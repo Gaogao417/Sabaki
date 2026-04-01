@@ -540,29 +540,98 @@ header {
   #graph svg:not(:active) > * {
     transition: transform .3s;
   }
+  #graph svg .node-ring,
+  #graph svg .node {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform .14s ease, stroke-width .14s ease, stroke .14s ease, filter .14s ease, opacity .14s ease;
+  }
   #graph svg .node {
     stroke: #111;
     stroke-width: 1px;
-    transform-box: fill-box;
-    transform-origin: center;
-    transition: transform .12s ease, stroke-width .12s ease, stroke .12s ease, filter .12s ease;
+  }
+  #graph svg .node-ring {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 0;
+    opacity: 0;
   }
   #graph svg .node.hover {
-    stroke: #777;
-    stroke-width: 2px;
-    transform: scale(1.35);
-    filter: drop-shadow(0 0 6px rgba(255, 255, 255, .2));
+    stroke: #f5f5f5;
+    stroke-width: 2.2px;
+    transform: scale(1.52);
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, .45));
   }
   #graph svg .node.current {
     stroke: #eee;
     stroke-width: 2px;
+  }
+  #graph svg .node-ring.hover {
+    stroke: rgba(255, 255, 255, .85);
+    stroke-width: 4px;
+    opacity: 1;
+    transform: scale(1.95);
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, .45));
+  }
+  #graph svg .node-group.compare-reference .node-ring {
+    stroke: #21c8d8;
+    stroke-width: 4px;
+    opacity: 1;
+    transform: scale(1.8);
+    filter: drop-shadow(0 0 10px rgba(33, 200, 216, .45));
+  }
+  #graph svg .node-group.compare-target .node-ring {
+    stroke: #ff9f43;
+    stroke-width: 4px;
+    opacity: 1;
+    transform: scale(1.95);
+    filter: drop-shadow(0 0 12px rgba(255, 159, 67, .55));
+  }
+  #graph svg .node-group.compare-reference .node {
+    stroke: #bff7ff;
+    stroke-width: 2px;
+  }
+  #graph svg .node-group.compare-target .node {
+    stroke: #ffe0b8;
+    stroke-width: 2.3px;
   }
   #graph svg .node-group {
     cursor: pointer;
   }
   #graph svg .node-hitarea {
     pointer-events: all;
+    cursor: pointer;
 }
+
+#goban.compare-mode .shudan-vertex[title="@compare-reference"].shudan-marker_point .shudan-marker {
+    fill: #21c8d8;
+    stroke: none;
+    filter: drop-shadow(0 0 4px rgba(33, 200, 216, .8));
+  }
+  #goban.compare-mode .shudan-vertex[title="@compare-target"].shudan-marker_point .shudan-marker {
+    fill: #ff9f43;
+    stroke: none;
+    filter: drop-shadow(0 0 4px rgba(255, 159, 67, .9));
+  }
+  #goban.compare-mode .shudan-vertex .shudan-selection {
+    border-color: rgba(255, 159, 67, .95);
+    background: rgba(255, 159, 67, .22);
+    box-shadow: 0 0 .5em rgba(255, 159, 67, .2);
+  }
+  #goban.compare-mode .shudan-vertex.shudan-sign_0.shudan-ghost_compare .shudan-ghost {
+    opacity: .95;
+  }
+  #goban.compare-mode .shudan-vertex.shudan-sign_0.shudan-ghost_compare .shudan-ghost::before {
+    width: .6em;
+    height: .6em;
+    box-shadow: 0 0 0 .08em rgba(255, 159, 67, .9), 0 0 .7em rgba(255, 159, 67, .55);
+  }
+  #goban.compare-mode .shudan-vertex.shudan-sign_0.shudan-ghost_compare.shudan-ghost_1 .shudan-ghost::before {
+    background: rgba(0, 0, 0, .92);
+  }
+  #goban.compare-mode .shudan-vertex.shudan-sign_0.shudan-ghost_compare.shudan-ghost_-1 .shudan-ghost::before {
+    background: rgba(255, 255, 255, .97);
+  }
 
 #properties {
     overflow: auto;

@@ -221,8 +221,10 @@ export default class Goban extends Component {
       analysis,
       analysisType,
       highlightVertices = [],
+      compareSelectedVertices = [],
       dimmedStones = [],
       overlayGhostStoneMap = null,
+      compareMode = false,
 
       crosshair = false,
       showCoordinates = false,
@@ -466,7 +468,7 @@ export default class Goban extends Component {
 
     return h(BoundedGoban, {
       id: 'goban',
-      class: classNames({crosshair}),
+      class: classNames({crosshair, 'compare-mode': compareMode}),
       style: {top, left},
       innerProps: {ref: (el) => (this.element = el)},
 
@@ -490,7 +492,10 @@ export default class Goban extends Component {
       }),
       heatMap: gobantransformer.transformMap(heatMap, transformation),
       lines: lines.map(transformLine),
-      selectedVertices: highlightVertices.map(transformVertex),
+      selectedVertices: [
+        ...highlightVertices,
+        ...compareSelectedVertices,
+      ].map(transformVertex),
       dimmedVertices: dimmedStones.map(transformVertex),
 
       onVertexMouseUp: this.handleVertexMouseUp,

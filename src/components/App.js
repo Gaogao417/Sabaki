@@ -4,6 +4,7 @@ import classNames from 'classnames'
 import fixPath from 'fix-path'
 
 import influence from '@sabaki/influence'
+import sgf from '@sabaki/sgf'
 
 import TripleSplitContainer from './helpers/TripleSplitContainer.js'
 import ThemeManager from './ThemeManager.js'
@@ -72,6 +73,16 @@ function buildCompareRenderData(deltaMap, preset) {
   }
 
   return {paintMap, markerMap}
+}
+
+function getNodeMoveVertex(tree, treePosition) {
+  let node = tree.get(treePosition)
+  if (node == null) return null
+
+  let move = node.data.B?.[0] ?? node.data.W?.[0]
+  if (move == null || move === '') return null
+
+  return sgf.parseVertex(move)
 }
 
 fixPath()
@@ -351,6 +362,8 @@ class App extends Component {
     let scoreBoard, areaMap
     let comparePaintMap = null
     let compareMarkerMap = null
+    let compareReferenceVertex = null
+    let compareTargetVertex = null
 
     if (['scoring', 'estimator'].includes(state.mode)) {
       // Calculate area map
@@ -373,22 +386,36 @@ class App extends Component {
 
     if (
       state.compareMode &&
+      state.compareReferenceTreePosition != null &&
       state.compareTargetTreePosition != null &&
       state.analyzingEngineSyncerId != null
     ) {
-      let currentOwnership = sabaki.getCurrentOwnership()
-      let targetOwnership = sabaki.getCachedOwnership(
-        state.analyzingEngineSyncerId,
-        tree,
+      let referenceOwnership = sabaki.getOwnershipForTreePosition(
+        null,
+        state.compareReferenceTreePosition,
+      )
+      let targetOwnership = sabaki.getOwnershipForTreePosition(
+        null,
         state.compareTargetTreePosition,
       )
-      let deltaMap = helper.getOwnershipDelta(currentOwnership, targetOwnership)
+      let deltaMap = helper.getOwnershipDelta(referenceOwnership, targetOwnership)
       let compareData = buildCompareRenderData(
         deltaMap,
         state.compareDisplayPreset,
       )
       comparePaintMap = compareData.paintMap
       compareMarkerMap = compareData.markerMap
+    }
+
+    if (state.compareMode && state.compareReferenceTreePosition != null) {
+      compareReferenceVertex = getNodeMoveVertex(
+        tree,
+        state.compareReferenceTreePosition,
+      )
+    }
+
+    if (state.compareMode && state.compareTargetTreePosition != null) {
+      compareTargetVertex = getNodeMoveVertex(tree, state.compareTargetTreePosition)
     }
 
     state = {
@@ -398,6 +425,8 @@ class App extends Component {
       areaMap,
       comparePaintMap,
       compareMarkerMap,
+      compareReferenceVertex,
+      compareTargetVertex,
     }
 
     return h(

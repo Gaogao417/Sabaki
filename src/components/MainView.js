@@ -70,6 +70,36 @@ export default class MainView extends Component {
     sabaki.editVertexData = null
   }
 
+  buildCompareAnchorMap(board, markerMap, referenceVertex, targetVertex) {
+    if (referenceVertex == null && targetVertex == null) return markerMap
+
+    let nextMarkerMap =
+      markerMap != null
+        ? markerMap.map((row) => [...row])
+        : board.signMap.map((row) => row.map(() => null))
+
+    if (referenceVertex != null) {
+      let [x, y] = referenceVertex
+      if (nextMarkerMap[y]?.[x] != null) {
+        nextMarkerMap[y][x] = null
+      }
+
+      if (nextMarkerMap[y] != null) {
+        nextMarkerMap[y][x] = {type: 'point', label: '@compare-reference'}
+      }
+    }
+
+    if (targetVertex != null) {
+      let [x, y] = targetVertex
+
+      if (nextMarkerMap[y] != null) {
+        nextMarkerMap[y][x] = {type: 'point', label: '@compare-target'}
+      }
+    }
+
+    return nextMarkerMap
+  }
+
   render(
     {
       mode,
@@ -89,8 +119,12 @@ export default class MainView extends Component {
       areaMap,
       compareMode,
       comparePending,
+      compareReferenceTreePosition,
+      compareTargetTreePosition,
       comparePaintMap,
       compareMarkerMap,
+      compareReferenceVertex,
+      compareTargetVertex,
       graphHoverTreePosition,
       blockedGuesses,
 
@@ -112,12 +146,17 @@ export default class MainView extends Component {
     },
     {gobanCrosshair},
   ) {
-    let node = gameTree.get(treePosition)
-    let board = gametree.getBoard(gameTree, treePosition)
+    let compareReferencePosition =
+      compareMode && compareReferenceTreePosition != null
+        ? compareReferenceTreePosition
+        : treePosition
+    let node = gameTree.get(compareReferencePosition)
+    let board = gametree.getBoard(gameTree, compareReferencePosition)
     let komi = +gametree.getRootProperty(gameTree, 'KM', 0)
     let handicap = +gametree.getRootProperty(gameTree, 'HA', 0)
     let paintMap
     let markerMap = null
+    let compareSelectedVertices = []
     let dimmedStones =
       ['scoring', 'estimator'].includes(mode) ? deadStones : []
     let overlayGhostStoneMap = null
@@ -138,8 +177,63 @@ export default class MainView extends Component {
     }
 
     if (
+      compareMode &&
+      compareReferenceTreePosition != null &&
+      compareTargetTreePosition != null &&
+      gameTree.get(compareTargetTreePosition) != null
+    ) {
+      let referenceBoard = gametree.getBoard(gameTree, compareReferenceTreePosition)
+      let targetBoard = gametree.getBoard(gameTree, compareTargetTreePosition)
+      let dimmedSet = new Set()
+
+      overlayGhostStoneMap = referenceBoard.signMap.map((row) => row.map(() => null))
+
+      for (let y = 0; y < referenceBoard.height; y++) {
+        for (let x = 0; x < referenceBoard.width; x++) {
+          let referenceSign = referenceBoard.signMap[y][x]
+          let targetSign = targetBoard.signMap[y][x]
+
+          if (targetSign !== 0) {
+            compareSelectedVertices.push([x, y])
+          }
+
+          if (referenceSign !== 0) {
+            dimmedSet.add(`${x},${y}`)
+          }
+
+          if (referenceSign !== 0 && referenceSign === targetSign) {
+            dimmedSet.delete(`${x},${y}`)
+          } else if (targetSign !== 0 && referenceSign !== targetSign) {
+            overlayGhostStoneMap[y][x] = {sign: targetSign, type: 'compare'}
+          }
+        }
+      }
+
+      dimmedStones = [...dimmedSet].map((vertex) => vertex.split(',').map(Number))
+      markerMap = this.buildCompareAnchorMap(
+        referenceBoard,
+        markerMap,
+        compareReferenceVertex,
+        compareTargetVertex,
+      )
+    }
+
+    if (compareMode && compareReferenceTreePosition != null) {
+      markerMap = this.buildCompareAnchorMap(
+        board,
+        markerMap,
+        compareReferenceVertex,
+        compareTargetVertex,
+      )
+    }
+
+    if (
+      !(
+        compareMode &&
+        compareTargetTreePosition != null
+      ) &&
       graphHoverTreePosition != null &&
-      graphHoverTreePosition !== treePosition &&
+      graphHoverTreePosition !== compareReferencePosition &&
       gameTree.get(graphHoverTreePosition) != null
     ) {
       let hoverBoard = gametree.getBoard(gameTree, graphHoverTreePosition)
@@ -169,7 +263,7 @@ export default class MainView extends Component {
 
         h(Goban, {
           gameTree,
-          treePosition,
+          treePosition: compareReferencePosition,
           board,
           highlightVertices:
             findVertex && mode === 'find' ? [findVertex] : highlightVertices,
@@ -183,9 +277,11 @@ export default class MainView extends Component {
               : null,
           paintMap,
           markerMap,
+          compareSelectedVertices,
           dimmedStones,
           overlayGhostStoneMap,
           comparePending,
+          compareMode,
 
           crosshair: gobanCrosshair,
           showCoordinates,

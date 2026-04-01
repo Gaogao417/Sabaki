@@ -37,6 +37,12 @@ export default class Sidebar extends Component {
       }
     }
 
+    this.handleGraphNodeDoubleClick = ({button, gameTree, treePosition}) => {
+      if (button !== 0) return
+
+      sabaki.setCurrentTreePosition(gameTree, treePosition)
+    }
+
     this.handleGraphNodeHoverChange = (treePosition) => {
       sabaki.setGraphHoverTreePosition(treePosition)
     }
@@ -115,6 +121,8 @@ export default class Sidebar extends Component {
       gameCurrents,
       treePosition,
       compareMode,
+      compareReferenceTreePosition,
+      compareTargetTreePosition,
 
       showWinrateGraph,
       showGameGraph,
@@ -196,7 +204,10 @@ export default class Sidebar extends Component {
               nodeSize: graphNodeSize,
 
               onNodeClick: this.handleGraphNodeClick,
+              onNodeDoubleClick: this.handleGraphNodeDoubleClick,
               onNodeHoverChange: this.handleGraphNodeHoverChange,
+              compareReferenceTreePosition,
+              compareTargetTreePosition,
             }),
           ),
 

@@ -83,6 +83,7 @@ class Sabaki extends EventEmitter {
       boardTransformation: '',
       compareMode: false,
       compareDisplayPreset: 'bands',
+      compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
@@ -451,6 +452,7 @@ class Sabaki extends EventEmitter {
     this.hideInfoOverlay()
     this.setState({
       compareMode: keepMode ? this.state.compareMode : false,
+      compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
@@ -468,6 +470,30 @@ class Sabaki extends EventEmitter {
 
   setCompareDisplayPreset(compareDisplayPreset) {
     this.setState({compareDisplayPreset})
+  }
+
+  getOwnershipForTreePosition(syncer, treePosition) {
+    let analyzingSyncer = syncer || this.inferredState.analyzingEngineSyncer
+    if (analyzingSyncer == null || treePosition == null) return null
+
+    let tree = this.inferredState.gameTree
+    let {analysis, analysisTreePosition} = this.state
+
+    if (
+      analysis != null &&
+      analysis.ownership != null &&
+      analysisTreePosition === treePosition
+    ) {
+      this.cacheOwnership(
+        analyzingSyncer.id,
+        tree,
+        treePosition,
+        analysis.ownership,
+      )
+      return analysis.ownership
+    }
+
+    return this.getCachedOwnership(analyzingSyncer.id, tree, treePosition)
   }
 
   async toggleCompareMode() {
@@ -499,6 +525,7 @@ class Sabaki extends EventEmitter {
 
     this.setState({
       compareMode: true,
+      compareReferenceTreePosition: this.state.treePosition,
       compareTargetTreePosition: null,
       comparePending: false,
     })
@@ -601,7 +628,16 @@ class Sabaki extends EventEmitter {
     let syncer = this.inferredState.analyzingEngineSyncer
     if (syncer == null) return
 
-    let baseOwnership = this.getCurrentOwnership(syncer)
+    let referenceTreePosition =
+      this.state.compareReferenceTreePosition ?? this.state.treePosition
+    let baseOwnership = this.getOwnershipForTreePosition(
+      syncer,
+      referenceTreePosition,
+    )
+
+    if (baseOwnership == null) {
+      baseOwnership = await this.fetchOwnershipForTreePosition(referenceTreePosition)
+    }
 
     if (baseOwnership == null) {
       await dialog.showMessageBox(
@@ -615,8 +651,19 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    if (treePosition === this.state.treePosition) {
-      this.setState({compareTargetTreePosition: null})
+    if (treePosition === referenceTreePosition) {
+      this.setState({
+        compareTargetTreePosition: null,
+        graphHoverTreePosition: null,
+      })
+      return
+    }
+
+    if (treePosition === this.state.compareTargetTreePosition) {
+      this.setState({
+        compareTargetTreePosition: null,
+        graphHoverTreePosition: null,
+      })
       return
     }
 
@@ -1737,6 +1784,10 @@ class Sabaki extends EventEmitter {
       gameTrees: gameTrees.map((t, i) => (i !== gameIndex ? t : tree)),
       gameIndex,
       treePosition,
+      compareReferenceTreePosition:
+        navigated && this.state.compareMode
+          ? treePosition
+          : this.state.compareReferenceTreePosition,
       compareTargetTreePosition: navigated
         ? null
         : this.state.compareTargetTreePosition,
@@ -2477,6 +2528,9 @@ class Sabaki extends EventEmitter {
     this.lastAnalyzingEngineSyncerId = syncerId
     this.setState({
       analyzingEngineSyncerId: syncerId,
+      compareReferenceTreePosition: this.state.compareMode
+        ? this.state.treePosition
+        : null,
       compareTargetTreePosition: null,
       comparePending: false,
     })
@@ -2501,6 +2555,7 @@ class Sabaki extends EventEmitter {
       analysis: null,
       analysisTreePosition: null,
       analyzingEngineSyncerId: null,
+      compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
       comparePending: false,
     })

@@ -12,6 +12,8 @@ class GameGraphNode extends Component {
   shouldComponentUpdate({
     type,
     current,
+    compareReference,
+    compareTarget,
     fill,
     nodeSize,
     hover,
@@ -20,6 +22,8 @@ class GameGraphNode extends Component {
     return (
       type !== this.props.type ||
       current !== this.props.current ||
+      compareReference !== this.props.compareReference ||
+      compareTarget !== this.props.compareTarget ||
       fill !== this.props.fill ||
       nodeSize !== this.props.nodeSize ||
       hover !== this.props.hover ||
@@ -31,12 +35,15 @@ class GameGraphNode extends Component {
     position: [left, top],
     type,
     current,
+    compareReference,
+    compareTarget,
     fill,
     nodeSize,
     hover,
     treePosition,
     onMouseDown = noop,
     onMouseUp = noop,
+    onDoubleClick = noop,
     onMouseEnter = noop,
     onMouseLeave = noop,
   }) {
@@ -70,9 +77,15 @@ class GameGraphNode extends Component {
     return h(
       'g',
       {
-        class: classNames('node-group', {hover, current}),
+        class: classNames('node-group', {
+          hover,
+          current,
+          'compare-reference': compareReference,
+          'compare-target': compareTarget,
+        }),
         onMouseDown,
         onMouseUp: (evt) => onMouseUp(evt, treePosition),
+        onDblClick: (evt) => onDoubleClick(evt, treePosition),
         onMouseEnter: () => onMouseEnter(treePosition),
         onMouseLeave: () => onMouseLeave(treePosition),
       },
@@ -85,7 +98,21 @@ class GameGraphNode extends Component {
       }),
       h('path', {
         d,
-        class: classNames({hover, current}, 'node'),
+        class: classNames('node-ring', {
+          hover,
+          current,
+          'compare-reference': compareReference,
+          'compare-target': compareTarget,
+        }),
+      }),
+      h('path', {
+        d,
+        class: classNames('node', {
+          hover,
+          current,
+          'compare-reference': compareReference,
+          'compare-target': compareTarget,
+        }),
         fill,
       }),
     )
@@ -152,6 +179,7 @@ class GameGraph extends Component {
     this.handleGraphMouseDown = this.handleGraphMouseDown.bind(this)
     this.handleNodeHoverChange = this.handleNodeHoverChange.bind(this)
     this.handleNodeMouseUp = this.handleNodeMouseUp.bind(this)
+    this.handleNodeDoubleClick = this.handleNodeDoubleClick.bind(this)
   }
 
   componentDidMount() {
@@ -195,10 +223,21 @@ class GameGraph extends Component {
     this.remeasure()
   }
 
-  shouldComponentUpdate({showGameGraph, height, treePosition}, nextState) {
+  shouldComponentUpdate(
+    {
+      showGameGraph,
+      height,
+      treePosition,
+      compareReferenceTreePosition,
+      compareTargetTreePosition,
+    },
+    nextState,
+  ) {
     return (
       height !== this.props.height ||
       treePosition !== this.props.treePosition ||
+      compareReferenceTreePosition !== this.props.compareReferenceTreePosition ||
+      compareTargetTreePosition !== this.props.compareTargetTreePosition ||
       nextState.hoveredTreePosition !== this.state.hoveredTreePosition ||
       showGameGraph
     )
@@ -293,7 +332,28 @@ class GameGraph extends Component {
 
     let {onNodeClick = noop, gameTree} = this.props
 
-    onNodeClick(
+    clearTimeout(this.nodeClickId)
+    this.nodeClickId = setTimeout(() => {
+      onNodeClick(
+        Object.assign(evt, {
+          gameTree,
+          treePosition,
+        }),
+      )
+    }, 180)
+  }
+
+  handleNodeDoubleClick(evt, treePosition) {
+    evt.preventDefault()
+    evt.stopPropagation()
+
+    if (this.drag) return
+
+    clearTimeout(this.nodeClickId)
+
+    let {onNodeDoubleClick = noop, gameTree} = this.props
+
+    onNodeDoubleClick(
       Object.assign(evt, {
         gameTree,
         treePosition,
@@ -302,7 +362,14 @@ class GameGraph extends Component {
   }
 
   renderNodes(
-    {gameTree, gameCurrents, gridSize, nodeSize},
+    {
+      gameTree,
+      gameCurrents,
+      gridSize,
+      nodeSize,
+      compareReferenceTreePosition,
+      compareTargetTreePosition,
+    },
     {
       matrixDict: [matrix, dict],
       cameraPosition: [cx, cy],
@@ -372,12 +439,15 @@ class GameGraph extends Component {
                     ? 'diamond' // Non-move node
                     : 'circle', // Normal node
             current: isCurrentNode,
+            compareReference: compareReferenceTreePosition === id,
+            compareTarget: compareTargetTreePosition === id,
             fill: `rgb(${fillRGB.map((x) => x * opacity).join(',')})`,
             nodeSize: nodeSize + 1,
             hover: hoveredTreePosition === id,
             treePosition: id,
             onMouseDown: this.handleGraphMouseDown,
             onMouseUp: this.handleNodeMouseUp,
+            onDoubleClick: this.handleNodeDoubleClick,
             onMouseEnter: (treePosition) => this.handleNodeHoverChange(treePosition),
             onMouseLeave: () => this.handleNodeHoverChange(null),
           }),
