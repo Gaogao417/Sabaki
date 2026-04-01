@@ -543,14 +543,25 @@ header {
   #graph svg .node {
     stroke: #111;
     stroke-width: 1px;
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform .12s ease, stroke-width .12s ease, stroke .12s ease, filter .12s ease;
   }
   #graph svg .node.hover {
     stroke: #777;
     stroke-width: 2px;
+    transform: scale(1.35);
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, .2));
   }
   #graph svg .node.current {
     stroke: #eee;
     stroke-width: 2px;
+  }
+  #graph svg .node-group {
+    cursor: pointer;
+  }
+  #graph svg .node-hitarea {
+    pointer-events: all;
 }
 
 #properties {

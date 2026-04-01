@@ -217,10 +217,12 @@ export default class Goban extends Component {
       treePosition,
       board,
       paintMap = [],
+      markerMap: customMarkerMap = null,
       analysis,
       analysisType,
       highlightVertices = [],
       dimmedStones = [],
+      overlayGhostStoneMap = null,
 
       crosshair = false,
       showCoordinates = false,
@@ -249,7 +251,7 @@ export default class Goban extends Component {
     },
   ) {
     let signMap = board.signMap
-    let markerMap = board.markers
+    let markerMap = customMarkerMap || board.markers
 
     let transformLine = (line) =>
       gobantransformer.transformLine(
@@ -351,9 +353,23 @@ export default class Goban extends Component {
       }
     }
 
+    if (overlayGhostStoneMap != null) {
+      if (ghostStoneMap.length === 0) {
+        ghostStoneMap = board.signMap.map((row) => row.map((_) => null))
+      }
+
+      for (let y = 0; y < overlayGhostStoneMap.length; y++) {
+        for (let x = 0; x < overlayGhostStoneMap[y].length; x++) {
+          if (overlayGhostStoneMap[y][x] != null) {
+            ghostStoneMap[y][x] = overlayGhostStoneMap[y][x]
+          }
+        }
+      }
+    }
+
     // Draw move numbers
 
-    if (showMoveNumbers) {
+    if (showMoveNumbers && customMarkerMap == null) {
       markerMap = markerMap.map((row) => row.map((_) => null))
 
       let history = [

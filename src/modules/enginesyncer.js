@@ -10,7 +10,7 @@ import {parseCompressedVertices} from '@sabaki/sgf'
 
 import i18n from '../i18n.js'
 import {getBoard, getRootProperty} from './gametree.js'
-import {noop, equals} from './helper.js'
+import {noop, equals, normalizeOwnership} from './helper.js'
 
 const t = i18n.context('EngineSyncer')
 const setting = {
@@ -31,7 +31,19 @@ function parseVertex(coord, size) {
 }
 
 function parseAnalysis(line, board) {
-  return line
+  let tokens = line.trim().split(/\s+/)
+  let ownership = null
+  let ownershipIndex = tokens.indexOf('ownership')
+
+  if (ownershipIndex >= 0) {
+    ownership = normalizeOwnership(
+      tokens.slice(ownershipIndex + 1, ownershipIndex + 1 + board.width * board.height),
+      board.width,
+      board.height,
+    )
+  }
+
+  let variations = line
     .split(/\s*info\s+/)
     .slice(1)
     .map((x) => x.trim())
@@ -68,6 +80,8 @@ function parseAnalysis(line, board) {
       scoreLead: scoreLead != null ? +scoreLead : null,
       moves: pv.map((x) => board.parseVertex(x)),
     }))
+
+  return {variations, ownership}
 }
 
 export default class EngineSyncer extends EventEmitter {
@@ -139,11 +153,12 @@ export default class EngineSyncer extends EventEmitter {
             // Parse analysis info
 
             if (line.startsWith('info ')) {
-              let variations = parseAnalysis(line, board)
+              let {variations, ownership} = parseAnalysis(line, board)
 
               this.analysis = {
                 sign,
                 variations,
+                ownership,
                 winrate: Math.max(...variations.map(({winrate}) => winrate)),
               }
             } else if (line.startsWith('play ')) {

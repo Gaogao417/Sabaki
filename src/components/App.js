@@ -36,6 +36,44 @@ const t = i18n.context('App')
 const leftSidebarMinWidth = setting.get('view.sidebar_minwidth')
 const sidebarMinWidth = setting.get('view.leftsidebar_minwidth')
 
+function buildCompareRenderData(deltaMap, preset) {
+  if (deltaMap == null || deltaMap.length === 0) {
+    return {paintMap: null, markerMap: null}
+  }
+
+  let height = deltaMap.length
+  let width = deltaMap[0].length
+  let paintMap = helper.makeMatrix(width, height, 0)
+  let markerMap = helper.makeMatrix(width, height, null)
+  let labelThreshold = 0.15
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let delta = deltaMap[y][x]
+      let absDelta = Math.abs(delta)
+      if (absDelta < labelThreshold) continue
+
+      if (preset === 'focus') {
+        if (absDelta < 0.3) continue
+        paintMap[y][x] = Math.sign(delta) * (absDelta >= 0.5 ? 1 : 0.55)
+      } else {
+        let strength =
+          absDelta >= 0.5 ? 1 : absDelta >= 0.3 ? 0.7 : 0.4
+        paintMap[y][x] = Math.sign(delta) * strength
+      }
+
+      if (preset === 'numbers') {
+        markerMap[y][x] = {
+          type: 'label',
+          label: `${delta > 0 ? '+' : ''}${Math.round(delta * 100)}`,
+        }
+      }
+    }
+  }
+
+  return {paintMap, markerMap}
+}
+
 fixPath()
 const portableDir = process.env.PORTABLE_EXECUTABLE_DIR
 if (portableDir) process.chdir(portableDir)
@@ -130,7 +168,9 @@ class App extends Component {
 
     document.addEventListener('keydown', (evt) => {
       if (evt.key === 'Escape') {
-        if (sabaki.state.openDrawer != null) {
+        if (sabaki.state.compareMode) {
+          sabaki.clearCompareState({keepMode: false})
+        } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
         } else if (sabaki.state.mode !== 'play') {
           sabaki.setMode('play')
@@ -309,6 +349,8 @@ class App extends Component {
     let inferredState = sabaki.inferredState
     let tree = inferredState.gameTree
     let scoreBoard, areaMap
+    let comparePaintMap = null
+    let compareMarkerMap = null
 
     if (['scoring', 'estimator'].includes(state.mode)) {
       // Calculate area map
@@ -329,7 +371,34 @@ class App extends Component {
           : influence.areaMap(scoreBoard.signMap)
     }
 
-    state = {...state, ...inferredState, scoreBoard, areaMap}
+    if (
+      state.compareMode &&
+      state.compareTargetTreePosition != null &&
+      state.analyzingEngineSyncerId != null
+    ) {
+      let currentOwnership = sabaki.getCurrentOwnership()
+      let targetOwnership = sabaki.getCachedOwnership(
+        state.analyzingEngineSyncerId,
+        tree,
+        state.compareTargetTreePosition,
+      )
+      let deltaMap = helper.getOwnershipDelta(currentOwnership, targetOwnership)
+      let compareData = buildCompareRenderData(
+        deltaMap,
+        state.compareDisplayPreset,
+      )
+      comparePaintMap = compareData.paintMap
+      compareMarkerMap = compareData.markerMap
+    }
+
+    state = {
+      ...state,
+      ...inferredState,
+      scoreBoard,
+      areaMap,
+      comparePaintMap,
+      compareMarkerMap,
+    }
 
     return h(
       'section',
@@ -353,6 +422,8 @@ class App extends Component {
         showMoveColorization: state.showMoveColorization,
         showNextMoves: state.showNextMoves,
         showSiblings: state.showSiblings,
+        compareMode: state.compareMode,
+        compareDisplayPreset: state.compareDisplayPreset,
         showWinrateGraph: state.showWinrateGraph,
         showGameGraph: state.showGameGraph,
         showCommentBox: state.showCommentBox,

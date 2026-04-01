@@ -15,6 +15,11 @@ export {
   normalizeEndings,
   wait,
   getScore,
+  makeMatrix,
+  cloneMatrix,
+  normalizeOwnership,
+  matrixEquals,
+  getOwnershipDelta,
 } from './utils.js'
 
 export const linebreak = process.platform === 'win32' ? '\r\n' : '\n'

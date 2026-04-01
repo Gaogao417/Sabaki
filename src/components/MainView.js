@@ -87,6 +87,11 @@ export default class MainView extends Component {
       analysis,
       analysisTreePosition,
       areaMap,
+      compareMode,
+      comparePending,
+      comparePaintMap,
+      compareMarkerMap,
+      graphHoverTreePosition,
       blockedGuesses,
 
       highlightVertices,
@@ -112,6 +117,10 @@ export default class MainView extends Component {
     let komi = +gametree.getRootProperty(gameTree, 'KM', 0)
     let handicap = +gametree.getRootProperty(gameTree, 'HA', 0)
     let paintMap
+    let markerMap = null
+    let dimmedStones =
+      ['scoring', 'estimator'].includes(mode) ? deadStones : []
+    let overlayGhostStoneMap = null
 
     if (['scoring', 'estimator'].includes(mode)) {
       paintMap = areaMap
@@ -120,6 +129,33 @@ export default class MainView extends Component {
 
       for (let [x, y] of blockedGuesses) {
         paintMap[y][x] = 1
+      }
+    }
+
+    if (compareMode && comparePaintMap != null) {
+      paintMap = comparePaintMap
+      markerMap = compareMarkerMap
+    }
+
+    if (
+      graphHoverTreePosition != null &&
+      graphHoverTreePosition !== treePosition &&
+      gameTree.get(graphHoverTreePosition) != null
+    ) {
+      let hoverBoard = gametree.getBoard(gameTree, graphHoverTreePosition)
+      overlayGhostStoneMap = board.signMap.map((row) => row.map(() => null))
+
+      for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) {
+          let currentSign = board.signMap[y][x]
+          let hoverSign = hoverBoard.signMap[y][x]
+
+          if (currentSign === 0 && hoverSign !== 0) {
+            overlayGhostStoneMap[y][x] = {sign: hoverSign}
+          } else if (currentSign !== hoverSign) {
+            dimmedStones = [...dimmedStones, [x, y]]
+          }
+        }
       }
     }
 
@@ -139,15 +175,17 @@ export default class MainView extends Component {
             findVertex && mode === 'find' ? [findVertex] : highlightVertices,
           analysisType,
           analysis:
+            !compareMode &&
             showAnalysis &&
             analysisTreePosition != null &&
             analysisTreePosition === treePosition
               ? analysis
               : null,
           paintMap,
-          dimmedStones: ['scoring', 'estimator'].includes(mode)
-            ? deadStones
-            : [],
+          markerMap,
+          dimmedStones,
+          overlayGhostStoneMap,
+          comparePending,
 
           crosshair: gobanCrosshair,
           showCoordinates,

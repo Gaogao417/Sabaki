@@ -37,6 +37,8 @@ exports.get = function (props = {}) {
     showMoveColorization,
     showNextMoves,
     showSiblings,
+    compareMode,
+    compareDisplayPreset,
     showWinrateGraph,
     showGameGraph,
     showCommentBox,
@@ -173,6 +175,36 @@ exports.get = function (props = {}) {
             sabaki.setMode(
               sabaki.state.mode === 'scoring' ? 'play' : 'scoring',
             ),
+        },
+        {
+          label: i18n.t('menu.play', '&Compare Variations'),
+          accelerator: 'CmdOrCtrl+Shift+D',
+          type: 'checkbox',
+          checked: !!compareMode,
+          click: () => sabaki.toggleCompareMode(),
+        },
+        {
+          label: i18n.t('menu.play', 'Compare Display'),
+          submenu: [
+            {
+              label: i18n.t('menu.play', '&Bands'),
+              type: 'checkbox',
+              checked: compareDisplayPreset === 'bands',
+              click: () => sabaki.setCompareDisplayPreset('bands'),
+            },
+            {
+              label: i18n.t('menu.play', '&Numbers'),
+              type: 'checkbox',
+              checked: compareDisplayPreset === 'numbers',
+              click: () => sabaki.setCompareDisplayPreset('numbers'),
+            },
+            {
+              label: i18n.t('menu.play', '&Focus'),
+              type: 'checkbox',
+              checked: compareDisplayPreset === 'focus',
+              click: () => sabaki.setCompareDisplayPreset('focus'),
+            },
+          ],
         },
       ],
     },

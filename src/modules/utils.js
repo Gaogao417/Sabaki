@@ -88,6 +88,42 @@ export function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+export function makeMatrix(width, height, initialValue = 0) {
+  return [...Array(height)].map(() => Array(width).fill(initialValue))
+}
+
+export function cloneMatrix(matrix) {
+  return matrix.map((row) => [...row])
+}
+
+export function normalizeOwnership(values, width, height) {
+  let expected = width * height
+  if (!Array.isArray(values) || values.length < expected) return null
+
+  let matrix = makeMatrix(width, height, 0)
+
+  for (let i = 0; i < expected; i++) {
+    let value = Number(values[i])
+    if (Number.isNaN(value)) return null
+
+    let x = i % width
+    let y = Math.floor(i / width)
+    matrix[y][x] = value
+  }
+
+  return matrix
+}
+
+export function matrixEquals(a, b) {
+  return equals(a, b)
+}
+
+export function getOwnershipDelta(current, target) {
+  if (current == null || target == null) return null
+
+  return target.map((row, y) => row.map((value, x) => value - current[y][x]))
+}
+
 export function getScore(board, areaMap, {komi = 0, handicap = 0} = {}) {
   let score = {
     area: [0, 0],
