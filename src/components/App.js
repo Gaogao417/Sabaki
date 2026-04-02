@@ -22,6 +22,11 @@ import {buildCompareRenderData, getNodeMoveVertex} from '../modules/compare.js'
 import * as gametree from '../modules/gametree.js'
 import * as gtplogger from '../modules/gtplogger.js'
 import * as helper from '../modules/helper.js'
+import {
+  applyMovesToSnapshot,
+  buildKeyPointMarkerMap,
+  boardFromSnapshot,
+} from '../modules/study.js'
 
 if (process.env.SABAKI_E2E) window.__sabaki = sabaki
 
@@ -365,6 +370,24 @@ class App extends Component {
 
     let inferredState = sabaki.inferredState
     let tree = inferredState.gameTree
+    let studyMode = ['baseline', 'trial'].includes(state.mode)
+    let studyBaselineSnapshot = state.studyBaselineSnapshot
+    let studyTrialSnapshot = applyMovesToSnapshot(
+      state.studyBaselineSnapshot,
+      state.studyTrialMoves,
+    )
+    let studyRenderSnapshot =
+      state.mode === 'trial' ? studyTrialSnapshot : studyBaselineSnapshot
+    let studyRenderBoard =
+      studyRenderSnapshot == null ? null : boardFromSnapshot(studyRenderSnapshot)
+    let studyCurrentPlayer =
+      state.mode === 'trial'
+        ? sabaki.getStudyAnalysisPlayer('trial')
+        : studyBaselineSnapshot?.nextPlayer ?? inferredState.currentPlayer
+    let studyMarkerMap =
+      studyRenderBoard == null
+        ? null
+        : buildKeyPointMarkerMap(studyRenderBoard, state.studyBaselineKeyPoints)
     let scoreBoard, areaMap
     let comparePaintMap = null
     let compareMarkerMap = null
@@ -376,7 +399,9 @@ class App extends Component {
     let lastMoveTerritoryDiffAvailable = false
     let effectiveOverlayMode = state.shiftTerritoryActive
       ? 'territory'
-      : state.overlayMode
+      : studyMode
+        ? 'territory'
+        : state.overlayMode
     let compareMode = sabaki.isCompareOverlayMode(effectiveOverlayMode)
     let territoryMode = effectiveOverlayMode === 'territory'
 
@@ -441,7 +466,11 @@ class App extends Component {
 
     if (territoryMode) {
       let engineSyncer = inferredState.analyzingEngineSyncer
-      territoryOwnership = sabaki.getCurrentOwnership(engineSyncer)
+      territoryOwnership = studyMode
+        ? state.mode === 'trial' && state.studyTrialMoves.length > 0
+          ? state.studyTrialOwnership
+          : state.studyBaselineOwnership
+        : sabaki.getCurrentOwnership(engineSyncer)
 
       if (['scoring', 'estimator'].includes(state.mode)) {
         overlayUnavailableReason = t(
@@ -449,6 +478,8 @@ class App extends Component {
         )
       } else if (engineSyncer == null) {
         overlayUnavailableReason = t('Start engine analysis first.')
+      } else if (studyMode && state.studyAnalysisPending) {
+        overlayUnavailableReason = t('Waiting for study ownership data...')
       } else if (territoryOwnership == null) {
         overlayUnavailableReason =
           state.analysisTreePosition !== state.treePosition ||
@@ -459,6 +490,17 @@ class App extends Component {
       }
 
       if (
+        studyMode &&
+        state.mode === 'trial' &&
+        state.studyBaselineOwnership != null &&
+        state.studyTrialOwnership != null
+      ) {
+        lastMoveTerritoryDeltaMap = helper.getOwnershipDelta(
+          state.studyBaselineOwnership,
+          state.studyTrialOwnership,
+        )
+        lastMoveTerritoryDiffAvailable = lastMoveTerritoryDeltaMap != null
+      } else if (
         state.territoryDiffSource === 'move' &&
         state.territoryDiffReferenceTreePosition != null &&
         state.territoryDiffTargetTreePosition != null
@@ -483,6 +525,10 @@ class App extends Component {
     let territoryStatusText =
       !territoryMode
         ? null
+        : studyMode && state.mode === 'baseline'
+          ? t('Baseline')
+          : studyMode && state.mode === 'trial'
+            ? t('Trial Compare')
         : state.shiftTerritoryActive && state.overlayMode !== 'territory'
           ? t('Territory (Shift)')
           : lastMoveTerritoryDiffAvailable
@@ -492,6 +538,10 @@ class App extends Component {
     state = {
       ...state,
       ...inferredState,
+      studyMode,
+      studyRenderBoard,
+      studyCurrentPlayer,
+      studyMarkerMap,
       overlayMode: effectiveOverlayMode,
       compareMode,
       territoryMode,

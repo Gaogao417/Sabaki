@@ -7,6 +7,8 @@ import GuessBar from './bars/GuessBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
 import ScoringBar from './bars/ScoringBar.js'
 import FindBar from './bars/FindBar.js'
+import BaselineBar from './bars/BaselineBar.js'
+import TrialBar from './bars/TrialBar.js'
 import BoardOverlayStack from './overlays/BoardOverlayStack.js'
 
 import sabaki from '../modules/sabaki.js'
@@ -17,8 +19,14 @@ export default class MainView extends Component {
     super(props)
 
     this.handleTogglePlayer = () => {
-      let {gameTree, treePosition, currentPlayer} = this.props
-      sabaki.setPlayer(treePosition, -currentPlayer)
+      let {mode, gameTree, treePosition, currentPlayer} = this.props
+      if (mode === 'baseline') {
+        sabaki.setStudyPlayer(-currentPlayer)
+      } else if (mode === 'trial') {
+        return
+      } else {
+        sabaki.setPlayer(treePosition, -currentPlayer)
+      }
     }
 
     this.handleToolButtonClick = (evt) => {
@@ -109,6 +117,10 @@ export default class MainView extends Component {
       gameCurrents,
       treePosition,
       currentPlayer,
+      studyMode,
+      studyRenderBoard,
+      studyCurrentPlayer,
+      studyMarkerMap,
       gameInfo,
 
       deadStones,
@@ -159,7 +171,13 @@ export default class MainView extends Component {
         ? compareReferenceTreePosition
         : treePosition
     let node = gameTree.get(compareReferencePosition)
-    let board = gametree.getBoard(gameTree, compareReferencePosition)
+    let board = studyMode
+      ? studyRenderBoard
+      : gametree.getBoard(gameTree, compareReferencePosition)
+    if (board == null) {
+      board = gametree.getBoard(gameTree, compareReferencePosition)
+    }
+    currentPlayer = studyMode ? studyCurrentPlayer : currentPlayer
     let komi = +gametree.getRootProperty(gameTree, 'KM', 0)
     let handicap = +gametree.getRootProperty(gameTree, 'HA', 0)
     let paintMap
@@ -272,6 +290,7 @@ export default class MainView extends Component {
         findVertex && mode === 'find' ? [findVertex] : highlightVertices,
       analysisType,
       analysis:
+        !studyMode &&
         !compareMode &&
         showAnalysis &&
         analysisTreePosition != null &&
@@ -279,7 +298,8 @@ export default class MainView extends Component {
           ? analysis
           : null,
       paintMap,
-      markerMap,
+      markerMap:
+        studyMode && studyMarkerMap != null ? studyMarkerMap : markerMap,
       compareSelectedVertices,
       dimmedStones,
       overlayGhostStoneMap,
@@ -289,7 +309,8 @@ export default class MainView extends Component {
       crosshair: gobanCrosshair,
       showCoordinates,
       showMoveColorization,
-      showMoveNumbers: mode !== 'edit' && showMoveNumbers,
+      showMoveNumbers:
+        !['edit', 'baseline'].includes(mode) && showMoveNumbers,
       showNextMoves: mode !== 'guess' && showNextMoves,
       showSiblings: mode !== 'guess' && showSiblings,
       fuzzyStonePlacement,
@@ -297,7 +318,8 @@ export default class MainView extends Component {
 
       playVariation,
       drawLineMode:
-        mode === 'edit' && ['arrow', 'line'].includes(selectedTool)
+        ['edit', 'baseline'].includes(mode) &&
+        ['arrow', 'line'].includes(selectedTool)
           ? selectedTool
           : null,
       transformation: boardTransformation,
@@ -323,6 +345,7 @@ export default class MainView extends Component {
               analysis: gobanProps.analysis,
               lastMoveDeltaMap: lastMoveTerritoryDeltaMap,
               lastMoveDiffAvailable: lastMoveTerritoryDiffAvailable,
+              keyPointSummary: this.props.studyKeyPointSummary,
             })
           : h(Goban, gobanProps),
       ),
@@ -389,6 +412,18 @@ export default class MainView extends Component {
           mode,
           findText,
           onButtonClick: this.handleFindButtonClick,
+        }),
+
+        h(BaselineBar, {
+          mode,
+          dirty: this.props.studyBaselineDirty,
+          hasBaseline: this.props.studyBaselineSnapshot != null,
+          keyPointCount: this.props.studyBaselineKeyPoints.length,
+        }),
+
+        h(TrialBar, {
+          mode,
+          moveCount: this.props.studyTrialMoves.length,
         }),
       ),
     )

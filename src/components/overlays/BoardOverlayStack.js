@@ -85,6 +85,7 @@ export default class BoardOverlayStack extends Component {
       analysis,
       lastMoveDeltaMap,
       lastMoveDiffAvailable,
+      keyPointSummary = null,
     },
     {
       hoveredVertex = null,
@@ -179,6 +180,7 @@ export default class BoardOverlayStack extends Component {
         hoveredDelta: territoryDiffLayer.hoveredDelta,
         hoveredRegionDeltaSummary: territoryDiffLayer.hoveredRegionDeltaSummary,
         diffSourceType: activeDiffSourceType,
+        keyPointSummary,
       }),
     )
   }

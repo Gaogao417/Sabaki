@@ -185,6 +185,16 @@ exports.get = function(props = {}) {
           click: () => sabaki.toggleCompareMode(),
         },
         {
+          label: i18n.t('menu.play', 'Edit &Baseline'),
+          accelerator: 'CmdOrCtrl+Shift+B',
+          click: () => sabaki.enterBaselineMode(),
+        },
+        {
+          label: i18n.t('menu.play', 'Enter &Trial Mode'),
+          accelerator: 'CmdOrCtrl+Shift+T',
+          click: () => sabaki.enterTrialMode(),
+        },
+        {
           label: i18n.t('menu.play', 'Compare Display'),
           submenu: [
             {
