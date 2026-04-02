@@ -19,6 +19,22 @@ import * as gobantransformer from './gobantransformer.js'
 import * as gtplogger from './gtplogger.js'
 import * as helper from './helper.js'
 import {getAnalysisPreviewCacheKey} from './overlays/analysisPreview.js'
+import {
+  STUDY_BASELINE_PROP,
+  STUDY_KEYPOINTS_PROP,
+  applyMovesToSnapshot,
+  buildKeyPointOwnershipMetrics,
+  boardFromSnapshot,
+  cloneSnapshot,
+  createSnapshotFromBoard,
+  deserializeKeyPoints,
+  deserializeSnapshot,
+  serializeKeyPoints,
+  serializeSnapshot,
+  snapshotMatchesBoard,
+  snapshotToGameTree,
+  summarizeKeyPointOwnershipMetrics,
+} from './study.js'
 import * as sound from './sound.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
@@ -91,6 +107,15 @@ class Sabaki extends EventEmitter {
       territoryDiffSource: null,
       territoryDiffReferenceTreePosition: null,
       territoryDiffTargetTreePosition: null,
+      studyBaselineSnapshot: null,
+      studyBaselineKeyPoints: [],
+      studyBaselineDirty: false,
+      studyTrialMoves: [],
+      studyBaselineOwnership: null,
+      studyTrialOwnership: null,
+      studyKeyPointMetrics: [],
+      studyKeyPointSummary: null,
+      studyAnalysisPending: false,
 
       // Sidebar
 
@@ -196,6 +221,7 @@ class Sabaki extends EventEmitter {
     this.ownershipCache = {}
     this.previewOwnershipCache = {}
     this.compareRequestId = 0
+    this.analysisRequestId = 0
     this.historyPointer = 0
     this.history = []
     this.recordHistory()
@@ -465,6 +491,355 @@ class Sabaki extends EventEmitter {
       : this.getCachedOwnership(syncer.id, tree, treePosition)
   }
 
+  getStudyData(tree = this.inferredState.gameTree, treePosition = this.state.treePosition) {
+    if (tree == null || treePosition == null) {
+      return {snapshot: null, keyPoints: []}
+    }
+
+    let node = tree.get(treePosition)
+    if (node == null) return {snapshot: null, keyPoints: []}
+
+    return {
+      snapshot: deserializeSnapshot(node.data[STUDY_BASELINE_PROP]?.[0] ?? null),
+      keyPoints: deserializeKeyPoints(node.data[STUDY_KEYPOINTS_PROP]?.[0] ?? null),
+    }
+  }
+
+  getStudyStateChange(tree = this.inferredState.gameTree, treePosition = this.state.treePosition) {
+    let {snapshot, keyPoints} = this.getStudyData(tree, treePosition)
+
+    return {
+      studyBaselineSnapshot: snapshot,
+      studyBaselineKeyPoints: keyPoints,
+      studyBaselineDirty: false,
+      studyTrialMoves: [],
+      studyBaselineOwnership: null,
+      studyTrialOwnership: null,
+      studyKeyPointMetrics: [],
+      studyKeyPointSummary: null,
+      studyAnalysisPending: false,
+    }
+  }
+
+  getStudyBaselineSnapshot() {
+    return this.state.studyBaselineSnapshot
+  }
+
+  getStudyTrialSnapshot() {
+    return applyMovesToSnapshot(
+      this.state.studyBaselineSnapshot,
+      this.state.studyTrialMoves,
+    )
+  }
+
+  getStudyAnalysisPlayer(kind = this.state.mode) {
+    if (kind === 'trial') {
+      return this.state.studyTrialMoves.length % 2 === 0
+        ? this.state.studyBaselineSnapshot?.nextPlayer ?? 1
+        : -(this.state.studyBaselineSnapshot?.nextPlayer ?? 1)
+    }
+
+    return this.state.studyBaselineSnapshot?.nextPlayer ?? 1
+  }
+
+  setStudyCompareMetrics(baselineOwnership = this.state.studyBaselineOwnership, trialOwnership = this.state.studyTrialOwnership) {
+    let metrics = buildKeyPointOwnershipMetrics(
+      this.state.studyBaselineKeyPoints,
+      baselineOwnership,
+      trialOwnership,
+    )
+
+    this.setState({
+      studyKeyPointMetrics: metrics,
+      studyKeyPointSummary: summarizeKeyPointOwnershipMetrics(metrics),
+    })
+  }
+
+  async saveBaselineSnapshot() {
+    let tree = this.inferredState.gameTree
+    let treePosition = this.state.treePosition
+    let snapshot = this.state.studyBaselineSnapshot
+    if (tree == null || treePosition == null || snapshot == null) return
+
+    let keyPoints = this.state.studyBaselineKeyPoints
+    let nextTree = tree.mutate((draft) => {
+      draft.updateProperty(treePosition, STUDY_BASELINE_PROP, [
+        serializeSnapshot(snapshot),
+      ])
+      draft.updateProperty(treePosition, STUDY_KEYPOINTS_PROP, [
+        serializeKeyPoints(keyPoints),
+      ])
+    })
+
+    this.setCurrentTreePosition(nextTree, treePosition)
+    this.setState({studyBaselineDirty: false})
+  }
+
+  clearBaselineSnapshot() {
+    let tree = this.inferredState.gameTree
+    let treePosition = this.state.treePosition
+    if (tree == null || treePosition == null) return
+
+    let nextTree = tree.mutate((draft) => {
+      draft.removeProperty(treePosition, STUDY_BASELINE_PROP)
+      draft.removeProperty(treePosition, STUDY_KEYPOINTS_PROP)
+    })
+
+    this.setCurrentTreePosition(nextTree, treePosition)
+    this.setState({
+      studyBaselineSnapshot: null,
+      studyBaselineKeyPoints: [],
+      studyBaselineDirty: false,
+      studyTrialMoves: [],
+      studyBaselineOwnership: null,
+      studyTrialOwnership: null,
+      studyKeyPointMetrics: [],
+      studyKeyPointSummary: null,
+    })
+  }
+
+  resetBaselineFromCurrentPosition() {
+    let {gameTree, board, currentPlayer} = this.inferredState
+    if (gameTree == null || board == null) return
+
+    this.setState({
+      studyBaselineSnapshot: createSnapshotFromBoard(board, currentPlayer),
+      studyBaselineKeyPoints: [],
+      studyBaselineDirty: true,
+      studyTrialMoves: [],
+      studyBaselineOwnership: null,
+      studyTrialOwnership: null,
+      studyKeyPointMetrics: [],
+      studyKeyPointSummary: null,
+    })
+  }
+
+  toggleBaselineKeyPoint(vertex) {
+    if (this.state.studyBaselineSnapshot == null) return
+
+    let nextKeyPoints = this.state.studyBaselineKeyPoints.some((point) =>
+      helper.vertexEquals(point, vertex),
+    )
+      ? this.state.studyBaselineKeyPoints.filter(
+          (point) => !helper.vertexEquals(point, vertex),
+        )
+      : [...this.state.studyBaselineKeyPoints, vertex]
+
+    this.setState({
+      studyBaselineKeyPoints: nextKeyPoints,
+      studyBaselineDirty: true,
+    })
+    this.setStudyCompareMetrics(
+      this.state.studyBaselineOwnership,
+      this.state.studyTrialOwnership,
+    )
+  }
+
+  setStudyPlayer(player) {
+    if (this.state.mode !== 'baseline' || this.state.studyBaselineSnapshot == null) {
+      return
+    }
+
+    this.setState({
+      studyBaselineSnapshot: {
+        ...cloneSnapshot(this.state.studyBaselineSnapshot),
+        nextPlayer: player > 0 ? 1 : -1,
+      },
+      studyBaselineDirty: true,
+      studyBaselineOwnership: null,
+      studyTrialOwnership: null,
+    })
+  }
+
+  enterBaselineMode(treePosition = this.state.treePosition) {
+    if (treePosition !== this.state.treePosition) {
+      this.setCurrentTreePosition(this.inferredState.gameTree, treePosition)
+      return
+    }
+
+    if (this.state.studyBaselineSnapshot == null) {
+      this.resetBaselineFromCurrentPosition()
+    }
+
+    this.setState({mode: 'baseline'})
+    this.setOverlayMode('territory')
+    this.scheduleStudyAnalysis()
+  }
+
+  enterTrialMode() {
+    if (this.state.studyBaselineSnapshot == null) {
+      this.resetBaselineFromCurrentPosition()
+    }
+
+    this.setState({
+      mode: 'trial',
+      studyTrialMoves: [],
+      studyTrialOwnership: null,
+    })
+    this.setOverlayMode('territory')
+    this.scheduleStudyAnalysis()
+  }
+
+  resetTrialWorkspace() {
+    this.setState({
+      studyTrialMoves: [],
+      studyTrialOwnership: null,
+    })
+    this.setStudyCompareMetrics(this.state.studyBaselineOwnership, null)
+    this.scheduleStudyAnalysis()
+  }
+
+  updateStudySnapshot(mutator) {
+    let snapshot = cloneSnapshot(this.state.studyBaselineSnapshot)
+    if (snapshot == null) return
+
+    let nextSnapshot = mutator(snapshot) || snapshot
+    this.setState({
+      studyBaselineSnapshot: nextSnapshot,
+      studyBaselineDirty: true,
+      studyTrialMoves: [],
+      studyBaselineOwnership: null,
+      studyTrialOwnership: null,
+    })
+    this.scheduleStudyAnalysis()
+  }
+
+  clickStudyVertex(vertex, {button = 0} = {}) {
+    if (button !== 0) return
+
+    if (this.state.mode === 'baseline') {
+      let selectedTool = this.state.selectedTool
+      if (selectedTool === 'label') {
+        this.toggleBaselineKeyPoint(vertex)
+        return
+      }
+
+      this.updateStudySnapshot((snapshot) => {
+        let [x, y] = vertex
+        let sign =
+          selectedTool === 'stone_-1'
+            ? -1
+            : selectedTool === 'stone_1'
+              ? 1
+              : 0
+
+        if (sign === 0) {
+          let current = snapshot.signMap[y]?.[x] ?? 0
+          snapshot.signMap[y][x] = current === 0 ? snapshot.nextPlayer : 0
+        } else {
+          let current = snapshot.signMap[y]?.[x] ?? 0
+          snapshot.signMap[y][x] = current === sign ? 0 : sign
+        }
+
+        return snapshot
+      })
+      return
+    }
+
+    if (this.state.mode === 'trial') {
+      let trialSnapshot = this.getStudyTrialSnapshot()
+      if (trialSnapshot == null) return
+
+      let board = boardFromSnapshot(trialSnapshot)
+      let player = this.getStudyAnalysisPlayer('trial')
+      let {pass, overwrite, suicide} = board.analyzeMove(player, vertex)
+
+      if (pass || overwrite || suicide) return
+
+      this.setState({
+        studyTrialMoves: [...this.state.studyTrialMoves, vertex],
+        studyTrialOwnership: null,
+      })
+      this.scheduleStudyAnalysis()
+    }
+  }
+
+  undoTrialMove() {
+    if (this.state.studyTrialMoves.length === 0) return
+
+    this.setState({
+      studyTrialMoves: this.state.studyTrialMoves.slice(0, -1),
+      studyTrialOwnership: null,
+    })
+    this.scheduleStudyAnalysis()
+  }
+
+  async applyTrialAsVariation() {
+    if (
+      this.state.studyBaselineSnapshot == null ||
+      this.state.studyTrialMoves.length === 0
+    ) {
+      return
+    }
+
+    let tree = this.inferredState.gameTree
+    let treePosition = this.state.treePosition
+    let board = gametree.getBoard(tree, treePosition)
+    let currentPlayer = this.getPlayer(treePosition)
+
+    if (
+      !snapshotMatchesBoard(
+        this.state.studyBaselineSnapshot,
+        board,
+        currentPlayer,
+      )
+    ) {
+      await dialog.showMessageBox(
+        i18n.t(
+          'sabaki.study',
+          'The baseline no longer matches the current node, so the trial cannot be applied as a variation.',
+        ),
+        'warning',
+      )
+      return
+    }
+
+    let nextTreePosition = treePosition
+    let nextTree = tree.mutate((draft) => {
+      let sign = currentPlayer
+      for (let move of this.state.studyTrialMoves) {
+        nextTreePosition = draft.appendNode(nextTreePosition, {
+          [sign > 0 ? 'B' : 'W']: [sgf.stringifyVertex(move)],
+        })
+        sign = -sign
+      }
+    })
+
+    this.setCurrentTreePosition(nextTree, nextTreePosition)
+    this.setState({mode: 'play', studyTrialMoves: []})
+  }
+
+  scheduleStudyAnalysis() {
+    clearTimeout(this.studyAnalysisId)
+    this.studyAnalysisId = setTimeout(() => {
+      this.refreshStudyAnalysis()
+    }, 200)
+  }
+
+  async refreshStudyAnalysis() {
+    if (
+      !['baseline', 'trial'].includes(this.state.mode) ||
+      this.state.studyBaselineSnapshot == null
+    ) {
+      return
+    }
+
+    this.setState({studyAnalysisPending: true})
+
+    let baselineOwnership = await this.analyzeStudyPosition('baseline')
+    let trialOwnership =
+      this.state.mode === 'trial' && this.state.studyTrialMoves.length > 0
+        ? await this.analyzeStudyPosition('trial')
+        : null
+
+    this.setState({
+      studyBaselineOwnership: baselineOwnership,
+      studyTrialOwnership: trialOwnership,
+      studyAnalysisPending: false,
+    })
+    this.setStudyCompareMetrics(baselineOwnership, trialOwnership)
+  }
+
   isCompareOverlayMode(overlayMode = this.state.overlayMode) {
     return overlayMode === 'compare'
   }
@@ -502,6 +877,151 @@ class Sabaki extends EventEmitter {
         args: ['maxVisits', Math.round(maxVisits).toString()],
       })
     } catch (err) {}
+  }
+
+  getAnalysisVisitLimit() {
+    let maxVisits = +setting.get('board.analysis_max_visits')
+    return Number.isFinite(maxVisits) && maxVisits > 0 ? Math.round(maxVisits) : null
+  }
+
+  async runOwnershipAnalysis({
+    syncer,
+    tree,
+    treePosition,
+    analyzePlayer,
+    pendingStateKey = null,
+    requestGroup = 'compare',
+    showLoadingText = null,
+    previewCacheMoves = null,
+  }) {
+    if (syncer == null || syncer.suspended || tree == null || treePosition == null) {
+      return null
+    }
+
+    let commandName = this.getAnalyzeCommand(syncer)
+    if (commandName == null) return null
+
+    let cachedOwnership =
+      previewCacheMoves != null
+        ? this.getCachedPreviewOwnership(syncer.id, tree, treePosition, previewCacheMoves)
+        : this.getCachedOwnership(syncer.id, tree, treePosition)
+    if (cachedOwnership != null) return cachedOwnership
+
+    let args = [
+      analyzePlayer > 0 ? 'B' : 'W',
+      setting.get('board.analysis_interval').toString(),
+    ]
+    if (commandName.includes('kata')) args.push('ownership', 'true')
+
+    let requestId =
+      requestGroup === 'analysis'
+        ? ++this.analysisRequestId
+        : ++this.compareRequestId
+    let visitLimit = this.getAnalysisVisitLimit()
+    let originTreePosition = this.state.treePosition
+
+    if (pendingStateKey != null) {
+      this.setState({[pendingStateKey]: true})
+    }
+    if (showLoadingText != null) {
+      this.showInfoOverlay(showLoadingText)
+    }
+
+    try {
+      let synced = await this.syncEngine(syncer.id, treePosition, {tree})
+      if (
+        !synced ||
+        (requestGroup === 'analysis' && requestId !== this.analysisRequestId) ||
+        (requestGroup !== 'analysis' && requestId !== this.compareRequestId)
+      ) {
+        return null
+      }
+
+      if (commandName.includes('kata')) {
+        await this.configureKataAnalysis(syncer)
+      }
+
+      let ownership = await new Promise((resolve) => {
+        let timeoutId = setTimeout(() => {
+          syncer.removeListener('analysis-update', handleUpdate)
+          resolve(null)
+        }, 8000)
+
+        let handleUpdate = () => {
+          let invalid =
+            requestGroup === 'analysis'
+              ? requestId !== this.analysisRequestId
+              : requestId !== this.compareRequestId
+
+          if (invalid) {
+            clearTimeout(timeoutId)
+            syncer.removeListener('analysis-update', handleUpdate)
+            resolve(null)
+            return
+          }
+
+          if (
+            syncer.treePosition !== treePosition ||
+            syncer.analysis == null ||
+            syncer.analysis.ownership == null
+          ) {
+            return
+          }
+
+          let bestVisits = Math.max(
+            0,
+            ...syncer.analysis.variations.map((variation) => variation.visits || 0),
+          )
+          if (visitLimit != null && bestVisits < visitLimit) return
+
+          clearTimeout(timeoutId)
+          syncer.removeListener('analysis-update', handleUpdate)
+          syncer.sendAbort()
+          resolve(syncer.analysis.ownership)
+        }
+
+        syncer.on('analysis-update', handleUpdate)
+
+        try {
+          syncer.queueCommand({name: commandName, args})
+        } catch (err) {
+          clearTimeout(timeoutId)
+          syncer.removeListener('analysis-update', handleUpdate)
+          resolve(null)
+        }
+      })
+
+      if (ownership != null) {
+        if (previewCacheMoves != null) {
+          this.cachePreviewOwnership(
+            syncer.id,
+            tree,
+            treePosition,
+            previewCacheMoves,
+            ownership,
+          )
+        } else {
+          this.cacheOwnership(syncer.id, tree, treePosition, ownership)
+        }
+      }
+
+      return ownership
+    } finally {
+      if (
+        this.state.analyzingEngineSyncerId === syncer.id &&
+        this.state.treePosition === originTreePosition &&
+        requestGroup !== 'analysis'
+      ) {
+        this.analyzeMove(originTreePosition)
+      }
+
+      if (pendingStateKey != null) {
+        this.setState({[pendingStateKey]: false})
+      }
+      if (showLoadingText != null) {
+        this.hideInfoOverlay()
+      }
+    }
   }
 
   getAnalysisSyncerId({requireOwnership = false} = {}) {
@@ -660,14 +1180,6 @@ class Sabaki extends EventEmitter {
     }
 
     let sourceTree = this.inferredState.gameTree
-    let cachedOwnership = this.getCachedPreviewOwnership(
-      syncer.id,
-      sourceTree,
-      treePosition,
-      previewMoves,
-    )
-    if (cachedOwnership != null) return cachedOwnership
-
     let previewTreePosition = treePosition
     let previewTree = sourceTree.mutate((draft) => {
       let sign = this.getPlayer(treePosition)
@@ -681,96 +1193,18 @@ class Sabaki extends EventEmitter {
       }
     })
 
-    let commandName = this.getAnalyzeCommand(syncer)
-    if (commandName == null) return null
-
     let analyzeSign =
       previewMoves.length % 2 === 0
         ? this.getPlayer(treePosition)
         : -this.getPlayer(treePosition)
-    let args = [
-      analyzeSign > 0 ? 'B' : 'W',
-      setting.get('board.analysis_interval').toString(),
-    ]
-
-    if (commandName.includes('kata')) {
-      args.push('ownership', 'true')
-    }
-
-    let requestId = ++this.compareRequestId
-    let originTreePosition = this.state.treePosition
-
-    this.setState({comparePending: true})
-
-    try {
-      let synced = await this.syncEngine(syncer.id, previewTreePosition, {
-        tree: previewTree,
-      })
-      if (!synced || requestId !== this.compareRequestId) return null
-
-      if (commandName.includes('kata')) {
-        await this.configureKataAnalysis(syncer)
-      }
-
-      let ownership = await new Promise((resolve) => {
-        let timeoutId = setTimeout(() => {
-          syncer.removeListener('analysis-update', handleUpdate)
-          resolve(null)
-        }, 4000)
-
-        let handleUpdate = () => {
-          if (requestId !== this.compareRequestId) {
-            clearTimeout(timeoutId)
-            syncer.removeListener('analysis-update', handleUpdate)
-            resolve(null)
-            return
-          }
-
-          if (
-            syncer.treePosition === previewTreePosition &&
-            syncer.analysis != null &&
-            syncer.analysis.ownership != null
-          ) {
-            clearTimeout(timeoutId)
-            syncer.removeListener('analysis-update', handleUpdate)
-            resolve(syncer.analysis.ownership)
-          }
-        }
-
-        syncer.on('analysis-update', handleUpdate)
-
-        try {
-          syncer.queueCommand({name: commandName, args})
-        } catch (err) {
-          clearTimeout(timeoutId)
-          syncer.removeListener('analysis-update', handleUpdate)
-          resolve(null)
-        }
-      })
-
-      if (ownership != null) {
-        this.cachePreviewOwnership(
-          syncer.id,
-          sourceTree,
-          treePosition,
-          previewMoves,
-          ownership,
-        )
-      }
-
-      return ownership
-    } finally {
-      if (
-        this.state.analyzingEngineSyncerId === syncer.id &&
-        this.state.treePosition === originTreePosition
-      ) {
-        this.analyzeMove(originTreePosition)
-      }
-
-      if (requestId === this.compareRequestId) {
-        this.setState({comparePending: false})
-      }
-    }
+    return await this.runOwnershipAnalysis({
+      syncer,
+      tree: previewTree,
+      treePosition: previewTreePosition,
+      analyzePlayer: analyzeSign,
+      pendingStateKey: 'comparePending',
+      previewCacheMoves,
+    })
   }
 
   async toggleCompareMode() {
@@ -786,14 +1220,26 @@ class Sabaki extends EventEmitter {
     if (syncer == null || syncer.suspended) return null
 
     let tree = this.inferredState.gameTree
+    let sign = this.getPlayer(treePosition)
+
+    this.setState({compareTargetTreePosition: null})
+    return await this.runOwnershipAnalysis({
+      syncer,
+      tree,
+      treePosition,
+      analyzePlayer: sign,
+      pendingStateKey: 'comparePending',
+      showLoadingText: i18n.t('sabaki.engine', 'Loading comparison...'),
+    })
+
     let cachedOwnership = this.getCachedOwnership(syncer.id, tree, treePosition)
     if (cachedOwnership != null) return cachedOwnership
 
     let commandName = this.getAnalyzeCommand(syncer)
     if (commandName == null) return null
 
-    let sign = this.getPlayer(treePosition)
-    let color = sign > 0 ? 'B' : 'W'
+    let legacySign = this.getPlayer(treePosition)
+    let color = legacySign > 0 ? 'B' : 'W'
     let interval = setting.get('board.analysis_interval').toString()
     let args = [color, interval]
 
@@ -937,6 +1383,25 @@ class Sabaki extends EventEmitter {
     this.setState({
       compareTargetTreePosition: treePosition,
       graphHoverTreePosition: null,
+    })
+  }
+
+  async analyzeStudyPosition(kind) {
+    let syncer = this.inferredState.analyzingEngineSyncer
+    if (syncer == null || !this.engineSupportsOwnership(syncer)) return null
+
+    let snapshot =
+      kind === 'trial'
+        ? this.getStudyTrialSnapshot()
+        : this.state.studyBaselineSnapshot
+    if (snapshot == null) return null
+
+    let {tree, treePosition} = snapshotToGameTree(snapshot)
+    return await this.runOwnershipAnalysis({
+      syncer,
+      tree,
+      treePosition,
+      analyzePlayer: snapshot.nextPlayer,
     })
   }
 
@@ -1457,6 +1922,11 @@ class Sabaki extends EventEmitter {
     }
 
     let [vx, vy] = vertex
+
+    if (['baseline', 'trial'].includes(this.state.mode)) {
+      this.clickStudyVertex(vertex, {button, ctrlKey, x, y})
+      return
+    }
 
     if (['play', 'autoplay'].includes(this.state.mode)) {
       if (button === 0) {
@@ -2017,6 +2487,9 @@ class Sabaki extends EventEmitter {
     if (clearCache) gametree.clearBoardCache()
 
     let navigated = treePosition !== this.state.treePosition
+    let studyStateChange = navigated
+      ? this.getStudyStateChange(tree, treePosition)
+      : {}
 
     if (['scoring', 'estimator'].includes(this.state.mode) && navigated) {
       this.setState({mode: 'play'})
@@ -2043,6 +2516,10 @@ class Sabaki extends EventEmitter {
       gameTrees: gameTrees.map((t, i) => (i !== gameIndex ? t : tree)),
       gameIndex,
       treePosition,
+      mode:
+        navigated && ['baseline', 'trial'].includes(this.state.mode)
+          ? 'play'
+          : this.state.mode,
       compareReferenceTreePosition:
         navigated && this.isCompareOverlayMode()
           ? treePosition
@@ -2058,6 +2535,7 @@ class Sabaki extends EventEmitter {
       territoryDiffTargetTreePosition: navigated
         ? null
         : this.state.territoryDiffTargetTreePosition,
+      ...studyStateChange,
     })
 
     this.recordHistory({prevGameIndex, prevTreePosition})
@@ -2749,30 +3227,16 @@ class Sabaki extends EventEmitter {
 
   async analyzeMove(treePosition) {
     let sign = this.getPlayer(treePosition)
-    let color = sign > 0 ? 'B' : 'W'
     let syncer = this.inferredState.analyzingEngineSyncer
     if (syncer == null || syncer.suspended) return
 
-    let synced = await this.syncEngine(syncer.id, treePosition)
-    if (!synced) return
-
-    let commandName = this.getAnalyzeCommand(syncer)
-    if (commandName == null) return
-
-    let interval = setting.get('board.analysis_interval').toString()
-    let args = [color, interval]
-
-    if (commandName.includes('kata')) {
-      args.push('ownership', 'true')
-      await this.configureKataAnalysis(syncer)
-    }
-
-    try {
-      syncer.queueCommand({
-        name: commandName,
-        args,
-      })
-    } catch (err) {}
+    await this.runOwnershipAnalysis({
+      syncer,
+      tree: this.inferredState.gameTree,
+      treePosition,
+      analyzePlayer: sign,
+      requestGroup: 'analysis',
+    })
   }
 
   async startAnalysis(syncerId) {

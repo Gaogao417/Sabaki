@@ -42,6 +42,7 @@ export default function OverlayStatusBar({
   hoveredDelta = null,
   hoveredRegionDeltaSummary = null,
   diffSourceType = null,
+  keyPointSummary = null,
 }) {
   if (!territoryMode) return null
 
@@ -134,6 +135,19 @@ export default function OverlayStatusBar({
         h(LabelValue, {
           label: t('White Gain'),
           value: formatMetric(deltaSummary.white),
+        }),
+      ),
+    keyPointSummary != null &&
+      h(
+        'div',
+        {class: 'overlay-status-line'},
+        h(LabelValue, {
+          label: t('Key Black Gain'),
+          value: formatMetric(keyPointSummary.blackGain),
+        }),
+        h(LabelValue, {
+          label: t('Key White Gain'),
+          value: formatMetric(keyPointSummary.whiteGain),
         }),
       ),
     h(
