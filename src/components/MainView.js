@@ -7,7 +7,7 @@ import GuessBar from './bars/GuessBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
 import ScoringBar from './bars/ScoringBar.js'
 import FindBar from './bars/FindBar.js'
-import TerritoryOverlay from './TerritoryOverlay.js'
+import BoardOverlayStack from './overlays/BoardOverlayStack.js'
 
 import sabaki from '../modules/sabaki.js'
 import * as gametree from '../modules/gametree.js'
@@ -130,6 +130,9 @@ export default class MainView extends Component {
       compareTargetVertex,
       territoryOwnership,
       overlayUnavailableReason,
+      lastMoveTerritoryDeltaMap,
+      lastMoveTerritoryDiffAvailable,
+      territoryStatusText,
       graphHoverTreePosition,
       blockedGuesses,
 
@@ -270,7 +273,6 @@ export default class MainView extends Component {
       analysisType,
       analysis:
         !compareMode &&
-        !territoryMode &&
         showAnalysis &&
         analysisTreePosition != null &&
         analysisTreePosition === treePosition
@@ -313,11 +315,14 @@ export default class MainView extends Component {
         {ref: (el) => (this.mainElement = el)},
 
         territoryMode
-          ? h(TerritoryOverlay, {
-              overlayMode,
+          ? h(BoardOverlayStack, {
+              territoryMode,
               ownership: territoryOwnership,
               unavailableReason: overlayUnavailableReason,
               gobanProps,
+              analysis: gobanProps.analysis,
+              lastMoveDeltaMap: lastMoveTerritoryDeltaMap,
+              lastMoveDiffAvailable: lastMoveTerritoryDiffAvailable,
             })
           : h(Goban, gobanProps),
       ),
@@ -338,6 +343,7 @@ export default class MainView extends Component {
           playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
           currentPlayer,
           showHotspot: node.data.HO != null,
+          overlayStatus: territoryStatusText,
           onCurrentPlayerClick: this.handleTogglePlayer,
         }),
 

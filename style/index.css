@@ -676,6 +676,45 @@ header {
     opacity: .85;
     filter: drop-shadow(0 0 4px rgba(244, 195, 95, .7));
   }
+  #goban.territory-mode .shudan-vertex[title^="@territory-delta-strengthened-"].shudan-marker_point .shudan-marker {
+    fill: #58d68d;
+    opacity: .95;
+    filter: drop-shadow(0 0 4px rgba(88, 214, 141, .8));
+  }
+  #goban.territory-mode .shudan-vertex[title^="@territory-delta-weakened-"].shudan-marker_point .shudan-marker {
+    fill: #ff7a7a;
+    opacity: .95;
+    filter: drop-shadow(0 0 4px rgba(255, 122, 122, .8));
+  }
+  #goban.territory-mode .shudan-vertex[title$="-1"].shudan-marker_point .shudan-marker {
+    transform: scale(.8);
+    transform-origin: center;
+  }
+  #goban.territory-mode .shudan-vertex[title$="-2"].shudan-marker_point .shudan-marker {
+    transform: scale(1.15);
+    transform-origin: center;
+  }
+  #goban.territory-mode .shudan-vertex[title$="-3"].shudan-marker_point .shudan-marker {
+    transform: scale(1.45);
+    transform-origin: center;
+  }
+
+.overlay-mode-badge {
+    position: absolute;
+    right: 54px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 243, 196, .45);
+    background: rgba(88, 58, 11, .78);
+    color: #fff5cf;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .03em;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
+  }
 
 #properties {
     overflow: auto;

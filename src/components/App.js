@@ -372,6 +372,8 @@ class App extends Component {
     let compareTargetVertex = null
     let territoryOwnership = null
     let overlayUnavailableReason = null
+    let lastMoveTerritoryDeltaMap = null
+    let lastMoveTerritoryDiffAvailable = false
     let effectiveOverlayMode = state.shiftTerritoryActive
       ? 'territory'
       : state.overlayMode
@@ -455,7 +457,37 @@ class App extends Component {
             ? t('Waiting for ownership data from the analysis engine...')
             : t('The current analysis engine does not provide ownership data.')
       }
+
+      if (
+        state.territoryDiffSource === 'move' &&
+        state.territoryDiffReferenceTreePosition != null &&
+        state.territoryDiffTargetTreePosition != null
+      ) {
+        let referenceOwnership = sabaki.getOwnershipForTreePosition(
+          null,
+          state.territoryDiffReferenceTreePosition,
+        )
+        let targetOwnership = sabaki.getOwnershipForTreePosition(
+          null,
+          state.territoryDiffTargetTreePosition,
+        )
+
+        lastMoveTerritoryDeltaMap = helper.getOwnershipDelta(
+          referenceOwnership,
+          targetOwnership,
+        )
+        lastMoveTerritoryDiffAvailable = lastMoveTerritoryDeltaMap != null
+      }
     }
+
+    let territoryStatusText =
+      !territoryMode
+        ? null
+        : state.shiftTerritoryActive && state.overlayMode !== 'territory'
+          ? t('Territory (Shift)')
+          : lastMoveTerritoryDiffAvailable
+            ? t('Territory + Diff')
+            : t('Territory')
 
     state = {
       ...state,
@@ -471,6 +503,9 @@ class App extends Component {
       compareTargetVertex,
       territoryOwnership,
       overlayUnavailableReason,
+      lastMoveTerritoryDeltaMap,
+      lastMoveTerritoryDiffAvailable,
+      territoryStatusText,
     }
 
     return h(

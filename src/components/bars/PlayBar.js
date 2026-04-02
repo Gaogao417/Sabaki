@@ -111,6 +111,7 @@ export default class PlayBar extends Component {
       playerCaptures,
       currentPlayer,
       showHotspot,
+      overlayStatus,
 
       onCurrentPlayerClick = helper.noop,
     },
@@ -218,6 +219,9 @@ export default class PlayBar extends Component {
           height: 22,
         }),
       ),
+
+      overlayStatus != null &&
+        h('span', {class: 'overlay-mode-badge'}, overlayStatus),
     )
   }
 }

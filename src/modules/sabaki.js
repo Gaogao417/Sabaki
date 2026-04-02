@@ -18,6 +18,7 @@ import * as gametree from './gametree.js'
 import * as gobantransformer from './gobantransformer.js'
 import * as gtplogger from './gtplogger.js'
 import * as helper from './helper.js'
+import {getAnalysisPreviewCacheKey} from './overlays/analysisPreview.js'
 import * as sound from './sound.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
@@ -87,6 +88,9 @@ class Sabaki extends EventEmitter {
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
+      territoryDiffSource: null,
+      territoryDiffReferenceTreePosition: null,
+      territoryDiffTargetTreePosition: null,
 
       // Sidebar
 
@@ -190,6 +194,7 @@ class Sabaki extends EventEmitter {
 
     this.treeHash = this.generateTreeHash()
     this.ownershipCache = {}
+    this.previewOwnershipCache = {}
     this.compareRequestId = 0
     this.historyPointer = 0
     this.history = []
@@ -428,6 +433,19 @@ class Sabaki extends EventEmitter {
     return key == null ? null : this.ownershipCache[key] || null
   }
 
+  cachePreviewOwnership(syncerId, tree, treePosition, moves, ownership) {
+    let key = getAnalysisPreviewCacheKey(tree, treePosition, moves)
+    if (syncerId == null || key == null || ownership == null) return
+    this.previewOwnershipCache[`${syncerId}:${key}`] = ownership
+  }
+
+  getCachedPreviewOwnership(syncerId, tree, treePosition, moves) {
+    let key = getAnalysisPreviewCacheKey(tree, treePosition, moves)
+    return key == null || syncerId == null
+      ? null
+      : this.previewOwnershipCache[`${syncerId}:${key}`] || null
+  }
+
   getCurrentOwnership(syncer = this.inferredState.analyzingEngineSyncer) {
     let tree = this.inferredState.gameTree
     let {treePosition, analysis, analysisTreePosition} = this.state
@@ -518,6 +536,9 @@ class Sabaki extends EventEmitter {
         compareTargetTreePosition: null,
         comparePending: false,
         graphHoverTreePosition: null,
+        territoryDiffSource: null,
+        territoryDiffReferenceTreePosition: null,
+        territoryDiffTargetTreePosition: null,
       })
       return true
     }
@@ -558,6 +579,9 @@ class Sabaki extends EventEmitter {
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
+      territoryDiffSource: null,
+      territoryDiffReferenceTreePosition: null,
+      territoryDiffTargetTreePosition: null,
     })
 
     if (
@@ -581,6 +605,9 @@ class Sabaki extends EventEmitter {
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
+      territoryDiffSource: null,
+      territoryDiffReferenceTreePosition: null,
+      territoryDiffTargetTreePosition: null,
     })
   }
 
@@ -619,6 +646,131 @@ class Sabaki extends EventEmitter {
     }
 
     return this.getCachedOwnership(analyzingSyncer.id, tree, treePosition)
+  }
+
+  async fetchPreviewOwnership(treePosition, previewMoves) {
+    let syncer = this.inferredState.analyzingEngineSyncer
+    if (
+      syncer == null ||
+      syncer.suspended ||
+      !Array.isArray(previewMoves) ||
+      previewMoves.length === 0
+    ) {
+      return null
+    }
+
+    let sourceTree = this.inferredState.gameTree
+    let cachedOwnership = this.getCachedPreviewOwnership(
+      syncer.id,
+      sourceTree,
+      treePosition,
+      previewMoves,
+    )
+    if (cachedOwnership != null) return cachedOwnership
+
+    let previewTreePosition = treePosition
+    let previewTree = sourceTree.mutate((draft) => {
+      let sign = this.getPlayer(treePosition)
+
+      for (let move of previewMoves) {
+        let color = sign > 0 ? 'B' : 'W'
+        previewTreePosition = draft.appendNode(previewTreePosition, {
+          [color]: [sgf.stringifyVertex(move)],
+        })
+        sign = -sign
+      }
+    })
+
+    let commandName = this.getAnalyzeCommand(syncer)
+    if (commandName == null) return null
+
+    let analyzeSign =
+      previewMoves.length % 2 === 0
+        ? this.getPlayer(treePosition)
+        : -this.getPlayer(treePosition)
+    let args = [
+      analyzeSign > 0 ? 'B' : 'W',
+      setting.get('board.analysis_interval').toString(),
+    ]
+
+    if (commandName.includes('kata')) {
+      args.push('ownership', 'true')
+    }
+
+    let requestId = ++this.compareRequestId
+    let originTreePosition = this.state.treePosition
+
+    this.setState({comparePending: true})
+
+    try {
+      let synced = await this.syncEngine(syncer.id, previewTreePosition, {
+        tree: previewTree,
+      })
+      if (!synced || requestId !== this.compareRequestId) return null
+
+      if (commandName.includes('kata')) {
+        await this.configureKataAnalysis(syncer)
+      }
+
+      let ownership = await new Promise((resolve) => {
+        let timeoutId = setTimeout(() => {
+          syncer.removeListener('analysis-update', handleUpdate)
+          resolve(null)
+        }, 4000)
+
+        let handleUpdate = () => {
+          if (requestId !== this.compareRequestId) {
+            clearTimeout(timeoutId)
+            syncer.removeListener('analysis-update', handleUpdate)
+            resolve(null)
+            return
+          }
+
+          if (
+            syncer.treePosition === previewTreePosition &&
+            syncer.analysis != null &&
+            syncer.analysis.ownership != null
+          ) {
+            clearTimeout(timeoutId)
+            syncer.removeListener('analysis-update', handleUpdate)
+            resolve(syncer.analysis.ownership)
+          }
+        }
+
+        syncer.on('analysis-update', handleUpdate)
+
+        try {
+          syncer.queueCommand({name: commandName, args})
+        } catch (err) {
+          clearTimeout(timeoutId)
+          syncer.removeListener('analysis-update', handleUpdate)
+          resolve(null)
+        }
+      })
+
+      if (ownership != null) {
+        this.cachePreviewOwnership(
+          syncer.id,
+          sourceTree,
+          treePosition,
+          previewMoves,
+          ownership,
+        )
+      }
+
+      return ownership
+    } finally {
+      if (
+        this.state.analyzingEngineSyncerId === syncer.id &&
+        this.state.treePosition === originTreePosition
+      ) {
+        this.analyzeMove(originTreePosition)
+      }
+
+      if (requestId === this.compareRequestId) {
+        this.setState({comparePending: false})
+      }
+    }
   }
 
   async toggleCompareMode() {
@@ -1593,6 +1745,11 @@ class Sabaki extends EventEmitter {
     let createNode = tree.get(nextTreePosition) == null
 
     this.setCurrentTreePosition(newTree, nextTreePosition)
+    this.setState({
+      territoryDiffSource: 'move',
+      territoryDiffReferenceTreePosition: treePosition,
+      territoryDiffTargetTreePosition: nextTreePosition,
+    })
 
     // Play sounds
 
@@ -1894,6 +2051,13 @@ class Sabaki extends EventEmitter {
         ? null
         : this.state.compareTargetTreePosition,
       graphHoverTreePosition: null,
+      territoryDiffSource: navigated ? null : this.state.territoryDiffSource,
+      territoryDiffReferenceTreePosition: navigated
+        ? null
+        : this.state.territoryDiffReferenceTreePosition,
+      territoryDiffTargetTreePosition: navigated
+        ? null
+        : this.state.territoryDiffTargetTreePosition,
     })
 
     this.recordHistory({prevGameIndex, prevTreePosition})
@@ -2214,13 +2378,20 @@ class Sabaki extends EventEmitter {
         if (this.state.analyzingEngineSyncerId === syncer.id) {
           // Update analysis info
 
+          let tree = this.state.gameTrees[this.state.gameIndex]
+          if (
+            syncer.treePosition != null &&
+            tree.get(syncer.treePosition) == null
+          ) {
+            return
+          }
+
           this.setState({
             analysis: syncer.analysis,
             analysisTreePosition: syncer.treePosition,
           })
 
           if (syncer.analysis != null && syncer.treePosition != null) {
-            let tree = this.state.gameTrees[this.state.gameIndex]
             if (syncer.analysis.ownership != null) {
               this.cacheOwnership(
                 syncer.id,
@@ -2357,14 +2528,14 @@ class Sabaki extends EventEmitter {
     )
   }
 
-  async syncEngine(syncerId, treePosition) {
+  async syncEngine(syncerId, treePosition, {tree = this.inferredState.gameTree} = {}) {
     let syncer = this.state.attachedEngineSyncers.find(
       (syncer) => syncer.id === syncerId,
     )
 
     if (syncer != null) {
       try {
-        await syncer.sync(this.inferredState.gameTree, treePosition)
+        await syncer.sync(tree, treePosition)
         return true
       } catch (err) {
         await dialog.showMessageBox(err.message, 'error')
@@ -2656,6 +2827,9 @@ class Sabaki extends EventEmitter {
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
+      territoryDiffSource: null,
+      territoryDiffReferenceTreePosition: null,
+      territoryDiffTargetTreePosition: null,
     })
   }
 
