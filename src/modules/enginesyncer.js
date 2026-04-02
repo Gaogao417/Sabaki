@@ -30,7 +30,7 @@ function parseVertex(coord, size) {
   return [x, y]
 }
 
-function parseAnalysis(line, board) {
+function parseAnalysis(line, board, sign = 1) {
   let tokens = line.trim().split(/\s+/)
   let ownership = null
   let ownershipIndex = tokens.indexOf('ownership')
@@ -41,6 +41,10 @@ function parseAnalysis(line, board) {
       board.width,
       board.height,
     )
+
+    if (ownership != null && sign !== 1) {
+      ownership = ownership.map((row) => row.map((value) => value * sign))
+    }
   }
 
   let variations = line
@@ -153,7 +157,7 @@ export default class EngineSyncer extends EventEmitter {
             // Parse analysis info
 
             if (line.startsWith('info ')) {
-              let {variations, ownership} = parseAnalysis(line, board)
+              let {variations, ownership} = parseAnalysis(line, board, sign)
 
               this.analysis = {
                 sign,

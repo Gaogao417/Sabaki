@@ -7,6 +7,7 @@ import GuessBar from './bars/GuessBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
 import ScoringBar from './bars/ScoringBar.js'
 import FindBar from './bars/FindBar.js'
+import TerritoryOverlay from './TerritoryOverlay.js'
 
 import sabaki from '../modules/sabaki.js'
 import * as gametree from '../modules/gametree.js'
@@ -117,7 +118,9 @@ export default class MainView extends Component {
       analysis,
       analysisTreePosition,
       areaMap,
+      overlayMode,
       compareMode,
+      territoryMode,
       comparePending,
       compareReferenceTreePosition,
       compareTargetTreePosition,
@@ -125,6 +128,8 @@ export default class MainView extends Component {
       compareMarkerMap,
       compareReferenceVertex,
       compareTargetVertex,
+      territoryOwnership,
+      overlayUnavailableReason,
       graphHoverTreePosition,
       blockedGuesses,
 
@@ -157,8 +162,7 @@ export default class MainView extends Component {
     let paintMap
     let markerMap = null
     let compareSelectedVertices = []
-    let dimmedStones =
-      ['scoring', 'estimator'].includes(mode) ? deadStones : []
+    let dimmedStones = ['scoring', 'estimator'].includes(mode) ? deadStones : []
     let overlayGhostStoneMap = null
 
     if (['scoring', 'estimator'].includes(mode)) {
@@ -182,11 +186,16 @@ export default class MainView extends Component {
       compareTargetTreePosition != null &&
       gameTree.get(compareTargetTreePosition) != null
     ) {
-      let referenceBoard = gametree.getBoard(gameTree, compareReferenceTreePosition)
+      let referenceBoard = gametree.getBoard(
+        gameTree,
+        compareReferenceTreePosition,
+      )
       let targetBoard = gametree.getBoard(gameTree, compareTargetTreePosition)
       let dimmedSet = new Set()
 
-      overlayGhostStoneMap = referenceBoard.signMap.map((row) => row.map(() => null))
+      overlayGhostStoneMap = referenceBoard.signMap.map((row) =>
+        row.map(() => null),
+      )
 
       for (let y = 0; y < referenceBoard.height; y++) {
         for (let x = 0; x < referenceBoard.width; x++) {
@@ -209,7 +218,9 @@ export default class MainView extends Component {
         }
       }
 
-      dimmedStones = [...dimmedSet].map((vertex) => vertex.split(',').map(Number))
+      dimmedStones = [...dimmedSet].map((vertex) =>
+        vertex.split(',').map(Number),
+      )
       markerMap = this.buildCompareAnchorMap(
         referenceBoard,
         markerMap,
@@ -228,10 +239,7 @@ export default class MainView extends Component {
     }
 
     if (
-      !(
-        compareMode &&
-        compareTargetTreePosition != null
-      ) &&
+      !(compareMode && compareTargetTreePosition != null) &&
       graphHoverTreePosition != null &&
       graphHoverTreePosition !== compareReferencePosition &&
       gameTree.get(graphHoverTreePosition) != null
@@ -253,6 +261,49 @@ export default class MainView extends Component {
       }
     }
 
+    let gobanProps = {
+      gameTree,
+      treePosition: compareReferencePosition,
+      board,
+      highlightVertices:
+        findVertex && mode === 'find' ? [findVertex] : highlightVertices,
+      analysisType,
+      analysis:
+        !compareMode &&
+        !territoryMode &&
+        showAnalysis &&
+        analysisTreePosition != null &&
+        analysisTreePosition === treePosition
+          ? analysis
+          : null,
+      paintMap,
+      markerMap,
+      compareSelectedVertices,
+      dimmedStones,
+      overlayGhostStoneMap,
+      comparePending,
+      compareMode,
+
+      crosshair: gobanCrosshair,
+      showCoordinates,
+      showMoveColorization,
+      showMoveNumbers: mode !== 'edit' && showMoveNumbers,
+      showNextMoves: mode !== 'guess' && showNextMoves,
+      showSiblings: mode !== 'guess' && showSiblings,
+      fuzzyStonePlacement,
+      animateStonePlacement,
+
+      playVariation,
+      drawLineMode:
+        mode === 'edit' && ['arrow', 'line'].includes(selectedTool)
+          ? selectedTool
+          : null,
+      transformation: boardTransformation,
+
+      onVertexClick: this.handleGobanVertexClick,
+      onLineDraw: this.handleGobanLineDraw,
+    }
+
     return h(
       'section',
       {id: 'main'},
@@ -261,47 +312,14 @@ export default class MainView extends Component {
         'main',
         {ref: (el) => (this.mainElement = el)},
 
-        h(Goban, {
-          gameTree,
-          treePosition: compareReferencePosition,
-          board,
-          highlightVertices:
-            findVertex && mode === 'find' ? [findVertex] : highlightVertices,
-          analysisType,
-          analysis:
-            !compareMode &&
-            showAnalysis &&
-            analysisTreePosition != null &&
-            analysisTreePosition === treePosition
-              ? analysis
-              : null,
-          paintMap,
-          markerMap,
-          compareSelectedVertices,
-          dimmedStones,
-          overlayGhostStoneMap,
-          comparePending,
-          compareMode,
-
-          crosshair: gobanCrosshair,
-          showCoordinates,
-          showMoveColorization,
-          showMoveNumbers: mode !== 'edit' && showMoveNumbers,
-          showNextMoves: mode !== 'guess' && showNextMoves,
-          showSiblings: mode !== 'guess' && showSiblings,
-          fuzzyStonePlacement,
-          animateStonePlacement,
-
-          playVariation,
-          drawLineMode:
-            mode === 'edit' && ['arrow', 'line'].includes(selectedTool)
-              ? selectedTool
-              : null,
-          transformation: boardTransformation,
-
-          onVertexClick: this.handleGobanVertexClick,
-          onLineDraw: this.handleGobanLineDraw,
-        }),
+        territoryMode
+          ? h(TerritoryOverlay, {
+              overlayMode,
+              ownership: territoryOwnership,
+              unavailableReason: overlayUnavailableReason,
+              gobanProps,
+            })
+          : h(Goban, gobanProps),
       ),
 
       h(

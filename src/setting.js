@@ -46,7 +46,9 @@ let defaults = {
   'autoscroll.max_interval': 200,
   'autoscroll.min_interval': 50,
   'board.analysis_interval': 50,
+  'board.analysis_max_visits': 500,
   'board.analysis_type': 'winrate',
+  'board.overlay_mode': 'off',
   'board.show_analysis': true,
   'board.variation_replay_mode': 'move_by_move',
   'board.variation_replay_interval': 500,
@@ -152,6 +154,7 @@ let defaults = {
   'setting.overwrite.v0.41.0': ['autoscroll.max_interval'],
   'setting.overwrite.v0.43.3_4': [
     'board.analysis_interval',
+    'board.analysis_max_visits',
     'graph.delay',
     'view.winrategraph_minheight',
     'view.winrategraph_blunderthreshold',
@@ -241,7 +244,7 @@ exports.events = {
   },
 }
 
-exports.load = function () {
+exports.load = function() {
   try {
     settings = JSON.parse(fs.readFileSync(exports.settingsPath, 'utf8'))
   } catch (err) {
@@ -280,7 +283,7 @@ exports.load = function () {
   return exports.save()
 }
 
-exports.loadThemes = function () {
+exports.loadThemes = function() {
   let packagePath = (filename) =>
     path.join(exports.themesDirectory, filename, 'package.json')
   let friendlyName = (name) =>
@@ -312,7 +315,7 @@ exports.loadThemes = function () {
     }, {})
 }
 
-exports.save = function () {
+exports.save = function() {
   let keys = Object.keys(settings).sort()
 
   fs.writeFileSync(
@@ -327,20 +330,20 @@ exports.save = function () {
   return exports
 }
 
-exports.get = function (key) {
+exports.get = function(key) {
   if (key in settings) return settings[key]
   if (key in defaults) return defaults[key]
   return null
 }
 
-exports.set = function (key, value) {
+exports.set = function(key, value) {
   settings[key] = value
   exports.save()
   exports.events.emit('change', {key, value})
   return exports
 }
 
-exports.getThemes = function () {
+exports.getThemes = function() {
   if (themesDict == null) exports.loadThemes()
   return themesDict
 }

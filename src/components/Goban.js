@@ -97,8 +97,10 @@ export default class Goban extends Component {
   }
 
   resize() {
-    let {offsetWidth: maxWidth, offsetHeight: maxHeight} =
-      this.element.parentElement
+    let {
+      offsetWidth: maxWidth,
+      offsetHeight: maxHeight,
+    } = this.element.parentElement
 
     if (
       maxWidth !== this.state.maxWidth ||
@@ -157,9 +159,12 @@ export default class Goban extends Component {
   }
 
   handleVertexMouseEnter(evt, vertex) {
-    if (this.props.analysis == null) return
+    let {analysis, onVertexMouseEnter = helper.noop} = this.props
+    onVertexMouseEnter(Object.assign(evt, {vertex}))
 
-    let {sign, variations} = this.props.analysis
+    if (analysis == null) return
+
+    let {sign, variations} = analysis
     let variation = variations.find((x) =>
       helper.vertexEquals(x.vertex, vertex),
     )
@@ -169,6 +174,8 @@ export default class Goban extends Component {
   }
 
   handleVertexMouseLeave(evt, vertex) {
+    let {onVertexMouseLeave = helper.noop} = this.props
+    onVertexMouseLeave(Object.assign(evt, {vertex}))
     this.stopPlayingVariation()
   }
 
@@ -216,6 +223,7 @@ export default class Goban extends Component {
       gameTree,
       treePosition,
       board,
+      className = '',
       paintMap = [],
       markerMap: customMarkerMap = null,
       analysis,
@@ -455,9 +463,8 @@ export default class Goban extends Component {
                     ? i18n.formatNumber(winrate) +
                       (Math.floor(winrate) === winrate ? '%' : '')
                     : analysisType === 'scoreLead' && scoreLead != null
-                      ? (scoreLead >= 0 ? '+' : '') +
-                        i18n.formatNumber(scoreLead)
-                      : '–',
+                    ? (scoreLead >= 0 ? '+' : '') + i18n.formatNumber(scoreLead)
+                    : '–',
                   visits < 1000
                     ? i18n.formatNumber(visits)
                     : i18n.formatNumber(Math.round(visits / 100) / 10) + 'k',
@@ -468,7 +475,13 @@ export default class Goban extends Component {
 
     return h(BoundedGoban, {
       id: 'goban',
-      class: classNames({crosshair, 'compare-mode': compareMode}),
+      class: classNames(
+        {
+          crosshair,
+          'compare-mode': compareMode,
+        },
+        className,
+      ),
       style: {top, left},
       innerProps: {ref: (el) => (this.element = el)},
 
@@ -492,10 +505,9 @@ export default class Goban extends Component {
       }),
       heatMap: gobantransformer.transformMap(heatMap, transformation),
       lines: lines.map(transformLine),
-      selectedVertices: [
-        ...highlightVertices,
-        ...compareSelectedVertices,
-      ].map(transformVertex),
+      selectedVertices: [...highlightVertices, ...compareSelectedVertices].map(
+        transformVertex,
+      ),
       dimmedVertices: dimmedStones.map(transformVertex),
 
       onVertexMouseUp: this.handleVertexMouseUp,

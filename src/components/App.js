@@ -4,7 +4,6 @@ import classNames from 'classnames'
 import fixPath from 'fix-path'
 
 import influence from '@sabaki/influence'
-import sgf from '@sabaki/sgf'
 
 import TripleSplitContainer from './helpers/TripleSplitContainer.js'
 import ThemeManager from './ThemeManager.js'
@@ -19,6 +18,7 @@ import InfoOverlay from './InfoOverlay.js'
 
 import i18n from '../i18n.js'
 import sabaki from '../modules/sabaki.js'
+import {buildCompareRenderData, getNodeMoveVertex} from '../modules/compare.js'
 import * as gametree from '../modules/gametree.js'
 import * as gtplogger from '../modules/gtplogger.js'
 import * as helper from '../modules/helper.js'
@@ -37,54 +37,6 @@ const t = i18n.context('App')
 const leftSidebarMinWidth = setting.get('view.sidebar_minwidth')
 const sidebarMinWidth = setting.get('view.leftsidebar_minwidth')
 
-function buildCompareRenderData(deltaMap, preset) {
-  if (deltaMap == null || deltaMap.length === 0) {
-    return {paintMap: null, markerMap: null}
-  }
-
-  let height = deltaMap.length
-  let width = deltaMap[0].length
-  let paintMap = helper.makeMatrix(width, height, 0)
-  let markerMap = helper.makeMatrix(width, height, null)
-  let labelThreshold = 0.15
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let delta = deltaMap[y][x]
-      let absDelta = Math.abs(delta)
-      if (absDelta < labelThreshold) continue
-
-      if (preset === 'focus') {
-        if (absDelta < 0.3) continue
-        paintMap[y][x] = Math.sign(delta) * (absDelta >= 0.5 ? 1 : 0.55)
-      } else {
-        let strength =
-          absDelta >= 0.5 ? 1 : absDelta >= 0.3 ? 0.7 : 0.4
-        paintMap[y][x] = Math.sign(delta) * strength
-      }
-
-      if (preset === 'numbers') {
-        markerMap[y][x] = {
-          type: 'label',
-          label: `${delta > 0 ? '+' : ''}${Math.round(delta * 100)}`,
-        }
-      }
-    }
-  }
-
-  return {paintMap, markerMap}
-}
-
-function getNodeMoveVertex(tree, treePosition) {
-  let node = tree.get(treePosition)
-  if (node == null) return null
-
-  let move = node.data.B?.[0] ?? node.data.W?.[0]
-  if (move == null || move === '') return null
-
-  return sgf.parseVertex(move)
-}
-
 fixPath()
 const portableDir = process.env.PORTABLE_EXECUTABLE_DIR
 if (portableDir) process.chdir(portableDir)
@@ -93,7 +45,10 @@ class App extends Component {
   constructor(props) {
     super(props)
 
-    this.state = sabaki.state
+    this.state = {
+      ...sabaki.state,
+      shiftTerritoryActive: false,
+    }
 
     sabaki.on('change', ({change, callback}) => {
       this.setState(change, callback)
@@ -102,6 +57,51 @@ class App extends Component {
     let bind = (f) => f.bind(this)
     this.handleMainLayoutSplitChange = bind(this.handleMainLayoutSplitChange)
     this.handleMainLayoutSplitFinish = bind(this.handleMainLayoutSplitFinish)
+    this.handleTemporaryTerritoryKeyDown = bind(
+      this.handleTemporaryTerritoryKeyDown,
+    )
+    this.handleTemporaryTerritoryKeyUp = bind(this.handleTemporaryTerritoryKeyUp)
+    this.deactivateTemporaryTerritory = bind(this.deactivateTemporaryTerritory)
+  }
+
+  handleTemporaryTerritoryKeyDown(evt) {
+    if (
+      evt.key !== 'Shift' ||
+      evt.repeat ||
+      evt.ctrlKey ||
+      evt.metaKey ||
+      evt.altKey ||
+      helper.isTextLikeElement(document.activeElement)
+    ) {
+      return
+    }
+
+    if (!this.state.shiftTerritoryActive) {
+      this.setState({shiftTerritoryActive: true})
+    }
+
+    let syncer = sabaki.inferredState.analyzingEngineSyncer
+
+    if (
+      syncer != null &&
+      !['scoring', 'estimator'].includes(sabaki.state.mode) &&
+      (sabaki.state.analysisTreePosition !== sabaki.state.treePosition ||
+        sabaki.getCurrentOwnership(syncer) == null)
+    ) {
+      sabaki.analyzeMove(sabaki.state.treePosition)
+    }
+  }
+
+  handleTemporaryTerritoryKeyUp(evt) {
+    if (evt.key === 'Shift') {
+      this.deactivateTemporaryTerritory()
+    }
+  }
+
+  deactivateTemporaryTerritory() {
+    if (this.state.shiftTerritoryActive) {
+      this.setState({shiftTerritoryActive: false})
+    }
   }
 
   componentDidMount() {
@@ -178,9 +178,11 @@ class App extends Component {
     // Handle keys
 
     document.addEventListener('keydown', (evt) => {
+      this.handleTemporaryTerritoryKeyDown(evt)
+
       if (evt.key === 'Escape') {
-        if (sabaki.state.compareMode) {
-          sabaki.clearCompareState({keepMode: false})
+        if (sabaki.state.overlayMode !== 'off') {
+          sabaki.setOverlayMode('off')
         } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
         } else if (sabaki.state.mode !== 'play') {
@@ -229,10 +231,14 @@ class App extends Component {
     })
 
     document.addEventListener('keyup', (evt) => {
+      this.handleTemporaryTerritoryKeyUp(evt)
+
       if (['ArrowUp', 'ArrowDown'].includes(evt.key)) {
         sabaki.stopAutoscrolling()
       }
     })
+
+    window.addEventListener('blur', this.deactivateTemporaryTerritory)
 
     // Handle window closing
 
@@ -364,6 +370,13 @@ class App extends Component {
     let compareMarkerMap = null
     let compareReferenceVertex = null
     let compareTargetVertex = null
+    let territoryOwnership = null
+    let overlayUnavailableReason = null
+    let effectiveOverlayMode = state.shiftTerritoryActive
+      ? 'territory'
+      : state.overlayMode
+    let compareMode = sabaki.isCompareOverlayMode(effectiveOverlayMode)
+    let territoryMode = effectiveOverlayMode === 'territory'
 
     if (['scoring', 'estimator'].includes(state.mode)) {
       // Calculate area map
@@ -385,7 +398,7 @@ class App extends Component {
     }
 
     if (
-      state.compareMode &&
+      compareMode &&
       state.compareReferenceTreePosition != null &&
       state.compareTargetTreePosition != null &&
       state.analyzingEngineSyncerId != null
@@ -398,7 +411,10 @@ class App extends Component {
         null,
         state.compareTargetTreePosition,
       )
-      let deltaMap = helper.getOwnershipDelta(referenceOwnership, targetOwnership)
+      let deltaMap = helper.getOwnershipDelta(
+        referenceOwnership,
+        targetOwnership,
+      )
       let compareData = buildCompareRenderData(
         deltaMap,
         state.compareDisplayPreset,
@@ -407,26 +423,54 @@ class App extends Component {
       compareMarkerMap = compareData.markerMap
     }
 
-    if (state.compareMode && state.compareReferenceTreePosition != null) {
+    if (compareMode && state.compareReferenceTreePosition != null) {
       compareReferenceVertex = getNodeMoveVertex(
         tree,
         state.compareReferenceTreePosition,
       )
     }
 
-    if (state.compareMode && state.compareTargetTreePosition != null) {
-      compareTargetVertex = getNodeMoveVertex(tree, state.compareTargetTreePosition)
+    if (compareMode && state.compareTargetTreePosition != null) {
+      compareTargetVertex = getNodeMoveVertex(
+        tree,
+        state.compareTargetTreePosition,
+      )
+    }
+
+    if (territoryMode) {
+      let engineSyncer = inferredState.analyzingEngineSyncer
+      territoryOwnership = sabaki.getCurrentOwnership(engineSyncer)
+
+      if (['scoring', 'estimator'].includes(state.mode)) {
+        overlayUnavailableReason = t(
+          'Territory overlay is unavailable while scoring or estimating.',
+        )
+      } else if (engineSyncer == null) {
+        overlayUnavailableReason = t('Start engine analysis first.')
+      } else if (territoryOwnership == null) {
+        overlayUnavailableReason =
+          state.analysisTreePosition !== state.treePosition ||
+          state.analysis == null ||
+          state.analysis.ownership == null
+            ? t('Waiting for ownership data from the analysis engine...')
+            : t('The current analysis engine does not provide ownership data.')
+      }
     }
 
     state = {
       ...state,
       ...inferredState,
+      overlayMode: effectiveOverlayMode,
+      compareMode,
+      territoryMode,
       scoreBoard,
       areaMap,
       comparePaintMap,
       compareMarkerMap,
       compareReferenceVertex,
       compareTargetVertex,
+      territoryOwnership,
+      overlayUnavailableReason,
     }
 
     return h(
@@ -452,6 +496,7 @@ class App extends Component {
         showNextMoves: state.showNextMoves,
         showSiblings: state.showSiblings,
         compareMode: state.compareMode,
+        overlayMode: state.overlayMode,
         compareDisplayPreset: state.compareDisplayPreset,
         showWinrateGraph: state.showWinrateGraph,
         showGameGraph: state.showGameGraph,

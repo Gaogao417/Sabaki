@@ -81,7 +81,7 @@ class Sabaki extends EventEmitter {
       fuzzyStonePlacement: null,
       animateStonePlacement: null,
       boardTransformation: '',
-      compareMode: false,
+      overlayMode: 'off',
       compareDisplayPreset: 'bands',
       compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
@@ -223,8 +223,7 @@ class Sabaki extends EventEmitter {
       this._windowState.isMaximized = false
     })
     window.sabaki.window.on('resize', async () => {
-      this._windowState.contentSize =
-        await window.sabaki.window.getContentSize()
+      this._windowState.contentSize = await window.sabaki.window.getContentSize()
     })
   }
 
@@ -281,8 +280,8 @@ class Sabaki extends EventEmitter {
         return 'B' in node.data
           ? 1
           : 'W' in node.data
-            ? -1
-            : -this.currentPlayer
+          ? -1
+          : -this.currentPlayer
       },
       get board() {
         return gametree.getBoard(this.gameTree, state.treePosition)
@@ -310,6 +309,7 @@ class Sabaki extends EventEmitter {
     let data = {
       'app.zoom_factor': 'zoomFactor',
       'board.analysis_type': 'analysisType',
+      'board.overlay_mode': 'overlayMode',
       'board.show_analysis': 'showAnalysis',
       'view.show_menubar': 'showMenuBar',
       'view.show_coordinates': 'showCoordinates',
@@ -447,11 +447,136 @@ class Sabaki extends EventEmitter {
       : this.getCachedOwnership(syncer.id, tree, treePosition)
   }
 
-  clearCompareState({keepMode = true} = {}) {
-    this.compareRequestId++
+  isCompareOverlayMode(overlayMode = this.state.overlayMode) {
+    return overlayMode === 'compare'
+  }
+
+  getAnalyzeCommand(syncer) {
+    if (syncer == null) return null
+
+    return (
+      setting
+        .get('engines.analyze_commands')
+        .find((command) => syncer.commands.includes(command)) || null
+    )
+  }
+
+  engineSupportsOwnership(syncer) {
+    let commandName = this.getAnalyzeCommand(syncer)
+    return commandName != null && commandName.includes('kata')
+  }
+
+  async configureKataAnalysis(syncer) {
+    if (
+      syncer == null ||
+      syncer.suspended ||
+      !syncer.commands.includes('kata-set-param')
+    ) {
+      return
+    }
+
+    let maxVisits = +setting.get('board.analysis_max_visits')
+    if (!Number.isFinite(maxVisits) || maxVisits <= 0) return
+
+    try {
+      await syncer.queueCommand({
+        name: 'kata-set-param',
+        args: ['maxVisits', Math.round(maxVisits).toString()],
+      })
+    } catch (err) {}
+  }
+
+  getAnalysisSyncerId({requireOwnership = false} = {}) {
+    let candidates = this.state.attachedEngineSyncers.filter((syncer) => {
+      if (this.getAnalyzeCommand(syncer) == null) return false
+      if (!requireOwnership) return true
+      return this.engineSupportsOwnership(syncer)
+    })
+
+    if (candidates.length === 0) return null
+
+    let preferredSyncer = candidates.find(
+      (syncer) => syncer.id === this.lastAnalyzingEngineSyncerId,
+    )
+
+    return (preferredSyncer || candidates[0]).id
+  }
+
+  async setOverlayMode(overlayMode) {
+    if (!['off', 'territory', 'compare'].includes(overlayMode)) return false
+
+    let compareOverlay = this.isCompareOverlayMode(overlayMode)
+    let territoryOverlay = overlayMode === 'territory'
+
+    if (!compareOverlay && !territoryOverlay) {
+      this.compareRequestId++
+      this.hideInfoOverlay()
+      setting.set('board.overlay_mode', overlayMode)
+      this.setState({
+        overlayMode,
+        compareReferenceTreePosition: null,
+        compareTargetTreePosition: null,
+        comparePending: false,
+        graphHoverTreePosition: null,
+      })
+      return true
+    }
+
+    let syncer = this.inferredState.analyzingEngineSyncer
+    let requireOwnership = compareOverlay || territoryOverlay
+
+    if (
+      syncer == null ||
+      (requireOwnership && !this.engineSupportsOwnership(syncer))
+    ) {
+      let syncerId = this.getAnalysisSyncerId({requireOwnership})
+
+      if (syncerId == null) {
+        await dialog.showMessageBox(
+          i18n.t(
+            'sabaki.engine',
+            requireOwnership
+              ? 'Please attach an analysis engine that provides ownership data first.'
+              : 'Please start engine analysis first.',
+          ),
+          'warning',
+        )
+        return false
+      }
+
+      await this.startAnalysis(syncerId)
+      syncer = this.state.attachedEngineSyncers.find((x) => x.id === syncerId)
+    }
+
+    setting.set('board.overlay_mode', overlayMode)
     this.hideInfoOverlay()
     this.setState({
-      compareMode: keepMode ? this.state.compareMode : false,
+      overlayMode,
+      compareReferenceTreePosition: compareOverlay
+        ? this.state.treePosition
+        : null,
+      compareTargetTreePosition: null,
+      comparePending: false,
+      graphHoverTreePosition: null,
+    })
+
+    if (
+      requireOwnership &&
+      (this.state.analysisTreePosition !== this.state.treePosition ||
+        this.getCurrentOwnership(syncer) == null)
+    ) {
+      this.analyzeMove(this.state.treePosition)
+    }
+
+    return true
+  }
+
+  clearCompareState({keepOverlay = true} = {}) {
+    this.compareRequestId++
+    this.hideInfoOverlay()
+    if (!keepOverlay) setting.set('board.overlay_mode', 'off')
+    this.setState({
+      overlayMode: keepOverlay ? this.state.overlayMode : 'off',
       compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
       comparePending: false,
@@ -497,38 +622,11 @@ class Sabaki extends EventEmitter {
   }
 
   async toggleCompareMode() {
-    if (this.state.compareMode) {
-      this.clearCompareState({keepMode: false})
-      return
+    if (this.isCompareOverlayMode()) {
+      await this.setOverlayMode('off')
+    } else {
+      await this.setOverlayMode('compare')
     }
-
-    let syncer = this.inferredState.analyzingEngineSyncer
-
-    if (syncer == null) {
-      await dialog.showMessageBox(
-        i18n.t('sabaki.engine', 'Please start engine analysis first.'),
-        'warning',
-      )
-      return
-    }
-
-    if (this.getCurrentOwnership(syncer) == null) {
-      await dialog.showMessageBox(
-        i18n.t(
-          'sabaki.engine',
-          'The current analysis engine does not provide ownership data.',
-        ),
-        'warning',
-      )
-      return
-    }
-
-    this.setState({
-      compareMode: true,
-      compareReferenceTreePosition: this.state.treePosition,
-      compareTargetTreePosition: null,
-      comparePending: false,
-    })
   }
 
   async fetchOwnershipForTreePosition(treePosition) {
@@ -539,9 +637,7 @@ class Sabaki extends EventEmitter {
     let cachedOwnership = this.getCachedOwnership(syncer.id, tree, treePosition)
     if (cachedOwnership != null) return cachedOwnership
 
-    let commandName = setting
-      .get('engines.analyze_commands')
-      .find((x) => syncer.commands.includes(x))
+    let commandName = this.getAnalyzeCommand(syncer)
     if (commandName == null) return null
 
     let sign = this.getPlayer(treePosition)
@@ -565,6 +661,10 @@ class Sabaki extends EventEmitter {
     try {
       let synced = await this.syncEngine(syncer.id, treePosition)
       if (!synced || requestId !== this.compareRequestId) return null
+
+      if (commandName.includes('kata')) {
+        await this.configureKataAnalysis(syncer)
+      }
 
       let ownership = await new Promise((resolve) => {
         let timeoutId = setTimeout(() => {
@@ -623,7 +723,7 @@ class Sabaki extends EventEmitter {
   }
 
   async compareWithTreePosition(treePosition) {
-    if (!this.state.compareMode) return
+    if (!this.isCompareOverlayMode()) return
 
     let syncer = this.inferredState.analyzingEngineSyncer
     if (syncer == null) return
@@ -636,7 +736,9 @@ class Sabaki extends EventEmitter {
     )
 
     if (baseOwnership == null) {
-      baseOwnership = await this.fetchOwnershipForTreePosition(referenceTreePosition)
+      baseOwnership = await this.fetchOwnershipForTreePosition(
+        referenceTreePosition,
+      )
     }
 
     if (baseOwnership == null) {
@@ -647,7 +749,7 @@ class Sabaki extends EventEmitter {
         ),
         'warning',
       )
-      this.clearCompareState({keepMode: false})
+      this.clearCompareState({keepOverlay: false})
       return
     }
 
@@ -1248,10 +1350,10 @@ class Sabaki extends EventEmitter {
               strength >= 8
                 ? 'TE'
                 : strength >= 5
-                  ? 'IT'
-                  : strength >= 3
-                    ? 'DO'
-                    : 'BM'
+                ? 'IT'
+                : strength >= 3
+                ? 'DO'
+                : 'BM'
             let annotationValues = {BM: '1', DO: '', IT: '', TE: '1'}
             let winrate =
               Math.round(
@@ -1393,10 +1495,10 @@ class Sabaki extends EventEmitter {
         let blocked = []
         let [, i] = vertex
           .map((x, i) => Math.abs(x - nextVertex[i]))
-          .reduce(
-            ([max, i], x, j) => (x > max ? [x, j] : [max, i]),
-            [-Infinity, -1],
-          )
+          .reduce(([max, i], x, j) => (x > max ? [x, j] : [max, i]), [
+            -Infinity,
+            -1,
+          ])
 
         for (let x = 0; x < board.width; x++) {
           for (let y = 0; y < board.height; y++) {
@@ -1785,7 +1887,7 @@ class Sabaki extends EventEmitter {
       gameIndex,
       treePosition,
       compareReferenceTreePosition:
-        navigated && this.state.compareMode
+        navigated && this.isCompareOverlayMode()
           ? treePosition
           : this.state.compareReferenceTreePosition,
       compareTargetTreePosition: navigated
@@ -2483,9 +2585,7 @@ class Sabaki extends EventEmitter {
     let synced = await this.syncEngine(syncer.id, treePosition)
     if (!synced) return
 
-    let commandName = setting
-      .get('engines.analyze_commands')
-      .find((x) => syncer.commands.includes(x))
+    let commandName = this.getAnalyzeCommand(syncer)
     if (commandName == null) return
 
     let interval = setting.get('board.analysis_interval').toString()
@@ -2493,6 +2593,7 @@ class Sabaki extends EventEmitter {
 
     if (commandName.includes('kata')) {
       args.push('ownership', 'true')
+      await this.configureKataAnalysis(syncer)
     }
 
     try {
@@ -2513,11 +2614,7 @@ class Sabaki extends EventEmitter {
 
     if (syncer == null) return
 
-    if (
-      setting
-        .get('engines.analyze_commands')
-        .every((command) => !syncer.commands.includes(command))
-    ) {
+    if (this.getAnalyzeCommand(syncer) == null) {
       await dialog.showMessageBox(
         t('The selected engine does not support analysis.'),
         'warning',
@@ -2528,7 +2625,7 @@ class Sabaki extends EventEmitter {
     this.lastAnalyzingEngineSyncerId = syncerId
     this.setState({
       analyzingEngineSyncerId: syncerId,
-      compareReferenceTreePosition: this.state.compareMode
+      compareReferenceTreePosition: this.isCompareOverlayMode()
         ? this.state.treePosition
         : null,
       compareTargetTreePosition: null,
@@ -2558,6 +2655,7 @@ class Sabaki extends EventEmitter {
       compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
       comparePending: false,
+      graphHoverTreePosition: null,
     })
   }
 
@@ -2667,8 +2765,8 @@ class Sabaki extends EventEmitter {
         ? -1
         : 1
       : data.B != null || (data.HA != null && +data.HA[0] >= 1)
-        ? -1
-        : 1
+      ? -1
+      : 1
   }
 
   setPlayer(treePosition, sign) {
@@ -2700,22 +2798,22 @@ class Sabaki extends EventEmitter {
         data.BM != null
           ? 'BM'
           : data.TE != null
-            ? 'TE'
-            : data.DO != null
-              ? 'DO'
-              : data.IT != null
-                ? 'IT'
-                : null,
+          ? 'TE'
+          : data.DO != null
+          ? 'DO'
+          : data.IT != null
+          ? 'IT'
+          : null,
       positionAnnotation:
         data.UC != null
           ? 'UC'
           : data.GW != null
-            ? 'GW'
-            : data.DM != null
-              ? 'DM'
-              : data.GB != null
-                ? 'GB'
-                : null,
+          ? 'GW'
+          : data.DM != null
+          ? 'DM'
+          : data.GB != null
+          ? 'GB'
+          : null,
     }
   }
 

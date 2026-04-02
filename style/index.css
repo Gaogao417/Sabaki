@@ -633,6 +633,50 @@ header {
     background: rgba(255, 255, 255, .97);
   }
 
+.overlay-status-bar {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 48px;
+    z-index: 15;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    border: 1px solid rgba(94, 70, 4, .28);
+    border-radius: 4px;
+    background: rgba(222, 197, 104, .96);
+    color: #35290a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+    font-size: 11px;
+    line-height: 1.35;
+    pointer-events: none;
+  }
+  .overlay-status-line + .overlay-status-line {
+    margin-top: 3px;
+  }
+  .overlay-status-pair {
+    display: inline-block;
+    margin-right: 12px;
+  }
+  .overlay-status-pair strong {
+    font-weight: 600;
+  }
+  .overlay-status-warning {
+    background: rgba(238, 210, 113, .98);
+  }
+  .overlay-status-idle {
+    background: rgba(223, 201, 119, .95);
+  }
+  #goban.territory-mode .shudan-selection {
+    border-color: rgba(255, 255, 255, .9);
+    background: rgba(255, 255, 255, .16);
+    box-shadow: 0 0 .65em rgba(255, 255, 255, .18);
+  }
+  #goban.territory-mode .shudan-vertex[title="@territory-neutral"].shudan-marker_point .shudan-marker {
+    fill: #f4c35f;
+    opacity: .85;
+    filter: drop-shadow(0 0 4px rgba(244, 195, 95, .7));
+  }
+
 #properties {
     overflow: auto;
     color: #d0d0d0;

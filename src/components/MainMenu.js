@@ -7,40 +7,60 @@ export default class MainMenu extends Component {
   constructor(props) {
     super(props)
 
-    this.menuData = menu.get()
+    this.menuData = []
     this.listeners = {}
     this._unsubscribeFocus = null
 
     this.buildMenu = () => {
       ipcRenderer.send('build-menu', this.props)
     }
+
+    this.syncMenuListeners = () => {
+      let nextMenuData = menu.get(this.props)
+      let nextListeners = {}
+
+      let registerMenuClicks = (items) => {
+        for (let item of items) {
+          if (item.click != null) {
+            let listener = this.listeners[item.id]
+
+            if (listener == null) {
+              listener = () => {
+                if (!this.props.showMenuBar) {
+                  window.sabaki.window.setMenuBarVisibility(false)
+                }
+
+                dialog.closeInputBox()
+                item.click()
+              }
+
+              ipcRenderer.on(`menu-click-${item.id}`, listener)
+            }
+
+            nextListeners[item.id] = listener
+          }
+
+          if (item.submenu != null) {
+            registerMenuClicks(item.submenu)
+          }
+        }
+      }
+
+      registerMenuClicks(nextMenuData)
+
+      for (let id in this.listeners) {
+        if (nextListeners[id] != null) continue
+        ipcRenderer.removeListener(`menu-click-${id}`, this.listeners[id])
+      }
+
+      this.menuData = nextMenuData
+      this.listeners = nextListeners
+    }
   }
 
   componentDidMount() {
     this._unsubscribeFocus = window.sabaki.window.on('focus', this.buildMenu)
-
-    let handleMenuClicks = (menu) => {
-      for (let item of menu) {
-        if (item.click != null) {
-          this.listeners[item.id] = () => {
-            if (!this.props.showMenuBar) {
-              window.sabaki.window.setMenuBarVisibility(false)
-            }
-
-            dialog.closeInputBox()
-            item.click()
-          }
-
-          ipcRenderer.on(`menu-click-${item.id}`, this.listeners[item.id])
-        }
-
-        if (item.submenu != null) {
-          handleMenuClicks(item.submenu)
-        }
-      }
-    }
-
-    handleMenuClicks(this.menuData)
+    this.syncMenuListeners()
   }
 
   componentWillUnmount() {
@@ -59,7 +79,13 @@ export default class MainMenu extends Component {
     return false
   }
 
+  componentDidUpdate() {
+    this.syncMenuListeners()
+  }
+
   render() {
+    this.syncMenuListeners()
     this.buildMenu()
+    return null
   }
 }

@@ -24,6 +24,7 @@ try {
 } catch (e) {
   console.error('[preload] Error getting paths:', e)
   pathsCache = {
+    settingsPath: '',
     themesDirectory: '',
     stylesPath: '',
     userDataDirectory: '',
@@ -56,6 +57,7 @@ window.sabaki = {
       pathsCache.themes = await ipcRenderer.invoke('setting:loadThemes')
       return pathsCache.themes
     },
+    settingsPath: pathsCache.settingsPath,
     themesDirectory: pathsCache.themesDirectory,
     stylesPath: pathsCache.stylesPath,
     userDataDirectory: pathsCache.userDataDirectory,

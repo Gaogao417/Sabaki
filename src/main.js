@@ -37,8 +37,10 @@ const settingsKeys = [
   'view.fuzzy_stone_placement',
   'view.animated_stone_placement',
   'board.analysis_type',
+  'board.overlay_mode',
   'board.show_analysis',
   'board.analysis_interval',
+  'board.analysis_max_visits',
   'board.variation_replay_mode',
   'board.variation_replay_interval',
   'graph.grid_size',
@@ -202,7 +204,7 @@ function buildMenu(props = {}) {
           ({
             newWindow,
             checkForUpdates: () => checkForUpdates({showFailDialogs: true}),
-          })[key]()
+          }[key]())
 
         delete item.clickMain
       }
@@ -434,6 +436,7 @@ function setupIpcHandlers() {
   ipcMain.on('setting:getPathsSync', (e) => {
     try {
       e.returnValue = {
+        settingsPath: setting.settingsPath,
         themesDirectory: setting.themesDirectory,
         stylesPath: setting.stylesPath,
         userDataDirectory: setting.userDataDirectory,
@@ -442,6 +445,7 @@ function setupIpcHandlers() {
     } catch (err) {
       console.error('[main] Error in setting:getPathsSync:', err)
       e.returnValue = {
+        settingsPath: '',
         themesDirectory: '',
         stylesPath: '',
         userDataDirectory: '',

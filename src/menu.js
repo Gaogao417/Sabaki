@@ -16,14 +16,14 @@ const setting = isRenderer
         window.sabaki.setting.set(key, value)
         return setting
       },
+      settingsPath: window.sabaki.setting.settingsPath,
     }
   : nativeRequire('./setting')
 
-exports.get = function (props = {}) {
+exports.get = function(props = {}) {
   let toggleSetting = (key) => setting.set(key, !setting.get(key))
   let selectTool = (tool) => (
-    sabaki.setMode('edit'),
-    sabaki.setState({selectedTool: tool})
+    sabaki.setMode('edit'), sabaki.setState({selectedTool: tool})
   )
 
   let {
@@ -37,6 +37,7 @@ exports.get = function (props = {}) {
     showMoveColorization,
     showNextMoves,
     showSiblings,
+    overlayMode,
     compareMode,
     compareDisplayPreset,
     showWinrateGraph,
@@ -675,6 +676,15 @@ exports.get = function (props = {}) {
           type: 'checkbox',
           checked: !!showSiblings,
           click: () => toggleSetting('view.show_siblings'),
+        },
+        {
+          label: i18n.t('menu.view', 'Territory &Overlay'),
+          type: 'checkbox',
+          checked: overlayMode === 'territory',
+          click: () =>
+            sabaki.setOverlayMode(
+              overlayMode === 'territory' ? 'off' : 'territory',
+            ),
         },
         {
           label: i18n.t('menu.view', 'Show &Heatmap'),
