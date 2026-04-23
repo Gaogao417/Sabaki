@@ -90,6 +90,7 @@ const settingsKeys = [
   'comments.show_move_interpretation',
   'comments.commit_delay',
   'console.max_history_count',
+  'debug.dev_tools',
   'cleanmarkup.annotations',
   'cleanmarkup.arrow',
   'cleanmarkup.circle',

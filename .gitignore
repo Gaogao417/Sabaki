@@ -12,3 +12,8 @@ bundle.js.map
 
 playwright-report/
 test-results/
+
+.claude/
+.opencode/
+.tools/
+undefined/

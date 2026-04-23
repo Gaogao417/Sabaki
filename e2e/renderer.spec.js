@@ -177,5 +177,27 @@ test.describe('Renderer Integration Tests', () => {
       })
       expect(stonesOnBoard).toBe(0)
     })
+
+    test('study workspace stays outside the board area', async ({page}) => {
+      await page.evaluate(() => {
+        window.__sabaki.enterStudyMode()
+      })
+
+      await page.waitForFunction(
+        () =>
+          window.__sabaki &&
+          window.__sabaki.state.studyEnabled &&
+          document.querySelector('#study') != null,
+      )
+
+      const boardStageBox = await page.locator('main.board-stage').boundingBox()
+      const studyBox = await page.locator('#study').boundingBox()
+
+      expect(boardStageBox).not.toBeNull()
+      expect(studyBox).not.toBeNull()
+      expect(studyBox.y).toBeGreaterThanOrEqual(
+        boardStageBox.y + boardStageBox.height,
+      )
+    })
   })
 })

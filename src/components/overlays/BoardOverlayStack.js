@@ -1,20 +1,29 @@
 import {h, Component, Fragment} from 'preact'
 
 import Goban from '../Goban.js'
-import OverlayStatusBar from './OverlayStatusBar.js'
 
-import sabaki from '../../modules/sabaki.js'
 import * as helper from '../../modules/helper.js'
 import {composeMarkerMaps} from '../../modules/overlays/compose.js'
 import {getTerritoryPaintLayer} from './TerritoryPaintLayer.js'
 import {getTerritoryDiffLayer} from './TerritoryDiffLayer.js'
-import {getAnalysisLayerHover} from './AnalysisLayer.js'
 
 export default class BoardOverlayStack extends Component {
+  componentDidMount() {
+    this.reportStatus()
+  }
+
+  componentDidUpdate() {
+    this.reportStatus()
+  }
+
+  componentWillUnmount() {
+    this.props.onStatusChange?.(null)
+  }
+
   componentWillReceiveProps(nextProps) {
     if (
       nextProps.gobanProps.treePosition !== this.props.gobanProps.treePosition ||
-      nextProps.ownership !== this.props.ownership ||
+      nextProps.baselineOwnership !== this.props.baselineOwnership ||
       nextProps.analysis !== this.props.analysis
     ) {
       this.clearHoverState()
@@ -32,46 +41,18 @@ export default class BoardOverlayStack extends Component {
     })
   }
 
+  reportStatus() {
+    if (helper.equals(this.lastStatusProps, this.statusProps)) return
+
+    this.lastStatusProps = this.statusProps
+    this.props.onStatusChange?.(this.statusProps)
+  }
+
   async syncHoverPreview(vertex) {
-    let {territoryMode, analysis, gobanProps} = this.props
-    if (!territoryMode) return
-
-    let {hoveredVariation} = getAnalysisLayerHover(analysis, vertex)
-    if (hoveredVariation == null) {
-      this.setState({
-        hoveredAnalysisVertex: null,
-        hoveredVariation: null,
-        hoverOwnership: null,
-        hoverPending: false,
-      })
-      return
-    }
-
-    if (
-      helper.vertexEquals(vertex, this.state.hoveredAnalysisVertex || [-1, -1])
-    ) {
-      return
-    }
-
-    let hoverToken = (this.hoverToken || 0) + 1
-    this.hoverToken = hoverToken
-
     this.setState({
-      hoveredAnalysisVertex: vertex,
-      hoveredVariation,
+      hoveredAnalysisVertex: null,
+      hoveredVariation: null,
       hoverOwnership: null,
-      hoverPending: true,
-    })
-
-    let ownership = await sabaki.fetchPreviewOwnership(
-      gobanProps.treePosition,
-      hoveredVariation.moves?.slice(0, 1) ?? [hoveredVariation.vertex],
-    )
-
-    if (hoverToken !== this.hoverToken) return
-
-    this.setState({
-      hoverOwnership: ownership,
       hoverPending: false,
     })
   }
@@ -79,7 +60,7 @@ export default class BoardOverlayStack extends Component {
   render(
     {
       territoryMode,
-      ownership,
+      baselineOwnership,
       unavailableReason,
       gobanProps,
       analysis,
@@ -96,7 +77,7 @@ export default class BoardOverlayStack extends Component {
   ) {
     let territoryPaintLayer =
       unavailableReason == null && territoryMode
-        ? getTerritoryPaintLayer(ownership, hoveredVertex)
+        ? getTerritoryPaintLayer(baselineOwnership, hoveredVertex)
         : {
             paintMap: gobanProps.paintMap,
             markerMap: null,
@@ -105,8 +86,8 @@ export default class BoardOverlayStack extends Component {
           }
 
     let hoverDeltaMap =
-      ownership != null && hoverOwnership != null
-        ? helper.getOwnershipDelta(ownership, hoverOwnership)
+      baselineOwnership != null && hoverOwnership != null
+        ? helper.getOwnershipDelta(baselineOwnership, hoverOwnership)
         : null
     let activeDeltaMap = hoverDeltaMap ?? lastMoveDeltaMap
     let activeDiffSourceType =
@@ -119,7 +100,7 @@ export default class BoardOverlayStack extends Component {
     let territoryDiffLayer =
       unavailableReason == null && territoryMode
         ? getTerritoryDiffLayer({
-            ownership,
+            ownership: baselineOwnership,
             deltaMap: activeDeltaMap,
             hoveredVertex,
             hoveredRegion: territoryPaintLayer.hoveredRegion,
@@ -130,6 +111,24 @@ export default class BoardOverlayStack extends Component {
             hoveredDelta: null,
             hoveredRegionDeltaSummary: null,
           }
+
+    this.statusProps = territoryMode
+      ? {
+          territoryMode,
+          unavailableReason:
+            hoverPending && unavailableReason == null
+              ? 'Loading territory diff preview...'
+              : unavailableReason,
+          territorySummary: territoryPaintLayer.territorySummary,
+          hoveredRegion: territoryPaintLayer.hoveredRegion,
+          deltaSummary: territoryDiffLayer.deltaSummary,
+          hoveredDelta: territoryDiffLayer.hoveredDelta,
+          hoveredRegionDeltaSummary:
+            territoryDiffLayer.hoveredRegionDeltaSummary,
+          diffSourceType: activeDiffSourceType,
+          keyPointSummary,
+        }
+      : null
 
     return h(
       Fragment,
@@ -167,20 +166,6 @@ export default class BoardOverlayStack extends Component {
           gobanProps.onVertexMouseLeave?.({vertex, ...evt})
           this.clearHoverState()
         },
-      }),
-      h(OverlayStatusBar, {
-        territoryMode,
-        unavailableReason:
-          hoverPending && unavailableReason == null
-            ? 'Loading territory diff preview...'
-            : unavailableReason,
-        territorySummary: territoryPaintLayer.territorySummary,
-        hoveredRegion: territoryPaintLayer.hoveredRegion,
-        deltaSummary: territoryDiffLayer.deltaSummary,
-        hoveredDelta: territoryDiffLayer.hoveredDelta,
-        hoveredRegionDeltaSummary: territoryDiffLayer.hoveredRegionDeltaSummary,
-        diffSourceType: activeDiffSourceType,
-        keyPointSummary,
       }),
     )
   }

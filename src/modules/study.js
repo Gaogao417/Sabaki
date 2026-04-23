@@ -34,6 +34,10 @@ export function serializeSnapshot(snapshot) {
   return JSON.stringify(cloneSnapshot(snapshot))
 }
 
+export function getSnapshotSignature(snapshot) {
+  return serializeSnapshot(snapshot)
+}
+
 export function deserializeSnapshot(raw) {
   if (raw == null || raw === '') return null
 
@@ -141,6 +145,23 @@ export function applyMovesToSnapshot(snapshot, moves = []) {
   return createSnapshotFromBoard(board, sign)
 }
 
+export function getTrialStartSnapshot(referenceSnapshot, baselineSnapshot) {
+  return cloneSnapshot(referenceSnapshot ?? baselineSnapshot)
+}
+
+export function hasMeaningfulTrialSnapshotChange(
+  trialSnapshot,
+  referenceSnapshot,
+  baselineSnapshot,
+) {
+  let startSnapshot = referenceSnapshot ?? baselineSnapshot
+  return (
+    trialSnapshot != null &&
+    startSnapshot != null &&
+    getSnapshotSignature(trialSnapshot) !== getSnapshotSignature(startSnapshot)
+  )
+}
+
 export function snapshotMatchesBoard(snapshot, board, nextPlayer) {
   if (snapshot == null || board == null) return false
   if (snapshot.width !== board.width || snapshot.height !== board.height) {
@@ -192,6 +213,50 @@ export function snapshotToGameTree(snapshot, moves = []) {
   })
 
   return {tree, treePosition}
+}
+
+export function diffSnapshots(referenceSnapshot, targetSnapshot) {
+  if (referenceSnapshot == null || targetSnapshot == null) return null
+  if (
+    referenceSnapshot.width !== targetSnapshot.width ||
+    referenceSnapshot.height !== targetSnapshot.height
+  ) {
+    return null
+  }
+
+  let addedBlack = []
+  let addedWhite = []
+  let cleared = []
+
+  for (let y = 0; y < referenceSnapshot.height; y++) {
+    for (let x = 0; x < referenceSnapshot.width; x++) {
+      let before = referenceSnapshot.signMap[y][x]
+      let after = targetSnapshot.signMap[y][x]
+      if (before === after) continue
+
+      if (before !== 0) {
+        cleared.push([x, y])
+      }
+
+      if (after > 0) {
+        addedBlack.push([x, y])
+      } else {
+        if (after < 0) {
+          addedWhite.push([x, y])
+        }
+      }
+    }
+  }
+
+  return {
+    addedBlack,
+    addedWhite,
+    cleared,
+    nextPlayerChanged:
+      referenceSnapshot.nextPlayer !== targetSnapshot.nextPlayer
+        ? targetSnapshot.nextPlayer
+        : null,
+  }
 }
 
 export function buildKeyPointMarkerMap(board, keyPoints = []) {
@@ -260,4 +325,22 @@ export function summarizeKeyPointOwnershipMetrics(metrics = []) {
       intersections: summary.whiteGain.intersections,
     },
   }
+}
+
+export function getStudyTerritoryDeltaMap(
+  studyPhase,
+  baselineOwnership,
+  trialOwnership,
+  trialDirty = false,
+) {
+  if (
+    studyPhase !== 'trial' ||
+    baselineOwnership == null ||
+    trialOwnership == null ||
+    !trialDirty
+  ) {
+    return null
+  }
+
+  return helper.getOwnershipDelta(baselineOwnership, trialOwnership)
 }

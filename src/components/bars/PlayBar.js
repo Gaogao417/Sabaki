@@ -56,12 +56,11 @@ export default class PlayBar extends Component {
               ),
           },
           {
-            label: t('&Baseline Study'),
-            click: () => sabaki.enterBaselineMode(),
-          },
-          {
-            label: t('&Trial Study'),
-            click: () => sabaki.enterTrialMode(),
+            label: t('&Study Mode'),
+            click: () =>
+              sabaki.state.studyEnabled
+                ? sabaki.exitStudyMode()
+                : sabaki.enterStudyMode(),
           },
           {
             label: t('&Edit'),

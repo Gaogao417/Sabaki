@@ -6,15 +6,19 @@ export default class Bar extends Component {
   constructor(props) {
     super(props)
 
+    let active = props.active ?? props.type === props.mode
     this.state = {
-      hidecontent: props.type !== props.mode,
+      hidecontent: !active,
     }
-
-    this.onCloseButtonClick = () => sabaki.setMode('play')
   }
 
   componentWillReceiveProps(nextProps) {
-    if (nextProps.type === nextProps.mode) {
+    let isCurrent =
+      nextProps.active ??
+      (nextProps.type === nextProps.mode ||
+        (nextProps.activeModes || []).includes(nextProps.mode))
+
+    if (isCurrent) {
       clearTimeout(this.hidecontentId)
 
       if (this.state.hidecontent) this.setState({hidecontent: false})
@@ -28,25 +32,37 @@ export default class Bar extends Component {
   }
 
   shouldComponentUpdate(nextProps) {
-    return (
-      nextProps.mode !== this.props.mode || nextProps.mode === nextProps.type
-    )
+    let nextCurrent =
+      nextProps.active ??
+      (nextProps.mode === nextProps.type ||
+        (nextProps.activeModes || []).includes(nextProps.mode))
+
+    return nextProps.mode !== this.props.mode || nextCurrent
   }
 
-  render({children, type, mode, class: c = ''}, {hidecontent}) {
+  render(
+    {children, type, mode, class: c = '', activeModes = [], active, onClose},
+    {hidecontent},
+  ) {
+    let current = active ?? (type === mode || activeModes.includes(mode))
+
     return h(
       'section',
       {
         id: type,
         class: classNames(c, {
           bar: true,
-          current: type === mode,
+          current,
           hidecontent,
         }),
       },
 
       children,
-      h('a', {class: 'close', href: '#', onClick: this.onCloseButtonClick}),
+      h('a', {
+        class: 'close',
+        href: '#',
+        onClick: onClose ?? (() => sabaki.setMode('play')),
+      }),
     )
   }
 }

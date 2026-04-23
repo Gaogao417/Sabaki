@@ -29,7 +29,7 @@ class EditBar extends Component {
   shouldComponentUpdate(nextProps) {
     return (
       nextProps.mode !== this.props.mode ||
-      ['edit', 'baseline'].includes(nextProps.mode)
+      nextProps.mode === 'edit'
     )
   }
 

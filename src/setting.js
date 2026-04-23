@@ -46,6 +46,7 @@ let defaults = {
   'autoscroll.max_interval': 200,
   'autoscroll.min_interval': 50,
   'board.analysis_interval': 50,
+  'board.analysis_max_time': 1,
   'board.analysis_max_visits': 500,
   'board.analysis_type': 'winrate',
   'board.overlay_mode': 'off',
@@ -154,6 +155,7 @@ let defaults = {
   'setting.overwrite.v0.41.0': ['autoscroll.max_interval'],
   'setting.overwrite.v0.43.3_4': [
     'board.analysis_interval',
+    'board.analysis_max_time',
     'board.analysis_max_visits',
     'graph.delay',
     'view.winrategraph_minheight',

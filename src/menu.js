@@ -29,6 +29,8 @@ exports.get = function(props = {}) {
   let {
     disableAll,
     disableGameLoading,
+    mode,
+    studyEnabled,
     analysisType,
     showAnalysis,
     showCoordinates,
@@ -185,14 +187,14 @@ exports.get = function(props = {}) {
           click: () => sabaki.toggleCompareMode(),
         },
         {
-          label: i18n.t('menu.play', 'Edit &Baseline'),
+          label: i18n.t('menu.play', '&Study Mode'),
           accelerator: 'CmdOrCtrl+Shift+B',
-          click: () => sabaki.enterBaselineMode(),
-        },
-        {
-          label: i18n.t('menu.play', 'Enter &Trial Mode'),
-          accelerator: 'CmdOrCtrl+Shift+T',
-          click: () => sabaki.enterTrialMode(),
+          type: 'checkbox',
+          checked: !!studyEnabled,
+          click: () =>
+            sabaki.state.studyEnabled
+              ? sabaki.exitStudyMode()
+              : sabaki.enterStudyMode(),
         },
         {
           label: i18n.t('menu.play', 'Compare Display'),

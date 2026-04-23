@@ -359,10 +359,12 @@ export default class GameChooserDrawer extends Component {
     if (prevProps.show !== this.props.show) {
       // Animate
 
-      let gobanRect = document.getElementById('goban').getBoundingClientRect()
-      let drawerRect = document
-        .getElementById('gamechooser')
-        .getBoundingClientRect()
+      let gobanElement = document.getElementById('goban')
+      let drawerElement = document.getElementById('gamechooser')
+      if (gobanElement == null || drawerElement == null) return
+
+      let gobanRect = gobanElement.getBoundingClientRect()
+      let drawerRect = drawerElement.getBoundingClientRect()
 
       let itemElement = this.itemElements[this.props.gameIndex]
       let svgElement =

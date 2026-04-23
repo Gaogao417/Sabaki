@@ -26,7 +26,8 @@ test.describe('Smoke Tests', () => {
 
   test('main layout elements present', async ({page}) => {
     await expect(page.locator('#main')).toBeVisible()
-    await expect(page.locator('#bar')).toBeVisible()
+    await expect(page.locator('.board-toolbar')).toBeVisible()
+    await expect(page.locator('.workspace-dock')).toBeVisible()
     await expect(page.locator('#mainlayout')).toBeVisible()
   })
 

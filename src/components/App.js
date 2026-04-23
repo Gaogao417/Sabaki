@@ -23,9 +23,9 @@ import * as gametree from '../modules/gametree.js'
 import * as gtplogger from '../modules/gtplogger.js'
 import * as helper from '../modules/helper.js'
 import {
-  applyMovesToSnapshot,
   buildKeyPointMarkerMap,
   boardFromSnapshot,
+  getStudyTerritoryDeltaMap,
 } from '../modules/study.js'
 
 if (process.env.SABAKI_E2E) window.__sabaki = sabaki
@@ -55,9 +55,7 @@ class App extends Component {
       shiftTerritoryActive: false,
     }
 
-    sabaki.on('change', ({change, callback}) => {
-      this.setState(change, callback)
-    })
+    sabaki.on('change', ({change, callback}) => this.setState(change, callback))
 
     let bind = (f) => f.bind(this)
     this.handleMainLayoutSplitChange = bind(this.handleMainLayoutSplitChange)
@@ -185,11 +183,65 @@ class App extends Component {
     document.addEventListener('keydown', (evt) => {
       this.handleTemporaryTerritoryKeyDown(evt)
 
+      if (
+        sabaki.state.studyEnabled &&
+        !evt.ctrlKey &&
+        !evt.metaKey &&
+        !evt.altKey &&
+        !helper.isTextLikeElement(document.activeElement)
+      ) {
+        let key = evt.key
+
+        if (['1', '2', '3', '4', 'Enter', 'Backspace'].includes(key)) {
+          evt.preventDefault()
+        }
+
+        if (key === '1') {
+          sabaki.setState({selectedTool: 'stone_1'})
+          return
+        }
+
+        if (key === '2') {
+          sabaki.setState({selectedTool: 'stone_-1'})
+          return
+        }
+
+        if (key === '3') {
+          sabaki.setState({selectedTool: 'eraser'})
+          return
+        }
+
+        if (key === '4') {
+          sabaki.setState({selectedTool: 'label'})
+          return
+        }
+
+        if (key === 'Enter') {
+          if (sabaki.state.studyPhase === 'baseline') {
+            sabaki.setStudyPhase('trial')
+          } else {
+            sabaki.applyTrialAsVariation()
+          }
+          return
+        }
+
+        if (key === 'Backspace' && sabaki.state.studyPhase === 'trial') {
+          if (evt.shiftKey) {
+            sabaki.resetTrialWorkspace()
+          } else {
+            sabaki.undoTrialMove()
+          }
+          return
+        }
+      }
+
       if (evt.key === 'Escape') {
         if (sabaki.state.overlayMode !== 'off') {
           sabaki.setOverlayMode('off')
         } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
+        } else if (sabaki.state.studyEnabled) {
+          sabaki.exitStudyMode()
         } else if (sabaki.state.mode !== 'play') {
           sabaki.setMode('play')
         } else if (sabaki.state.fullScreen) {
@@ -370,18 +422,17 @@ class App extends Component {
 
     let inferredState = sabaki.inferredState
     let tree = inferredState.gameTree
-    let studyMode = ['baseline', 'trial'].includes(state.mode)
+    let studyMode = state.studyEnabled
     let studyBaselineSnapshot = state.studyBaselineSnapshot
-    let studyTrialSnapshot = applyMovesToSnapshot(
-      state.studyBaselineSnapshot,
-      state.studyTrialMoves,
-    )
+    let studyTrialSnapshot = state.studyTrialSnapshot
     let studyRenderSnapshot =
-      state.mode === 'trial' ? studyTrialSnapshot : studyBaselineSnapshot
+      studyMode && state.studyPhase === 'trial'
+        ? studyTrialSnapshot
+        : studyBaselineSnapshot
     let studyRenderBoard =
       studyRenderSnapshot == null ? null : boardFromSnapshot(studyRenderSnapshot)
     let studyCurrentPlayer =
-      state.mode === 'trial'
+      studyMode && state.studyPhase === 'trial'
         ? sabaki.getStudyAnalysisPlayer('trial')
         : studyBaselineSnapshot?.nextPlayer ?? inferredState.currentPlayer
     let studyMarkerMap =
@@ -467,9 +518,7 @@ class App extends Component {
     if (territoryMode) {
       let engineSyncer = inferredState.analyzingEngineSyncer
       territoryOwnership = studyMode
-        ? state.mode === 'trial' && state.studyTrialMoves.length > 0
-          ? state.studyTrialOwnership
-          : state.studyBaselineOwnership
+        ? state.studyBaselineOwnership
         : sabaki.getCurrentOwnership(engineSyncer)
 
       if (['scoring', 'estimator'].includes(state.mode)) {
@@ -478,7 +527,11 @@ class App extends Component {
         )
       } else if (engineSyncer == null) {
         overlayUnavailableReason = t('Start engine analysis first.')
-      } else if (studyMode && state.studyAnalysisPending) {
+      } else if (
+        studyMode &&
+        state.studyAnalysisPending &&
+        territoryOwnership == null
+      ) {
         overlayUnavailableReason = t('Waiting for study ownership data...')
       } else if (territoryOwnership == null) {
         overlayUnavailableReason =
@@ -491,13 +544,15 @@ class App extends Component {
 
       if (
         studyMode &&
-        state.mode === 'trial' &&
+        state.studyPhase === 'trial' &&
         state.studyBaselineOwnership != null &&
         state.studyTrialOwnership != null
       ) {
-        lastMoveTerritoryDeltaMap = helper.getOwnershipDelta(
+        lastMoveTerritoryDeltaMap = getStudyTerritoryDeltaMap(
+          state.studyPhase,
           state.studyBaselineOwnership,
           state.studyTrialOwnership,
+          sabaki.hasStudyTrialMeaningfulChange(),
         )
         lastMoveTerritoryDiffAvailable = lastMoveTerritoryDeltaMap != null
       } else if (
@@ -525,10 +580,12 @@ class App extends Component {
     let territoryStatusText =
       !territoryMode
         ? null
-        : studyMode && state.mode === 'baseline'
-          ? t('Baseline')
-          : studyMode && state.mode === 'trial'
-            ? t('Trial Compare')
+        : studyMode && state.studyPhase === 'baseline'
+          ? t('Baseline Territory')
+          : studyMode && state.studyPhase === 'trial'
+            ? state.studyAnalysisPending
+              ? t('Trial Diff (Updating)')
+              : t('Trial Diff')
         : state.shiftTerritoryActive && state.overlayMode !== 'territory'
           ? t('Territory (Shift)')
           : lastMoveTerritoryDiffAvailable
@@ -562,6 +619,7 @@ class App extends Component {
       'section',
       {
         class: classNames({
+          study: state.studyEnabled,
           showleftsidebar: state.showLeftSidebar,
           showsidebar: state.showSidebar,
           [state.mode]: true,
@@ -570,6 +628,9 @@ class App extends Component {
 
       h(ThemeManager),
       h(MainMenu, {
+        mode: state.mode,
+        studyEnabled: state.studyEnabled,
+        studyPhase: state.studyPhase,
         showMenuBar: state.showMenuBar,
         disableAll: state.busy > 0,
         analysisType: state.analysisType,
