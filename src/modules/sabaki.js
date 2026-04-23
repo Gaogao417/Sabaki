@@ -22,19 +22,23 @@ import {getAnalysisPreviewCacheKey} from './overlays/analysisPreview.js'
 import {
   STUDY_BASELINE_PROP,
   STUDY_KEYPOINTS_PROP,
-  applyMovesToSnapshot,
   buildKeyPointOwnershipMetrics,
   boardFromSnapshot,
   cloneSnapshot,
   createSnapshotFromBoard,
   deserializeKeyPoints,
   deserializeSnapshot,
+  diffSnapshots,
+  getTrialStartSnapshot,
+  hasMeaningfulTrialSnapshotChange,
+  getSnapshotSignature,
   serializeKeyPoints,
   serializeSnapshot,
   snapshotMatchesBoard,
   snapshotToGameTree,
   summarizeKeyPointOwnershipMetrics,
 } from './study.js'
+import {buildOwnershipDeltaSummary} from './overlays/territoryDiff.js'
 import * as sound from './sound.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
@@ -85,6 +89,8 @@ class Sabaki extends EventEmitter {
 
       // Goban
 
+      analysisAreaVertices: null,
+      analysisAreaSelecting: false,
       highlightVertices: [],
       playVariation: null,
       analysisType: null,
@@ -107,10 +113,19 @@ class Sabaki extends EventEmitter {
       territoryDiffSource: null,
       territoryDiffReferenceTreePosition: null,
       territoryDiffTargetTreePosition: null,
+      studyEnabled: false,
+      studyPhase: 'baseline',
+      studyReferenceTreePosition: null,
+      studyReferenceSnapshot: null,
+      studyReferencePlayer: null,
       studyBaselineSnapshot: null,
       studyBaselineKeyPoints: [],
       studyBaselineDirty: false,
-      studyTrialMoves: [],
+      studyTrialSnapshot: null,
+      studyTrialHistory: [],
+      studyTrialHasSetupEdits: false,
+      studyTrialDirty: false,
+      studyTrialCommittedSignature: null,
       studyBaselineOwnership: null,
       studyTrialOwnership: null,
       studyKeyPointMetrics: [],
@@ -509,10 +524,19 @@ class Sabaki extends EventEmitter {
     let {snapshot, keyPoints} = this.getStudyData(tree, treePosition)
 
     return {
+      studyEnabled: false,
+      studyPhase: 'baseline',
+      studyReferenceTreePosition: null,
+      studyReferenceSnapshot: null,
+      studyReferencePlayer: null,
       studyBaselineSnapshot: snapshot,
       studyBaselineKeyPoints: keyPoints,
       studyBaselineDirty: false,
-      studyTrialMoves: [],
+      studyTrialSnapshot: null,
+      studyTrialHistory: [],
+      studyTrialHasSetupEdits: false,
+      studyTrialDirty: false,
+      studyTrialCommittedSignature: null,
       studyBaselineOwnership: null,
       studyTrialOwnership: null,
       studyKeyPointMetrics: [],
@@ -526,17 +550,45 @@ class Sabaki extends EventEmitter {
   }
 
   getStudyTrialSnapshot() {
-    return applyMovesToSnapshot(
+    return this.state.studyTrialSnapshot
+  }
+
+  getStudyTrialSignature() {
+    return getSnapshotSignature(this.state.studyTrialSnapshot)
+  }
+
+  getStudyTrialMoveCount() {
+    return this.state.studyTrialHistory.filter((entry) => entry.type === 'move')
+      .length
+  }
+
+  getStudyTrialMoves() {
+    if (this.state.studyTrialHasSetupEdits) return null
+    return this.state.studyTrialHistory
+      .filter((entry) => entry.type === 'move')
+      .map((entry) => entry.vertex)
+  }
+
+  hasStudyTrialChanges() {
+    return !!this.state.studyTrialDirty
+  }
+
+  hasStudyTrialMeaningfulChange() {
+    return hasMeaningfulTrialSnapshotChange(
+      this.state.studyTrialSnapshot,
+      this.state.studyReferenceSnapshot,
       this.state.studyBaselineSnapshot,
-      this.state.studyTrialMoves,
     )
   }
 
-  getStudyAnalysisPlayer(kind = this.state.mode) {
+  getStudyAnalysisPlayer(kind = this.state.studyPhase) {
     if (kind === 'trial') {
-      return this.state.studyTrialMoves.length % 2 === 0
-        ? this.state.studyBaselineSnapshot?.nextPlayer ?? 1
-        : -(this.state.studyBaselineSnapshot?.nextPlayer ?? 1)
+      return (
+        this.state.studyTrialSnapshot?.nextPlayer ??
+        this.state.studyBaselineSnapshot?.nextPlayer ??
+        this.state.studyReferencePlayer ??
+        1
+      )
     }
 
     return this.state.studyBaselineSnapshot?.nextPlayer ?? 1
@@ -557,7 +609,8 @@ class Sabaki extends EventEmitter {
 
   async saveBaselineSnapshot() {
     let tree = this.inferredState.gameTree
-    let treePosition = this.state.treePosition
+    let treePosition =
+      this.state.studyReferenceTreePosition ?? this.state.treePosition
     let snapshot = this.state.studyBaselineSnapshot
     if (tree == null || treePosition == null || snapshot == null) return
 
@@ -577,7 +630,8 @@ class Sabaki extends EventEmitter {
 
   clearBaselineSnapshot() {
     let tree = this.inferredState.gameTree
-    let treePosition = this.state.treePosition
+    let treePosition =
+      this.state.studyReferenceTreePosition ?? this.state.treePosition
     if (tree == null || treePosition == null) return
 
     let nextTree = tree.mutate((draft) => {
@@ -590,7 +644,11 @@ class Sabaki extends EventEmitter {
       studyBaselineSnapshot: null,
       studyBaselineKeyPoints: [],
       studyBaselineDirty: false,
-      studyTrialMoves: [],
+      studyTrialSnapshot: null,
+      studyTrialHistory: [],
+      studyTrialHasSetupEdits: false,
+      studyTrialDirty: false,
+      studyTrialCommittedSignature: null,
       studyBaselineOwnership: null,
       studyTrialOwnership: null,
       studyKeyPointMetrics: [],
@@ -599,15 +657,24 @@ class Sabaki extends EventEmitter {
   }
 
   resetBaselineFromCurrentPosition() {
-    let {gameTree, board, currentPlayer} = this.inferredState
-    if (gameTree == null || board == null) return
+    let referenceSnapshot =
+      this.state.studyReferenceSnapshot ??
+      createSnapshotFromBoard(
+        this.inferredState.board,
+        this.inferredState.currentPlayer,
+      )
+    if (referenceSnapshot == null) return
 
     this.setState({
-      studyBaselineSnapshot: createSnapshotFromBoard(board, currentPlayer),
+      studyBaselineSnapshot: cloneSnapshot(referenceSnapshot),
       studyBaselineKeyPoints: [],
       studyBaselineDirty: true,
-      studyTrialMoves: [],
-      studyBaselineOwnership: null,
+      studyTrialSnapshot: null,
+      studyTrialHistory: [],
+      studyTrialHasSetupEdits: false,
+      studyTrialDirty: false,
+      studyTrialCommittedSignature: null,
+      studyBaselineOwnership: this.state.studyBaselineOwnership,
       studyTrialOwnership: null,
       studyKeyPointMetrics: [],
       studyKeyPointSummary: null,
@@ -636,7 +703,11 @@ class Sabaki extends EventEmitter {
   }
 
   setStudyPlayer(player) {
-    if (this.state.mode !== 'baseline' || this.state.studyBaselineSnapshot == null) {
+    if (
+      !this.state.studyEnabled ||
+      this.state.studyPhase !== 'baseline' ||
+      this.state.studyBaselineSnapshot == null
+    ) {
       return
     }
 
@@ -646,59 +717,146 @@ class Sabaki extends EventEmitter {
         nextPlayer: player > 0 ? 1 : -1,
       },
       studyBaselineDirty: true,
-      studyBaselineOwnership: null,
+      studyBaselineOwnership: this.state.studyBaselineOwnership,
       studyTrialOwnership: null,
     })
   }
 
-  enterBaselineMode(treePosition = this.state.treePosition) {
+  enterStudyMode(treePosition = this.state.treePosition) {
     if (treePosition !== this.state.treePosition) {
       this.setCurrentTreePosition(this.inferredState.gameTree, treePosition)
       return
     }
 
-    if (this.state.studyBaselineSnapshot == null) {
-      this.resetBaselineFromCurrentPosition()
+    if (!['play', 'edit'].includes(this.state.mode)) {
+      this.setMode('play')
     }
 
-    this.setState({mode: 'baseline'})
-    this.setOverlayMode('territory')
-    this.scheduleStudyAnalysis()
-  }
+    let tree = this.inferredState.gameTree
+    let board = gametree.getBoard(tree, treePosition)
+    let currentPlayer = this.getPlayer(treePosition)
+    if (board == null) return
 
-  enterTrialMode() {
-    if (this.state.studyBaselineSnapshot == null) {
-      this.resetBaselineFromCurrentPosition()
-    }
+    let referenceSnapshot = createSnapshotFromBoard(board, currentPlayer)
+    let {snapshot, keyPoints} = this.getStudyData(tree, treePosition)
+    let baselineSnapshot = snapshot ?? cloneSnapshot(referenceSnapshot)
 
     this.setState({
-      mode: 'trial',
-      studyTrialMoves: [],
+      studyEnabled: true,
+      studyPhase: 'baseline',
+      studyReferenceTreePosition: treePosition,
+      studyReferenceSnapshot: referenceSnapshot,
+      studyReferencePlayer: currentPlayer,
+      studyBaselineSnapshot: baselineSnapshot,
+      studyBaselineKeyPoints: keyPoints,
+      studyBaselineDirty: snapshot == null,
+      studyTrialSnapshot: null,
+      studyTrialHistory: [],
+      studyTrialHasSetupEdits: false,
+      studyTrialDirty: false,
+      studyTrialCommittedSignature: null,
+      studyBaselineOwnership: null,
       studyTrialOwnership: null,
+      studyKeyPointMetrics: [],
+      studyKeyPointSummary: null,
+      studyAnalysisPending: false,
     })
     this.setOverlayMode('territory')
     this.scheduleStudyAnalysis()
   }
 
+  exitStudyMode() {
+    clearTimeout(this.studyAnalysisId)
+    this.setState(
+      this.getStudyStateChange(this.inferredState.gameTree, this.state.treePosition),
+    )
+  }
+
+  setStudyPhase(studyPhase) {
+    if (!this.state.studyEnabled) return
+    if (!['baseline', 'trial'].includes(studyPhase)) return
+
+    let stateChange = {studyPhase}
+
+    if (studyPhase === 'trial' && this.state.studyTrialSnapshot == null) {
+      stateChange.studyTrialSnapshot = getTrialStartSnapshot(
+        this.state.studyReferenceSnapshot,
+        this.state.studyBaselineSnapshot,
+      )
+      stateChange.studyTrialHistory = []
+      stateChange.studyTrialHasSetupEdits = false
+      stateChange.studyTrialDirty = false
+      stateChange.studyTrialCommittedSignature = null
+      stateChange.studyTrialOwnership = null
+    }
+
+    this.setState(stateChange)
+
+    if (studyPhase === 'trial') {
+      this.scheduleStudyAnalysis()
+    }
+  }
+
   resetTrialWorkspace() {
     this.setState({
-      studyTrialMoves: [],
+      studyTrialSnapshot: getTrialStartSnapshot(
+        this.state.studyReferenceSnapshot,
+        this.state.studyBaselineSnapshot,
+      ),
+      studyTrialHistory: [],
+      studyTrialHasSetupEdits: false,
+      studyTrialDirty: false,
+      studyTrialCommittedSignature: null,
       studyTrialOwnership: null,
     })
     this.setStudyCompareMetrics(this.state.studyBaselineOwnership, null)
     this.scheduleStudyAnalysis()
   }
 
+  updateTrialWorkspace(nextSnapshot, entry) {
+    if (nextSnapshot == null) return
+    if (
+      getSnapshotSignature(nextSnapshot) ===
+      getSnapshotSignature(this.state.studyTrialSnapshot)
+    ) {
+      return
+    }
+
+    let nextHistory =
+      entry == null
+        ? this.state.studyTrialHistory
+        : [
+            ...this.state.studyTrialHistory,
+            {...entry, snapshot: cloneSnapshot(nextSnapshot)},
+          ]
+    let hasSetupEdits = nextHistory.some((item) => item.type === 'setup')
+
+    this.setState({
+      studyTrialSnapshot: nextSnapshot,
+      studyTrialHistory: nextHistory,
+      studyTrialHasSetupEdits: hasSetupEdits,
+      studyTrialDirty: nextHistory.length > 0,
+      studyTrialCommittedSignature: null,
+    })
+  }
+
   updateStudySnapshot(mutator) {
     let snapshot = cloneSnapshot(this.state.studyBaselineSnapshot)
     if (snapshot == null) return
 
+    let previousSignature = getSnapshotSignature(snapshot)
     let nextSnapshot = mutator(snapshot) || snapshot
+    if (getSnapshotSignature(nextSnapshot) === previousSignature) return
+
     this.setState({
       studyBaselineSnapshot: nextSnapshot,
       studyBaselineDirty: true,
-      studyTrialMoves: [],
-      studyBaselineOwnership: null,
+      studyTrialSnapshot: null,
+      studyTrialHistory: [],
+      studyTrialHasSetupEdits: false,
+      studyTrialDirty: false,
+      studyTrialCommittedSignature: null,
+      studyBaselineOwnership: this.state.studyBaselineOwnership,
       studyTrialOwnership: null,
     })
     this.scheduleStudyAnalysis()
@@ -707,15 +865,29 @@ class Sabaki extends EventEmitter {
   clickStudyVertex(vertex, {button = 0} = {}) {
     if (button !== 0) return
 
-    if (this.state.mode === 'baseline') {
-      let selectedTool = this.state.selectedTool
-      if (selectedTool === 'label') {
+    if (this.state.studyPhase === 'baseline') {
+      if (this.state.mode === 'edit' && this.state.selectedTool === 'label') {
         this.toggleBaselineKeyPoint(vertex)
         return
       }
 
       this.updateStudySnapshot((snapshot) => {
+        if (this.state.mode !== 'edit') {
+          let board = boardFromSnapshot(snapshot)
+          let player = snapshot.nextPlayer
+          let {pass, overwrite, suicide} = board.analyzeMove(player, vertex)
+          if (pass || overwrite || suicide) return snapshot
+
+          return createSnapshotFromBoard(board.makeMove(player, vertex), -player)
+        }
+
+        let selectedTool = this.state.selectedTool
         let [x, y] = vertex
+        if (selectedTool === 'eraser') {
+          snapshot.signMap[y][x] = 0
+          return snapshot
+        }
+
         let sign =
           selectedTool === 'stone_-1'
             ? -1
@@ -736,50 +908,90 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    if (this.state.mode === 'trial') {
+    if (this.state.studyPhase === 'trial') {
       let trialSnapshot = this.getStudyTrialSnapshot()
       if (trialSnapshot == null) return
 
-      let board = boardFromSnapshot(trialSnapshot)
-      let player = this.getStudyAnalysisPlayer('trial')
-      let {pass, overwrite, suicide} = board.analyzeMove(player, vertex)
+      if (this.state.mode !== 'edit') {
+        let board = boardFromSnapshot(trialSnapshot)
+        let player = this.getStudyAnalysisPlayer('trial')
+        let {pass, overwrite, suicide} = board.analyzeMove(player, vertex)
 
-      if (pass || overwrite || suicide) return
+        if (pass || overwrite || suicide) return
 
-      this.setState({
-        studyTrialMoves: [...this.state.studyTrialMoves, vertex],
-        studyTrialOwnership: null,
-      })
+        this.updateTrialWorkspace(createSnapshotFromBoard(board.makeMove(player, vertex), -player), {
+          type: 'move',
+          vertex,
+        })
+      } else {
+        let selectedTool = this.state.selectedTool
+        if (selectedTool === 'label') return
+
+        let nextSnapshot = cloneSnapshot(trialSnapshot)
+        let [x, y] = vertex
+
+        if (selectedTool === 'eraser') {
+          nextSnapshot.signMap[y][x] = 0
+        } else {
+          let sign =
+            selectedTool === 'stone_-1'
+              ? -1
+              : selectedTool === 'stone_1'
+                ? 1
+                : 0
+          if (sign === 0) return
+
+          let current = nextSnapshot.signMap[y]?.[x] ?? 0
+          nextSnapshot.signMap[y][x] = current === sign ? 0 : sign
+        }
+
+        this.updateTrialWorkspace(nextSnapshot, {type: 'setup'})
+      }
       this.scheduleStudyAnalysis()
     }
   }
 
   undoTrialMove() {
-    if (this.state.studyTrialMoves.length === 0) return
+    if (this.state.studyTrialHistory.length === 0) return
+
+    let nextHistory = this.state.studyTrialHistory.slice(0, -1)
+    let nextSnapshot =
+      nextHistory.length > 0
+        ? cloneSnapshot(nextHistory[nextHistory.length - 1].snapshot)
+        : getTrialStartSnapshot(
+            this.state.studyReferenceSnapshot,
+            this.state.studyBaselineSnapshot,
+          )
 
     this.setState({
-      studyTrialMoves: this.state.studyTrialMoves.slice(0, -1),
-      studyTrialOwnership: null,
+      studyTrialSnapshot: nextSnapshot,
+      studyTrialHistory: nextHistory,
+      studyTrialHasSetupEdits: nextHistory.some((entry) => entry.type === 'setup'),
+      studyTrialDirty: nextHistory.length > 0,
+      studyTrialCommittedSignature: null,
+      studyTrialOwnership: this.state.studyTrialOwnership,
     })
     this.scheduleStudyAnalysis()
   }
 
   async applyTrialAsVariation() {
     if (
-      this.state.studyBaselineSnapshot == null ||
-      this.state.studyTrialMoves.length === 0
+      !this.state.studyEnabled ||
+      this.state.studyReferenceSnapshot == null ||
+      !this.hasStudyTrialMeaningfulChange()
     ) {
       return
     }
 
     let tree = this.inferredState.gameTree
-    let treePosition = this.state.treePosition
+    let treePosition =
+      this.state.studyReferenceTreePosition ?? this.state.treePosition
     let board = gametree.getBoard(tree, treePosition)
-    let currentPlayer = this.getPlayer(treePosition)
+    let currentPlayer = this.state.studyReferencePlayer ?? this.getPlayer(treePosition)
 
     if (
       !snapshotMatchesBoard(
-        this.state.studyBaselineSnapshot,
+        this.state.studyReferenceSnapshot,
         board,
         currentPlayer,
       )
@@ -787,26 +999,115 @@ class Sabaki extends EventEmitter {
       await dialog.showMessageBox(
         i18n.t(
           'sabaki.study',
-          'The baseline no longer matches the current node, so the trial cannot be applied as a variation.',
+          'The study reference node no longer matches the current position, so the trial cannot be applied as a variation.',
         ),
         'warning',
       )
       return
     }
 
-    let nextTreePosition = treePosition
-    let nextTree = tree.mutate((draft) => {
-      let sign = currentPlayer
-      for (let move of this.state.studyTrialMoves) {
-        nextTreePosition = draft.appendNode(nextTreePosition, {
-          [sign > 0 ? 'B' : 'W']: [sgf.stringifyVertex(move)],
-        })
-        sign = -sign
+    let deltaSummary =
+      this.state.studyBaselineOwnership != null &&
+      this.state.studyTrialOwnership != null
+        ? buildOwnershipDeltaSummary(
+            helper.getOwnershipDelta(
+              this.state.studyBaselineOwnership,
+              this.state.studyTrialOwnership,
+            ),
+          )
+        : null
+    let startNodeProperties = {}
+
+    if (deltaSummary != null || this.state.studyKeyPointSummary != null) {
+      let lines = [i18n.t('sabaki.study', 'Study trial result')]
+
+      if (deltaSummary != null) {
+        lines.push(
+          i18n.t(
+            'sabaki.study',
+            (p) =>
+              `Territory diff · Black gain ${p.blackSum}/${p.blackCount}, White gain ${p.whiteSum}/${p.whiteCount}`,
+            {
+              blackSum: deltaSummary.black.sum.toFixed(2),
+              blackCount: deltaSummary.black.intersections,
+              whiteSum: deltaSummary.white.sum.toFixed(2),
+              whiteCount: deltaSummary.white.intersections,
+            },
+          ),
+        )
       }
+
+      if (this.state.studyKeyPointSummary != null) {
+        lines.push(
+          i18n.t(
+            'sabaki.study',
+            (p) =>
+              `Key points · Black gain ${p.blackSum}/${p.blackCount}, White gain ${p.whiteSum}/${p.whiteCount}`,
+            {
+              blackSum: this.state.studyKeyPointSummary.blackGain.sum.toFixed(2),
+              blackCount:
+                this.state.studyKeyPointSummary.blackGain.intersections,
+              whiteSum: this.state.studyKeyPointSummary.whiteGain.sum.toFixed(2),
+              whiteCount:
+                this.state.studyKeyPointSummary.whiteGain.intersections,
+            },
+          ),
+        )
+      }
+
+      startNodeProperties.C = [lines.join('\n')]
+    }
+
+    let trialMoves = this.getStudyTrialMoves()
+    let useSetupNode = trialMoves == null
+    let nextTree = tree.mutate((draft) => {
+      let parentId = treePosition
+
+      if (!useSetupNode) {
+        let sign = this.state.studyReferenceSnapshot?.nextPlayer ?? currentPlayer
+        let variationData = trialMoves.map((move, index) => {
+          let data = {
+            [sign > 0 ? 'B' : 'W']: [sgf.stringifyVertex(move)],
+            ...(index === 0 ? startNodeProperties : {}),
+          }
+          sign = -sign
+          return data
+        })
+
+        for (let data of variationData) {
+          parentId = draft.appendNode(parentId, data)
+        }
+        return
+      }
+
+      let diff = diffSnapshots(
+        this.state.studyReferenceSnapshot,
+        this.state.studyTrialSnapshot,
+      )
+      let nodeData = {...startNodeProperties}
+
+      if (diff != null) {
+        if (diff.addedBlack.length > 0) {
+          nodeData.AB = diff.addedBlack.map((vertex) => sgf.stringifyVertex(vertex))
+        }
+        if (diff.addedWhite.length > 0) {
+          nodeData.AW = diff.addedWhite.map((vertex) => sgf.stringifyVertex(vertex))
+        }
+        if (diff.cleared.length > 0) {
+          nodeData.AE = diff.cleared.map((vertex) => sgf.stringifyVertex(vertex))
+        }
+        if (diff.nextPlayerChanged != null) {
+          nodeData.PL = [diff.nextPlayerChanged > 0 ? 'B' : 'W']
+        }
+      }
+
+      draft.appendNode(parentId, nodeData)
     })
 
-    this.setCurrentTreePosition(nextTree, nextTreePosition)
-    this.setState({mode: 'play', studyTrialMoves: []})
+    this.setCurrentTreePosition(nextTree, treePosition)
+    this.setState({
+      studyTrialCommittedSignature: this.getStudyTrialSignature(),
+    })
   }
 
   scheduleStudyAnalysis() {
@@ -818,7 +1119,7 @@ class Sabaki extends EventEmitter {
 
   async refreshStudyAnalysis() {
     if (
-      !['baseline', 'trial'].includes(this.state.mode) ||
+      !this.state.studyEnabled ||
       this.state.studyBaselineSnapshot == null
     ) {
       return
@@ -826,18 +1127,40 @@ class Sabaki extends EventEmitter {
 
     this.setState({studyAnalysisPending: true})
 
-    let baselineOwnership = await this.analyzeStudyPosition('baseline')
+    let baselineOwnership = await this.analyzeStudyPosition('baseline', (ownership) => {
+      this.setState({studyBaselineOwnership: ownership})
+      this.setStudyCompareMetrics(ownership, this.state.studyTrialOwnership)
+    })
     let trialOwnership =
-      this.state.mode === 'trial' && this.state.studyTrialMoves.length > 0
-        ? await this.analyzeStudyPosition('trial')
+      this.state.studyPhase === 'trial' && this.hasStudyTrialMeaningfulChange()
+        ? await this.analyzeStudyPosition('trial', (ownership) => {
+            this.setState({studyTrialOwnership: ownership})
+            this.setStudyCompareMetrics(
+              this.state.studyBaselineOwnership,
+              ownership,
+            )
+          })
         : null
 
     this.setState({
-      studyBaselineOwnership: baselineOwnership,
-      studyTrialOwnership: trialOwnership,
+      studyBaselineOwnership:
+        baselineOwnership ?? this.state.studyBaselineOwnership,
+      studyTrialOwnership:
+        trialOwnership ??
+        (this.state.studyPhase === 'trial' &&
+        this.hasStudyTrialMeaningfulChange()
+          ? this.state.studyTrialOwnership
+          : null),
       studyAnalysisPending: false,
     })
-    this.setStudyCompareMetrics(baselineOwnership, trialOwnership)
+    this.setStudyCompareMetrics(
+      baselineOwnership ?? this.state.studyBaselineOwnership,
+      trialOwnership ??
+        (this.state.studyPhase === 'trial' &&
+        this.hasStudyTrialMeaningfulChange()
+          ? this.state.studyTrialOwnership
+          : null),
+    )
   }
 
   isCompareOverlayMode(overlayMode = this.state.overlayMode) {
@@ -868,14 +1191,22 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    let maxVisits = +setting.get('board.analysis_max_visits')
-    if (!Number.isFinite(maxVisits) || maxVisits <= 0) return
-
     try {
-      await syncer.queueCommand({
-        name: 'kata-set-param',
-        args: ['maxVisits', Math.round(maxVisits).toString()],
-      })
+      let maxVisits = +setting.get('board.analysis_max_visits')
+      if (Number.isFinite(maxVisits) && maxVisits > 0) {
+        await syncer.queueCommand({
+          name: 'kata-set-param',
+          args: ['maxVisits', Math.round(maxVisits).toString()],
+        })
+      }
+
+      let maxTime = +setting.get('board.analysis_max_time')
+      if (Number.isFinite(maxTime) && maxTime > 0) {
+        await syncer.queueCommand({
+          name: 'kata-set-param',
+          args: ['maxTime', maxTime.toString()],
+        })
+      }
     } catch (err) {}
   }
 
@@ -893,6 +1224,7 @@ class Sabaki extends EventEmitter {
     requestGroup = 'compare',
     showLoadingText = null,
     previewCacheMoves = null,
+    onOwnershipUpdate = null,
   }) {
     if (syncer == null || syncer.suspended || tree == null || treePosition == null) {
       return null
@@ -905,7 +1237,10 @@ class Sabaki extends EventEmitter {
       previewCacheMoves != null
         ? this.getCachedPreviewOwnership(syncer.id, tree, treePosition, previewCacheMoves)
         : this.getCachedOwnership(syncer.id, tree, treePosition)
-    if (cachedOwnership != null) return cachedOwnership
+    if (cachedOwnership != null) {
+      onOwnershipUpdate?.(cachedOwnership)
+      return cachedOwnership
+    }
 
     let args = [
       analyzePlayer > 0 ? 'B' : 'W',
@@ -913,11 +1248,23 @@ class Sabaki extends EventEmitter {
     ]
     if (commandName.includes('kata')) args.push('ownership', 'true')
 
+    if (commandName.includes('kata') && this.state.analysisAreaVertices?.length > 0) {
+      let gameBoard = gametree.getBoard(this.inferredState.gameTree, treePosition)
+      let vertexStr = this.state.analysisAreaVertices
+        .map((v) => gameBoard.stringifyVertex(v))
+        .join(',')
+      let player = analyzePlayer > 0 ? 'b' : 'w'
+      args.push('allow', player, vertexStr, '999')
+    }
+
     let requestId =
       requestGroup === 'analysis'
         ? ++this.analysisRequestId
         : ++this.compareRequestId
     let visitLimit = this.getAnalysisVisitLimit()
+    let maxTime = +setting.get('board.analysis_max_time')
+    let timeoutMs =
+      Number.isFinite(maxTime) && maxTime > 0 ? Math.round(maxTime * 1000) : null
     let originTreePosition = this.state.treePosition
 
     if (pendingStateKey != null) {
@@ -942,10 +1289,18 @@ class Sabaki extends EventEmitter {
       }
 
       let ownership = await new Promise((resolve) => {
-        let timeoutId = setTimeout(() => {
+        let settled = false
+        let latestOwnership = null
+        let timeoutId = null
+
+        let finish = (value) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeoutId)
           syncer.removeListener('analysis-update', handleUpdate)
-          resolve(null)
-        }, 8000)
+          syncer.sendAbort()
+          resolve(value)
+        }
 
         let handleUpdate = () => {
           let invalid =
@@ -954,9 +1309,7 @@ class Sabaki extends EventEmitter {
               : requestId !== this.compareRequestId
 
           if (invalid) {
-            clearTimeout(timeoutId)
-            syncer.removeListener('analysis-update', handleUpdate)
-            resolve(null)
+            finish(null)
             return
           }
 
@@ -972,22 +1325,25 @@ class Sabaki extends EventEmitter {
             0,
             ...syncer.analysis.variations.map((variation) => variation.visits || 0),
           )
-          if (visitLimit != null && bestVisits < visitLimit) return
+          latestOwnership = syncer.analysis.ownership
+          onOwnershipUpdate?.(latestOwnership)
 
-          clearTimeout(timeoutId)
-          syncer.removeListener('analysis-update', handleUpdate)
-          syncer.sendAbort()
-          resolve(syncer.analysis.ownership)
+          if (visitLimit != null && bestVisits < visitLimit) {
+            return
+          }
+
+          finish(latestOwnership)
         }
 
         syncer.on('analysis-update', handleUpdate)
+        if (timeoutMs != null) {
+          timeoutId = setTimeout(() => finish(latestOwnership), timeoutMs)
+        }
 
         try {
           syncer.queueCommand({name: commandName, args})
         } catch (err) {
-          clearTimeout(timeoutId)
-          syncer.removeListener('analysis-update', handleUpdate)
-          resolve(null)
+          finish(null)
         }
       })
 
@@ -1105,6 +1461,7 @@ class Sabaki extends EventEmitter {
     })
 
     if (
+      !this.state.studyEnabled &&
       requireOwnership &&
       (this.state.analysisTreePosition !== this.state.treePosition ||
         this.getCurrentOwnership(syncer) == null)
@@ -1203,6 +1560,7 @@ class Sabaki extends EventEmitter {
       treePosition: previewTreePosition,
       analyzePlayer: analyzeSign,
       pendingStateKey: 'comparePending',
+      requestGroup: 'preview',
       previewCacheMoves,
     })
   }
@@ -1229,6 +1587,7 @@ class Sabaki extends EventEmitter {
       treePosition,
       analyzePlayer: sign,
       pendingStateKey: 'comparePending',
+      requestGroup: 'compare',
       showLoadingText: i18n.t('sabaki.engine', 'Loading comparison...'),
     })
 
@@ -1386,7 +1745,7 @@ class Sabaki extends EventEmitter {
     })
   }
 
-  async analyzeStudyPosition(kind) {
+  async analyzeStudyPosition(kind, onOwnershipUpdate = null) {
     let syncer = this.inferredState.analyzingEngineSyncer
     if (syncer == null || !this.engineSupportsOwnership(syncer)) return null
 
@@ -1402,6 +1761,8 @@ class Sabaki extends EventEmitter {
       tree,
       treePosition,
       analyzePlayer: snapshot.nextPlayer,
+      requestGroup: 'study',
+      onOwnershipUpdate,
     })
   }
 
@@ -1923,7 +2284,7 @@ class Sabaki extends EventEmitter {
 
     let [vx, vy] = vertex
 
-    if (['baseline', 'trial'].includes(this.state.mode)) {
+    if (this.state.studyEnabled) {
       this.clickStudyVertex(vertex, {button, ctrlKey, x, y})
       return
     }
@@ -2516,10 +2877,7 @@ class Sabaki extends EventEmitter {
       gameTrees: gameTrees.map((t, i) => (i !== gameIndex ? t : tree)),
       gameIndex,
       treePosition,
-      mode:
-        navigated && ['baseline', 'trial'].includes(this.state.mode)
-          ? 'play'
-          : this.state.mode,
+      mode: this.state.mode,
       compareReferenceTreePosition:
         navigated && this.isCompareOverlayMode()
           ? treePosition
@@ -3405,6 +3763,22 @@ class Sabaki extends EventEmitter {
       : data.B != null || (data.HA != null && +data.HA[0] >= 1)
       ? -1
       : 1
+  }
+
+  setAnalysisArea(vertices) {
+    this.setState({
+      analysisAreaVertices: vertices,
+      analysisAreaSelecting: false,
+    })
+    this.analyzeMove(this.state.treePosition)
+  }
+
+  clearAnalysisArea() {
+    this.setState({
+      analysisAreaVertices: null,
+      analysisAreaSelecting: false,
+    })
+    this.analyzeMove(this.state.treePosition)
   }
 
   setPlayer(treePosition, sign) {

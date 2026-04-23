@@ -1,14 +1,14 @@
 import {h, Component} from 'preact'
 
 import Goban from './Goban.js'
-import PlayBar from './bars/PlayBar.js'
+import BoardToolbar from './BoardToolbar.js'
+import WorkspaceDock from './WorkspaceDock.js'
 import EditBar from './bars/EditBar.js'
 import GuessBar from './bars/GuessBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
 import ScoringBar from './bars/ScoringBar.js'
 import FindBar from './bars/FindBar.js'
-import BaselineBar from './bars/BaselineBar.js'
-import TrialBar from './bars/TrialBar.js'
+import StudyBar from './bars/StudyBar.js'
 import BoardOverlayStack from './overlays/BoardOverlayStack.js'
 
 import sabaki from '../modules/sabaki.js'
@@ -18,11 +18,17 @@ export default class MainView extends Component {
   constructor(props) {
     super(props)
 
+    this.state = {
+      gobanCrosshair: false,
+      overlayStatusProps: null,
+    }
+
     this.handleTogglePlayer = () => {
-      let {mode, gameTree, treePosition, currentPlayer} = this.props
-      if (mode === 'baseline') {
+      let {gameTree, treePosition, currentPlayer, studyEnabled, studyPhase} =
+        this.props
+      if (studyEnabled && studyPhase === 'baseline') {
         sabaki.setStudyPlayer(-currentPlayer)
-      } else if (mode === 'trial') {
+      } else if (studyEnabled && studyPhase === 'trial') {
         return
       } else {
         sabaki.setPlayer(treePosition, -currentPlayer)
@@ -39,8 +45,55 @@ export default class MainView extends Component {
         text: this.props.findText,
       })
 
+    this.handleOverlayStatusChange = (overlayStatusProps) => {
+      this.setState(({overlayStatusProps: currentStatusProps}) => {
+        let nextStatus = overlayStatusProps ?? null
+        if (JSON.stringify(currentStatusProps) === JSON.stringify(nextStatus)) {
+          return null
+        }
+
+        return {overlayStatusProps: nextStatus}
+      })
+    }
+
     this.handleGobanVertexClick = this.handleGobanVertexClick.bind(this)
     this.handleGobanLineDraw = this.handleGobanLineDraw.bind(this)
+    this.handleGobanAreaSelect = this.handleGobanAreaSelect.bind(this)
+    this.handleGobanAreaSelectPreview = this.handleGobanAreaSelectPreview.bind(this)
+  }
+
+  computeRectangleVertices(start, end, width, height) {
+    let minX = Math.min(start[0], end[0])
+    let maxX = Math.max(start[0], end[0])
+    let minY = Math.min(start[1], end[1])
+    let maxY = Math.max(start[1], end[1])
+    let vertices = []
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (x >= 0 && y >= 0 && x < width && y < height) {
+          vertices.push([x, y])
+        }
+      }
+    }
+
+    return vertices
+  }
+
+  handleGobanAreaSelect({start, end}) {
+    let {gameTree, treePosition} = this.props
+    let board = gametree.getBoard(gameTree, treePosition)
+    let vertices = this.computeRectangleVertices(start, end, board.width, board.height)
+    if (vertices.length > 0) {
+      sabaki.setAnalysisArea(vertices)
+    }
+  }
+
+  handleGobanAreaSelectPreview({start, end}) {
+    let {gameTree, treePosition} = this.props
+    let board = gametree.getBoard(gameTree, treePosition)
+    let vertices = this.computeRectangleVertices(start, end, board.width, board.height)
+    sabaki.setState({highlightVertices: vertices})
   }
 
   componentDidMount() {
@@ -66,6 +119,10 @@ export default class MainView extends Component {
   componentWillReceiveProps(nextProps) {
     if (nextProps.mode !== 'edit') {
       this.setState({gobanCrosshair: false})
+    }
+
+    if (!nextProps.territoryMode && this.state.overlayStatusProps != null) {
+      this.setState({overlayStatusProps: null})
     }
   }
 
@@ -118,6 +175,7 @@ export default class MainView extends Component {
       treePosition,
       currentPlayer,
       studyMode,
+      studyPhase,
       studyRenderBoard,
       studyCurrentPlayer,
       studyMarkerMap,
@@ -149,6 +207,8 @@ export default class MainView extends Component {
       blockedGuesses,
 
       highlightVertices,
+      analysisAreaVertices,
+      analysisAreaSelecting,
       analysisType,
       showAnalysis,
       showCoordinates,
@@ -163,6 +223,15 @@ export default class MainView extends Component {
       selectedTool,
       findText,
       findVertex,
+      studyBaselineDirty,
+      studyBaselineSnapshot,
+      studyBaselineKeyPoints,
+      studyBaselineOwnership,
+      studyTrialOwnership,
+      studyTrialDirty,
+      studyTrialCommittedSignature,
+      studyTrialHasSetupEdits,
+      studyAnalysisPending,
     },
     {gobanCrosshair},
   ) {
@@ -199,6 +268,18 @@ export default class MainView extends Component {
     if (compareMode && comparePaintMap != null) {
       paintMap = comparePaintMap
       markerMap = compareMarkerMap
+    }
+
+    if (analysisAreaVertices != null && !analysisAreaSelecting) {
+      paintMap = board.signMap.map((row) => row.map(() => 0))
+      let vertexSet = new Set(analysisAreaVertices.map((v) => `${v[0]},${v[1]}`))
+      for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) {
+          if (!vertexSet.has(`${x},${y}`)) {
+            paintMap[y][x] = -0.3
+          }
+        }
+      }
     }
 
     if (
@@ -306,11 +387,10 @@ export default class MainView extends Component {
       comparePending,
       compareMode,
 
-      crosshair: gobanCrosshair,
+      crosshair: gobanCrosshair || analysisAreaSelecting,
       showCoordinates,
       showMoveColorization,
-      showMoveNumbers:
-        !['edit', 'baseline'].includes(mode) && showMoveNumbers,
+      showMoveNumbers: mode !== 'edit' && showMoveNumbers,
       showNextMoves: mode !== 'guess' && showNextMoves,
       showSiblings: mode !== 'guess' && showSiblings,
       fuzzyStonePlacement,
@@ -318,113 +398,149 @@ export default class MainView extends Component {
 
       playVariation,
       drawLineMode:
-        ['edit', 'baseline'].includes(mode) &&
-        ['arrow', 'line'].includes(selectedTool)
+        mode === 'edit' && ['arrow', 'line'].includes(selectedTool)
           ? selectedTool
           : null,
       transformation: boardTransformation,
 
       onVertexClick: this.handleGobanVertexClick,
       onLineDraw: this.handleGobanLineDraw,
+
+      areaSelectMode: analysisAreaSelecting,
+      onAreaSelect: this.handleGobanAreaSelect,
+      onAreaSelectPreview: this.handleGobanAreaSelectPreview,
     }
+
+    let engineSyncers = [
+      this.props.blackEngineSyncerId,
+      this.props.whiteEngineSyncerId,
+    ].map((id) =>
+      this.props.attachedEngineSyncers.find((syncer) => syncer.id === id),
+    )
+
+    let workspaceSummary = studyMode
+      ? studyPhase === 'trial'
+        ? 'Trial workspace'
+        : 'Baseline workspace'
+      : territoryStatusText
 
     return h(
       'section',
       {id: 'main'},
+      h(BoardToolbar, {
+        mode,
+        studyMode,
+        territoryMode,
+        currentPlayer,
+        playerNames: gameInfo.playerNames,
+        playerRanks: gameInfo.playerRanks,
+        playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
+        engineSyncers,
+        areaSelectActive: analysisAreaSelecting || analysisAreaVertices != null,
+        onCurrentPlayerClick: this.handleTogglePlayer,
+      }),
 
       h(
         'main',
-        {ref: (el) => (this.mainElement = el)},
+        {
+          ref: (el) => (this.mainElement = el),
+          class: 'board-stage',
+        },
 
         territoryMode
           ? h(BoardOverlayStack, {
               territoryMode,
-              ownership: territoryOwnership,
+              baselineOwnership: territoryOwnership,
               unavailableReason: overlayUnavailableReason,
               gobanProps,
               analysis: gobanProps.analysis,
               lastMoveDeltaMap: lastMoveTerritoryDeltaMap,
               lastMoveDiffAvailable: lastMoveTerritoryDiffAvailable,
               keyPointSummary: this.props.studyKeyPointSummary,
+              onStatusChange: this.handleOverlayStatusChange,
             })
           : h(Goban, gobanProps),
       ),
 
       h(
-        'section',
-        {id: 'bar'},
-        h(PlayBar, {
+        WorkspaceDock,
+        {
           mode,
-          engineSyncers: [
-            this.props.blackEngineSyncerId,
-            this.props.whiteEngineSyncerId,
-          ].map((id) =>
-            this.props.attachedEngineSyncers.find((syncer) => syncer.id === id),
-          ),
-          playerNames: gameInfo.playerNames,
-          playerRanks: gameInfo.playerRanks,
-          playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
-          currentPlayer,
-          showHotspot: node.data.HO != null,
-          overlayStatus: territoryStatusText,
-          onCurrentPlayerClick: this.handleTogglePlayer,
-        }),
-
+          studyMode,
+          overlayStatusProps: this.state.overlayStatusProps,
+          summaryText: workspaceSummary,
+        },
+        !studyMode &&
         h(EditBar, {
           mode,
           selectedTool,
           onToolButtonClick: this.handleToolButtonClick,
         }),
 
-        h(GuessBar, {
-          mode,
-          treePosition,
-        }),
+        !studyMode &&
+          h(GuessBar, {
+            mode,
+            treePosition,
+          }),
 
-        h(AutoplayBar, {
-          mode,
-          gameTree,
-          gameCurrents: gameCurrents[gameIndex],
-          treePosition,
-        }),
+        !studyMode &&
+          h(AutoplayBar, {
+            mode,
+            gameTree,
+            gameCurrents: gameCurrents[gameIndex],
+            treePosition,
+          }),
 
-        h(ScoringBar, {
-          type: 'scoring',
-          mode,
-          method: scoringMethod,
-          scoreBoard,
-          areaMap,
-          komi,
-          handicap,
-        }),
+        !studyMode &&
+          h(ScoringBar, {
+            type: 'scoring',
+            mode,
+            method: scoringMethod,
+            scoreBoard,
+            areaMap,
+            komi,
+            handicap,
+          }),
 
-        h(ScoringBar, {
-          type: 'estimator',
-          mode,
-          method: scoringMethod,
-          scoreBoard,
-          areaMap,
-          komi,
-          handicap,
-        }),
+        !studyMode &&
+          h(ScoringBar, {
+            type: 'estimator',
+            mode,
+            method: scoringMethod,
+            scoreBoard,
+            areaMap,
+            komi,
+            handicap,
+          }),
 
-        h(FindBar, {
-          mode,
-          findText,
-          onButtonClick: this.handleFindButtonClick,
-        }),
+        !studyMode &&
+          h(FindBar, {
+            mode,
+            findText,
+            onButtonClick: this.handleFindButtonClick,
+          }),
 
-        h(BaselineBar, {
-          mode,
-          dirty: this.props.studyBaselineDirty,
-          hasBaseline: this.props.studyBaselineSnapshot != null,
-          keyPointCount: this.props.studyBaselineKeyPoints.length,
-        }),
-
-        h(TrialBar, {
-          mode,
-          moveCount: this.props.studyTrialMoves.length,
-        }),
+        studyMode &&
+          h(StudyBar, {
+            mode,
+            studyPhase,
+            selectedTool,
+            dirty: studyBaselineDirty,
+            hasBaseline: studyBaselineSnapshot != null,
+            keyPointCount: studyBaselineKeyPoints.length,
+            moveCount: sabaki.getStudyTrialMoveCount(),
+            analysisPending: studyAnalysisPending,
+            ownershipReady: studyBaselineOwnership != null,
+            trialReady:
+              sabaki.hasStudyTrialMeaningfulChange() &&
+              studyTrialOwnership != null &&
+              !studyAnalysisPending,
+            trialDirty: sabaki.hasStudyTrialMeaningfulChange(),
+            committed:
+              studyTrialCommittedSignature != null &&
+              studyTrialCommittedSignature === sabaki.getStudyTrialSignature(),
+            usingSetupEdits: studyTrialHasSetupEdits,
+          }),
       ),
     )
   }

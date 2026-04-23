@@ -97,6 +97,8 @@ export default class Goban extends Component {
   }
 
   resize() {
+    if (!this.element || !this.element.parentElement) return
+
     let {
       offsetWidth: maxWidth,
       offsetHeight: maxHeight,
@@ -118,7 +120,12 @@ export default class Goban extends Component {
   handleVertexMouseUp(evt, vertex) {
     if (!this.mouseDown) return
 
-    let {onVertexClick = helper.noop, onLineDraw = helper.noop} = this.props
+    let {
+      areaSelectMode,
+      onVertexClick = helper.noop,
+      onLineDraw = helper.noop,
+      onAreaSelect = helper.noop,
+    } = this.props
 
     this.mouseDown = false
     evt.vertex = vertex
@@ -126,6 +133,13 @@ export default class Goban extends Component {
 
     if (evt.x == null) evt.x = evt.clientX
     if (evt.y == null) evt.y = evt.clientY
+
+    if (areaSelectMode && this.startVertex != null) {
+      onAreaSelect({start: this.startVertex, end: vertex})
+      this.setState({clicked: true})
+      setTimeout(() => this.setState({clicked: false}), 200)
+      return
+    }
 
     if (evt.line) {
       onLineDraw(evt)
@@ -139,17 +153,24 @@ export default class Goban extends Component {
   }
 
   handleVertexMouseMove(evt, vertex) {
-    let {drawLineMode, onVertexMouseMove = helper.noop} = this.props
+    let {
+      areaSelectMode,
+      drawLineMode,
+      onVertexMouseMove = helper.noop,
+      onAreaSelectPreview = helper.noop,
+    } = this.props
 
-    onVertexMouseMove(
-      Object.assign(evt, {
-        mouseDown: this.mouseDown,
-        startVertex: this.startVertex,
-        vertex,
-      }),
-    )
+    let moveEvent = Object.assign(evt, {
+      mouseDown: this.mouseDown,
+      startVertex: this.startVertex,
+      vertex,
+    })
 
-    if (!!drawLineMode && evt.mouseDown && evt.button === 0) {
+    onVertexMouseMove(moveEvent)
+
+    if (areaSelectMode && evt.mouseDown && this.startVertex != null && evt.button === 0) {
+      onAreaSelectPreview({start: this.startVertex, end: vertex})
+    } else if (!!drawLineMode && evt.mouseDown && evt.button === 0) {
       let temporaryLine = {v1: evt.startVertex, v2: evt.vertex}
 
       if (!helper.equals(temporaryLine, this.state.temporaryLine)) {
