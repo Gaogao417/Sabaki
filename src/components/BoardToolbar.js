@@ -147,7 +147,7 @@ export default class BoardToolbar extends Component {
   render(
     {
       mode,
-      studyMode,
+      editWorkspaceActive,
       territoryMode,
       currentPlayer,
       playerNames,
@@ -220,21 +220,14 @@ export default class BoardToolbar extends Component {
             sabaki.setOverlayMode(territoryMode ? 'off' : 'territory'),
         }),
         h(ToolbarButton, {
-          label: t('Study'),
-          selected: studyMode,
-          accent: studyMode,
-          onClick: () =>
-            studyMode ? sabaki.exitStudyMode() : sabaki.enterStudyMode(),
-        }),
-        h(ToolbarButton, {
           label: t('Area'),
           selected: areaSelectActive,
           accent: areaSelectActive,
-          title: t('Select analysis area'),
+          title: t('Shift+drag to select, click to clear'),
           onClick: () =>
             areaSelectActive
               ? sabaki.clearAnalysisArea()
-              : sabaki.setState({analysisAreaSelecting: true}),
+              : null,
         }),
         h(
           'a',

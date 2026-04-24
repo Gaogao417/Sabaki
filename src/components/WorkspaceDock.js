@@ -7,14 +7,14 @@ const t = i18n.context('WorkspaceDock')
 
 export default function WorkspaceDock({
   mode,
-  studyMode,
+  editWorkspaceActive,
   overlayStatusProps = null,
   summaryText = null,
   children,
 }) {
   let activePanel =
-    studyMode
-      ? t('Study Workspace')
+    editWorkspaceActive
+      ? t('Edit Workspace')
       : mode === 'edit'
         ? t('Edit Tools')
         : mode === 'find'

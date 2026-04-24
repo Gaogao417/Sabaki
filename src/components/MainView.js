@@ -8,7 +8,6 @@ import GuessBar from './bars/GuessBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
 import ScoringBar from './bars/ScoringBar.js'
 import FindBar from './bars/FindBar.js'
-import StudyBar from './bars/StudyBar.js'
 import BoardOverlayStack from './overlays/BoardOverlayStack.js'
 
 import sabaki from '../modules/sabaki.js'
@@ -24,12 +23,9 @@ export default class MainView extends Component {
     }
 
     this.handleTogglePlayer = () => {
-      let {gameTree, treePosition, currentPlayer, studyEnabled, studyPhase} =
-        this.props
-      if (studyEnabled && studyPhase === 'baseline') {
-        sabaki.setStudyPlayer(-currentPlayer)
-      } else if (studyEnabled && studyPhase === 'trial') {
-        return
+      let {gameTree, treePosition, currentPlayer, editWorkspaceActive} = this.props
+      if (editWorkspaceActive) {
+        sabaki.setEditWorkspacePlayer(-currentPlayer)
       } else {
         sabaki.setPlayer(treePosition, -currentPlayer)
       }
@@ -132,8 +128,19 @@ export default class MainView extends Component {
 
   handleGobanLineDraw(evt) {
     let {v1, v2} = evt.line
-    sabaki.useTool(this.props.selectedTool, v1, v2)
-    sabaki.editVertexData = null
+    let {mode, editWorkspaceActive, selectedTool} = this.props
+    if (mode === 'edit' && editWorkspaceActive) {
+      let ws = sabaki.state.editWorkspace
+      if (ws != null) {
+        let linesKey = ws.activeTab === 'reference' ? 'referenceLines' : 'workingLines'
+        let lines = [...ws[linesKey], {v1, v2, type: selectedTool}]
+        sabaki.setState({editWorkspace: {...ws, [linesKey]: lines}})
+      }
+      sabaki.editVertexData = null
+    } else {
+      sabaki.useTool(selectedTool, v1, v2)
+      sabaki.editVertexData = null
+    }
   }
 
   buildCompareAnchorMap(board, markerMap, referenceVertex, targetVertex) {
@@ -174,11 +181,11 @@ export default class MainView extends Component {
       gameCurrents,
       treePosition,
       currentPlayer,
-      studyMode,
-      studyPhase,
-      studyRenderBoard,
-      studyCurrentPlayer,
-      studyMarkerMap,
+      editWorkspaceActive,
+      editRenderBoard,
+      editCurrentPlayer,
+      editMarkerMap,
+      editLines,
       gameInfo,
 
       deadStones,
@@ -223,15 +230,7 @@ export default class MainView extends Component {
       selectedTool,
       findText,
       findVertex,
-      studyBaselineDirty,
-      studyBaselineSnapshot,
-      studyBaselineKeyPoints,
-      studyBaselineOwnership,
-      studyTrialOwnership,
-      studyTrialDirty,
-      studyTrialCommittedSignature,
-      studyTrialHasSetupEdits,
-      studyAnalysisPending,
+      editWorkspace: editWs,
     },
     {gobanCrosshair},
   ) {
@@ -240,13 +239,16 @@ export default class MainView extends Component {
         ? compareReferenceTreePosition
         : treePosition
     let node = gameTree.get(compareReferencePosition)
-    let board = studyMode
-      ? studyRenderBoard
+    let board = editWorkspaceActive
+      ? editRenderBoard
       : gametree.getBoard(gameTree, compareReferencePosition)
     if (board == null) {
       board = gametree.getBoard(gameTree, compareReferencePosition)
     }
-    currentPlayer = studyMode ? studyCurrentPlayer : currentPlayer
+    if (editWorkspaceActive && editLines != null) {
+      board.lines = editLines
+    }
+    currentPlayer = editWorkspaceActive ? editCurrentPlayer : currentPlayer
     let komi = +gametree.getRootProperty(gameTree, 'KM', 0)
     let handicap = +gametree.getRootProperty(gameTree, 'HA', 0)
     let paintMap
@@ -270,7 +272,7 @@ export default class MainView extends Component {
       markerMap = compareMarkerMap
     }
 
-    if (analysisAreaVertices != null && !analysisAreaSelecting) {
+    if (analysisAreaVertices != null) {
       paintMap = board.signMap.map((row) => row.map(() => 0))
       let vertexSet = new Set(analysisAreaVertices.map((v) => `${v[0]},${v[1]}`))
       for (let y = 0; y < board.height; y++) {
@@ -283,6 +285,7 @@ export default class MainView extends Component {
     }
 
     if (
+      !editWorkspaceActive &&
       compareMode &&
       compareReferenceTreePosition != null &&
       compareTargetTreePosition != null &&
@@ -341,6 +344,7 @@ export default class MainView extends Component {
     }
 
     if (
+      !editWorkspaceActive &&
       !(compareMode && compareTargetTreePosition != null) &&
       graphHoverTreePosition != null &&
       graphHoverTreePosition !== compareReferencePosition &&
@@ -371,7 +375,7 @@ export default class MainView extends Component {
         findVertex && mode === 'find' ? [findVertex] : highlightVertices,
       analysisType,
       analysis:
-        !studyMode &&
+        !editWorkspaceActive &&
         !compareMode &&
         showAnalysis &&
         analysisTreePosition != null &&
@@ -380,7 +384,7 @@ export default class MainView extends Component {
           : null,
       paintMap,
       markerMap:
-        studyMode && studyMarkerMap != null ? studyMarkerMap : markerMap,
+        editWorkspaceActive && editMarkerMap != null ? editMarkerMap : markerMap,
       compareSelectedVertices,
       dimmedStones,
       overlayGhostStoneMap,
@@ -391,8 +395,8 @@ export default class MainView extends Component {
       showCoordinates,
       showMoveColorization,
       showMoveNumbers: mode !== 'edit' && showMoveNumbers,
-      showNextMoves: mode !== 'guess' && showNextMoves,
-      showSiblings: mode !== 'guess' && showSiblings,
+      showNextMoves: !editWorkspaceActive && mode !== 'guess' && showNextMoves,
+      showSiblings: !editWorkspaceActive && mode !== 'guess' && showSiblings,
       fuzzyStonePlacement,
       animateStonePlacement,
 
@@ -405,6 +409,10 @@ export default class MainView extends Component {
 
       onVertexClick: this.handleGobanVertexClick,
       onLineDraw: this.handleGobanLineDraw,
+      dragMode: mode === 'edit' && editWorkspaceActive,
+      onStoneDragEnd: mode === 'edit' && editWorkspaceActive
+        ? (evt) => sabaki.handleEditDragEnd(evt)
+        : null,
 
       areaSelectMode: analysisAreaSelecting,
       onAreaSelect: this.handleGobanAreaSelect,
@@ -418,10 +426,8 @@ export default class MainView extends Component {
       this.props.attachedEngineSyncers.find((syncer) => syncer.id === id),
     )
 
-    let workspaceSummary = studyMode
-      ? studyPhase === 'trial'
-        ? 'Trial workspace'
-        : 'Baseline workspace'
+    let workspaceSummary = editWorkspaceActive
+      ? (editWs?.activeTab === 'reference' ? 'Reference' : 'Working')
       : territoryStatusText
 
     return h(
@@ -429,14 +435,14 @@ export default class MainView extends Component {
       {id: 'main'},
       h(BoardToolbar, {
         mode,
-        studyMode,
+        editWorkspaceActive,
         territoryMode,
         currentPlayer,
         playerNames: gameInfo.playerNames,
         playerRanks: gameInfo.playerRanks,
         playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
         engineSyncers,
-        areaSelectActive: analysisAreaSelecting || analysisAreaVertices != null,
+        areaSelectActive: analysisAreaVertices != null,
         onCurrentPlayerClick: this.handleTogglePlayer,
       }),
 
@@ -456,7 +462,6 @@ export default class MainView extends Component {
               analysis: gobanProps.analysis,
               lastMoveDeltaMap: lastMoveTerritoryDeltaMap,
               lastMoveDiffAvailable: lastMoveTerritoryDiffAvailable,
-              keyPointSummary: this.props.studyKeyPointSummary,
               onStatusChange: this.handleOverlayStatusChange,
             })
           : h(Goban, gobanProps),
@@ -466,81 +471,54 @@ export default class MainView extends Component {
         WorkspaceDock,
         {
           mode,
-          studyMode,
+          editWorkspaceActive,
           overlayStatusProps: this.state.overlayStatusProps,
           summaryText: workspaceSummary,
         },
-        !studyMode &&
         h(EditBar, {
           mode,
           selectedTool,
           onToolButtonClick: this.handleToolButtonClick,
+          editWorkspace: editWs,
         }),
 
-        !studyMode &&
-          h(GuessBar, {
-            mode,
-            treePosition,
-          }),
+        h(GuessBar, {
+          mode,
+          treePosition,
+        }),
 
-        !studyMode &&
-          h(AutoplayBar, {
-            mode,
-            gameTree,
-            gameCurrents: gameCurrents[gameIndex],
-            treePosition,
-          }),
+        h(AutoplayBar, {
+          mode,
+          gameTree,
+          gameCurrents: gameCurrents[gameIndex],
+          treePosition,
+        }),
 
-        !studyMode &&
-          h(ScoringBar, {
-            type: 'scoring',
-            mode,
-            method: scoringMethod,
-            scoreBoard,
-            areaMap,
-            komi,
-            handicap,
-          }),
+        h(ScoringBar, {
+          type: 'scoring',
+          mode,
+          method: scoringMethod,
+          scoreBoard,
+          areaMap,
+          komi,
+          handicap,
+        }),
 
-        !studyMode &&
-          h(ScoringBar, {
-            type: 'estimator',
-            mode,
-            method: scoringMethod,
-            scoreBoard,
-            areaMap,
-            komi,
-            handicap,
-          }),
+        h(ScoringBar, {
+          type: 'estimator',
+          mode,
+          method: scoringMethod,
+          scoreBoard,
+          areaMap,
+          komi,
+          handicap,
+        }),
 
-        !studyMode &&
-          h(FindBar, {
-            mode,
-            findText,
-            onButtonClick: this.handleFindButtonClick,
-          }),
-
-        studyMode &&
-          h(StudyBar, {
-            mode,
-            studyPhase,
-            selectedTool,
-            dirty: studyBaselineDirty,
-            hasBaseline: studyBaselineSnapshot != null,
-            keyPointCount: studyBaselineKeyPoints.length,
-            moveCount: sabaki.getStudyTrialMoveCount(),
-            analysisPending: studyAnalysisPending,
-            ownershipReady: studyBaselineOwnership != null,
-            trialReady:
-              sabaki.hasStudyTrialMeaningfulChange() &&
-              studyTrialOwnership != null &&
-              !studyAnalysisPending,
-            trialDirty: sabaki.hasStudyTrialMeaningfulChange(),
-            committed:
-              studyTrialCommittedSignature != null &&
-              studyTrialCommittedSignature === sabaki.getStudyTrialSignature(),
-            usingSetupEdits: studyTrialHasSetupEdits,
-          }),
+        h(FindBar, {
+          mode,
+          findText,
+          onButtonClick: this.handleFindButtonClick,
+        }),
       ),
     )
   }

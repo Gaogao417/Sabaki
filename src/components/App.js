@@ -23,9 +23,7 @@ import * as gametree from '../modules/gametree.js'
 import * as gtplogger from '../modules/gtplogger.js'
 import * as helper from '../modules/helper.js'
 import {
-  buildKeyPointMarkerMap,
   boardFromSnapshot,
-  getStudyTerritoryDeltaMap,
 } from '../modules/study.js'
 
 if (process.env.SABAKI_E2E) window.__sabaki = sabaki
@@ -184,7 +182,8 @@ class App extends Component {
       this.handleTemporaryTerritoryKeyDown(evt)
 
       if (
-        sabaki.state.studyEnabled &&
+        sabaki.state.mode === 'edit' &&
+        sabaki.state.editWorkspace != null &&
         !evt.ctrlKey &&
         !evt.metaKey &&
         !evt.altKey &&
@@ -192,7 +191,7 @@ class App extends Component {
       ) {
         let key = evt.key
 
-        if (['1', '2', '3', '4', 'Enter', 'Backspace'].includes(key)) {
+        if (['1', '2', '3', '4', 'Tab'].includes(key)) {
           evt.preventDefault()
         }
 
@@ -216,20 +215,10 @@ class App extends Component {
           return
         }
 
-        if (key === 'Enter') {
-          if (sabaki.state.studyPhase === 'baseline') {
-            sabaki.setStudyPhase('trial')
-          } else {
-            sabaki.applyTrialAsVariation()
-          }
-          return
-        }
-
-        if (key === 'Backspace' && sabaki.state.studyPhase === 'trial') {
-          if (evt.shiftKey) {
-            sabaki.resetTrialWorkspace()
-          } else {
-            sabaki.undoTrialMove()
+        if (key === 'Tab') {
+          let ws = sabaki.state.editWorkspace
+          if (ws.referenceSnapshot != null) {
+            sabaki.toggleEditTab(ws.activeTab === 'working' ? 'reference' : 'working')
           }
           return
         }
@@ -240,8 +229,6 @@ class App extends Component {
           sabaki.setOverlayMode('off')
         } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
-        } else if (sabaki.state.studyEnabled) {
-          sabaki.exitStudyMode()
         } else if (sabaki.state.mode !== 'play') {
           sabaki.setMode('play')
         } else if (sabaki.state.fullScreen) {
@@ -422,23 +409,34 @@ class App extends Component {
 
     let inferredState = sabaki.inferredState
     let tree = inferredState.gameTree
-    let studyMode = state.studyEnabled
-    let studyBaselineSnapshot = state.studyBaselineSnapshot
-    let studyTrialSnapshot = state.studyTrialSnapshot
-    let studyRenderSnapshot =
-      studyMode && state.studyPhase === 'trial'
-        ? studyTrialSnapshot
-        : studyBaselineSnapshot
-    let studyRenderBoard =
-      studyRenderSnapshot == null ? null : boardFromSnapshot(studyRenderSnapshot)
-    let studyCurrentPlayer =
-      studyMode && state.studyPhase === 'trial'
-        ? sabaki.getStudyAnalysisPlayer('trial')
-        : studyBaselineSnapshot?.nextPlayer ?? inferredState.currentPlayer
-    let studyMarkerMap =
-      studyRenderBoard == null
-        ? null
-        : buildKeyPointMarkerMap(studyRenderBoard, state.studyBaselineKeyPoints)
+    let editWorkspaceActive = state.mode === 'edit' && state.editWorkspace != null
+    let editWs = state.editWorkspace
+    let editRenderSnapshot =
+      editWorkspaceActive
+        ? (editWs.activeTab === 'reference'
+            ? editWs.referenceSnapshot
+            : editWs.workingSnapshot)
+        : null
+    let editRenderBoard =
+      editRenderSnapshot == null ? null : boardFromSnapshot(editRenderSnapshot)
+    let editCurrentPlayer =
+      editWorkspaceActive
+        ? (editWs.activeTab === 'reference'
+            ? editWs.referenceSnapshot?.nextPlayer
+            : editWs.workingSnapshot?.nextPlayer) ?? inferredState.currentPlayer
+        : inferredState.currentPlayer
+    let editMarkerMap =
+      editWorkspaceActive
+        ? (editWs.activeTab === 'reference'
+            ? editWs.referenceMarkerMap
+            : editWs.workingMarkerMap)
+        : null
+    let editLines =
+      editWorkspaceActive
+        ? (editWs.activeTab === 'reference'
+            ? editWs.referenceLines
+            : editWs.workingLines)
+        : null
     let scoreBoard, areaMap
     let comparePaintMap = null
     let compareMarkerMap = null
@@ -450,7 +448,7 @@ class App extends Component {
     let lastMoveTerritoryDiffAvailable = false
     let effectiveOverlayMode = state.shiftTerritoryActive
       ? 'territory'
-      : studyMode
+      : editWorkspaceActive
         ? 'territory'
         : state.overlayMode
     let compareMode = sabaki.isCompareOverlayMode(effectiveOverlayMode)
@@ -517,8 +515,10 @@ class App extends Component {
 
     if (territoryMode) {
       let engineSyncer = inferredState.analyzingEngineSyncer
-      territoryOwnership = studyMode
-        ? state.studyBaselineOwnership
+      territoryOwnership = editWorkspaceActive
+        ? (editWs.activeTab === 'reference'
+            ? editWs.referenceOwnership
+            : editWs.workingOwnership)
         : sabaki.getCurrentOwnership(engineSyncer)
 
       if (['scoring', 'estimator'].includes(state.mode)) {
@@ -528,11 +528,11 @@ class App extends Component {
       } else if (engineSyncer == null) {
         overlayUnavailableReason = t('Start engine analysis first.')
       } else if (
-        studyMode &&
-        state.studyAnalysisPending &&
+        editWorkspaceActive &&
+        editWs.analysisPending &&
         territoryOwnership == null
       ) {
-        overlayUnavailableReason = t('Waiting for study ownership data...')
+        overlayUnavailableReason = t('Waiting for ownership data...')
       } else if (territoryOwnership == null) {
         overlayUnavailableReason =
           state.analysisTreePosition !== state.treePosition ||
@@ -543,18 +543,15 @@ class App extends Component {
       }
 
       if (
-        studyMode &&
-        state.studyPhase === 'trial' &&
-        state.studyBaselineOwnership != null &&
-        state.studyTrialOwnership != null
+        editWorkspaceActive &&
+        editWs.referenceOwnership != null &&
+        editWs.workingOwnership != null
       ) {
-        lastMoveTerritoryDeltaMap = getStudyTerritoryDeltaMap(
-          state.studyPhase,
-          state.studyBaselineOwnership,
-          state.studyTrialOwnership,
-          sabaki.hasStudyTrialMeaningfulChange(),
+        lastMoveTerritoryDeltaMap = helper.getOwnershipDelta(
+          editWs.referenceOwnership,
+          editWs.workingOwnership,
         )
-        lastMoveTerritoryDiffAvailable = lastMoveTerritoryDeltaMap != null
+        lastMoveTerritoryDiffAvailable = true
       } else if (
         state.territoryDiffSource === 'move' &&
         state.territoryDiffReferenceTreePosition != null &&
@@ -580,25 +577,27 @@ class App extends Component {
     let territoryStatusText =
       !territoryMode
         ? null
-        : studyMode && state.studyPhase === 'baseline'
-          ? t('Baseline Territory')
-          : studyMode && state.studyPhase === 'trial'
-            ? state.studyAnalysisPending
-              ? t('Trial Diff (Updating)')
-              : t('Trial Diff')
-        : state.shiftTerritoryActive && state.overlayMode !== 'territory'
-          ? t('Territory (Shift)')
-          : lastMoveTerritoryDiffAvailable
-            ? t('Territory + Diff')
-            : t('Territory')
+        : editWorkspaceActive && editWs.activeTab === 'reference'
+          ? t('Reference Territory')
+          : editWorkspaceActive && lastMoveTerritoryDiffAvailable
+            ? editWs.analysisPending
+              ? t('Diff (Updating)')
+              : t('Working vs Reference')
+            : editWorkspaceActive
+              ? t('Edit Territory')
+              : state.shiftTerritoryActive && state.overlayMode !== 'territory'
+                ? t('Territory (Shift)')
+                : lastMoveTerritoryDiffAvailable
+                  ? t('Territory + Diff')
+                  : t('Territory')
 
     state = {
       ...state,
       ...inferredState,
-      studyMode,
-      studyRenderBoard,
-      studyCurrentPlayer,
-      studyMarkerMap,
+      editWorkspaceActive,
+      editRenderBoard,
+      editCurrentPlayer,
+      editMarkerMap,
       overlayMode: effectiveOverlayMode,
       compareMode,
       territoryMode,
@@ -619,7 +618,7 @@ class App extends Component {
       'section',
       {
         class: classNames({
-          study: state.studyEnabled,
+          editWorkspace: state.editWorkspaceActive,
           showleftsidebar: state.showLeftSidebar,
           showsidebar: state.showSidebar,
           [state.mode]: true,
@@ -629,8 +628,6 @@ class App extends Component {
       h(ThemeManager),
       h(MainMenu, {
         mode: state.mode,
-        studyEnabled: state.studyEnabled,
-        studyPhase: state.studyPhase,
         showMenuBar: state.showMenuBar,
         disableAll: state.busy > 0,
         analysisType: state.analysisType,

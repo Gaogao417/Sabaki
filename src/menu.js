@@ -30,7 +30,6 @@ exports.get = function(props = {}) {
     disableAll,
     disableGameLoading,
     mode,
-    studyEnabled,
     analysisType,
     showAnalysis,
     showCoordinates,
@@ -185,16 +184,6 @@ exports.get = function(props = {}) {
           type: 'checkbox',
           checked: !!compareMode,
           click: () => sabaki.toggleCompareMode(),
-        },
-        {
-          label: i18n.t('menu.play', '&Study Mode'),
-          accelerator: 'CmdOrCtrl+Shift+B',
-          type: 'checkbox',
-          checked: !!studyEnabled,
-          click: () =>
-            sabaki.state.studyEnabled
-              ? sabaki.exitStudyMode()
-              : sabaki.enterStudyMode(),
         },
         {
           label: i18n.t('menu.play', 'Compare Display'),

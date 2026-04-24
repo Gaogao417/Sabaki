@@ -48,9 +48,15 @@ export default class Goban extends Component {
   componentDidMount() {
     document.addEventListener('mouseup', () => {
       this.mouseDown = false
+      this.dragging = false
+      this.dragSource = null
 
       if (this.state.temporaryLine) {
         this.setState({temporaryLine: null})
+      }
+
+      if (this.state.dragTarget) {
+        this.setState({dragTarget: null})
       }
     })
 
@@ -115,16 +121,23 @@ export default class Goban extends Component {
   handleVertexMouseDown(evt, vertex) {
     this.mouseDown = true
     this.startVertex = vertex
+    this.shiftDownOnMouseDown = evt.shiftKey
+
+    // Start drag if dragMode and vertex has a stone
+    if (this.props.dragMode && this.props.board?.get(vertex) !== 0 && evt.button === 0) {
+      this.dragging = true
+      this.dragSource = vertex
+    }
   }
 
   handleVertexMouseUp(evt, vertex) {
     if (!this.mouseDown) return
 
     let {
-      areaSelectMode,
       onVertexClick = helper.noop,
       onLineDraw = helper.noop,
       onAreaSelect = helper.noop,
+      onStoneDragEnd = helper.noop,
     } = this.props
 
     this.mouseDown = false
@@ -134,8 +147,18 @@ export default class Goban extends Component {
     if (evt.x == null) evt.x = evt.clientX
     if (evt.y == null) evt.y = evt.clientY
 
-    if (areaSelectMode && this.startVertex != null) {
+    // Handle drag end
+    if (this.dragging) {
+      this.dragging = false
+      onStoneDragEnd({source: this.dragSource, target: vertex})
+      this.dragSource = null
+      this.setState({dragTarget: null})
+      return
+    }
+
+    if (this.shiftDownOnMouseDown && this.startVertex != null) {
       onAreaSelect({start: this.startVertex, end: vertex})
+      this.shiftDownOnMouseDown = false
       this.setState({clicked: true})
       setTimeout(() => this.setState({clicked: false}), 200)
       return
@@ -154,7 +177,6 @@ export default class Goban extends Component {
 
   handleVertexMouseMove(evt, vertex) {
     let {
-      areaSelectMode,
       drawLineMode,
       onVertexMouseMove = helper.noop,
       onAreaSelectPreview = helper.noop,
@@ -168,7 +190,15 @@ export default class Goban extends Component {
 
     onVertexMouseMove(moveEvent)
 
-    if (areaSelectMode && evt.mouseDown && this.startVertex != null && evt.button === 0) {
+    // Handle drag move
+    if (this.dragging && evt.button === 0) {
+      if (!helper.equals(vertex, this.state.dragTarget)) {
+        this.setState({dragTarget: vertex})
+      }
+      return
+    }
+
+    if (evt.shiftKey && evt.mouseDown && this.startVertex != null && evt.button === 0) {
       onAreaSelectPreview({start: this.startVertex, end: vertex})
     } else if (!!drawLineMode && evt.mouseDown && evt.button === 0) {
       let temporaryLine = {v1: evt.startVertex, v2: evt.vertex}
@@ -265,6 +295,7 @@ export default class Goban extends Component {
       animateStonePlacement = true,
 
       drawLineMode = null,
+      dragMode = false,
       transformation = '',
     },
     {
@@ -274,6 +305,7 @@ export default class Goban extends Component {
       maxHeight = 100,
       clicked = false,
       temporaryLine = null,
+      dragTarget = null,
 
       variationMoves = null,
       variationSign = 1,
@@ -395,6 +427,26 @@ export default class Goban extends Component {
             ghostStoneMap[y][x] = overlayGhostStoneMap[y][x]
           }
         }
+      }
+    }
+
+    // Draw drag ghost stone
+    if (dragMode && this.dragging && dragTarget != null && this.dragSource != null) {
+      if (ghostStoneMap.length === 0) {
+        ghostStoneMap = board.signMap.map((row) => row.map((_) => null))
+      }
+
+      let [sx, sy] = this.dragSource
+      let [tx, ty] = dragTarget
+      let sourceSign = board.signMap[sy]?.[sx] ?? 0
+      let targetEmpty = (board.signMap[ty]?.[tx] ?? 0) === 0
+
+      // Dim source stone
+      dimmedStones = [...dimmedStones, this.dragSource]
+
+      // Show ghost at target if empty
+      if (targetEmpty && sourceSign !== 0) {
+        ghostStoneMap[ty][tx] = {sign: sourceSign, type: 'drag'}
       }
     }
 
