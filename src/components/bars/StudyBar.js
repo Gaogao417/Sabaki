@@ -61,7 +61,7 @@ export default function StudyBar({
     selectedTool === 'label'
       ? t('Key Points')
       : mode === 'edit'
-        ? t('Edit Mode')
+        ? t('Analysis Mode')
         : t('Normal Mode')
   let statusText = baselineStepCurrent
     ? !hasBaseline

@@ -196,7 +196,7 @@ class CommentTitle extends Component {
       h('img', {
         src: './node_modules/@primer/octicons/build/svg/pencil.svg',
         class: 'edit-button',
-        title: t('Edit'),
+        title: t('Analysis'),
         width: 16,
         height: 16,
         onClick: this.handleEditButtonClick,

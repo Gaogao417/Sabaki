@@ -588,6 +588,27 @@ class Sabaki extends EventEmitter {
     }
   }
 
+  syncEditWorkspaceToCurrentPosition() {
+    let ws = this.state.editWorkspace
+    if (ws == null) return
+
+    let tree = this.state.gameTrees[this.state.gameIndex]
+    let board = gametree.getBoard(tree, this.state.treePosition)
+    let currentPlayer = this.getPlayer(this.state.treePosition)
+    let snapshot = createSnapshotFromBoard(board, currentPlayer)
+
+    this.setState({
+      editWorkspace: {
+        ...ws,
+        currentSnapshot: snapshot,
+        currentAnalysis: null,
+        currentOwnership: null,
+        currentMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
+        currentLines: [],
+      },
+    })
+  }
+
   async ensureAnalysisReady({requireOwnership = false} = {}) {
     let syncer = this.inferredState.analyzingEngineSyncer
 
@@ -743,6 +764,24 @@ class Sabaki extends EventEmitter {
       let nextSnapshot = cloneSnapshot(snapshot)
       let current = nextSnapshot.signMap[vy]?.[vx] ?? 0
       nextSnapshot.signMap[vy][vx] = current === sign ? 0 : sign
+
+      // Auto-capture: remove opponent groups with no liberties
+      if (nextSnapshot.signMap[vy][vx] !== 0) {
+        let tempBoard = boardFromSnapshot(snapshot)
+        let resultBoard = tempBoard.makeMove(sign, [vx, vy])
+
+        for (let y = 0; y < resultBoard.height; y++) {
+          for (let x = 0; x < resultBoard.width; x++) {
+            if (
+              tempBoard.get([x, y]) === -sign &&
+              resultBoard.get([x, y]) === 0
+            ) {
+              nextSnapshot.signMap[y][x] = 0
+            }
+          }
+        }
+      }
+
       this.setState({
         editWorkspace: {...ws, [snapshotKey]: nextSnapshot},
       })
@@ -909,6 +948,7 @@ class Sabaki extends EventEmitter {
   }
 
   async refreshEditWorkspaceAnalysis() {
+    this.syncEditWorkspaceToCurrentPosition()
     let generation =
       (this.editAnalysisGeneration =
         (this.editAnalysisGeneration || 0) + 1)
@@ -2776,14 +2816,10 @@ class Sabaki extends EventEmitter {
     if (clearCache) gametree.clearBoardCache()
 
     let navigated = treePosition !== this.state.treePosition
-    // Clear edit workspace on tree navigation
-    let workspaceStateChange =
-      navigated && this.state.mode === 'edit'
-        ? (() => {
-            clearTimeout(this.editAnalysisId)
-            return {editWorkspace: null}
-          })()
-        : {}
+
+    if (navigated && this.state.mode === 'edit') {
+      clearTimeout(this.editAnalysisId)
+    }
 
     if (['scoring', 'estimator'].includes(this.state.mode) && navigated) {
       this.setState({mode: 'play'})
@@ -2806,7 +2842,6 @@ class Sabaki extends EventEmitter {
     let nextPreviewState = {
       ...this.state,
       treePosition,
-      ...workspaceStateChange,
     }
 
     this.setState({
@@ -2827,7 +2862,6 @@ class Sabaki extends EventEmitter {
       territoryCompareEnabled:
         this.state.territoryCompareEnabled &&
         (!navigated || this.getTerritoryCompareAvailable(nextPreviewState)),
-      ...workspaceStateChange,
     })
 
     this.recordHistory({prevGameIndex, prevTreePosition})
@@ -2836,22 +2870,31 @@ class Sabaki extends EventEmitter {
 
     // Continuous analysis
 
-    let syncer = this.inferredState.analyzingEngineSyncer
-
     if (
-      syncer != null &&
       navigated &&
-      (this.state.engineGameOngoing == null ||
-        ![
-          this.state.blackEngineSyncerId,
-          this.state.whiteEngineSyncerId,
-        ].includes(this.state.analyzingEngineSyncerId))
+      this.state.mode === 'edit' &&
+      this.state.editWorkspace != null
     ) {
-      clearTimeout(this.continuousAnalysisId)
+      this.syncEditWorkspaceToCurrentPosition()
+      this.scheduleEditWorkspaceAnalysis()
+    } else {
+      let syncer = this.inferredState.analyzingEngineSyncer
 
-      this.continuousAnalysisId = setTimeout(() => {
-        this.analyzeMove(treePosition)
-      }, setting.get('game.navigation_analysis_delay'))
+      if (
+        syncer != null &&
+        navigated &&
+        (this.state.engineGameOngoing == null ||
+          ![
+            this.state.blackEngineSyncerId,
+            this.state.whiteEngineSyncerId,
+          ].includes(this.state.analyzingEngineSyncerId))
+      ) {
+        clearTimeout(this.continuousAnalysisId)
+
+        this.continuousAnalysisId = setTimeout(() => {
+          this.analyzeMove(treePosition)
+        }, setting.get('game.navigation_analysis_delay'))
+      }
     }
   }
 
@@ -3569,6 +3612,7 @@ class Sabaki extends EventEmitter {
         this.state.whiteEngineSyncerId !== syncerId)
     ) {
       if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+        this.syncEditWorkspaceToCurrentPosition()
         this.scheduleEditWorkspaceAnalysis()
       } else {
         this.analyzeMove(this.state.treePosition)

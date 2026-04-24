@@ -53,7 +53,7 @@ export default class PlayBar extends Component {
             click: () => sabaki.toggleTerritoryEnabled(),
           },
           {
-            label: t('&Edit'),
+            label: t('&Analysis'),
             click: () => sabaki.setMode('edit'),
           },
           {

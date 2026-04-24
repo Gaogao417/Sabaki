@@ -14,9 +14,9 @@ export default function WorkspaceDock({
 }) {
   let activePanel =
     editWorkspaceActive
-      ? t('Edit Workspace')
+      ? t('Analysis Workspace')
       : mode === 'edit'
-        ? t('Edit Tools')
+        ? t('Analysis Tools')
         : mode === 'find'
           ? t('Find')
           : mode === 'guess'

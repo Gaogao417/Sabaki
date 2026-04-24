@@ -198,7 +198,7 @@ exports.get = function (props = {}) {
         },
         {type: 'separator'},
         {
-          label: i18n.t('menu.edit', 'Toggle &Edit Mode'),
+          label: i18n.t('menu.edit', 'Toggle &Analysis Mode'),
           accelerator: 'CmdOrCtrl+E',
           click: () =>
             sabaki.setMode(sabaki.state.mode === 'edit' ? 'play' : 'edit'),

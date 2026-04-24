@@ -344,7 +344,7 @@ test.describe('Renderer Integration Tests', () => {
 
       await expect(
         page.locator(
-          '.board-toolbar .toolbar-button[title="Edit (Cmd/Ctrl+E)"]',
+          '.board-toolbar .toolbar-button[title="Analysis (Cmd/Ctrl+E)"]',
         ),
       ).toHaveCount(1)
       await expect(
@@ -405,6 +405,139 @@ test.describe('Renderer Integration Tests', () => {
       await page.waitForFunction(
         () => window.__sabaki.state.editWorkspace?.activeTab === 'reference',
       )
+    })
+  })
+
+  test.describe('Analysis Mode (Edit Workspace)', () => {
+    test.beforeEach(async ({page}) => {
+      const sgfPath = path.resolve(
+        __dirname,
+        '..',
+        'test',
+        'sgf',
+        'pro_game.sgf',
+      )
+
+      await loadSgfAndWait(page, sgfPath)
+    })
+
+    test('navigation preserves workspace and updates currentSnapshot', async ({
+      page,
+    }) => {
+      await page.evaluate(() => {
+        window.__sabaki.setMode('edit')
+      })
+      await page.waitForFunction(
+        () =>
+          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.editWorkspace != null,
+      )
+
+      // Capture reference to the initial snapshot
+      const initialCurrentSnapshot = await page.evaluate(() =>
+        JSON.stringify(window.__sabaki.state.editWorkspace.currentSnapshot),
+      )
+      const initialRefSnapshot = await page.evaluate(() =>
+        JSON.stringify(window.__sabaki.state.editWorkspace.referenceSnapshot),
+      )
+
+      // Navigate forward
+      await page.evaluate(() => {
+        window.__sabaki.goStep(1)
+      })
+
+      await page.waitForFunction(() => {
+        const ws = window.__sabaki.state.editWorkspace
+        return ws != null
+      })
+
+      // Workspace should still exist
+      const workspaceExists = await page.evaluate(
+        () => window.__sabaki.state.editWorkspace != null,
+      )
+      expect(workspaceExists).toBe(true)
+
+      // currentSnapshot should have changed
+      const newCurrentSnapshot = await page.evaluate(() =>
+        JSON.stringify(window.__sabaki.state.editWorkspace.currentSnapshot),
+      )
+      expect(newCurrentSnapshot).not.toBe(initialCurrentSnapshot)
+
+      // referenceSnapshot should be unchanged
+      const newRefSnapshot = await page.evaluate(() =>
+        JSON.stringify(window.__sabaki.state.editWorkspace.referenceSnapshot),
+      )
+      expect(newRefSnapshot).toBe(initialRefSnapshot)
+    })
+
+    test('multiple navigations keep reference unchanged', async ({page}) => {
+      await page.evaluate(() => {
+        window.__sabaki.setMode('edit')
+      })
+      await page.waitForFunction(
+        () =>
+          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.editWorkspace != null,
+      )
+
+      const initialRefSnapshot = await page.evaluate(() =>
+        JSON.stringify(window.__sabaki.state.editWorkspace.referenceSnapshot),
+      )
+
+      // Navigate multiple times
+      await page.evaluate(() => {
+        for (let i = 0; i < 5; i++) {
+          window.__sabaki.goStep(1)
+        }
+      })
+
+      await page.waitForFunction(() => {
+        const ws = window.__sabaki.state.editWorkspace
+        return ws != null
+      })
+
+      const refSnapshotAfter = await page.evaluate(() =>
+        JSON.stringify(window.__sabaki.state.editWorkspace.referenceSnapshot),
+      )
+      expect(refSnapshotAfter).toBe(initialRefSnapshot)
+    })
+
+    test('currentSnapshot matches game tree position after navigation', async ({
+      page,
+    }) => {
+      await page.evaluate(() => {
+        window.__sabaki.setMode('edit')
+      })
+      await page.waitForFunction(
+        () =>
+          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.editWorkspace != null,
+      )
+
+      await page.evaluate(() => {
+        window.__sabaki.goStep(1)
+      })
+
+      await page.waitForFunction(() => {
+        const ws = window.__sabaki.state.editWorkspace
+        return ws != null && ws.currentSnapshot != null
+      })
+
+      const snapshotMatches = await page.evaluate(() => {
+        const ws = window.__sabaki.state.editWorkspace
+        if (ws == null) return false
+
+        const board = window.__sabaki.inferredState.board
+        if (board == null) return false
+
+        const snapshot = ws.currentSnapshot
+        return (
+          snapshot.width === board.width &&
+          snapshot.height === board.height &&
+          JSON.stringify(snapshot.signMap) === JSON.stringify(board.signMap)
+        )
+      })
+      expect(snapshotMatches).toBe(true)
     })
   })
 })
