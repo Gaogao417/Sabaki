@@ -153,8 +153,6 @@ export default class LeftSidebar extends Component {
             compareSelectedVertices: [],
             dimmedStones: [],
             overlayGhostStoneMap: null,
-            comparePending: false,
-            compareMode: false,
             crosshair: false,
             showCoordinates: false,
             showMoveColorization: false,

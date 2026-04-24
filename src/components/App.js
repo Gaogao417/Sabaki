@@ -18,7 +18,6 @@ import InfoOverlay from './InfoOverlay.js'
 
 import i18n from '../i18n.js'
 import sabaki from '../modules/sabaki.js'
-import {buildCompareRenderData, getNodeMoveVertex} from '../modules/compare.js'
 import * as gametree from '../modules/gametree.js'
 import * as gtplogger from '../modules/gtplogger.js'
 import * as helper from '../modules/helper.js'
@@ -223,8 +222,6 @@ class App extends Component {
       if (evt.key === 'Escape') {
         if (sabaki.state.territoryEnabled) {
           sabaki.setTerritoryEnabled(false)
-        } else if (sabaki.state.compareMode) {
-          sabaki.clearCompareState()
         } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
         } else if (sabaki.state.mode !== 'play') {
@@ -455,16 +452,11 @@ class App extends Component {
     let editPreviewOwnership =
       editPreviewKeys == null ? null : editWs[editPreviewKeys.ownershipKey]
     let scoreBoard, areaMap
-    let comparePaintMap = null
-    let compareMarkerMap = null
-    let compareReferenceVertex = null
-    let compareTargetVertex = null
     let territoryOwnership = null
     let overlayUnavailableReason = null
     let territoryDeltaMap = null
     let territoryDiffAvailable = false
     let territoryDiffSourceType = null
-    let compareMode = state.compareMode
     let territoryMode = state.territoryEnabled
     let activeAnalysis = editWorkspaceActive
       ? editAnalysis
@@ -489,46 +481,6 @@ class App extends Component {
         state.mode === 'estimator'
           ? influence.map(scoreBoard.signMap, {discrete: true})
           : influence.areaMap(scoreBoard.signMap)
-    }
-
-    if (
-      compareMode &&
-      state.compareReferenceTreePosition != null &&
-      state.compareTargetTreePosition != null &&
-      state.analyzingEngineSyncerId != null
-    ) {
-      let referenceOwnership = sabaki.getOwnershipForTreePosition(
-        null,
-        state.compareReferenceTreePosition,
-      )
-      let targetOwnership = sabaki.getOwnershipForTreePosition(
-        null,
-        state.compareTargetTreePosition,
-      )
-      let deltaMap = helper.getOwnershipDelta(
-        referenceOwnership,
-        targetOwnership,
-      )
-      let compareData = buildCompareRenderData(
-        deltaMap,
-        state.compareDisplayPreset,
-      )
-      comparePaintMap = compareData.paintMap
-      compareMarkerMap = compareData.markerMap
-    }
-
-    if (compareMode && state.compareReferenceTreePosition != null) {
-      compareReferenceVertex = getNodeMoveVertex(
-        tree,
-        state.compareReferenceTreePosition,
-      )
-    }
-
-    if (compareMode && state.compareTargetTreePosition != null) {
-      compareTargetVertex = getNodeMoveVertex(
-        tree,
-        state.compareTargetTreePosition,
-      )
     }
 
     if (territoryMode) {
@@ -612,14 +564,9 @@ class App extends Component {
       editPreviewBoard,
       editPreviewOwnership,
       activeAnalysis,
-      compareMode,
       territoryMode,
       scoreBoard,
       areaMap,
-      comparePaintMap,
-      compareMarkerMap,
-      compareReferenceVertex,
-      compareTargetVertex,
       territoryOwnership,
       overlayUnavailableReason,
       territoryDeltaMap,
@@ -657,16 +604,15 @@ class App extends Component {
         showMoveColorization: state.showMoveColorization,
         showNextMoves: state.showNextMoves,
         showSiblings: state.showSiblings,
-        compareMode: state.compareMode,
         territoryEnabled: state.territoryEnabled,
         territoryCompareEnabled: state.territoryCompareEnabled,
         territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
-        compareDisplayPreset: state.compareDisplayPreset,
         showWinrateGraph: state.showWinrateGraph,
         showGameGraph: state.showGameGraph,
         showCommentBox: state.showCommentBox,
         showLeftSidebar: state.showLeftSidebar,
         engineGameOngoing: state.engineGameOngoing,
+        quickAnalysisId: state.quickAnalysisId,
       }),
 
       h(TripleSplitContainer, {

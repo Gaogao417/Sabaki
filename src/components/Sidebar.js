@@ -47,24 +47,10 @@ export default class Sidebar extends Component {
 
     this.handleGraphNodeClick = ({button, gameTree, treePosition, x, y}) => {
       if (button === 0) {
-        if (this.props.compareMode) {
-          sabaki.compareWithTreePosition(treePosition)
-        } else {
-          sabaki.setCurrentTreePosition(gameTree, treePosition)
-        }
+        sabaki.setCurrentTreePosition(gameTree, treePosition)
       } else {
         sabaki.openNodeMenu(treePosition, {x, y})
       }
-    }
-
-    this.handleGraphNodeDoubleClick = ({button, gameTree, treePosition}) => {
-      if (button !== 0) return
-
-      sabaki.setCurrentTreePosition(gameTree, treePosition)
-    }
-
-    this.handleGraphNodeHoverChange = (treePosition) => {
-      sabaki.setGraphHoverTreePosition(treePosition)
     }
 
     this.handleSliderChange = ({percent}) => {
@@ -140,9 +126,6 @@ export default class Sidebar extends Component {
       gameTree,
       gameCurrents,
       treePosition,
-      compareMode,
-      compareReferenceTreePosition,
-      compareTargetTreePosition,
       editWorkspaceActive,
       inspectorSummary,
       overlayStatusProps,
@@ -295,10 +278,6 @@ export default class Sidebar extends Component {
               nodeSize: graphNodeSize,
 
               onNodeClick: this.handleGraphNodeClick,
-              onNodeDoubleClick: this.handleGraphNodeDoubleClick,
-              onNodeHoverChange: this.handleGraphNodeHoverChange,
-              compareReferenceTreePosition,
-              compareTargetTreePosition,
             }),
           ),
         ),
@@ -413,10 +392,6 @@ export default class Sidebar extends Component {
               nodeSize: graphNodeSize,
 
               onNodeClick: this.handleGraphNodeClick,
-              onNodeDoubleClick: this.handleGraphNodeDoubleClick,
-              onNodeHoverChange: this.handleGraphNodeHoverChange,
-              compareReferenceTreePosition,
-              compareTargetTreePosition,
             }),
           ),
 

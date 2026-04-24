@@ -79,7 +79,10 @@ export default class Goban extends Component {
 
     let {maxWidth, maxHeight} = this.state
 
-    setTimeout(() => {
+    clearTimeout(this.centerId)
+    this.centerId = setTimeout(() => {
+      if (!this.element || !this.element.parentElement) return
+
       let {width, height} = this.element.getBoundingClientRect()
 
       let left = Math.round((maxWidth - width) / 2)
@@ -89,6 +92,10 @@ export default class Goban extends Component {
         this.setState({left, top})
       }
     }, 0)
+  }
+
+  componentWillUnmount() {
+    clearTimeout(this.centerId)
   }
 
   componentWillReceiveProps(nextProps = {}) {
@@ -389,10 +396,8 @@ export default class Goban extends Component {
       analysis,
       analysisType,
       highlightVertices = [],
-      compareSelectedVertices = [],
       dimmedStones = [],
       overlayGhostStoneMap = null,
-      compareMode = false,
 
       crosshair = false,
       showCoordinates = false,
@@ -660,7 +665,6 @@ export default class Goban extends Component {
       class: classNames(
         {
           crosshair,
-          'compare-mode': compareMode,
         },
         className,
       ),
@@ -687,7 +691,7 @@ export default class Goban extends Component {
       }),
       heatMap: gobantransformer.transformMap(heatMap, transformation),
       lines: lines.map(transformLine),
-      selectedVertices: [...highlightVertices, ...compareSelectedVertices].map(
+      selectedVertices: highlightVertices.map(
         transformVertex,
       ),
       dimmedVertices: dimmedStones.map(transformVertex),

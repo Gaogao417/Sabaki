@@ -230,36 +230,6 @@ export default class MainView extends Component {
     }
   }
 
-  buildCompareAnchorMap(board, markerMap, referenceVertex, targetVertex) {
-    if (referenceVertex == null && targetVertex == null) return markerMap
-
-    let nextMarkerMap =
-      markerMap != null
-        ? markerMap.map((row) => [...row])
-        : board.signMap.map((row) => row.map(() => null))
-
-    if (referenceVertex != null) {
-      let [x, y] = referenceVertex
-      if (nextMarkerMap[y]?.[x] != null) {
-        nextMarkerMap[y][x] = null
-      }
-
-      if (nextMarkerMap[y] != null) {
-        nextMarkerMap[y][x] = {type: 'point', label: '@compare-reference'}
-      }
-    }
-
-    if (targetVertex != null) {
-      let [x, y] = targetVertex
-
-      if (nextMarkerMap[y] != null) {
-        nextMarkerMap[y][x] = {type: 'point', label: '@compare-target'}
-      }
-    }
-
-    return nextMarkerMap
-  }
-
   renderBoardSurface({
     territoryMode,
     territoryOwnership,
@@ -311,16 +281,8 @@ export default class MainView extends Component {
       analysisTreePosition,
       activeAnalysis,
       areaMap,
-      compareMode,
       territoryMode,
       territoryCompareEnabled,
-      comparePending,
-      compareReferenceTreePosition,
-      compareTargetTreePosition,
-      comparePaintMap,
-      compareMarkerMap,
-      compareReferenceVertex,
-      compareTargetVertex,
       territoryOwnership,
       overlayUnavailableReason,
       territoryDeltaMap,
@@ -328,7 +290,6 @@ export default class MainView extends Component {
       territoryDiffSourceType,
       territoryStatusText,
       comparisonOwnership,
-      graphHoverTreePosition,
       blockedGuesses,
 
       highlightVertices,
@@ -352,16 +313,12 @@ export default class MainView extends Component {
     },
     {gobanCrosshair, areaModifierActive},
   ) {
-    let compareReferencePosition =
-      compareMode && compareReferenceTreePosition != null
-        ? compareReferenceTreePosition
-        : treePosition
-    let node = gameTree.get(compareReferencePosition)
+    let node = gameTree.get(treePosition)
     let board = editWorkspaceActive
       ? editRenderBoard
-      : gametree.getBoard(gameTree, compareReferencePosition)
+      : gametree.getBoard(gameTree, treePosition)
     if (board == null) {
-      board = gametree.getBoard(gameTree, compareReferencePosition)
+      board = gametree.getBoard(gameTree, treePosition)
     }
     if (editWorkspaceActive && editLines != null) {
       board.lines = editLines
@@ -371,7 +328,6 @@ export default class MainView extends Component {
     let handicap = +gametree.getRootProperty(gameTree, 'HA', 0)
     let paintMap
     let markerMap = null
-    let compareSelectedVertices = []
     let dimmedStones = ['scoring', 'estimator'].includes(mode) ? deadStones : []
     let overlayGhostStoneMap = null
 
@@ -383,11 +339,6 @@ export default class MainView extends Component {
       for (let [x, y] of blockedGuesses) {
         paintMap[y][x] = 1
       }
-    }
-
-    if (compareMode && comparePaintMap != null) {
-      paintMap = comparePaintMap
-      markerMap = compareMarkerMap
     }
 
     if (analysisAreaVertices != null) {
@@ -404,107 +355,21 @@ export default class MainView extends Component {
       }
     }
 
-    if (
-      !editWorkspaceActive &&
-      compareMode &&
-      compareReferenceTreePosition != null &&
-      compareTargetTreePosition != null &&
-      gameTree.get(compareTargetTreePosition) != null
-    ) {
-      let referenceBoard = gametree.getBoard(
-        gameTree,
-        compareReferenceTreePosition,
-      )
-      let targetBoard = gametree.getBoard(gameTree, compareTargetTreePosition)
-      let dimmedSet = new Set()
-
-      overlayGhostStoneMap = referenceBoard.signMap.map((row) =>
-        row.map(() => null),
-      )
-
-      for (let y = 0; y < referenceBoard.height; y++) {
-        for (let x = 0; x < referenceBoard.width; x++) {
-          let referenceSign = referenceBoard.signMap[y][x]
-          let targetSign = targetBoard.signMap[y][x]
-
-          if (targetSign !== 0) {
-            compareSelectedVertices.push([x, y])
-          }
-
-          if (referenceSign !== 0) {
-            dimmedSet.add(`${x},${y}`)
-          }
-
-          if (referenceSign !== 0 && referenceSign === targetSign) {
-            dimmedSet.delete(`${x},${y}`)
-          } else if (targetSign !== 0 && referenceSign !== targetSign) {
-            overlayGhostStoneMap[y][x] = {sign: targetSign, type: 'compare'}
-          }
-        }
-      }
-
-      dimmedStones = [...dimmedSet].map((vertex) =>
-        vertex.split(',').map(Number),
-      )
-      markerMap = this.buildCompareAnchorMap(
-        referenceBoard,
-        markerMap,
-        compareReferenceVertex,
-        compareTargetVertex,
-      )
-    }
-
-    if (compareMode && compareReferenceTreePosition != null) {
-      markerMap = this.buildCompareAnchorMap(
-        board,
-        markerMap,
-        compareReferenceVertex,
-        compareTargetVertex,
-      )
-    }
-
-    if (
-      !editWorkspaceActive &&
-      !(compareMode && compareTargetTreePosition != null) &&
-      graphHoverTreePosition != null &&
-      graphHoverTreePosition !== compareReferencePosition &&
-      gameTree.get(graphHoverTreePosition) != null
-    ) {
-      let hoverBoard = gametree.getBoard(gameTree, graphHoverTreePosition)
-      overlayGhostStoneMap = board.signMap.map((row) => row.map(() => null))
-
-      for (let y = 0; y < board.height; y++) {
-        for (let x = 0; x < board.width; x++) {
-          let currentSign = board.signMap[y][x]
-          let hoverSign = hoverBoard.signMap[y][x]
-
-          if (currentSign === 0 && hoverSign !== 0) {
-            overlayGhostStoneMap[y][x] = {sign: hoverSign}
-          } else if (currentSign !== hoverSign) {
-            dimmedStones = [...dimmedStones, [x, y]]
-          }
-        }
-      }
-    }
-
     let gobanProps = {
       gameTree,
-      treePosition: compareReferencePosition,
+      treePosition,
       board,
       highlightVertices:
         findVertex && mode === 'find' ? [findVertex] : highlightVertices,
       analysisType,
-      analysis: !compareMode && showAnalysis ? activeAnalysis : null,
+      analysis: showAnalysis ? activeAnalysis : null,
       paintMap,
       markerMap:
         editWorkspaceActive && editMarkerMap != null
           ? editMarkerMap
           : markerMap,
-      compareSelectedVertices,
       dimmedStones,
       overlayGhostStoneMap,
-      comparePending,
-      compareMode,
 
       crosshair: gobanCrosshair || areaModifierActive,
       showCoordinates,
