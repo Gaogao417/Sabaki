@@ -12,16 +12,20 @@ function ToolbarButton({
   icon,
   label,
   title = null,
+  shortcut = null,
   selected = false,
   accent = false,
   disabled = false,
   onClick,
 }) {
+  let tooltip = title || label
+  if (shortcut != null) tooltip += ` (${shortcut})`
+
   return h(
     'a',
     {
       href: '#',
-      title: title || label,
+      title: tooltip,
       class: classNames('toolbar-button', {selected, accent, disabled}),
       'aria-disabled': disabled,
       onClick: (evt) => {
@@ -30,9 +34,7 @@ function ToolbarButton({
         onClick?.()
       },
     },
-    icon
-      ? h('img', {src: icon, width: 16, height: 16, alt: label})
-      : label,
+    icon ? h('img', {src: icon, width: 16, height: 16, alt: label}) : label,
   )
 }
 
@@ -218,6 +220,7 @@ export default class BoardToolbar extends Component {
           h(ToolbarButton, {
             icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
             label: t('Edit'),
+            shortcut: 'Cmd/Ctrl+E',
             selected: mode === 'edit',
             onClick: () => sabaki.setMode('edit'),
           }),
@@ -228,6 +231,7 @@ export default class BoardToolbar extends Component {
           h(ToolbarButton, {
             icon: './node_modules/@primer/octicons/build/svg/eye.svg',
             label: t('Territory'),
+            shortcut: 'T',
             selected: territoryEnabled,
             accent: territoryEnabled,
             onClick: () => sabaki.toggleTerritoryEnabled(),
@@ -237,7 +241,7 @@ export default class BoardToolbar extends Component {
             h(ToolbarButton, {
               icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
               label: t('Territory Compare'),
-              title: t('Compare Reference against Current'),
+              shortcut: 'Shift+T',
               selected: territoryCompareEnabled,
               accent: territoryCompareEnabled,
               disabled: !territoryCompareAvailable,

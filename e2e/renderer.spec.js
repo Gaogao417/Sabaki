@@ -320,6 +320,7 @@ test.describe('Renderer Integration Tests', () => {
     })
 
     test('board tool shortcuts and edit Current/Reference tabs stay in sync', async ({
+      electronApp,
       page,
     }) => {
       const sgfPath = path.resolve(
@@ -341,8 +342,30 @@ test.describe('Renderer Integration Tests', () => {
       })
       await page.waitForFunction(() => window.__sabaki.state.territoryEnabled)
 
+      await expect(
+        page.locator(
+          '.board-toolbar .toolbar-button[title="Edit (Cmd/Ctrl+E)"]',
+        ),
+      ).toHaveCount(1)
+      await expect(
+        page.locator('.board-toolbar .toolbar-button[title="Territory (T)"]'),
+      ).toHaveCount(1)
+
+      const playMenuLabels = await electronApp.evaluate(({Menu}) => {
+        const menu = Menu.getApplicationMenu()
+        const playMenu = menu.items.find(
+          (item) => item.label.replace(/&/g, '') === 'Play',
+        )
+
+        return playMenu.submenu.items.map((item) =>
+          item.label.replace(/&/g, ''),
+        )
+      })
+      expect(playMenuLabels).not.toContain('Compare Variations')
+      expect(playMenuLabels).not.toContain('Compare Display')
+
       const compareButton = page.locator(
-        '.board-toolbar .toolbar-button[title="Compare Reference against Current"]',
+        '.board-toolbar .toolbar-button[title="Territory Compare (Shift+T)"]',
       )
       await expect(compareButton).toHaveCount(0)
 
@@ -358,20 +381,17 @@ test.describe('Renderer Integration Tests', () => {
       await expect(compareButton).toHaveCount(1)
       await expect(compareButton).toHaveAttribute('aria-disabled', 'true')
 
-      await page
-        .getByRole('link', {name: 'Capture Reference', exact: true})
-        .click()
+      await page.evaluate(() => {
+        window.__sabaki.captureEditReference()
+      })
       await page.waitForFunction(
         () => window.__sabaki.state.editWorkspace?.referenceSnapshot != null,
       )
 
-      await expect(
-        page.getByRole('link', {name: 'Current', exact: true}),
-      ).toBeVisible()
-      await expect(
-        page.getByRole('link', {name: 'Reference', exact: true}),
-      ).toBeVisible()
-      await expect(page.locator('.edit-board-panel--secondary')).toBeVisible()
+      await expect(page.locator('.edit-board-panel--primary')).toContainText(
+        'Large: Current',
+      )
+      await expect(page.locator('.edit-preview-panel')).toBeVisible()
       await expect(compareButton).toHaveAttribute('aria-disabled', 'false')
 
       await compareButton.click()
