@@ -180,47 +180,30 @@ class GameGraph extends Component {
     this.handleNodeHoverChange = this.handleNodeHoverChange.bind(this)
     this.handleNodeMouseUp = this.handleNodeMouseUp.bind(this)
     this.handleNodeDoubleClick = this.handleNodeDoubleClick.bind(this)
+
+    this.handleDocumentMouseMove = this.handleDocumentMouseMove.bind(this)
+    this.handleDocumentMouseUp = this.handleDocumentMouseUp.bind(this)
+    this.handleWindowResize = this.handleWindowResize.bind(this)
   }
 
   componentDidMount() {
     this.setState({matrixDict: this.getMatrixDict(this.props.gameTree)})
 
-    document.addEventListener('mousemove', (evt) => {
-      if (!this.svgElement) return
-
-      let {clientX: x, clientY: y, movementX, movementY} = evt
-      let {
-        cameraPosition: [cx, cy],
-        viewportPosition: [vx, vy],
-      } = this.state
-
-      if (this.mouseDown === 0) {
-        this.drag = true
-      } else {
-        movementX = movementY = 0
-        this.drag = false
-      }
-
-      if (this.drag) {
-        evt.preventDefault()
-        this.setState({cameraPosition: [cx - movementX, cy - movementY]})
-      }
-    })
-
-    document.addEventListener('mouseup', () => {
-      this.mouseDown = null
-      if (this.drag) {
-        this.setState({hoveredTreePosition: null})
-        this.props.onNodeHoverChange?.(null)
-      }
-    })
-
-    window.addEventListener('resize', () => {
-      clearTimeout(this.remeasureId)
-      this.remeasureId = setTimeout(() => this.remeasure(), 500)
-    })
+    document.addEventListener('mousemove', this.handleDocumentMouseMove)
+    document.addEventListener('mouseup', this.handleDocumentMouseUp)
+    window.addEventListener('resize', this.handleWindowResize)
 
     this.remeasure()
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('mousemove', this.handleDocumentMouseMove)
+    document.removeEventListener('mouseup', this.handleDocumentMouseUp)
+    window.removeEventListener('resize', this.handleWindowResize)
+
+    clearTimeout(this.remeasureId)
+    clearTimeout(this.updateCameraPositionId)
+    clearTimeout(this.nodeClickId)
   }
 
   shouldComponentUpdate(
@@ -280,10 +263,14 @@ class GameGraph extends Component {
   }
 
   updateCameraPosition() {
+    if (this.state.matrixDict == null) return
+
     let {gridSize, treePosition} = this.props
     let {
       matrixDict: [matrix, dict],
     } = this.state
+
+    if (dict[treePosition] == null) return
 
     let [x, y] = dict[treePosition]
     let [width, padding] = gametree.getMatrixWidth(y, matrix)
@@ -301,13 +288,47 @@ class GameGraph extends Component {
   }
 
   remeasure() {
-    if (!this.props.showGameGraph) return
+    if (!this.props.showGameGraph || this.element == null) return
 
     let {left, top, width, height} = this.element.getBoundingClientRect()
     this.setState({
       viewportSize: [width, height],
       viewportPosition: [left, top],
     })
+  }
+
+  handleDocumentMouseMove(evt) {
+    if (!this.svgElement) return
+
+    let {movementX, movementY} = evt
+    let {
+      cameraPosition: [cx, cy],
+    } = this.state
+
+    if (this.mouseDown === 0) {
+      this.drag = true
+    } else {
+      movementX = movementY = 0
+      this.drag = false
+    }
+
+    if (this.drag) {
+      evt.preventDefault()
+      this.setState({cameraPosition: [cx - movementX, cy - movementY]})
+    }
+  }
+
+  handleDocumentMouseUp() {
+    this.mouseDown = null
+    if (this.drag) {
+      this.setState({hoveredTreePosition: null})
+      this.props.onNodeHoverChange?.(null)
+    }
+  }
+
+  handleWindowResize() {
+    clearTimeout(this.remeasureId)
+    this.remeasureId = setTimeout(() => this.remeasure(), 500)
   }
 
   handleGraphMouseDown(evt) {

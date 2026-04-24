@@ -48,6 +48,14 @@ class EnginePeerListItem extends Component {
   }
 
   render({syncer, analyzing, selected, blackPlayer, whitePlayer}) {
+    let statusText = analyzing
+      ? t('Analyzing')
+      : this.state.busy
+        ? t('Thinking')
+        : this.state.suspended
+          ? t('Stopped')
+          : t('Ready')
+
     return h(
       'li',
       {
@@ -79,6 +87,7 @@ class EnginePeerListItem extends Component {
         : h(TextSpinner),
 
       h('span', {key: 'name', class: 'name'}, syncer.engine.name),
+      h('span', {key: 'status', class: 'status'}, statusText),
 
       analyzing &&
         h(
@@ -176,7 +185,7 @@ export class EnginePeerList extends Component {
         {},
 
         h(ToolBarButton, {
-          icon: './node_modules/@primer/octicons/build/svg/play.svg',
+          icon: './node_modules/@primer/octicons/build/svg/plug.svg',
           tooltip: t('Attach Engine…'),
           menu: true,
           onClick: this.handleAttachEngineButtonClick,
@@ -195,20 +204,22 @@ export class EnginePeerList extends Component {
       h(
         'ul',
         {},
-        attachedEngineSyncers.map((syncer) =>
-          h(EnginePeerListItem, {
-            key: syncer.id,
+        attachedEngineSyncers.length === 0
+          ? h('li', {class: 'empty'}, t('No engines attached.'))
+          : attachedEngineSyncers.map((syncer) =>
+              h(EnginePeerListItem, {
+                key: syncer.id,
 
-            syncer,
-            analyzing: syncer.id === analyzingEngineSyncerId,
-            selected: syncer.id === selectedEngineSyncerId,
-            blackPlayer: syncer.id === blackEngineSyncerId,
-            whitePlayer: syncer.id === whiteEngineSyncerId,
+                syncer,
+                analyzing: syncer.id === analyzingEngineSyncerId,
+                selected: syncer.id === selectedEngineSyncerId,
+                blackPlayer: syncer.id === blackEngineSyncerId,
+                whitePlayer: syncer.id === whiteEngineSyncerId,
 
-            onClick: this.handleEngineClick,
-            onContextMenu: this.handleEngineContextMenu,
-          }),
-        ),
+                onClick: this.handleEngineClick,
+                onContextMenu: this.handleEngineContextMenu,
+              }),
+            ),
       ),
     )
   }

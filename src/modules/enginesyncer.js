@@ -37,7 +37,10 @@ function parseAnalysis(line, board, sign = 1) {
 
   if (ownershipIndex >= 0) {
     ownership = normalizeOwnership(
-      tokens.slice(ownershipIndex + 1, ownershipIndex + 1 + board.width * board.height),
+      tokens.slice(
+        ownershipIndex + 1,
+        ownershipIndex + 1 + board.width * board.height,
+      ),
       board.width,
       board.height,
     )
@@ -159,11 +162,21 @@ export default class EngineSyncer extends EventEmitter {
             if (line.startsWith('info ')) {
               let {variations, ownership} = parseAnalysis(line, board, sign)
 
+              let bestVariation = variations.reduce(
+                (best, variation) =>
+                  best == null || variation.winrate > best.winrate
+                    ? variation
+                    : best,
+                null,
+              )
+
               this.analysis = {
                 sign,
                 variations,
                 ownership,
-                winrate: Math.max(...variations.map(({winrate}) => winrate)),
+                winrate: bestVariation == null ? null : bestVariation.winrate,
+                scoreLead:
+                  bestVariation == null ? null : bestVariation.scoreLead,
               }
             } else if (line.startsWith('play ')) {
               sign = -sign

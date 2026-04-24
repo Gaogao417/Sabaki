@@ -109,7 +109,7 @@ export default class Sidebar extends Component {
       winrateGraphHeight !== this.state.winrateGraphHeight ||
       showWinrateGraph !== this.state.showWinrateGraph
     ) {
-      this.gameGraph.remeasure()
+      if (this.gameGraph != null) this.gameGraph.remeasure()
     }
   }
 
@@ -140,6 +140,7 @@ export default class Sidebar extends Component {
       graphNodeSize,
 
       winrateData,
+      scoreLeadData,
     },
     {winrateGraphHeight, sidebarSplit},
   ) {
@@ -149,9 +150,12 @@ export default class Sidebar extends Component {
       1,
     )
     let level = gameTree.getLevel(treePosition)
-    showWinrateGraph = showWinrateGraph && winrateData.some((x) => x != null)
     let showEditPreview = editWorkspaceActive && editPreviewBoard != null
     let showGraphColumn = showGameGraph || showEditPreview
+    let inspectorSidebar = editWorkspaceActive || mode === 'play'
+    let hasAnalysisData =
+      winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
+    showWinrateGraph = showWinrateGraph && (inspectorSidebar || hasAnalysisData)
     let editPreviewLabel =
       editPreviewTab === 'reference' ? 'Preview: Reference' : 'Preview: Current'
     let editPreviewGobanProps = showEditPreview
@@ -187,6 +191,136 @@ export default class Sidebar extends Component {
         }
       : null
 
+    if (inspectorSidebar) {
+      return h(
+        'section',
+        {
+          ref: (el) => (this.element = el),
+          id: 'sidebar',
+          class: 'inspector-sidebar',
+        },
+
+        showWinrateGraph &&
+          h(WinrateGraph, {
+            lastPlayer,
+            width: winrateGraphWidth,
+            data: winrateData,
+            scoreLeadData,
+            currentIndex: level,
+            onCurrentIndexChange: this.handleWinrateGraphChange,
+          }),
+
+        showEditPreview &&
+          h(
+            'section',
+            {class: 'sidebar-card preview-card edit-preview-panel'},
+            h(
+              'div',
+              {class: 'card-header edit-preview-panel__header'},
+              h('strong', {class: 'card-title'}, editPreviewLabel),
+              h('span', {}, 'Read-only preview'),
+            ),
+            h(
+              'div',
+              {class: 'preview-body edit-preview-panel__body'},
+              h(
+                'div',
+                {class: 'edit-board-readonly mini-board'},
+                h(BoardOverlayStack, {
+                  territoryMode,
+                  baselineOwnership: editPreviewOwnership,
+                  unavailableReason: overlayUnavailableReason,
+                  gobanProps: editPreviewGobanProps,
+                  analysis: null,
+                  lastMoveDeltaMap: null,
+                  lastMoveDiffAvailable: false,
+                  diffSourceType: null,
+                  comparisonOwnership: null,
+                }),
+              ),
+            ),
+          ),
+
+        showGameGraph &&
+          h(
+          'section',
+          {class: 'sidebar-card game-tree-card'},
+          h(
+            'div',
+            {class: 'card-header'},
+            h('strong', {class: 'card-title'}, 'GAME TREE'),
+          ),
+          h(
+            'div',
+            {class: 'game-tree-body'},
+            h(GameGraph, {
+              ref: (component) => (this.gameGraph = component),
+
+              gameTree,
+              gameCurrents: gameCurrents[gameIndex],
+              treePosition,
+              showGameGraph: true,
+              height: 100,
+              gridSize: graphGridSize,
+              nodeSize: graphNodeSize,
+
+              onNodeClick: this.handleGraphNodeClick,
+              onNodeDoubleClick: this.handleGraphNodeDoubleClick,
+              onNodeHoverChange: this.handleGraphNodeHoverChange,
+              compareReferenceTreePosition,
+              compareTargetTreePosition,
+            }),
+          ),
+        ),
+
+        !editWorkspaceActive &&
+          showCommentBox &&
+          h(
+            'section',
+            {class: 'sidebar-card comment-card'},
+            h(
+              'div',
+              {class: 'card-header'},
+              h('strong', {class: 'card-title'}, 'COMMENTS'),
+            ),
+            h(
+              'div',
+              {class: 'comment-card-body'},
+              h(CommentBox, {
+                mode,
+                gameTree,
+                treePosition,
+                showCommentBox,
+                moveAnnotation:
+                  node.data.BM != null
+                    ? [-1, node.data.BM[0]]
+                    : node.data.DO != null
+                      ? [0, 1]
+                      : node.data.IT != null
+                        ? [1, 1]
+                        : node.data.TE != null
+                          ? [2, node.data.TE[0]]
+                          : [null, 1],
+                positionAnnotation:
+                  node.data.UC != null
+                    ? [-2, node.data.UC[0]]
+                    : node.data.GW != null
+                      ? [-1, node.data.GW[0]]
+                      : node.data.DM != null
+                        ? [0, node.data.DM[0]]
+                        : node.data.GB != null
+                          ? [1, node.data.GB[0]]
+                          : [null, 1],
+                title: node.data.N != null ? node.data.N[0] : '',
+                comment: node.data.C != null ? node.data.C[0] : '',
+
+                onCommentInput: this.handleCommentInput,
+              }),
+            ),
+          ),
+      )
+    }
+
     return h(
       'section',
       {
@@ -203,6 +337,7 @@ export default class Sidebar extends Component {
           lastPlayer,
           width: winrateGraphWidth,
           data: winrateData,
+          scoreLeadData,
           currentIndex: level,
           onCurrentIndexChange: this.handleWinrateGraphChange,
         }),
@@ -328,8 +463,18 @@ export default class Sidebar extends Component {
   }
 }
 
-Sidebar.getDerivedStateFromProps = function ({showWinrateGraph, winrateData}) {
+Sidebar.getDerivedStateFromProps = function ({
+  mode,
+  editWorkspaceActive,
+  showWinrateGraph,
+  winrateData,
+  scoreLeadData = [],
+}) {
+  let inspectorSidebar = editWorkspaceActive || mode === 'play'
+  let hasAnalysisData =
+    winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
+
   return {
-    showWinrateGraph: showWinrateGraph && winrateData.some((x) => x != null),
+    showWinrateGraph: showWinrateGraph && (inspectorSidebar || hasAnalysisData),
   }
 }

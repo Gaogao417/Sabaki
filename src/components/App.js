@@ -603,6 +603,7 @@ class App extends Component {
       {
         class: classNames({
           editWorkspace: state.editWorkspaceActive,
+          inspectorShell: state.mode === 'play' || state.editWorkspaceActive,
           showleftsidebar: state.showLeftSidebar,
           showsidebar: state.showSidebar,
           [state.mode]: true,

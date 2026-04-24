@@ -287,23 +287,25 @@ export default class GtpConsole extends Component {
           onContextMenu: this.handleContextMenu,
         },
 
-        consoleLog.map(({name, command, response, waiting}, i) => {
-          let sign = this.getSign(command)
+        consoleLog.length === 0
+          ? h('li', {class: 'empty'}, h('pre', {}, i18n.context('GtpConsole')('No engine logs yet.')))
+          : consoleLog.map(({name, command, response, waiting}, i) => {
+              let sign = this.getSign(command)
 
-          return [
-            command ||
-            i === 0 ||
-            consoleLog[i - 1].name !== name ||
-            (sign !== 0 && consoleLog[i - 1].sign !== sign)
-              ? h(ConsoleCommandEntry, {sign, name, command})
-              : null,
+              return [
+                command ||
+                i === 0 ||
+                consoleLog[i - 1].name !== name ||
+                (sign !== 0 && consoleLog[i - 1].sign !== sign)
+                  ? h(ConsoleCommandEntry, {sign, name, command})
+                  : null,
 
-            h(ConsoleResponseEntry, {
-              response,
-              waiting: response == null || waiting,
+                h(ConsoleResponseEntry, {
+                  response,
+                  waiting: response == null || waiting,
+                }),
+              ]
             }),
-          ]
-        }),
       ),
 
       h(ConsoleInput, {

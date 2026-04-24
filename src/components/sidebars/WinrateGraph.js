@@ -1,5 +1,4 @@
 import {h, Component} from 'preact'
-import classNames from 'classnames'
 import i18n from '../../i18n.js'
 import sabaki from '../../modules/sabaki.js'
 import {noop} from '../../modules/helper.js'
@@ -9,48 +8,62 @@ const setting = {
   get: (key) => window.sabaki.setting.get(key),
   onDidChange: (callback) => window.sabaki.setting.onDidChange(callback),
 }
-const blunderThreshold = setting.get('view.winrategraph_blunderthreshold')
 
-class WinrateStrip extends Component {
-  render() {
-    let {player, winrate, change} = this.props
+function toNumber(value) {
+  if (value == null || value === '') return null
 
-    return h(
-      'section',
-      {class: 'winrate-strip'},
+  let number = +value
+  return Number.isFinite(number) ? number : null
+}
 
-      h('img', {
-        class: 'player',
-        src: `./img/ui/${player > 0 ? 'black' : 'white'}.svg`,
-        height: 14,
-        alt: player > 0 ? t('Black') : t('White'),
-        title: player > 0 ? t('Black') : t('White'),
-      }),
+function buildLinePath(values, mapPoint) {
+  let path = ''
+  let open = false
 
-      h(
-        'span',
-        {class: 'main'},
-        winrate == null ? '–' : `${i18n.formatNumber(winrate)}%`,
-      ),
+  values.forEach((value, index) => {
+    if (value == null) {
+      open = false
+      return
+    }
 
-      h(
-        'span',
-        {
-          class: classNames('change', {
-            positive: change != null && change > blunderThreshold,
-            negative: change != null && change < -blunderThreshold,
-          }),
-        },
+    let [x, y] = mapPoint(value, index)
+    path += `${open ? 'L' : 'M'} ${x},${y} `
+    open = true
+  })
 
-        h('span', {}, change == null ? '' : change >= 0 ? '+' : '-'),
-        h(
-          'span',
-          {},
-          change == null ? '–' : i18n.formatNumber(Math.abs(change)),
-        ),
-      ),
-    )
-  }
+  return path.trim()
+}
+
+function buildAreaPath(values, mapPoint, baselineY) {
+  let segments = []
+  let current = []
+
+  values.forEach((value, index) => {
+    if (value == null) {
+      if (current.length > 0) segments.push(current)
+      current = []
+      return
+    }
+
+    current.push([value, index])
+  })
+
+  if (current.length > 0) segments.push(current)
+
+  return segments
+    .map((segment) => {
+      let points = segment.map(([value, index]) => mapPoint(value, index))
+      let first = points[0]
+      let last = points[points.length - 1]
+
+      return [
+        `M ${first[0]},${baselineY}`,
+        ...points.map(([x, y]) => `L ${x},${y}`),
+        `L ${last[0]},${baselineY}`,
+        'Z',
+      ].join(' ')
+    })
+    .join(' ')
 }
 
 export default class WinrateGraph extends Component {
@@ -59,6 +72,8 @@ export default class WinrateGraph extends Component {
 
     this.state = {
       invert: setting.get('view.winrategraph_invert'),
+      showWinrate: true,
+      showScoreLead: true,
     }
 
     setting.onDidChange(({key, value}) => {
@@ -68,81 +83,129 @@ export default class WinrateGraph extends Component {
     })
 
     this.handleMouseDown = (evt) => {
+      if (!this.hasData) return
+
       this.mouseDown = true
       document.dispatchEvent(new MouseEvent('mousemove', evt))
     }
-  }
 
-  shouldComponentUpdate({lastPlayer, width, currentIndex, data}, {invert}) {
-    return (
-      lastPlayer !== this.props.lastPlayer ||
-      width !== this.props.width ||
-      currentIndex !== this.props.currentIndex ||
-      data[currentIndex] !== this.props.data[currentIndex] ||
-      invert !== this.state.invert
-    )
+    this.handleWinrateToggle = (evt) => {
+      evt.preventDefault()
+      this.setState(({showWinrate}) => ({showWinrate: !showWinrate}))
+    }
+
+    this.handleScoreLeadToggle = (evt) => {
+      evt.preventDefault()
+      this.setState(({showScoreLead}) => ({showScoreLead: !showScoreLead}))
+    }
   }
 
   componentDidMount() {
-    document.addEventListener('mousemove', (evt) => {
-      if (!this.mouseDown) return
+    this.handleDocumentMouseMove = (evt) => {
+      if (!this.mouseDown || this.element == null) return
 
       let rect = this.element.getBoundingClientRect()
       let percent = (evt.clientX - rect.left) / rect.width
-      let {width, data, onCurrentIndexChange = noop} = this.props
+      let {data, onCurrentIndexChange = noop} = this.props
       let index = Math.max(
-        Math.min(Math.round(width * percent), data.length - 1),
+        Math.min(Math.round((data.length - 1) * percent), data.length - 1),
         0,
       )
 
       if (index !== this.props.currentIndex) onCurrentIndexChange({index})
-    })
+    }
 
-    document.addEventListener('mouseup', () => {
+    this.handleDocumentMouseUp = () => {
       this.mouseDown = false
-    })
+    }
+
+    document.addEventListener('mousemove', this.handleDocumentMouseMove)
+    document.addEventListener('mouseup', this.handleDocumentMouseUp)
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('mousemove', this.handleDocumentMouseMove)
+    document.removeEventListener('mouseup', this.handleDocumentMouseUp)
   }
 
   render() {
-    let {lastPlayer, width, currentIndex, data} = this.props
-    let {invert} = this.state
+    let {lastPlayer, currentIndex, data, scoreLeadData = []} = this.props
+    let {invert, showWinrate, showScoreLead} = this.state
 
-    let dataDiff = data.map((x, i) =>
-      i === 0 || x == null || (data[i - 1] == null && data[i - 2] == null)
+    let winrateValues = data.map(toNumber)
+    let scoreLeadValues = scoreLeadData.map(toNumber)
+    let hasWinrateData = winrateValues.some((value) => value != null)
+    let hasScoreLeadData = scoreLeadValues.some((value) => value != null)
+    let hasData = hasWinrateData || hasScoreLeadData
+    this.hasData = hasData
+
+    let currentWinrate = winrateValues[currentIndex]
+    let displayedWinrate =
+      currentWinrate == null
         ? null
-        : x - data[data[i - 1] != null ? i - 1 : i - 2],
+        : Math.round(
+            (lastPlayer > 0 ? currentWinrate : 100 - currentWinrate) * 100,
+          ) / 100
+    let currentScoreLead = scoreLeadValues[currentIndex]
+
+    let width = 320
+    let height = 180
+    let left = 34
+    let right = 286
+    let top = 18
+    let bottom = 154
+    let chartWidth = right - left
+    let chartHeight = bottom - top
+    let count = Math.max(winrateValues.length, scoreLeadValues.length, 1)
+    let scoreAbsMax = Math.max(
+      20,
+      ...scoreLeadValues
+        .filter((value) => value != null)
+        .map((value) => Math.abs(value)),
     )
-    let dataDiffMax = Math.max(...dataDiff.map(Math.abs), 25)
 
-    let round2 = (x) => Math.round(x * 100) / 100
-    let blackWinrate =
-      data[currentIndex] == null ? null : round2(data[currentIndex])
-    let blackWinrateDiff =
-      dataDiff[currentIndex] == null ? null : round2(dataDiff[currentIndex])
-    let whiteWinrate =
-      data[currentIndex] == null ? null : round2(100 - data[currentIndex])
-    let whiteWinrateDiff =
-      dataDiff[currentIndex] == null ? null : -round2(dataDiff[currentIndex])
+    let xForIndex = (index) =>
+      count <= 1 ? left : left + (index / (count - 1)) * chartWidth
+    let yForWinrate = (value) => {
+      let y = bottom - (Math.max(0, Math.min(100, value)) / 100) * chartHeight
+      return !invert ? y : top + bottom - y
+    }
+    let yForScoreLead = (value) => {
+      let clamped = Math.max(-scoreAbsMax, Math.min(scoreAbsMax, value))
+      return top + ((scoreAbsMax - clamped) / (scoreAbsMax * 2)) * chartHeight
+    }
 
+    let winratePath = buildLinePath(winrateValues, (value, index) => [
+      xForIndex(index),
+      yForWinrate(value),
+    ])
+    let winrateArea = buildAreaPath(
+      winrateValues,
+      (value, index) => [xForIndex(index), yForWinrate(value)],
+      bottom,
+    )
+    let scoreLeadPath = buildLinePath(scoreLeadValues, (value, index) => [
+      xForIndex(index),
+      yForScoreLead(value),
+    ])
+    let markerX = xForIndex(currentIndex)
+    let markerY = currentWinrate == null ? null : yForWinrate(currentWinrate)
     let tooltip =
-      data[currentIndex] == null
+      currentWinrate == null
         ? ''
         : [
-            [blackWinrate, blackWinrateDiff],
-            [whiteWinrate, whiteWinrateDiff],
+            `${lastPlayer > 0 ? t('Black Winrate:') : t('White Winrate:')} ${
+              displayedWinrate == null
+                ? '-'
+                : i18n.formatNumber(displayedWinrate)
+            }%`,
+            currentScoreLead == null
+              ? null
+              : `${t('Score lead:')} ${
+                  currentScoreLead >= 0 ? '+' : ''
+                }${i18n.formatNumber(Math.round(currentScoreLead * 10) / 10)}`,
           ]
-            .map(
-              ([winrate, diff], i) =>
-                `${
-                  i === 0 ? t('Black Winrate:') : t('White Winrate:')
-                } ${i18n.formatNumber(winrate)}%${
-                  diff == null
-                    ? ''
-                    : ` (${diff >= 0 ? '+' : '-'}${i18n.formatNumber(
-                        Math.abs(diff),
-                      )})`
-                }`,
-            )
+            .filter(Boolean)
             .join('\n')
 
     return h(
@@ -150,204 +213,156 @@ export default class WinrateGraph extends Component {
       {
         ref: (el) => (this.element = el),
         id: 'winrategraph',
-        style: {
-          height: this.state.height + 'px',
-        },
+        class: 'sidebar-card analysis-card',
       },
 
-      h(WinrateStrip, {
-        player: lastPlayer,
-        winrate: lastPlayer > 0 ? blackWinrate : whiteWinrate,
-        change: lastPlayer > 0 ? blackWinrateDiff : whiteWinrateDiff,
-      }),
+      h(
+        'header',
+        {class: 'card-header analysis-header'},
+        h('strong', {class: 'card-title'}, 'ANALYSIS'),
+        h(
+          'span',
+          {class: 'analysis-value'},
+          displayedWinrate == null
+            ? '-'
+            : `${i18n.formatNumber(displayedWinrate)}%`,
+        ),
+      ),
 
+      !hasData &&
+        h(
+          'div',
+          {class: 'analysis-empty-state'},
+          h('strong', {}, t('No analysis data')),
+          h('span', {}, t('Start engine analysis to see win rate and score lead.')),
+        ),
+
+      hasData &&
+      h(
+        'div',
+        {class: 'metric-tabs'},
+        hasWinrateData &&
+          h(
+          'button',
+          {
+            class: `metric-tab${showWinrate ? ' active' : ''}`,
+            onClick: this.handleWinrateToggle,
+          },
+          h('span', {class: 'checkmark'}),
+          'Win rate',
+        ),
+        hasScoreLeadData &&
+          h(
+          'button',
+          {
+            class: `metric-tab${showScoreLead ? ' active' : ''}`,
+            onClick: this.handleScoreLeadToggle,
+          },
+          h('span', {class: 'checkmark'}),
+          'Score lead',
+        ),
+      ),
+
+      hasData &&
       h(
         'section',
         {
-          class: 'graph',
+          class: 'graph trend-chart',
           title: tooltip,
           onMouseDown: this.handleMouseDown,
         },
-
         h(
           'svg',
           {
-            viewBox: `0 0 ${width} 100`,
+            class: 'trend-svg',
+            viewBox: `0 0 ${width} ${height}`,
             preserveAspectRatio: 'none',
-            style: {
-              height: '100%',
-              width: '100%',
-              transform: !invert ? 'none' : 'scaleY(-1)',
-            },
           },
-
-          // Draw background
-
-          h(
-            'defs',
-            {},
-            h(
-              'linearGradient',
-              {
-                id: 'bgGradient',
-                x1: 0,
-                y1: 0,
-                x2: 0,
-                y2: 1,
-              },
-              h('stop', {
-                offset: '0%',
-                'stop-color': 'white',
-                'stop-opacity': 0.7,
-              }),
-              h('stop', {
-                offset: '100%',
-                'stop-color': 'white',
-                'stop-opacity': 0.1,
-              }),
-            ),
-
-            h(
-              'clipPath',
-              {id: 'clipGradient'},
-              h('path', {
-                fill: 'black',
-                'stroke-width': 0,
-                d: (() => {
-                  let instructions = data
-                    .map((x, i) => {
-                      if (x == null) return i === 0 ? [i, 50] : null
-                      return [i, x]
-                    })
-                    .filter((x) => x != null)
-
-                  if (instructions.length === 0) return ''
-
-                  return (
-                    `M ${instructions[0][0]},100 ` +
-                    instructions.map((x) => `L ${x.join(',')}`).join(' ') +
-                    ` L ${instructions.slice(-1)[0][0]},100 Z`
-                  )
-                })(),
-              }),
-            ),
-          ),
-
-          h('rect', {
-            x: 0,
-            y: 0,
-            width,
-            height: 100,
-            fill: 'url(#bgGradient)',
-            'clip-path': 'url(#clipGradient)',
-          }),
-
-          // Draw guiding lines
-
-          h('line', {
-            x1: 0,
-            y1: 50,
-            x2: width,
-            y2: 50,
-            stroke: '#aaa',
-            'stroke-width': 1,
-            'stroke-dasharray': 2,
-            'vector-effect': 'non-scaling-stroke',
-          }),
-
-          [...Array(width)].map((_, i) => {
-            if (i === 0 || i % 50 !== 0) return
-
-            return h('line', {
-              x1: i,
-              y1: 0,
-              x2: i,
-              y2: 100,
-              stroke: '#aaa',
-              'stroke-width': 1,
-              'stroke-dasharray': 2,
+          [top, top + chartHeight / 2, bottom].map((y, index) =>
+            h('line', {
+              class: `grid-line${index === 1 ? ' major' : ''}`,
+              x1: left,
+              y1: y,
+              x2: right,
+              y2: y,
               'vector-effect': 'non-scaling-stroke',
-            })
-          }),
-
-          // Current position marker
-
-          h('line', {
-            x1: currentIndex,
-            y1: 0,
-            x2: currentIndex,
-            y2: 100,
-            stroke: '#0082F0',
-            'stroke-width': 2,
-            'vector-effect': 'non-scaling-stroke',
-          }),
-
-          // Draw differential bar graph
-
-          h('path', {
-            fill: 'none',
-            stroke: '#FF3B30',
-            'stroke-width': 1,
-
-            d: dataDiff
-              .map((x, i) => {
-                if (x == null || Math.abs(x) <= blunderThreshold) return ''
-
-                return `M ${i},50 l 0,${(50 * x) / dataDiffMax}`
-              })
-              .join(' '),
-          }),
-
-          // Draw data lines
-
-          h('path', {
-            fill: 'none',
-            stroke: '#eee',
-            'stroke-width': 2,
-            'vector-effect': 'non-scaling-stroke',
-
-            d: data
-              .map((x, i) => {
-                if (x == null) return ''
-
-                let command = i === 0 || data[i - 1] == null ? 'M' : 'L'
-                return `${command} ${i},${x}`
-              })
-              .join(' '),
-          }),
-
-          h('path', {
-            fill: 'none',
-            stroke: '#ccc',
-            'stroke-width': 2,
-            'stroke-dasharray': 2,
-            'vector-effect': 'non-scaling-stroke',
-
-            d: data
-              .map((x, i) => {
-                if (i === 0) return 'M 0,50'
-
-                if (x == null && data[i - 1] != null)
-                  return `M ${i - 1},${data[i - 1]}`
-
-                if (x != null && data[i - 1] == null) return `L ${i},${x}`
-
-                return ''
-              })
-              .join(' '),
-          }),
-        ),
-
-        // Draw marker
-
-        data[currentIndex] &&
-          h('div', {
-            class: 'marker',
-            style: {
-              left: `${(currentIndex * 100) / width}%`,
-              top: `${!invert ? data[currentIndex] : 100 - data[currentIndex]}%`,
+            }),
+          ),
+          [0, 50, 100, 150].map((x) =>
+            h('line', {
+              class: 'grid-line vertical',
+              x1: left + (x / 150) * chartWidth,
+              y1: top,
+              x2: left + (x / 150) * chartWidth,
+              y2: bottom,
+              'vector-effect': 'non-scaling-stroke',
+            }),
+          ),
+          h('text', {class: 'axis-label', x: 2, y: top + 5}, '100%'),
+          h(
+            'text',
+            {class: 'axis-label', x: 8, y: top + chartHeight / 2 + 4},
+            '50%',
+          ),
+          h('text', {class: 'axis-label', x: 14, y: bottom + 4}, '0%'),
+          h(
+            'text',
+            {class: 'axis-label axis-label--right', x: right + 10, y: top + 5},
+            '+20',
+          ),
+          h(
+            'text',
+            {
+              class: 'axis-label axis-label--right',
+              x: right + 18,
+              y: top + chartHeight / 2 + 4,
             },
+            '0',
+          ),
+          h(
+            'text',
+            {
+              class: 'axis-label axis-label--right',
+              x: right + 10,
+              y: bottom + 4,
+            },
+            '-20',
+          ),
+          showWinrate &&
+            winrateArea !== '' &&
+            h('path', {class: 'winrate-area', d: winrateArea}),
+          showWinrate &&
+            winratePath !== '' &&
+            h('path', {
+              class: 'winrate-line',
+              d: winratePath,
+              'vector-effect': 'non-scaling-stroke',
+            }),
+          showScoreLead &&
+            scoreLeadPath !== '' &&
+            h('path', {
+              class: 'score-line',
+              d: scoreLeadPath,
+              'vector-effect': 'non-scaling-stroke',
+            }),
+          h('line', {
+            class: 'current-move-line',
+            x1: markerX,
+            y1: top,
+            x2: markerX,
+            y2: bottom,
+            'vector-effect': 'non-scaling-stroke',
           }),
+          showWinrate &&
+            markerY != null &&
+            h('circle', {
+              class: 'current-move-dot',
+              cx: markerX,
+              cy: markerY,
+              r: 4,
+              'vector-effect': 'non-scaling-stroke',
+            }),
+        ),
       ),
     )
   }

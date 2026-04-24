@@ -319,6 +319,20 @@ class Sabaki extends EventEmitter {
           ),
         ].map((x) => x.data.SBKV && x.data.SBKV[0])
       },
+      get scoreLeadData() {
+        return [
+          ...this.gameTree.listCurrentNodes(
+            state.gameCurrents[state.gameIndex],
+          ),
+        ].map((x) => x.data.SBKS && x.data.SBKS[0])
+      },
+      get currentLineNodes() {
+        return [
+          ...this.gameTree.listCurrentNodes(
+            state.gameCurrents[state.gameIndex],
+          ),
+        ]
+      },
     }
   }
 
@@ -397,7 +411,7 @@ class Sabaki extends EventEmitter {
 
       stateChange.editWorkspace = {
         currentSnapshot: snapshot,
-        referenceSnapshot: cloneSnapshot(snapshot),
+        referenceSnapshot: null,
         activeTab: 'current',
         currentAnalysis: null,
         currentOwnership: null,
@@ -405,13 +419,15 @@ class Sabaki extends EventEmitter {
         referenceOwnership: null,
         analysisPending: false,
         currentMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
-        referenceMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
+        referenceMarkerMap: null,
         currentLines: [],
         referenceLines: [],
       }
 
       this.waitForRender().then(() => {
         let textarea = document.querySelector('#properties .edit textarea')
+
+        if (textarea == null) return
 
         textarea.selectionStart = textarea.selectionEnd = 0
         textarea.focus()
@@ -916,8 +932,11 @@ class Sabaki extends EventEmitter {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
-    let {snapshotKey: key, analysisKey, ownershipKey} =
-      this.getEditWorkspaceTabKeys(ws.activeTab)
+    let {
+      snapshotKey: key,
+      analysisKey,
+      ownershipKey,
+    } = this.getEditWorkspaceTabKeys(ws.activeTab)
     let snapshot = ws[key]
     if (snapshot == null) return
 
@@ -926,8 +945,7 @@ class Sabaki extends EventEmitter {
       nextPlayer: sign > 0 ? 1 : -1,
     }
 
-    this.editAnalysisGeneration =
-      (this.editAnalysisGeneration || 0) + 1
+    this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
 
     this.setState({
       editWorkspace: {
@@ -948,10 +966,8 @@ class Sabaki extends EventEmitter {
   }
 
   async refreshEditWorkspaceAnalysis() {
-    this.syncEditWorkspaceToCurrentPosition()
-    let generation =
-      (this.editAnalysisGeneration =
-        (this.editAnalysisGeneration || 0) + 1)
+    let generation = (this.editAnalysisGeneration =
+      (this.editAnalysisGeneration || 0) + 1)
     let ws = this.state.editWorkspace
     if (ws == null) return
 
@@ -3214,13 +3230,22 @@ class Sabaki extends EventEmitter {
               )
             }
 
-            let {sign, winrate} = syncer.analysis
+            let {sign, winrate, scoreLead} = syncer.analysis
             if (sign < 0) winrate = 100 - winrate
+            if (scoreLead != null && sign < 0) scoreLead = -scoreLead
 
             let newTree = tree.mutate((draft) => {
-              draft.updateProperty(syncer.treePosition, 'SBKV', [
-                (Math.round(winrate * 100) / 100).toString(),
-              ])
+              if (winrate != null) {
+                draft.updateProperty(syncer.treePosition, 'SBKV', [
+                  (Math.round(winrate * 100) / 100).toString(),
+                ])
+              }
+
+              if (scoreLead != null) {
+                draft.updateProperty(syncer.treePosition, 'SBKS', [
+                  (Math.round(scoreLead * 100) / 100).toString(),
+                ])
+              }
             })
 
             this.setCurrentTreePosition(newTree, this.state.treePosition)

@@ -174,11 +174,13 @@ export default class ThemeManager extends Component {
                 }`,
 
         backgroundPath != null &&
-          `main {
+          `main.board-stage {
                     background-image: url('${backgroundPath.replace(
                       /\\/g,
                       '/',
                     )}');
+                    background-position: center;
+                    background-size: cover;
                 }`,
       ),
 

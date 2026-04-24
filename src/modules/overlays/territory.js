@@ -146,18 +146,7 @@ export function buildTerritoryMarkerMap(
 ) {
   if (!Array.isArray(ownership)) return []
 
-  return ownership.map((row) =>
-    row.map((value) => {
-      let point = classifyOwnershipPoint(value, {
-        solidThreshold,
-        neutralThreshold,
-      })
-
-      return point.owner === 0
-        ? {type: 'point', label: '@territory-neutral'}
-        : null
-    }),
-  )
+  return ownership.map((row) => row.map(() => null))
 }
 
 export function buildTerritoryRegions(

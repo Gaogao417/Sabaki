@@ -198,7 +198,7 @@ let defaults = {
   'view.animated_stone_placement': true,
   'view.coordinates_type': 'A1',
   'view.fuzzy_stone_placement': true,
-  'view.leftsidebar_width': 250,
+  'view.leftsidebar_width': 368,
   'view.leftsidebar_minwidth': 100,
   'view.peerlist_height': 130,
   'view.peerlist_minheight': 58,
@@ -214,12 +214,12 @@ let defaults = {
   'view.show_next_moves': true,
   'view.show_siblings': true,
   'view.show_winrategraph': true,
-  'view.sidebar_width': 200,
+  'view.sidebar_width': 384,
   'view.sidebar_minwidth': 100,
   'view.winrategraph_blunderthreshold': 5,
-  'view.winrategraph_height': 90,
+  'view.winrategraph_height': 292,
   'view.winrategraph_minheight': 30,
-  'view.winrategraph_maxheight': 250,
+  'view.winrategraph_maxheight': 320,
   'view.winrategraph_invert': false,
   'infooverlay.duration': 2000,
   'window.height': 604,
@@ -253,7 +253,7 @@ exports.events = {
   },
 }
 
-exports.load = function() {
+exports.load = function () {
   try {
     settings = JSON.parse(fs.readFileSync(exports.settingsPath, 'utf8'))
   } catch (err) {
@@ -292,7 +292,7 @@ exports.load = function() {
   return exports.save()
 }
 
-exports.loadThemes = function() {
+exports.loadThemes = function () {
   let packagePath = (filename) =>
     path.join(exports.themesDirectory, filename, 'package.json')
   let friendlyName = (name) =>
@@ -324,7 +324,7 @@ exports.loadThemes = function() {
     }, {})
 }
 
-exports.save = function() {
+exports.save = function () {
   let keys = Object.keys(settings).sort()
 
   fs.writeFileSync(
@@ -339,20 +339,20 @@ exports.save = function() {
   return exports
 }
 
-exports.get = function(key) {
+exports.get = function (key) {
   if (key in settings) return settings[key]
   if (key in defaults) return defaults[key]
   return null
 }
 
-exports.set = function(key, value) {
+exports.set = function (key, value) {
   settings[key] = value
   exports.save()
   exports.events.emit('change', {key, value})
   return exports
 }
 
-exports.getThemes = function() {
+exports.getThemes = function () {
   if (themesDict == null) exports.loadThemes()
   return themesDict
 }
