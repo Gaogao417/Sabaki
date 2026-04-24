@@ -25,7 +25,6 @@ import {
   createSnapshotFromBoard,
   snapshotToGameTree,
 } from './study.js'
-import {buildOwnershipDeltaSummary} from './overlays/territoryDiff.js'
 import * as sound from './sound.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
@@ -78,6 +77,9 @@ class Sabaki extends EventEmitter {
 
       analysisAreaVertices: null,
       analysisAreaSelecting: false,
+      territoryEnabled: false,
+      territoryCompareEnabled: false,
+      areaToolEnabled: false,
       highlightVertices: [],
       playVariation: null,
       analysisType: null,
@@ -91,15 +93,12 @@ class Sabaki extends EventEmitter {
       fuzzyStonePlacement: null,
       animateStonePlacement: null,
       boardTransformation: '',
-      overlayMode: 'off',
+      compareMode: false,
       compareDisplayPreset: 'bands',
       compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
-      territoryDiffSource: null,
-      territoryDiffReferenceTreePosition: null,
-      territoryDiffTargetTreePosition: null,
 
       // Edit workspace (set only when mode === 'edit')
       editWorkspace: null,
@@ -327,7 +326,6 @@ class Sabaki extends EventEmitter {
     let data = {
       'app.zoom_factor': 'zoomFactor',
       'board.analysis_type': 'analysisType',
-      'board.overlay_mode': 'overlayMode',
       'board.show_analysis': 'showAnalysis',
       'view.show_menubar': 'showMenuBar',
       'view.show_coordinates': 'showCoordinates',
@@ -394,15 +392,17 @@ class Sabaki extends EventEmitter {
       let snapshot = createSnapshotFromBoard(board, currentPlayer)
 
       stateChange.editWorkspace = {
-        workingSnapshot: snapshot,
+        currentSnapshot: snapshot,
         referenceSnapshot: null,
-        activeTab: 'working',
-        workingOwnership: null,
+        activeTab: 'current',
+        currentAnalysis: null,
+        currentOwnership: null,
+        referenceAnalysis: null,
         referenceOwnership: null,
         analysisPending: false,
-        workingMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
+        currentMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
         referenceMarkerMap: null,
-        workingLines: [],
+        currentLines: [],
         referenceLines: [],
       }
 
@@ -416,6 +416,16 @@ class Sabaki extends EventEmitter {
 
     this.setState(stateChange)
     this.events.emit('modeChange')
+
+    if (mode === 'edit') {
+      this.scheduleEditWorkspaceAnalysis()
+    } else if (
+      mode !== 'edit' &&
+      this.state.territoryCompareEnabled &&
+      !this.getTerritoryCompareAvailable()
+    ) {
+      this.setState({territoryCompareEnabled: false})
+    }
   }
 
   openDrawer(drawer) {
@@ -503,6 +513,113 @@ class Sabaki extends EventEmitter {
       : this.getCachedOwnership(syncer.id, tree, treePosition)
   }
 
+  getEditWorkspaceTabKeys(tab) {
+    let prefix = tab === 'reference' ? 'reference' : 'current'
+
+    return {
+      snapshotKey: `${prefix}Snapshot`,
+      analysisKey: `${prefix}Analysis`,
+      ownershipKey: `${prefix}Ownership`,
+      markerKey: `${prefix}MarkerMap`,
+      linesKey: `${prefix}Lines`,
+    }
+  }
+
+  getPreviousTreePosition(
+    treePosition = this.state.treePosition,
+    tree = this.inferredState.gameTree,
+  ) {
+    return tree?.get(treePosition)?.parentId ?? null
+  }
+
+  getTerritoryCompareAvailable(state = this.state) {
+    if (state.mode === 'edit') {
+      return state.editWorkspace?.referenceSnapshot != null
+    }
+
+    if (['scoring', 'estimator'].includes(state.mode)) return false
+    return this.getPreviousTreePosition(
+      state.treePosition,
+      this.getInferredState(state).gameTree,
+    ) != null
+  }
+
+  getBoardAnalysisContext({state = this.state, tab = null} = {}) {
+    if (state.mode === 'edit' && state.editWorkspace != null) {
+      let activeTab = tab ?? state.editWorkspace.activeTab
+      let {
+        snapshotKey,
+        analysisKey,
+        ownershipKey,
+      } = this.getEditWorkspaceTabKeys(activeTab)
+      let snapshot = state.editWorkspace[snapshotKey]
+      if (snapshot == null) return null
+
+      let context = snapshotToGameTree(snapshot)
+      if (context == null) return null
+
+      let {tree, treePosition} = context
+      return {
+        source: 'edit',
+        tab: activeTab,
+        tree,
+        treePosition,
+        analyzePlayer: snapshot.nextPlayer,
+        analysis: state.editWorkspace[analysisKey],
+        ownership: state.editWorkspace[ownershipKey],
+      }
+    }
+
+    let inferredState = this.getInferredState(state)
+    return {
+      source: 'play',
+      tab: null,
+      tree: inferredState.gameTree,
+      treePosition: state.treePosition,
+      analyzePlayer: this.getPlayer(state.treePosition),
+      analysis:
+        state.analysisTreePosition === state.treePosition ? state.analysis : null,
+      ownership: this.getCurrentOwnership(inferredState.analyzingEngineSyncer),
+    }
+  }
+
+  refreshActiveBoardAnalysis() {
+    if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+      this.scheduleEditWorkspaceAnalysis()
+    } else {
+      this.analyzeMove(this.state.treePosition)
+    }
+  }
+
+  async ensureAnalysisReady({requireOwnership = false} = {}) {
+    let syncer = this.inferredState.analyzingEngineSyncer
+
+    if (
+      syncer != null &&
+      (!requireOwnership || this.engineSupportsOwnership(syncer))
+    ) {
+      return syncer
+    }
+
+    let syncerId = this.getAnalysisSyncerId({requireOwnership})
+
+    if (syncerId == null) {
+      await dialog.showMessageBox(
+        i18n.t(
+          'sabaki.engine',
+          requireOwnership
+            ? 'Please attach an analysis engine that provides ownership data first.'
+            : 'Please start engine analysis first.',
+        ),
+        'warning',
+      )
+      return null
+    }
+
+    await this.startAnalysis(syncerId)
+    return this.state.attachedEngineSyncers.find((x) => x.id === syncerId) || null
+  }
+
   // Edit Workspace Methods
 
   clickEditWorkspaceVertex(vertex, {button = 0, ctrlKey = false, x = 0, y = 0} = {}) {
@@ -510,9 +627,7 @@ class Sabaki extends EventEmitter {
     if (ws == null) return
 
     let tab = ws.activeTab
-    let snapshotKey = tab === 'reference' ? 'referenceSnapshot' : 'workingSnapshot'
-    let markerKey = tab === 'reference' ? 'referenceMarkerMap' : 'workingMarkerMap'
-    let linesKey = tab === 'reference' ? 'referenceLines' : 'workingLines'
+    let {snapshotKey, markerKey, linesKey} = this.getEditWorkspaceTabKeys(tab)
     let snapshot = ws[snapshotKey]
     if (snapshot == null) return
 
@@ -625,14 +740,17 @@ class Sabaki extends EventEmitter {
 
   captureEditReference() {
     let ws = this.state.editWorkspace
-    if (ws == null || ws.workingSnapshot == null) return
+    if (ws == null || ws.currentSnapshot == null) return
 
     this.setState({
       editWorkspace: {
         ...ws,
-        referenceSnapshot: cloneSnapshot(ws.workingSnapshot),
+        referenceSnapshot: cloneSnapshot(ws.currentSnapshot),
+        referenceAnalysis: null,
         referenceOwnership: null,
-        referenceMarkerMap: ws.workingSnapshot.signMap.map((row) => row.map(() => null)),
+        referenceMarkerMap: ws.currentSnapshot.signMap.map((row) =>
+          row.map(() => null),
+        ),
         referenceLines: [],
       },
     })
@@ -642,19 +760,24 @@ class Sabaki extends EventEmitter {
   toggleEditTab(tab) {
     let ws = this.state.editWorkspace
     if (ws == null) return
-    if (tab !== 'working' && tab !== 'reference') return
+    if (tab !== 'current' && tab !== 'reference') return
     if (tab === 'reference' && ws.referenceSnapshot == null) return
 
     this.setState({
       editWorkspace: {...ws, activeTab: tab},
     })
+
+    let {analysisKey} = this.getEditWorkspaceTabKeys(tab)
+    if (ws[analysisKey] == null) {
+      this.scheduleEditWorkspaceAnalysis()
+    }
   }
 
   setEditWorkspacePlayer(sign) {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
-    let key = ws.activeTab === 'reference' ? 'referenceSnapshot' : 'workingSnapshot'
+    let {snapshotKey: key} = this.getEditWorkspaceTabKeys(ws.activeTab)
     let snapshot = ws[key]
     if (snapshot == null) return
 
@@ -679,46 +802,66 @@ class Sabaki extends EventEmitter {
     if (ws == null) return
 
     let syncer = this.inferredState.analyzingEngineSyncer
-    if (syncer == null || !this.engineSupportsOwnership(syncer)) return
+    if (syncer == null || !this.engineSupportsOwnership(syncer)) {
+      this.setState({
+        editWorkspace: {
+          ...ws,
+          currentAnalysis: null,
+          currentOwnership: null,
+          referenceAnalysis: null,
+          referenceOwnership: null,
+          analysisPending: false,
+        },
+      })
+      return
+    }
 
     this.setState({
       editWorkspace: {...ws, analysisPending: true},
     })
 
-    let workingOwnership = null
-    if (ws.workingSnapshot != null) {
-      let {tree, treePosition} = snapshotToGameTree(ws.workingSnapshot)
-      workingOwnership = await this.runOwnershipAnalysis({
+    let currentAnalysis = null
+    if (ws.currentSnapshot != null) {
+      let {tree, treePosition} = snapshotToGameTree(ws.currentSnapshot)
+      currentAnalysis = await this.runBoardAnalysis({
         syncer,
         tree,
         treePosition,
-        analyzePlayer: ws.workingSnapshot.nextPlayer,
+        analyzePlayer: ws.currentSnapshot.nextPlayer,
         requestGroup: 'study',
-        onOwnershipUpdate: (ownership) => {
+        onAnalysisUpdate: (analysis) => {
           let current = this.state.editWorkspace
           if (current != null) {
             this.setState({
-              editWorkspace: {...current, workingOwnership: ownership},
+              editWorkspace: {
+                ...current,
+                currentAnalysis: analysis,
+                currentOwnership: analysis?.ownership ?? null,
+              },
             })
           }
         },
       })
     }
 
-    let referenceOwnership = null
+    let referenceAnalysis = null
     if (ws.referenceSnapshot != null) {
       let {tree, treePosition} = snapshotToGameTree(ws.referenceSnapshot)
-      referenceOwnership = await this.runOwnershipAnalysis({
+      referenceAnalysis = await this.runBoardAnalysis({
         syncer,
         tree,
         treePosition,
         analyzePlayer: ws.referenceSnapshot.nextPlayer,
         requestGroup: 'study',
-        onOwnershipUpdate: (ownership) => {
+        onAnalysisUpdate: (analysis) => {
           let current = this.state.editWorkspace
           if (current != null) {
             this.setState({
-              editWorkspace: {...current, referenceOwnership: ownership},
+              editWorkspace: {
+                ...current,
+                referenceAnalysis: analysis,
+                referenceOwnership: analysis?.ownership ?? null,
+              },
             })
           }
         },
@@ -730,8 +873,12 @@ class Sabaki extends EventEmitter {
       this.setState({
         editWorkspace: {
           ...finalWs,
-          workingOwnership: workingOwnership ?? finalWs.workingOwnership,
-          referenceOwnership: referenceOwnership ?? finalWs.referenceOwnership,
+          currentAnalysis: currentAnalysis ?? finalWs.currentAnalysis,
+          currentOwnership:
+            currentAnalysis?.ownership ?? finalWs.currentOwnership,
+          referenceAnalysis: referenceAnalysis ?? finalWs.referenceAnalysis,
+          referenceOwnership:
+            referenceAnalysis?.ownership ?? finalWs.referenceOwnership,
           analysisPending: false,
         },
       })
@@ -742,7 +889,7 @@ class Sabaki extends EventEmitter {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
-    let key = ws.activeTab === 'reference' ? 'referenceSnapshot' : 'workingSnapshot'
+    let {snapshotKey: key} = this.getEditWorkspaceTabKeys(ws.activeTab)
     let snapshot = ws[key]
     if (snapshot == null) return
 
@@ -763,10 +910,6 @@ class Sabaki extends EventEmitter {
       editWorkspace: {...ws, [key]: nextSnapshot},
     })
     this.scheduleEditWorkspaceAnalysis()
-  }
-
-  isCompareOverlayMode(overlayMode = this.state.overlayMode) {
-    return overlayMode === 'compare'
   }
 
   getAnalyzeCommand(syncer) {
@@ -817,7 +960,7 @@ class Sabaki extends EventEmitter {
     return Number.isFinite(maxVisits) && maxVisits > 0 ? Math.round(maxVisits) : null
   }
 
-  async runOwnershipAnalysis({
+  async runBoardAnalysis({
     syncer,
     tree,
     treePosition,
@@ -826,7 +969,7 @@ class Sabaki extends EventEmitter {
     requestGroup = 'compare',
     showLoadingText = null,
     previewCacheMoves = null,
-    onOwnershipUpdate = null,
+    onAnalysisUpdate = null,
   }) {
     if (syncer == null || syncer.suspended || tree == null || treePosition == null) {
       return null
@@ -835,23 +978,18 @@ class Sabaki extends EventEmitter {
     let commandName = this.getAnalyzeCommand(syncer)
     if (commandName == null) return null
 
-    let cachedOwnership =
-      previewCacheMoves != null
-        ? this.getCachedPreviewOwnership(syncer.id, tree, treePosition, previewCacheMoves)
-        : this.getCachedOwnership(syncer.id, tree, treePosition)
-    if (cachedOwnership != null) {
-      onOwnershipUpdate?.(cachedOwnership)
-      return cachedOwnership
-    }
-
     let args = [
       analyzePlayer > 0 ? 'B' : 'W',
       setting.get('board.analysis_interval').toString(),
     ]
     if (commandName.includes('kata')) args.push('ownership', 'true')
 
-    if (commandName.includes('kata') && this.state.analysisAreaVertices?.length > 0) {
-      let gameBoard = gametree.getBoard(this.inferredState.gameTree, treePosition)
+    if (
+      commandName.includes('kata') &&
+      this.state.areaToolEnabled &&
+      this.state.analysisAreaVertices?.length > 0
+    ) {
+      let gameBoard = gametree.getBoard(tree, treePosition)
       let vertexStr = this.state.analysisAreaVertices
         .map((v) => gameBoard.stringifyVertex(v))
         .join(',')
@@ -890,9 +1028,9 @@ class Sabaki extends EventEmitter {
         await this.configureKataAnalysis(syncer)
       }
 
-      let ownership = await new Promise((resolve) => {
+      let analysis = await new Promise((resolve) => {
         let settled = false
-        let latestOwnership = null
+        let latestAnalysis = null
         let timeoutId = null
 
         let finish = (value) => {
@@ -915,11 +1053,7 @@ class Sabaki extends EventEmitter {
             return
           }
 
-          if (
-            syncer.treePosition !== treePosition ||
-            syncer.analysis == null ||
-            syncer.analysis.ownership == null
-          ) {
+          if (syncer.treePosition !== treePosition || syncer.analysis == null) {
             return
           }
 
@@ -927,19 +1061,19 @@ class Sabaki extends EventEmitter {
             0,
             ...syncer.analysis.variations.map((variation) => variation.visits || 0),
           )
-          latestOwnership = syncer.analysis.ownership
-          onOwnershipUpdate?.(latestOwnership)
+          latestAnalysis = syncer.analysis
+          onAnalysisUpdate?.(latestAnalysis)
 
           if (visitLimit != null && bestVisits < visitLimit) {
             return
           }
 
-          finish(latestOwnership)
+          finish(latestAnalysis)
         }
 
         syncer.on('analysis-update', handleUpdate)
         if (timeoutMs != null) {
-          timeoutId = setTimeout(() => finish(latestOwnership), timeoutMs)
+          timeoutId = setTimeout(() => finish(latestAnalysis), timeoutMs)
         }
 
         try {
@@ -949,21 +1083,21 @@ class Sabaki extends EventEmitter {
         }
       })
 
-      if (ownership != null) {
+      if (analysis?.ownership != null) {
         if (previewCacheMoves != null) {
           this.cachePreviewOwnership(
             syncer.id,
             tree,
             treePosition,
             previewCacheMoves,
-            ownership,
+            analysis.ownership,
           )
         } else {
-          this.cacheOwnership(syncer.id, tree, treePosition, ownership)
+          this.cacheOwnership(syncer.id, tree, treePosition, analysis.ownership)
         }
       }
 
-      return ownership
+      return analysis
     } finally {
       if (
         this.state.analyzingEngineSyncerId === syncer.id &&
@@ -982,6 +1116,47 @@ class Sabaki extends EventEmitter {
     }
   }
 
+  async runOwnershipAnalysis({
+    syncer,
+    tree,
+    treePosition,
+    analyzePlayer,
+    pendingStateKey = null,
+    requestGroup = 'compare',
+    showLoadingText = null,
+    previewCacheMoves = null,
+    onOwnershipUpdate = null,
+  }) {
+    if (syncer == null || syncer.suspended || tree == null || treePosition == null) {
+      return null
+    }
+
+    let cachedOwnership =
+      previewCacheMoves != null
+        ? this.getCachedPreviewOwnership(syncer.id, tree, treePosition, previewCacheMoves)
+        : this.getCachedOwnership(syncer.id, tree, treePosition)
+    if (cachedOwnership != null) {
+      onOwnershipUpdate?.(cachedOwnership)
+      return cachedOwnership
+    }
+
+    let analysis = await this.runBoardAnalysis({
+      syncer,
+      tree,
+      treePosition,
+      analyzePlayer,
+      pendingStateKey,
+      requestGroup,
+      showLoadingText,
+      previewCacheMoves,
+      onAnalysisUpdate: (nextAnalysis) => {
+        onOwnershipUpdate?.(nextAnalysis?.ownership ?? null)
+      },
+    })
+
+    return analysis?.ownership ?? null
+  }
+
   getAnalysisSyncerId({requireOwnership = false} = {}) {
     let candidates = this.state.attachedEngineSyncers.filter((syncer) => {
       if (this.getAnalyzeCommand(syncer) == null) return false
@@ -998,75 +1173,136 @@ class Sabaki extends EventEmitter {
     return (preferredSyncer || candidates[0]).id
   }
 
-  async setOverlayMode(overlayMode) {
-    if (!['off', 'territory', 'compare'].includes(overlayMode)) return false
+  async setTerritoryEnabled(territoryEnabled) {
+    if (territoryEnabled === this.state.territoryEnabled) return true
 
-    let compareOverlay = this.isCompareOverlayMode(overlayMode)
-    let territoryOverlay = overlayMode === 'territory'
-
-    if (!compareOverlay && !territoryOverlay) {
-      this.compareRequestId++
+    if (!territoryEnabled) {
       this.hideInfoOverlay()
-      setting.set('board.overlay_mode', overlayMode)
       this.setState({
-        overlayMode,
-        compareReferenceTreePosition: null,
-        compareTargetTreePosition: null,
-        comparePending: false,
-        graphHoverTreePosition: null,
-        territoryDiffSource: null,
-        territoryDiffReferenceTreePosition: null,
-        territoryDiffTargetTreePosition: null,
+        territoryEnabled: false,
+        territoryCompareEnabled: false,
       })
       return true
     }
 
-    let syncer = this.inferredState.analyzingEngineSyncer
-    let requireOwnership = compareOverlay || territoryOverlay
+    let syncer = await this.ensureAnalysisReady({requireOwnership: true})
+    if (syncer == null) return false
 
-    if (
-      syncer == null ||
-      (requireOwnership && !this.engineSupportsOwnership(syncer))
-    ) {
-      let syncerId = this.getAnalysisSyncerId({requireOwnership})
-
-      if (syncerId == null) {
-        await dialog.showMessageBox(
-          i18n.t(
-            'sabaki.engine',
-            requireOwnership
-              ? 'Please attach an analysis engine that provides ownership data first.'
-              : 'Please start engine analysis first.',
-          ),
-          'warning',
-        )
-        return false
-      }
-
-      await this.startAnalysis(syncerId)
-      syncer = this.state.attachedEngineSyncers.find((x) => x.id === syncerId)
-    }
-
-    setting.set('board.overlay_mode', overlayMode)
     this.hideInfoOverlay()
-    this.setState({
-      overlayMode,
-      compareReferenceTreePosition: compareOverlay
-        ? this.state.treePosition
-        : null,
-      compareTargetTreePosition: null,
-      comparePending: false,
-      graphHoverTreePosition: null,
-      territoryDiffSource: null,
-      territoryDiffReferenceTreePosition: null,
-      territoryDiffTargetTreePosition: null,
-    })
+    this.setState({territoryEnabled: true})
 
     if (
       this.state.mode !== 'edit' &&
-      requireOwnership &&
       (this.state.analysisTreePosition !== this.state.treePosition ||
         this.getCurrentOwnership(syncer) == null)
+    ) {
+      this.analyzeMove(this.state.treePosition)
+    } else if (this.state.mode === 'edit') {
+      this.scheduleEditWorkspaceAnalysis()
+    }
+
+    return true
+  }
+
+  async toggleTerritoryEnabled() {
+    return await this.setTerritoryEnabled(!this.state.territoryEnabled)
+  }
+
+  async setTerritoryCompareEnabled(territoryCompareEnabled) {
+    if (territoryCompareEnabled === this.state.territoryCompareEnabled) return true
+
+    if (!territoryCompareEnabled) {
+      this.setState({territoryCompareEnabled: false})
+      return true
+    }
+
+    let territoryReady = await this.setTerritoryEnabled(true)
+    if (!territoryReady || !this.getTerritoryCompareAvailable()) {
+      return false
+    }
+
+    if (this.state.mode === 'edit') {
+      this.scheduleEditWorkspaceAnalysis()
+      this.setState({territoryCompareEnabled: true})
+      return true
+    }
+
+    let previousTreePosition = this.getPreviousTreePosition()
+    if (previousTreePosition == null) return false
+
+    let previousOwnership = this.getOwnershipForTreePosition(null, previousTreePosition)
+    if (previousOwnership == null) {
+      previousOwnership = await this.fetchOwnershipForTreePosition(previousTreePosition)
+    }
+    if (previousOwnership == null) return false
+
+    this.setState({territoryCompareEnabled: true})
+    return true
+  }
+
+  async toggleTerritoryCompareEnabled() {
+    return await this.setTerritoryCompareEnabled(
+      !this.state.territoryCompareEnabled,
+    )
+  }
+
+  setAreaToolEnabled(areaToolEnabled) {
+    if (areaToolEnabled === this.state.areaToolEnabled) return
+
+    this.setState({
+      areaToolEnabled,
+      analysisAreaSelecting: areaToolEnabled,
+      highlightVertices: [],
+    })
+    this.refreshActiveBoardAnalysis()
+  }
+
+  toggleAreaTool() {
+    this.setAreaToolEnabled(!this.state.areaToolEnabled)
+  }
+
+  async setOverlayMode(overlayMode) {
+    if (overlayMode === 'territory') {
+      return await this.setTerritoryEnabled(true)
+    }
+
+    if (overlayMode === 'compare') {
+      return await this.setCompareMode(true)
+    }
+
+    if (overlayMode === 'off') {
+      if (this.state.compareMode) {
+        this.clearCompareState()
+      }
+      return await this.setTerritoryEnabled(false)
+    }
+
+    return false
+  }
+
+  async setCompareMode(compareMode) {
+    if (compareMode === this.state.compareMode) return true
+
+    if (!compareMode) {
+      this.clearCompareState()
+      return true
+    }
+
+    let syncer = await this.ensureAnalysisReady({requireOwnership: true})
+    if (syncer == null) return false
+
+    this.hideInfoOverlay()
+    this.setState({
+      compareMode: true,
+      compareReferenceTreePosition: this.state.treePosition,
+      compareTargetTreePosition: null,
+      comparePending: false,
+      graphHoverTreePosition: null,
+    })
+
+    if (
+      this.state.analysisTreePosition !== this.state.treePosition ||
+      this.getCurrentOwnership(syncer) == null
     ) {
       this.analyzeMove(this.state.treePosition)
     }
@@ -1074,19 +1310,15 @@ class Sabaki extends EventEmitter {
     return true
   }
 
-  clearCompareState({keepOverlay = true} = {}) {
+  clearCompareState() {
     this.compareRequestId++
     this.hideInfoOverlay()
-    if (!keepOverlay) setting.set('board.overlay_mode', 'off')
     this.setState({
-      overlayMode: keepOverlay ? this.state.overlayMode : 'off',
+      compareMode: false,
       compareReferenceTreePosition: null,
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
-      territoryDiffSource: null,
-      territoryDiffReferenceTreePosition: null,
-      territoryDiffTargetTreePosition: null,
     })
   }
 
@@ -1163,16 +1395,12 @@ class Sabaki extends EventEmitter {
       analyzePlayer: analyzeSign,
       pendingStateKey: 'comparePending',
       requestGroup: 'preview',
-      previewCacheMoves,
+      previewCacheMoves: previewMoves,
     })
   }
 
   async toggleCompareMode() {
-    if (this.isCompareOverlayMode()) {
-      await this.setOverlayMode('off')
-    } else {
-      await this.setOverlayMode('compare')
-    }
+    await this.setCompareMode(!this.state.compareMode)
   }
 
   async fetchOwnershipForTreePosition(treePosition) {
@@ -1282,7 +1510,7 @@ class Sabaki extends EventEmitter {
   }
 
   async compareWithTreePosition(treePosition) {
-    if (!this.isCompareOverlayMode()) return
+    if (!this.state.compareMode) return
 
     let syncer = this.inferredState.analyzingEngineSyncer
     if (syncer == null) return
@@ -1308,7 +1536,7 @@ class Sabaki extends EventEmitter {
         ),
         'warning',
       )
-      this.clearCompareState({keepOverlay: false})
+      this.clearCompareState()
       return
     }
 
@@ -2164,11 +2392,6 @@ class Sabaki extends EventEmitter {
     let createNode = tree.get(nextTreePosition) == null
 
     this.setCurrentTreePosition(newTree, nextTreePosition)
-    this.setState({
-      territoryDiffSource: 'move',
-      territoryDiffReferenceTreePosition: treePosition,
-      territoryDiffTargetTreePosition: nextTreePosition,
-    })
 
     // Play sounds
 
@@ -2463,6 +2686,11 @@ class Sabaki extends EventEmitter {
 
     let prevGameIndex = this.state.gameIndex
     let prevTreePosition = this.state.treePosition
+    let nextPreviewState = {
+      ...this.state,
+      treePosition,
+      ...workspaceStateChange,
+    }
 
     this.setState({
       playVariation: null,
@@ -2472,20 +2700,16 @@ class Sabaki extends EventEmitter {
       treePosition,
       mode: this.state.mode,
       compareReferenceTreePosition:
-        navigated && this.isCompareOverlayMode()
+        navigated && this.state.compareMode
           ? treePosition
           : this.state.compareReferenceTreePosition,
       compareTargetTreePosition: navigated
         ? null
         : this.state.compareTargetTreePosition,
       graphHoverTreePosition: null,
-      territoryDiffSource: navigated ? null : this.state.territoryDiffSource,
-      territoryDiffReferenceTreePosition: navigated
-        ? null
-        : this.state.territoryDiffReferenceTreePosition,
-      territoryDiffTargetTreePosition: navigated
-        ? null
-        : this.state.territoryDiffTargetTreePosition,
+      territoryCompareEnabled:
+        this.state.territoryCompareEnabled &&
+        (!navigated || this.getTerritoryCompareAvailable(nextPreviewState)),
       ...workspaceStateChange,
     })
 
@@ -3211,7 +3435,7 @@ class Sabaki extends EventEmitter {
     this.lastAnalyzingEngineSyncerId = syncerId
     this.setState({
       analyzingEngineSyncerId: syncerId,
-      compareReferenceTreePosition: this.isCompareOverlayMode()
+      compareReferenceTreePosition: this.state.compareMode
         ? this.state.treePosition
         : null,
       compareTargetTreePosition: null,
@@ -3246,9 +3470,17 @@ class Sabaki extends EventEmitter {
       compareTargetTreePosition: null,
       comparePending: false,
       graphHoverTreePosition: null,
-      territoryDiffSource: null,
-      territoryDiffReferenceTreePosition: null,
-      territoryDiffTargetTreePosition: null,
+      editWorkspace:
+        this.state.editWorkspace == null
+          ? null
+          : {
+              ...this.state.editWorkspace,
+              currentAnalysis: null,
+              currentOwnership: null,
+              referenceAnalysis: null,
+              referenceOwnership: null,
+              analysisPending: false,
+            },
     })
   }
 
@@ -3365,15 +3597,17 @@ class Sabaki extends EventEmitter {
   setAnalysisArea(vertices) {
     this.setState({
       analysisAreaVertices: vertices,
+      highlightVertices: [],
     })
-    this.analyzeMove(this.state.treePosition)
+    this.refreshActiveBoardAnalysis()
   }
 
   clearAnalysisArea() {
     this.setState({
       analysisAreaVertices: null,
+      highlightVertices: [],
     })
-    this.analyzeMove(this.state.treePosition)
+    this.refreshActiveBoardAnalysis()
   }
 
   setPlayer(treePosition, sign) {

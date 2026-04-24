@@ -158,8 +158,10 @@ export default function OverlayStatusBar({
         {},
         diffSourceType === 'hover'
           ? t('Territory diff previewing the hovered AI candidate.')
-          : diffSourceType === 'move'
-            ? t('Territory diff previewing the latest move.')
+          : diffSourceType === 'previous'
+            ? t('Territory diff comparing the current move against the previous move.')
+            : diffSourceType === 'reference'
+              ? t('Territory diff comparing Reference against Current.')
             : t('Territory overlay active. Hover a region to inspect ownership.'),
       ),
     ),

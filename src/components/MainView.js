@@ -76,27 +76,71 @@ export default class MainView extends Component {
     return vertices
   }
 
-  handleGobanAreaSelect({start, end}) {
-    let {gameTree, treePosition} = this.props
-    let board = gametree.getBoard(gameTree, treePosition)
+  handleGobanAreaSelect({start, end, operation}) {
+    let {gameTree, treePosition, editWorkspaceActive, editRenderBoard} = this.props
+    let board =
+      editWorkspaceActive && editRenderBoard != null
+        ? editRenderBoard
+        : gametree.getBoard(gameTree, treePosition)
     let vertices = this.computeRectangleVertices(start, end, board.width, board.height)
-    if (vertices.length > 0) {
-      sabaki.setAnalysisArea(vertices)
+    let vertexSet = new Set(
+      (this.props.analysisAreaVertices || []).map((vertex) => vertex.join(',')),
+    )
+
+    for (let vertex of vertices) {
+      let key = vertex.join(',')
+      if (operation === 'subtract') {
+        vertexSet.delete(key)
+      } else {
+        vertexSet.add(key)
+      }
     }
+
+    let nextVertices =
+      operation === 'replace'
+        ? vertices
+        : [...vertexSet].map((vertex) => vertex.split(',').map(Number))
+
+    sabaki.setAnalysisArea(nextVertices.length > 0 ? nextVertices : null)
   }
 
-  handleGobanAreaSelectPreview({start, end}) {
-    let {gameTree, treePosition} = this.props
-    let board = gametree.getBoard(gameTree, treePosition)
+  handleGobanAreaSelectPreview({start, end, operation}) {
+    let {gameTree, treePosition, editWorkspaceActive, editRenderBoard} = this.props
+    let board =
+      editWorkspaceActive && editRenderBoard != null
+        ? editRenderBoard
+        : gametree.getBoard(gameTree, treePosition)
     let vertices = this.computeRectangleVertices(start, end, board.width, board.height)
-    sabaki.setState({highlightVertices: vertices})
+    if (operation === 'replace') {
+      sabaki.setState({highlightVertices: vertices})
+      return
+    }
+
+    let currentVertices = new Set(
+      (this.props.analysisAreaVertices || []).map((vertex) => vertex.join(',')),
+    )
+
+    for (let vertex of vertices) {
+      let key = vertex.join(',')
+      if (operation === 'subtract') {
+        currentVertices.delete(key)
+      } else {
+        currentVertices.add(key)
+      }
+    }
+
+    sabaki.setState({
+      highlightVertices: [...currentVertices].map((vertex) =>
+        vertex.split(',').map(Number),
+      ),
+    })
   }
 
   componentDidMount() {
     // Pressing Ctrl/Cmd should show crosshair cursor on Goban in edit mode
 
     document.addEventListener('keydown', (evt) => {
-      if (evt.key !== 'Control' || evt.key !== 'Meta') return
+      if (evt.key !== 'Control' && evt.key !== 'Meta') return
 
       if (this.props.mode === 'edit') {
         this.setState({gobanCrosshair: true})
@@ -104,7 +148,7 @@ export default class MainView extends Component {
     })
 
     document.addEventListener('keyup', (evt) => {
-      if (evt.key !== 'Control' || evt.key !== 'Meta') return
+      if (evt.key !== 'Control' && evt.key !== 'Meta') return
 
       if (this.props.mode === 'edit') {
         this.setState({gobanCrosshair: false})
@@ -132,7 +176,7 @@ export default class MainView extends Component {
     if (mode === 'edit' && editWorkspaceActive) {
       let ws = sabaki.state.editWorkspace
       if (ws != null) {
-        let linesKey = ws.activeTab === 'reference' ? 'referenceLines' : 'workingLines'
+        let linesKey = ws.activeTab === 'reference' ? 'referenceLines' : 'currentLines'
         let lines = [...ws[linesKey], {v1, v2, type: selectedTool}]
         sabaki.setState({editWorkspace: {...ws, [linesKey]: lines}})
       }
@@ -194,10 +238,11 @@ export default class MainView extends Component {
       playVariation,
       analysis,
       analysisTreePosition,
+      activeAnalysis,
       areaMap,
-      overlayMode,
       compareMode,
       territoryMode,
+      territoryCompareEnabled,
       comparePending,
       compareReferenceTreePosition,
       compareTargetTreePosition,
@@ -207,15 +252,16 @@ export default class MainView extends Component {
       compareTargetVertex,
       territoryOwnership,
       overlayUnavailableReason,
-      lastMoveTerritoryDeltaMap,
-      lastMoveTerritoryDiffAvailable,
+      territoryDeltaMap,
+      territoryDiffAvailable,
+      territoryDiffSourceType,
       territoryStatusText,
       graphHoverTreePosition,
       blockedGuesses,
 
       highlightVertices,
       analysisAreaVertices,
-      analysisAreaSelecting,
+      areaToolEnabled,
       analysisType,
       showAnalysis,
       showCoordinates,
@@ -272,7 +318,7 @@ export default class MainView extends Component {
       markerMap = compareMarkerMap
     }
 
-    if (analysisAreaVertices != null) {
+    if (areaToolEnabled && analysisAreaVertices != null) {
       paintMap = board.signMap.map((row) => row.map(() => 0))
       let vertexSet = new Set(analysisAreaVertices.map((v) => `${v[0]},${v[1]}`))
       for (let y = 0; y < board.height; y++) {
@@ -375,13 +421,7 @@ export default class MainView extends Component {
         findVertex && mode === 'find' ? [findVertex] : highlightVertices,
       analysisType,
       analysis:
-        !editWorkspaceActive &&
-        !compareMode &&
-        showAnalysis &&
-        analysisTreePosition != null &&
-        analysisTreePosition === treePosition
-          ? analysis
-          : null,
+        !compareMode && showAnalysis ? activeAnalysis : null,
       paintMap,
       markerMap:
         editWorkspaceActive && editMarkerMap != null ? editMarkerMap : markerMap,
@@ -391,7 +431,7 @@ export default class MainView extends Component {
       comparePending,
       compareMode,
 
-      crosshair: gobanCrosshair || analysisAreaSelecting,
+      crosshair: gobanCrosshair || areaToolEnabled,
       showCoordinates,
       showMoveColorization,
       showMoveNumbers: mode !== 'edit' && showMoveNumbers,
@@ -409,12 +449,12 @@ export default class MainView extends Component {
 
       onVertexClick: this.handleGobanVertexClick,
       onLineDraw: this.handleGobanLineDraw,
-      dragMode: mode === 'edit' && editWorkspaceActive,
+      dragMode: mode === 'edit' && editWorkspaceActive && !areaToolEnabled,
       onStoneDragEnd: mode === 'edit' && editWorkspaceActive
         ? (evt) => sabaki.handleEditDragEnd(evt)
         : null,
 
-      areaSelectMode: analysisAreaSelecting,
+      areaSelectMode: areaToolEnabled,
       onAreaSelect: this.handleGobanAreaSelect,
       onAreaSelectPreview: this.handleGobanAreaSelectPreview,
     }
@@ -426,9 +466,22 @@ export default class MainView extends Component {
       this.props.attachedEngineSyncers.find((syncer) => syncer.id === id),
     )
 
-    let workspaceSummary = editWorkspaceActive
-      ? (editWs?.activeTab === 'reference' ? 'Reference' : 'Working')
-      : territoryStatusText
+    let activeTools = [
+      territoryMode ? territoryStatusText : null,
+      areaToolEnabled ? 'Area' : null,
+      showAnalysis ? 'Heatmap' : null,
+    ].filter(Boolean)
+    let workspaceSummary = [
+      editWorkspaceActive
+        ? editWs?.activeTab === 'reference'
+          ? 'Reference'
+          : 'Current'
+        : null,
+      activeTools.join(' • ') || null,
+    ]
+      .filter(Boolean)
+      .join(' • ')
+    if (workspaceSummary === '') workspaceSummary = null
 
     return h(
       'section',
@@ -436,13 +489,16 @@ export default class MainView extends Component {
       h(BoardToolbar, {
         mode,
         editWorkspaceActive,
-        territoryMode,
+        territoryEnabled: territoryMode,
+        territoryCompareEnabled,
+        territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
         currentPlayer,
         playerNames: gameInfo.playerNames,
         playerRanks: gameInfo.playerRanks,
         playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
         engineSyncers,
-        areaSelectActive: analysisAreaVertices != null,
+        areaToolEnabled,
+        areaSelectionActive: analysisAreaVertices != null,
         onCurrentPlayerClick: this.handleTogglePlayer,
       }),
 
@@ -460,8 +516,9 @@ export default class MainView extends Component {
               unavailableReason: overlayUnavailableReason,
               gobanProps,
               analysis: gobanProps.analysis,
-              lastMoveDeltaMap: lastMoveTerritoryDeltaMap,
-              lastMoveDiffAvailable: lastMoveTerritoryDiffAvailable,
+              lastMoveDeltaMap: territoryDeltaMap,
+              lastMoveDiffAvailable: territoryDiffAvailable,
+              diffSourceType: territoryDiffSourceType,
               onStatusChange: this.handleOverlayStatusChange,
             })
           : h(Goban, gobanProps),

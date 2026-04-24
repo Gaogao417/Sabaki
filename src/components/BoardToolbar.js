@@ -148,13 +148,16 @@ export default class BoardToolbar extends Component {
     {
       mode,
       editWorkspaceActive,
-      territoryMode,
+      territoryEnabled,
+      territoryCompareEnabled,
+      territoryCompareAvailable = false,
       currentPlayer,
       playerNames,
       playerRanks,
       playerCaptures,
       engineSyncers,
-      areaSelectActive = false,
+      areaToolEnabled = false,
+      areaSelectionActive = false,
       onCurrentPlayerClick = helper.noop,
     },
     {playerBusy},
@@ -214,20 +217,23 @@ export default class BoardToolbar extends Component {
         }),
         h(ToolbarButton, {
           label: t('Territory'),
-          selected: territoryMode,
-          accent: territoryMode,
-          onClick: () =>
-            sabaki.setOverlayMode(territoryMode ? 'off' : 'territory'),
+          selected: territoryEnabled,
+          accent: territoryEnabled,
+          onClick: () => sabaki.toggleTerritoryEnabled(),
+        }),
+        h(ToolbarButton, {
+          label: t('Territory Compare'),
+          selected: territoryCompareEnabled,
+          accent: territoryCompareEnabled,
+          disabled: !territoryCompareAvailable,
+          onClick: () => sabaki.toggleTerritoryCompareEnabled(),
         }),
         h(ToolbarButton, {
           label: t('Area'),
-          selected: areaSelectActive,
-          accent: areaSelectActive,
-          title: t('Shift+drag to select, click to clear'),
-          onClick: () =>
-            areaSelectActive
-              ? sabaki.clearAnalysisArea()
-              : null,
+          selected: areaToolEnabled,
+          accent: areaToolEnabled || areaSelectionActive,
+          title: t('Drag to replace, Shift+drag to add, Alt+drag to subtract'),
+          onClick: () => sabaki.toggleAreaTool(),
         }),
         h(
           'a',

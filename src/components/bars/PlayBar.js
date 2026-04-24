@@ -50,10 +50,7 @@ export default class PlayBar extends Component {
           },
           {
             label: t('&Territory Overlay'),
-            click: () =>
-              sabaki.setOverlayMode(
-                sabaki.state.overlayMode === 'territory' ? 'off' : 'territory',
-              ),
+            click: () => sabaki.toggleTerritoryEnabled(),
           },
           {
             label: t('&Edit'),

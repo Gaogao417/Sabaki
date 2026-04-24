@@ -38,8 +38,11 @@ exports.get = function(props = {}) {
     showMoveColorization,
     showNextMoves,
     showSiblings,
-    overlayMode,
     compareMode,
+    territoryEnabled,
+    territoryCompareEnabled,
+    territoryCompareAvailable,
+    areaToolEnabled,
     compareDisplayPreset,
     showWinrateGraph,
     showGameGraph,
@@ -679,13 +682,23 @@ exports.get = function(props = {}) {
           click: () => toggleSetting('view.show_siblings'),
         },
         {
-          label: i18n.t('menu.view', 'Territory &Overlay'),
+          label: i18n.t('menu.view', '&Territory'),
           type: 'checkbox',
-          checked: overlayMode === 'territory',
-          click: () =>
-            sabaki.setOverlayMode(
-              overlayMode === 'territory' ? 'off' : 'territory',
-            ),
+          checked: !!territoryEnabled,
+          click: () => sabaki.toggleTerritoryEnabled(),
+        },
+        {
+          label: i18n.t('menu.view', 'Territory &Compare'),
+          type: 'checkbox',
+          checked: !!territoryCompareEnabled,
+          enabled: !!territoryCompareAvailable,
+          click: () => sabaki.toggleTerritoryCompareEnabled(),
+        },
+        {
+          label: i18n.t('menu.view', '&Area'),
+          type: 'checkbox',
+          checked: !!areaToolEnabled,
+          click: () => sabaki.toggleAreaTool(),
         },
         {
           label: i18n.t('menu.view', 'Show &Heatmap'),

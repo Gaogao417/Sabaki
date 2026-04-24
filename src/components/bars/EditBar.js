@@ -106,18 +106,18 @@ class EditBar extends Component {
               evt.preventDefault()
               sabaki.captureEditReference()
             },
-          }, t('Snapshot')),
+          }, t('Capture Reference')),
         ),
         h('li', {},
           h('a', {
             href: '#',
-            title: t('Working Board'),
-            class: classNames({selected: ws.activeTab === 'working'}),
+            title: t('Current Board'),
+            class: classNames({selected: ws.activeTab === 'current'}),
             onClick: (evt) => {
               evt.preventDefault()
-              sabaki.toggleEditTab('working')
+              sabaki.toggleEditTab('current')
             },
-          }, t('Work')),
+          }, t('Current')),
         ),
         h('li', {},
           h('a', {
@@ -129,7 +129,7 @@ class EditBar extends Component {
               evt.preventDefault()
               if (hasReference) sabaki.toggleEditTab('reference')
             },
-          }, t('Ref')),
+          }, t('Reference')),
         ),
         ws.analysisPending && h('li', {},
           h('span', {class: 'edit-analysis-pending'}, '⏳'),

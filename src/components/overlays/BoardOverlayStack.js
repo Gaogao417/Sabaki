@@ -66,6 +66,7 @@ export default class BoardOverlayStack extends Component {
       analysis,
       lastMoveDeltaMap,
       lastMoveDiffAvailable,
+      diffSourceType = null,
       keyPointSummary = null,
     },
     {
@@ -94,7 +95,7 @@ export default class BoardOverlayStack extends Component {
       hoverDeltaMap != null
         ? 'hover'
         : lastMoveDiffAvailable && lastMoveDeltaMap != null
-          ? 'move'
+          ? diffSourceType
           : null
 
     let territoryDiffLayer =
@@ -139,7 +140,13 @@ export default class BoardOverlayStack extends Component {
         analysis,
         paintMap:
           territoryMode && unavailableReason == null
-            ? territoryPaintLayer.paintMap
+            ? territoryPaintLayer.paintMap.map((row, y) =>
+                row.map((value, x) => {
+                  let areaValue = gobanProps.paintMap?.[y]?.[x] ?? 0
+                  if (areaValue >= 0) return value
+                  return value === 0 ? areaValue : value * 0.55
+                }),
+              )
             : gobanProps.paintMap,
         markerMap: composeMarkerMaps(
           gobanProps.markerMap,

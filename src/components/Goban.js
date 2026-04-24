@@ -49,6 +49,7 @@ export default class Goban extends Component {
     document.addEventListener('mouseup', () => {
       this.mouseDown = false
       this.dragging = false
+      this.areaDragging = false
       this.dragSource = null
 
       if (this.state.temporaryLine) {
@@ -121,7 +122,12 @@ export default class Goban extends Component {
   handleVertexMouseDown(evt, vertex) {
     this.mouseDown = true
     this.startVertex = vertex
-    this.shiftDownOnMouseDown = evt.shiftKey
+    this.areaDragOperation = evt.altKey
+      ? 'subtract'
+      : evt.shiftKey
+        ? 'add'
+        : 'replace'
+    this.areaDragging = false
 
     // Start drag if dragMode and vertex has a stone
     if (this.props.dragMode && this.props.board?.get(vertex) !== 0 && evt.button === 0) {
@@ -156,9 +162,13 @@ export default class Goban extends Component {
       return
     }
 
-    if (this.shiftDownOnMouseDown && this.startVertex != null) {
-      onAreaSelect({start: this.startVertex, end: vertex})
-      this.shiftDownOnMouseDown = false
+    if (this.props.areaSelectMode && this.areaDragging && this.startVertex != null) {
+      onAreaSelect({
+        start: this.startVertex,
+        end: vertex,
+        operation: this.areaDragOperation,
+      })
+      this.areaDragging = false
       this.setState({clicked: true})
       setTimeout(() => this.setState({clicked: false}), 200)
       return
@@ -198,8 +208,24 @@ export default class Goban extends Component {
       return
     }
 
-    if (evt.shiftKey && evt.mouseDown && this.startVertex != null && evt.button === 0) {
-      onAreaSelectPreview({start: this.startVertex, end: vertex})
+    if (
+      this.props.areaSelectMode &&
+      evt.mouseDown &&
+      this.startVertex != null &&
+      evt.button === 0
+    ) {
+      this.areaDragOperation = evt.altKey
+        ? 'subtract'
+        : evt.shiftKey
+          ? 'add'
+          : 'replace'
+      this.areaDragging =
+        this.areaDragging || !helper.vertexEquals(this.startVertex, vertex)
+      onAreaSelectPreview({
+        start: this.startVertex,
+        end: vertex,
+        operation: this.areaDragOperation,
+      })
     } else if (!!drawLineMode && evt.mouseDown && evt.button === 0) {
       let temporaryLine = {v1: evt.startVertex, v2: evt.vertex}
 

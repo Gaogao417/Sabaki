@@ -199,5 +199,65 @@ test.describe('Renderer Integration Tests', () => {
         boardStageBox.y + boardStageBox.height,
       )
     })
+
+    test('board tool shortcuts and edit Current/Reference tabs stay in sync', async ({
+      page,
+    }) => {
+      const sgfPath = path.resolve(
+        __dirname,
+        '..',
+        'test',
+        'sgf',
+        'beginner_game.sgf',
+      )
+
+      await loadSgfAndWait(page, sgfPath)
+
+      await page.evaluate(() => {
+        window.__sabaki.goStep(1)
+      })
+
+      await page.keyboard.press('t')
+      await page.waitForFunction(() => window.__sabaki.state.territoryEnabled)
+
+      await page.keyboard.press('Shift+T')
+      await page.waitForFunction(
+        () => window.__sabaki.state.territoryCompareEnabled,
+      )
+
+      await page.keyboard.press('a')
+      await page.waitForFunction(() => window.__sabaki.state.areaToolEnabled)
+
+      await page.keyboard.press('Escape')
+      await page.waitForFunction(() => !window.__sabaki.state.areaToolEnabled)
+
+      await page.evaluate(() => {
+        window.__sabaki.setMode('edit')
+      })
+      await page.waitForFunction(
+        () =>
+          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.editWorkspace != null,
+      )
+
+      const compareButton = page
+        .locator('.board-toolbar .toolbar-button')
+        .filter({hasText: 'Territory Compare'})
+      await expect(compareButton).toHaveAttribute('aria-disabled', 'true')
+
+      await page.getByText('Capture Reference').click()
+      await page.waitForFunction(
+        () => window.__sabaki.state.editWorkspace?.referenceSnapshot != null,
+      )
+
+      await expect(page.getByText('Current')).toBeVisible()
+      await expect(page.getByText('Reference')).toBeVisible()
+      await expect(compareButton).toHaveAttribute('aria-disabled', 'false')
+
+      await page.getByText('Reference').click()
+      await page.waitForFunction(
+        () => window.__sabaki.state.editWorkspace?.activeTab === 'reference',
+      )
+    })
   })
 })

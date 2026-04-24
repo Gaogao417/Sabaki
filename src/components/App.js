@@ -22,9 +22,7 @@ import {buildCompareRenderData, getNodeMoveVertex} from '../modules/compare.js'
 import * as gametree from '../modules/gametree.js'
 import * as gtplogger from '../modules/gtplogger.js'
 import * as helper from '../modules/helper.js'
-import {
-  boardFromSnapshot,
-} from '../modules/study.js'
+import {boardFromSnapshot} from '../modules/study.js'
 
 if (process.env.SABAKI_E2E) window.__sabaki = sabaki
 
@@ -50,7 +48,6 @@ class App extends Component {
 
     this.state = {
       ...sabaki.state,
-      shiftTerritoryActive: false,
     }
 
     sabaki.on('change', ({change, callback}) => this.setState(change, callback))
@@ -58,51 +55,6 @@ class App extends Component {
     let bind = (f) => f.bind(this)
     this.handleMainLayoutSplitChange = bind(this.handleMainLayoutSplitChange)
     this.handleMainLayoutSplitFinish = bind(this.handleMainLayoutSplitFinish)
-    this.handleTemporaryTerritoryKeyDown = bind(
-      this.handleTemporaryTerritoryKeyDown,
-    )
-    this.handleTemporaryTerritoryKeyUp = bind(this.handleTemporaryTerritoryKeyUp)
-    this.deactivateTemporaryTerritory = bind(this.deactivateTemporaryTerritory)
-  }
-
-  handleTemporaryTerritoryKeyDown(evt) {
-    if (
-      evt.key !== 'Shift' ||
-      evt.repeat ||
-      evt.ctrlKey ||
-      evt.metaKey ||
-      evt.altKey ||
-      helper.isTextLikeElement(document.activeElement)
-    ) {
-      return
-    }
-
-    if (!this.state.shiftTerritoryActive) {
-      this.setState({shiftTerritoryActive: true})
-    }
-
-    let syncer = sabaki.inferredState.analyzingEngineSyncer
-
-    if (
-      syncer != null &&
-      !['scoring', 'estimator'].includes(sabaki.state.mode) &&
-      (sabaki.state.analysisTreePosition !== sabaki.state.treePosition ||
-        sabaki.getCurrentOwnership(syncer) == null)
-    ) {
-      sabaki.analyzeMove(sabaki.state.treePosition)
-    }
-  }
-
-  handleTemporaryTerritoryKeyUp(evt) {
-    if (evt.key === 'Shift') {
-      this.deactivateTemporaryTerritory()
-    }
-  }
-
-  deactivateTemporaryTerritory() {
-    if (this.state.shiftTerritoryActive) {
-      this.setState({shiftTerritoryActive: false})
-    }
   }
 
   componentDidMount() {
@@ -179,7 +131,41 @@ class App extends Component {
     // Handle keys
 
     document.addEventListener('keydown', (evt) => {
-      this.handleTemporaryTerritoryKeyDown(evt)
+      let typing = helper.isTextLikeElement(document.activeElement)
+      let lowerKey = evt.key.toLowerCase()
+
+      if (!typing && !evt.ctrlKey && !evt.metaKey) {
+        if (evt.key === 'Escape' && sabaki.state.areaToolEnabled) {
+          evt.preventDefault()
+          sabaki.setAreaToolEnabled(false)
+          return
+        }
+
+        if (
+          ['Backspace', 'Delete'].includes(evt.key) &&
+          sabaki.state.areaToolEnabled
+        ) {
+          evt.preventDefault()
+          sabaki.clearAnalysisArea()
+          return
+        }
+
+        if (!evt.altKey && lowerKey === 't') {
+          evt.preventDefault()
+          if (evt.shiftKey) {
+            sabaki.toggleTerritoryCompareEnabled()
+          } else {
+            sabaki.toggleTerritoryEnabled()
+          }
+          return
+        }
+
+        if (!evt.altKey && !evt.shiftKey && lowerKey === 'a') {
+          evt.preventDefault()
+          sabaki.toggleAreaTool()
+          return
+        }
+      }
 
       if (
         sabaki.state.mode === 'edit' &&
@@ -187,7 +173,7 @@ class App extends Component {
         !evt.ctrlKey &&
         !evt.metaKey &&
         !evt.altKey &&
-        !helper.isTextLikeElement(document.activeElement)
+        !typing
       ) {
         let key = evt.key
 
@@ -218,15 +204,19 @@ class App extends Component {
         if (key === 'Tab') {
           let ws = sabaki.state.editWorkspace
           if (ws.referenceSnapshot != null) {
-            sabaki.toggleEditTab(ws.activeTab === 'working' ? 'reference' : 'working')
+            sabaki.toggleEditTab(
+              ws.activeTab === 'current' ? 'reference' : 'current',
+            )
           }
           return
         }
       }
 
       if (evt.key === 'Escape') {
-        if (sabaki.state.overlayMode !== 'off') {
-          sabaki.setOverlayMode('off')
+        if (sabaki.state.territoryEnabled) {
+          sabaki.setTerritoryEnabled(false)
+        } else if (sabaki.state.compareMode) {
+          sabaki.clearCompareState()
         } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
         } else if (sabaki.state.mode !== 'play') {
@@ -275,14 +265,10 @@ class App extends Component {
     })
 
     document.addEventListener('keyup', (evt) => {
-      this.handleTemporaryTerritoryKeyUp(evt)
-
       if (['ArrowUp', 'ArrowDown'].includes(evt.key)) {
         sabaki.stopAutoscrolling()
       }
     })
-
-    window.addEventListener('blur', this.deactivateTemporaryTerritory)
 
     // Handle window closing
 
@@ -415,7 +401,7 @@ class App extends Component {
       editWorkspaceActive
         ? (editWs.activeTab === 'reference'
             ? editWs.referenceSnapshot
-            : editWs.workingSnapshot)
+            : editWs.currentSnapshot)
         : null
     let editRenderBoard =
       editRenderSnapshot == null ? null : boardFromSnapshot(editRenderSnapshot)
@@ -423,19 +409,25 @@ class App extends Component {
       editWorkspaceActive
         ? (editWs.activeTab === 'reference'
             ? editWs.referenceSnapshot?.nextPlayer
-            : editWs.workingSnapshot?.nextPlayer) ?? inferredState.currentPlayer
+            : editWs.currentSnapshot?.nextPlayer) ?? inferredState.currentPlayer
         : inferredState.currentPlayer
     let editMarkerMap =
       editWorkspaceActive
         ? (editWs.activeTab === 'reference'
             ? editWs.referenceMarkerMap
-            : editWs.workingMarkerMap)
+            : editWs.currentMarkerMap)
         : null
     let editLines =
       editWorkspaceActive
         ? (editWs.activeTab === 'reference'
             ? editWs.referenceLines
-            : editWs.workingLines)
+            : editWs.currentLines)
+        : null
+    let editAnalysis =
+      editWorkspaceActive
+        ? (editWs.activeTab === 'reference'
+            ? editWs.referenceAnalysis
+            : editWs.currentAnalysis)
         : null
     let scoreBoard, areaMap
     let comparePaintMap = null
@@ -444,15 +436,17 @@ class App extends Component {
     let compareTargetVertex = null
     let territoryOwnership = null
     let overlayUnavailableReason = null
-    let lastMoveTerritoryDeltaMap = null
-    let lastMoveTerritoryDiffAvailable = false
-    let effectiveOverlayMode = state.shiftTerritoryActive
-      ? 'territory'
-      : editWorkspaceActive
-        ? 'territory'
-        : state.overlayMode
-    let compareMode = sabaki.isCompareOverlayMode(effectiveOverlayMode)
-    let territoryMode = effectiveOverlayMode === 'territory'
+    let territoryDeltaMap = null
+    let territoryDiffAvailable = false
+    let territoryDiffSourceType = null
+    let compareMode = state.compareMode
+    let territoryMode = state.territoryEnabled
+    let activeAnalysis =
+      editWorkspaceActive
+        ? editAnalysis
+        : state.analysisTreePosition === state.treePosition
+          ? state.analysis
+          : null
 
     if (['scoring', 'estimator'].includes(state.mode)) {
       // Calculate area map
@@ -518,7 +512,7 @@ class App extends Component {
       territoryOwnership = editWorkspaceActive
         ? (editWs.activeTab === 'reference'
             ? editWs.referenceOwnership
-            : editWs.workingOwnership)
+            : editWs.currentOwnership)
         : sabaki.getCurrentOwnership(engineSyncer)
 
       if (['scoring', 'estimator'].includes(state.mode)) {
@@ -536,41 +530,40 @@ class App extends Component {
       } else if (territoryOwnership == null) {
         overlayUnavailableReason =
           state.analysisTreePosition !== state.treePosition ||
-          state.analysis == null ||
-          state.analysis.ownership == null
+          activeAnalysis == null ||
+          activeAnalysis.ownership == null
             ? t('Waiting for ownership data from the analysis engine...')
             : t('The current analysis engine does not provide ownership data.')
       }
 
-      if (
-        editWorkspaceActive &&
-        editWs.referenceOwnership != null &&
-        editWs.workingOwnership != null
-      ) {
-        lastMoveTerritoryDeltaMap = helper.getOwnershipDelta(
-          editWs.referenceOwnership,
-          editWs.workingOwnership,
-        )
-        lastMoveTerritoryDiffAvailable = true
-      } else if (
-        state.territoryDiffSource === 'move' &&
-        state.territoryDiffReferenceTreePosition != null &&
-        state.territoryDiffTargetTreePosition != null
-      ) {
-        let referenceOwnership = sabaki.getOwnershipForTreePosition(
-          null,
-          state.territoryDiffReferenceTreePosition,
-        )
-        let targetOwnership = sabaki.getOwnershipForTreePosition(
-          null,
-          state.territoryDiffTargetTreePosition,
-        )
+      if (state.territoryCompareEnabled) {
+        if (
+          editWorkspaceActive &&
+          editWs.activeTab === 'reference' &&
+          editWs.referenceOwnership != null &&
+          editWs.currentOwnership != null
+        ) {
+          territoryDeltaMap = helper.getOwnershipDelta(
+            editWs.referenceOwnership,
+            editWs.currentOwnership,
+          )
+          territoryDiffAvailable = territoryDeltaMap != null
+          territoryDiffSourceType = 'reference'
+        } else if (!editWorkspaceActive) {
+          let previousTreePosition =
+            tree.get(state.treePosition)?.parentId ?? null
+          let previousOwnership =
+            previousTreePosition == null
+              ? null
+              : sabaki.getOwnershipForTreePosition(null, previousTreePosition)
 
-        lastMoveTerritoryDeltaMap = helper.getOwnershipDelta(
-          referenceOwnership,
-          targetOwnership,
-        )
-        lastMoveTerritoryDiffAvailable = lastMoveTerritoryDeltaMap != null
+          territoryDeltaMap = helper.getOwnershipDelta(
+            previousOwnership,
+            territoryOwnership,
+          )
+          territoryDiffAvailable = territoryDeltaMap != null
+          territoryDiffSourceType = territoryDiffAvailable ? 'previous' : null
+        }
       }
     }
 
@@ -578,18 +571,14 @@ class App extends Component {
       !territoryMode
         ? null
         : editWorkspaceActive && editWs.activeTab === 'reference'
-          ? t('Reference Territory')
-          : editWorkspaceActive && lastMoveTerritoryDiffAvailable
-            ? editWs.analysisPending
-              ? t('Diff (Updating)')
-              : t('Working vs Reference')
-            : editWorkspaceActive
-              ? t('Edit Territory')
-              : state.shiftTerritoryActive && state.overlayMode !== 'territory'
-                ? t('Territory (Shift)')
-                : lastMoveTerritoryDiffAvailable
-                  ? t('Territory + Diff')
-                  : t('Territory')
+          ? state.territoryCompareEnabled
+            ? t('Reference Territory Compare')
+            : t('Reference Territory')
+          : editWorkspaceActive
+            ? t('Current Territory')
+            : state.territoryCompareEnabled
+              ? t('Territory Compare')
+              : t('Territory')
 
     state = {
       ...state,
@@ -598,7 +587,8 @@ class App extends Component {
       editRenderBoard,
       editCurrentPlayer,
       editMarkerMap,
-      overlayMode: effectiveOverlayMode,
+      editAnalysis,
+      activeAnalysis,
       compareMode,
       territoryMode,
       scoreBoard,
@@ -609,8 +599,9 @@ class App extends Component {
       compareTargetVertex,
       territoryOwnership,
       overlayUnavailableReason,
-      lastMoveTerritoryDeltaMap,
-      lastMoveTerritoryDiffAvailable,
+      territoryDeltaMap,
+      territoryDiffAvailable,
+      territoryDiffSourceType,
       territoryStatusText,
     }
 
@@ -639,7 +630,10 @@ class App extends Component {
         showNextMoves: state.showNextMoves,
         showSiblings: state.showSiblings,
         compareMode: state.compareMode,
-        overlayMode: state.overlayMode,
+        territoryEnabled: state.territoryEnabled,
+        territoryCompareEnabled: state.territoryCompareEnabled,
+        territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
+        areaToolEnabled: state.areaToolEnabled,
         compareDisplayPreset: state.compareDisplayPreset,
         showWinrateGraph: state.showWinrateGraph,
         showGameGraph: state.showGameGraph,
