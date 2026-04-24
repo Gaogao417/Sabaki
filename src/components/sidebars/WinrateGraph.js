@@ -72,7 +72,8 @@ export default class WinrateGraph extends Component {
 
     this.state = {
       invert: setting.get('view.winrategraph_invert'),
-      metricMode: 'both', // 'winrate' | 'lead' | 'both'
+      showWinrate: true,
+      showScoreLead: true,
     }
 
     setting.onDidChange(({key, value}) => {
@@ -90,19 +91,17 @@ export default class WinrateGraph extends Component {
 
     this.handleWinrateToggle = (evt) => {
       evt.preventDefault()
-      this.setState(({metricMode}) => {
-        if (metricMode === 'lead') return {metricMode: 'lead'} // Can't turn off last metric
-        if (metricMode === 'both') return {metricMode: 'lead'}
-        return {metricMode: 'both'}
+      this.setState(({showWinrate, showScoreLead}) => {
+        if (showWinrate && !showScoreLead) return null
+        return {showWinrate: !showWinrate}
       })
     }
 
     this.handleScoreLeadToggle = (evt) => {
       evt.preventDefault()
-      this.setState(({metricMode}) => {
-        if (metricMode === 'winrate') return {metricMode: 'winrate'} // Can't turn off last metric
-        if (metricMode === 'both') return {metricMode: 'winrate'}
-        return {metricMode: 'both'}
+      this.setState(({showWinrate, showScoreLead}) => {
+        if (showScoreLead && !showWinrate) return null
+        return {showScoreLead: !showScoreLead}
       })
     }
   }
@@ -137,9 +136,7 @@ export default class WinrateGraph extends Component {
 
   render() {
     let {lastPlayer, currentIndex, data, scoreLeadData = []} = this.props
-    let {invert, metricMode} = this.state
-    let showWinrate = metricMode !== 'lead'
-    let showScoreLead = metricMode !== 'winrate'
+    let {invert, showWinrate, showScoreLead} = this.state
 
     let winrateValues = data.map(toNumber)
     let scoreLeadValues = scoreLeadData.map(toNumber)
@@ -147,6 +144,10 @@ export default class WinrateGraph extends Component {
     let hasScoreLeadData = scoreLeadValues.some((value) => value != null)
     let hasData = hasWinrateData || hasScoreLeadData
     this.hasData = hasData
+
+    // Data availability overrides toggle state
+    if (!hasWinrateData) showWinrate = false
+    if (!hasScoreLeadData) showScoreLead = false
 
     let currentWinrate = winrateValues[currentIndex]
     let displayedWinrate =
