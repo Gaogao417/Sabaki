@@ -160,8 +160,19 @@ class App extends Component {
       ) {
         let key = evt.key
 
-        if (['1', '2', '3', '4', 'Tab'].includes(key) || lowerKey === 'r') {
+        if (['1', '2', '3', '4', 'Tab'].includes(key) || lowerKey === 'r' || lowerKey === 'p') {
           evt.preventDefault()
+        }
+
+        if (lowerKey === 'p') {
+          let ws = sabaki.state.editWorkspace
+          let tab = ws?.activeTab ?? 'current'
+          let {snapshotKey} = sabaki.getEditWorkspaceTabKeys(tab)
+          let snapshot = ws?.[snapshotKey]
+          if (snapshot != null) {
+            sabaki.setEditWorkspacePlayer(-snapshot.nextPlayer)
+          }
+          return
         }
 
         if (key === '1') {

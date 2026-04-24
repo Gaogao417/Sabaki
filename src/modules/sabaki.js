@@ -397,7 +397,7 @@ class Sabaki extends EventEmitter {
 
       stateChange.editWorkspace = {
         currentSnapshot: snapshot,
-        referenceSnapshot: null,
+        referenceSnapshot: cloneSnapshot(snapshot),
         activeTab: 'current',
         currentAnalysis: null,
         currentOwnership: null,
@@ -405,7 +405,7 @@ class Sabaki extends EventEmitter {
         referenceOwnership: null,
         analysisPending: false,
         currentMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
-        referenceMarkerMap: null,
+        referenceMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
         currentLines: [],
         referenceLines: [],
       }
@@ -877,7 +877,8 @@ class Sabaki extends EventEmitter {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
-    let {snapshotKey: key} = this.getEditWorkspaceTabKeys(ws.activeTab)
+    let {snapshotKey: key, analysisKey, ownershipKey} =
+      this.getEditWorkspaceTabKeys(ws.activeTab)
     let snapshot = ws[key]
     if (snapshot == null) return
 
@@ -886,8 +887,16 @@ class Sabaki extends EventEmitter {
       nextPlayer: sign > 0 ? 1 : -1,
     }
 
+    this.editAnalysisGeneration =
+      (this.editAnalysisGeneration || 0) + 1
+
     this.setState({
-      editWorkspace: {...ws, [key]: nextSnapshot},
+      editWorkspace: {
+        ...ws,
+        [key]: nextSnapshot,
+        [analysisKey]: null,
+        [ownershipKey]: null,
+      },
     })
     this.scheduleEditWorkspaceAnalysis()
   }
@@ -900,6 +909,9 @@ class Sabaki extends EventEmitter {
   }
 
   async refreshEditWorkspaceAnalysis() {
+    let generation =
+      (this.editAnalysisGeneration =
+        (this.editAnalysisGeneration || 0) + 1)
     let ws = this.state.editWorkspace
     if (ws == null) return
 
@@ -932,6 +944,7 @@ class Sabaki extends EventEmitter {
         analyzePlayer: ws.currentSnapshot.nextPlayer,
         requestGroup: 'study',
         onAnalysisUpdate: (analysis) => {
+          if (this.editAnalysisGeneration !== generation) return
           let current = this.state.editWorkspace
           if (current != null) {
             this.setState({
@@ -956,6 +969,7 @@ class Sabaki extends EventEmitter {
         analyzePlayer: ws.referenceSnapshot.nextPlayer,
         requestGroup: 'study',
         onAnalysisUpdate: (analysis) => {
+          if (this.editAnalysisGeneration !== generation) return
           let current = this.state.editWorkspace
           if (current != null) {
             this.setState({
@@ -969,6 +983,8 @@ class Sabaki extends EventEmitter {
         },
       })
     }
+
+    if (this.editAnalysisGeneration !== generation) return
 
     let finalWs = this.state.editWorkspace
     if (finalWs != null) {
