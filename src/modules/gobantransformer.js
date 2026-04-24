@@ -98,6 +98,8 @@ export function transformLine(line, transformation, width, height) {
 }
 
 export function transformMap(map, transformation, {ignoreInvert = false} = {}) {
+  if (map == null) return null
+
   let inverse = invert(transformation)
   let inverted = inverse.includes('i')
   let {width, height} = transformSize(

@@ -48,9 +48,12 @@ export default class Goban extends Component {
   componentDidMount() {
     document.addEventListener('mouseup', () => {
       this.mouseDown = false
+      this.dragCandidate = false
       this.dragging = false
+      this.areaSelecting = false
       this.areaDragging = false
       this.dragSource = null
+      this.mouseDownClient = null
 
       if (this.state.temporaryLine) {
         this.setState({temporaryLine: null})
@@ -119,19 +122,47 @@ export default class Goban extends Component {
     }
   }
 
+  getAreaOperation(evt) {
+    if (evt.altKey && evt.button === 2) return 'clearAll'
+    if (evt.altKey && evt.button === 0) return 'removeRect'
+    if ((evt.ctrlKey || evt.metaKey) && evt.button === 0) return 'add'
+    return null
+  }
+
+  clearAreaSelectPreview() {
+    this.props.onAreaSelectPreview?.({clear: true})
+  }
+
   handleVertexMouseDown(evt, vertex) {
     this.mouseDown = true
     this.startVertex = vertex
-    this.areaDragOperation = evt.altKey
-      ? 'subtract'
-      : evt.shiftKey
-        ? 'add'
-        : 'replace'
+    this.mouseDownClient = [
+      evt.clientX ?? evt.x ?? 0,
+      evt.clientY ?? evt.y ?? 0,
+    ]
+    this.areaDragOperation = this.getAreaOperation(evt)
+    this.areaSelecting = this.areaDragOperation != null
     this.areaDragging = false
 
-    // Start drag if dragMode and vertex has a stone
-    if (this.props.dragMode && this.props.board?.get(vertex) !== 0 && evt.button === 0) {
-      this.dragging = true
+    this.dragCandidate = false
+    this.dragSource = null
+
+    if (this.areaSelecting && this.areaDragOperation === 'add') {
+      this.props.onAreaSelectPreview?.({
+        start: vertex,
+        end: vertex,
+        operation: this.areaDragOperation,
+      })
+      return
+    }
+
+    // Start drag candidate if dragMode and vertex has a stone
+    if (
+      this.props.dragMode &&
+      this.props.board?.get(vertex) !== 0 &&
+      evt.button === 0
+    ) {
+      this.dragCandidate = true
       this.dragSource = vertex
     }
   }
@@ -155,20 +186,28 @@ export default class Goban extends Component {
 
     // Handle drag end
     if (this.dragging) {
+      this.dragCandidate = false
       this.dragging = false
       onStoneDragEnd({source: this.dragSource, target: vertex})
       this.dragSource = null
+      this.mouseDownClient = null
       this.setState({dragTarget: null})
       return
     }
 
-    if (this.props.areaSelectMode && this.areaDragging && this.startVertex != null) {
+    this.dragCandidate = false
+    this.dragSource = null
+    this.mouseDownClient = null
+
+    if (this.areaSelecting && this.startVertex != null) {
       onAreaSelect({
         start: this.startVertex,
         end: vertex,
         operation: this.areaDragOperation,
       })
+      this.areaSelecting = false
       this.areaDragging = false
+      this.clearAreaSelectPreview()
       this.setState({clicked: true})
       setTimeout(() => this.setState({clicked: false}), 200)
       return
@@ -191,6 +230,9 @@ export default class Goban extends Component {
       onVertexMouseMove = helper.noop,
       onAreaSelectPreview = helper.noop,
     } = this.props
+    let areaOperation = this.getAreaOperation(evt)
+    let areaEvent =
+      areaOperation != null || evt.altKey || evt.ctrlKey || evt.metaKey
 
     let moveEvent = Object.assign(evt, {
       mouseDown: this.mouseDown,
@@ -198,7 +240,34 @@ export default class Goban extends Component {
       vertex,
     })
 
-    onVertexMouseMove(moveEvent)
+    if (areaOperation === 'add' && !this.mouseDown) {
+      onAreaSelectPreview({
+        start: vertex,
+        end: vertex,
+        operation: areaOperation,
+      })
+      return
+    }
+
+    if (!areaEvent) {
+      onVertexMouseMove(moveEvent)
+    }
+
+    if (
+      this.dragCandidate &&
+      !this.dragging &&
+      evt.button === 0 &&
+      this.mouseDownClient != null
+    ) {
+      let [startX, startY] = this.mouseDownClient
+      let dx = (evt.clientX ?? evt.x ?? startX) - startX
+      let dy = (evt.clientY ?? evt.y ?? startY) - startY
+      let dragThreshold = this.props.dragThreshold ?? 6
+
+      if (Math.hypot(dx, dy) >= dragThreshold) {
+        this.dragging = true
+      }
+    }
 
     // Handle drag move
     if (this.dragging && evt.button === 0) {
@@ -209,23 +278,21 @@ export default class Goban extends Component {
     }
 
     if (
-      this.props.areaSelectMode &&
+      this.areaSelecting &&
       evt.mouseDown &&
       this.startVertex != null &&
       evt.button === 0
     ) {
-      this.areaDragOperation = evt.altKey
-        ? 'subtract'
-        : evt.shiftKey
-          ? 'add'
-          : 'replace'
+      this.areaDragOperation = areaOperation || this.areaDragOperation
       this.areaDragging =
         this.areaDragging || !helper.vertexEquals(this.startVertex, vertex)
-      onAreaSelectPreview({
-        start: this.startVertex,
-        end: vertex,
-        operation: this.areaDragOperation,
-      })
+      if (this.areaDragOperation === 'add') {
+        onAreaSelectPreview({
+          start: this.startVertex,
+          end: vertex,
+          operation: this.areaDragOperation,
+        })
+      }
     } else if (!!drawLineMode && evt.mouseDown && evt.button === 0) {
       let temporaryLine = {v1: evt.startVertex, v2: evt.vertex}
 
@@ -237,6 +304,20 @@ export default class Goban extends Component {
 
   handleVertexMouseEnter(evt, vertex) {
     let {analysis, onVertexMouseEnter = helper.noop} = this.props
+    let areaOperation = this.getAreaOperation(evt)
+    if (areaOperation === 'add') {
+      this.props.onAreaSelectPreview?.({
+        start: vertex,
+        end: vertex,
+        operation: areaOperation,
+      })
+      return
+    }
+
+    if (areaOperation != null || evt.altKey || evt.ctrlKey || evt.metaKey) {
+      return
+    }
+
     onVertexMouseEnter(Object.assign(evt, {vertex}))
 
     if (analysis == null) return
@@ -253,6 +334,7 @@ export default class Goban extends Component {
   handleVertexMouseLeave(evt, vertex) {
     let {onVertexMouseLeave = helper.noop} = this.props
     onVertexMouseLeave(Object.assign(evt, {vertex}))
+    this.clearAreaSelectPreview()
     this.stopPlayingVariation()
   }
 
@@ -297,6 +379,7 @@ export default class Goban extends Component {
 
   render(
     {
+      id = 'goban',
       gameTree,
       treePosition,
       board,
@@ -573,7 +656,7 @@ export default class Goban extends Component {
     }
 
     return h(BoundedGoban, {
-      id: 'goban',
+      id,
       class: classNames(
         {
           crosshair,

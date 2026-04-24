@@ -9,6 +9,7 @@ import TextSpinner from './TextSpinner.js'
 const t = i18n.context('BoardToolbar')
 
 function ToolbarButton({
+  icon,
   label,
   title = null,
   selected = false,
@@ -20,7 +21,7 @@ function ToolbarButton({
     'a',
     {
       href: '#',
-      title,
+      title: title || label,
       class: classNames('toolbar-button', {selected, accent, disabled}),
       'aria-disabled': disabled,
       onClick: (evt) => {
@@ -29,7 +30,9 @@ function ToolbarButton({
         onClick?.()
       },
     },
-    label,
+    icon
+      ? h('img', {src: icon, width: 16, height: 16, alt: label})
+      : label,
   )
 }
 
@@ -156,8 +159,6 @@ export default class BoardToolbar extends Component {
       playerRanks,
       playerCaptures,
       engineSyncers,
-      areaToolEnabled = false,
-      areaSelectionActive = false,
       onCurrentPlayerClick = helper.noop,
     },
     {playerBusy},
@@ -204,37 +205,45 @@ export default class BoardToolbar extends Component {
       ),
       h(
         'div',
-        {class: 'toolbar-group toolbar-actions'},
-        h(ToolbarButton, {
-          label: t('Play'),
-          selected: mode === 'play',
-          onClick: () => sabaki.setMode('play'),
-        }),
-        h(ToolbarButton, {
-          label: t('Edit'),
-          selected: mode === 'edit',
-          onClick: () => sabaki.setMode('edit'),
-        }),
-        h(ToolbarButton, {
-          label: t('Territory'),
-          selected: territoryEnabled,
-          accent: territoryEnabled,
-          onClick: () => sabaki.toggleTerritoryEnabled(),
-        }),
-        h(ToolbarButton, {
-          label: t('Territory Compare'),
-          selected: territoryCompareEnabled,
-          accent: territoryCompareEnabled,
-          disabled: !territoryCompareAvailable,
-          onClick: () => sabaki.toggleTerritoryCompareEnabled(),
-        }),
-        h(ToolbarButton, {
-          label: t('Area'),
-          selected: areaToolEnabled,
-          accent: areaToolEnabled || areaSelectionActive,
-          title: t('Drag to replace, Shift+drag to add, Alt+drag to subtract'),
-          onClick: () => sabaki.toggleAreaTool(),
-        }),
+        {class: 'toolbar-group toolbar-controls'},
+        h(
+          'div',
+          {class: 'toolbar-group toolbar-actions toolbar-modes'},
+          h(ToolbarButton, {
+            icon: './node_modules/@primer/octicons/build/svg/play.svg',
+            label: t('Play'),
+            selected: mode === 'play',
+            onClick: () => sabaki.setMode('play'),
+          }),
+          h(ToolbarButton, {
+            icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
+            label: t('Edit'),
+            selected: mode === 'edit',
+            onClick: () => sabaki.setMode('edit'),
+          }),
+        ),
+        h(
+          'div',
+          {class: 'toolbar-group toolbar-actions toolbar-overlays'},
+          h(ToolbarButton, {
+            icon: './node_modules/@primer/octicons/build/svg/eye.svg',
+            label: t('Territory'),
+            selected: territoryEnabled,
+            accent: territoryEnabled,
+            onClick: () => sabaki.toggleTerritoryEnabled(),
+          }),
+          territoryEnabled &&
+            editWorkspaceActive &&
+            h(ToolbarButton, {
+              icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
+              label: t('Territory Compare'),
+              title: t('Compare Reference against Current'),
+              selected: territoryCompareEnabled,
+              accent: territoryCompareEnabled,
+              disabled: !territoryCompareAvailable,
+              onClick: () => sabaki.toggleTerritoryCompareEnabled(),
+            }),
+        ),
         h(
           'a',
           {

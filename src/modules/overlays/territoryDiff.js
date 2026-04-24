@@ -70,7 +70,11 @@ export function buildOwnershipDeltaSummary(deltaMap) {
   }
 }
 
-export function buildCompareTerritoryMarkerMap(ownership, deltaMap) {
+export function buildCompareTerritoryMarkerMap(
+  ownership,
+  deltaMap,
+  comparisonOwnership = null,
+) {
   if (!Array.isArray(ownership)) return []
 
   let getMarkerSizeLevel = (delta) => {
@@ -83,8 +87,16 @@ export function buildCompareTerritoryMarkerMap(ownership, deltaMap) {
   return ownership.map((row, y) =>
     row.map((value, x) => {
       let point = classifyOwnershipPoint(value)
+      let fallbackPoint =
+        comparisonOwnership == null
+          ? point
+          : classifyOwnershipPoint(comparisonOwnership?.[y]?.[x] ?? 0)
+      let ownerPoint = point.owner !== 0 ? point : fallbackPoint
       let delta = deltaMap?.[y]?.[x] ?? 0
-      let deltaDirection = getCompareTerritoryDeltaDirection(point.owner, delta)
+      let deltaDirection = getCompareTerritoryDeltaDirection(
+        ownerPoint.owner,
+        delta,
+      )
       let sizeLevel = getMarkerSizeLevel(delta)
 
       if (deltaDirection != null && sizeLevel > 0) {

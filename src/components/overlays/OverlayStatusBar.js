@@ -17,11 +17,7 @@ function RegionTitle({region}) {
         ? t('Black Region')
         : t('White Region')
 
-  return h(
-    'div',
-    {class: 'overlay-status-line'},
-    h('strong', {}, title),
-  )
+  return h('div', {class: 'overlay-status-line'}, h('strong', {}, title))
 }
 
 function LabelValue({label, value}) {
@@ -159,10 +155,18 @@ export default function OverlayStatusBar({
         diffSourceType === 'hover'
           ? t('Territory diff previewing the hovered AI candidate.')
           : diffSourceType === 'previous'
-            ? t('Territory diff comparing the current move against the previous move.')
+            ? t(
+                'Territory diff comparing the current move against the previous move.',
+              )
             : diffSourceType === 'reference'
               ? t('Territory diff comparing Reference against Current.')
-            : t('Territory overlay active. Hover a region to inspect ownership.'),
+              : diffSourceType === 'workspace'
+                ? t(
+                    'Territory diff comparing the preview board against the large board.',
+                  )
+                : t(
+                    'Territory overlay active. Hover a region to inspect ownership.',
+                  ),
       ),
     ),
   )

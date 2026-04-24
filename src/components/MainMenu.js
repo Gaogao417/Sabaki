@@ -8,8 +8,19 @@ export default class MainMenu extends Component {
     super(props)
 
     this.menuData = []
-    this.listeners = {}
+    this.handlers = {}
     this._unsubscribeFocus = null
+    this.handleMenuClick = (_evt, itemId) => {
+      let handler = this.handlers[itemId]
+      if (handler == null) return
+
+      if (!this.props.showMenuBar) {
+        window.sabaki.window.setMenuBarVisibility(false)
+      }
+
+      dialog.closeInputBox()
+      handler()
+    }
 
     this.buildMenu = () => {
       ipcRenderer.send('build-menu', this.props)
@@ -17,27 +28,12 @@ export default class MainMenu extends Component {
 
     this.syncMenuListeners = () => {
       let nextMenuData = menu.get(this.props)
-      let nextListeners = {}
+      let nextHandlers = {}
 
       let registerMenuClicks = (items) => {
         for (let item of items) {
           if (item.click != null) {
-            let listener = this.listeners[item.id]
-
-            if (listener == null) {
-              listener = () => {
-                if (!this.props.showMenuBar) {
-                  window.sabaki.window.setMenuBarVisibility(false)
-                }
-
-                dialog.closeInputBox()
-                item.click()
-              }
-
-              ipcRenderer.on(`menu-click-${item.id}`, listener)
-            }
-
-            nextListeners[item.id] = listener
+            nextHandlers[item.id] = item.click
           }
 
           if (item.submenu != null) {
@@ -48,27 +44,20 @@ export default class MainMenu extends Component {
 
       registerMenuClicks(nextMenuData)
 
-      for (let id in this.listeners) {
-        if (nextListeners[id] != null) continue
-        ipcRenderer.removeListener(`menu-click-${id}`, this.listeners[id])
-      }
-
       this.menuData = nextMenuData
-      this.listeners = nextListeners
+      this.handlers = nextHandlers
     }
   }
 
   componentDidMount() {
     this._unsubscribeFocus = window.sabaki.window.on('focus', this.buildMenu)
+    ipcRenderer.on('menu-click', this.handleMenuClick)
     this.syncMenuListeners()
   }
 
   componentWillUnmount() {
     if (this._unsubscribeFocus) this._unsubscribeFocus()
-
-    for (let id in this.listeners) {
-      ipcRenderer.removeListener(`menu-click-${id}`, this.listeners[id])
-    }
+    ipcRenderer.removeListener('menu-click', this.handleMenuClick)
   }
 
   shouldComponentUpdate(nextProps) {
@@ -84,7 +73,6 @@ export default class MainMenu extends Component {
   }
 
   render() {
-    this.syncMenuListeners()
     this.buildMenu()
     return null
   }

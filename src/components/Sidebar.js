@@ -6,6 +6,7 @@ import WinrateGraph from './sidebars/WinrateGraph.js'
 import Slider from './sidebars/Slider.js'
 import GameGraph from './sidebars/GameGraph.js'
 import CommentBox from './sidebars/CommentBox.js'
+import BoardOverlayStack from './overlays/BoardOverlayStack.js'
 
 const setting = {
   get: (key) => window.sabaki.setting.get(key),
@@ -123,6 +124,13 @@ export default class Sidebar extends Component {
       compareMode,
       compareReferenceTreePosition,
       compareTargetTreePosition,
+      editWorkspaceActive,
+      editPreviewTab,
+      editPreviewBoard,
+      editPreviewOwnership,
+      territoryMode,
+      overlayUnavailableReason,
+      boardTransformation,
 
       showWinrateGraph,
       showGameGraph,
@@ -142,6 +150,42 @@ export default class Sidebar extends Component {
     )
     let level = gameTree.getLevel(treePosition)
     showWinrateGraph = showWinrateGraph && winrateData.some((x) => x != null)
+    let showEditPreview = editWorkspaceActive && editPreviewBoard != null
+    let showGraphColumn = showGameGraph || showEditPreview
+    let editPreviewLabel =
+      editPreviewTab === 'reference' ? 'Preview: Reference' : 'Preview: Current'
+    let editPreviewGobanProps = showEditPreview
+      ? {
+          id: 'goban-edit-preview',
+          gameTree,
+          treePosition,
+          board: editPreviewBoard,
+          highlightVertices: [],
+          analysisType: null,
+          analysis: null,
+          paintMap: null,
+          markerMap: null,
+          compareSelectedVertices: [],
+          dimmedStones: [],
+          overlayGhostStoneMap: null,
+          comparePending: false,
+          compareMode: false,
+
+          crosshair: false,
+          showCoordinates: false,
+          showMoveColorization: false,
+          showMoveNumbers: false,
+          showNextMoves: false,
+          showSiblings: false,
+          fuzzyStonePlacement: false,
+          animateStonePlacement: false,
+
+          playVariation: null,
+          drawLineMode: null,
+          transformation: boardTransformation,
+          dragMode: false,
+        }
+      : null
 
     return h(
       'section',
@@ -165,15 +209,46 @@ export default class Sidebar extends Component {
 
         mainContent: h(SplitContainer, {
           vertical: true,
-          sideSize: !showGameGraph ? 100 : !showCommentBox ? 0 : sidebarSplit,
+          sideSize: !showGraphColumn ? 100 : !showCommentBox ? 0 : sidebarSplit,
           procentualSplit: true,
 
           mainContent: h(
             'div',
             {
               ref: (el) => (this.horizontalSplitContainer = el),
-              class: 'graphproperties',
+              class: `graphproperties${showEditPreview ? ' has-edit-preview' : ''}`,
             },
+
+            showEditPreview &&
+              h(
+                'section',
+                {class: 'edit-preview-panel'},
+                h(
+                  'div',
+                  {class: 'edit-preview-panel__header'},
+                  h('strong', {}, editPreviewLabel),
+                  h('span', {}, 'Read-only preview'),
+                ),
+                h(
+                  'div',
+                  {class: 'edit-preview-panel__body'},
+                  h(
+                    'div',
+                    {class: 'edit-board-readonly'},
+                    h(BoardOverlayStack, {
+                      territoryMode,
+                      baselineOwnership: editPreviewOwnership,
+                      unavailableReason: overlayUnavailableReason,
+                      gobanProps: editPreviewGobanProps,
+                      analysis: null,
+                      lastMoveDeltaMap: null,
+                      lastMoveDiffAvailable: false,
+                      diffSourceType: null,
+                      comparisonOwnership: null,
+                    }),
+                  ),
+                ),
+              ),
 
             h(Slider, {
               showSlider: showGameGraph,

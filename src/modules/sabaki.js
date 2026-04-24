@@ -75,11 +75,10 @@ class Sabaki extends EventEmitter {
 
       // Goban
 
+      analysisAreaRects: null,
       analysisAreaVertices: null,
-      analysisAreaSelecting: false,
       territoryEnabled: false,
       territoryCompareEnabled: false,
-      areaToolEnabled: false,
       highlightVertices: [],
       playVariation: null,
       analysisType: null,
@@ -240,7 +239,8 @@ class Sabaki extends EventEmitter {
       this._windowState.isMaximized = false
     })
     window.sabaki.window.on('resize', async () => {
-      this._windowState.contentSize = await window.sabaki.window.getContentSize()
+      this._windowState.contentSize =
+        await window.sabaki.window.getContentSize()
     })
   }
 
@@ -283,7 +283,11 @@ class Sabaki extends EventEmitter {
         return state.gameTrees[state.gameIndex]
       },
       get showSidebar() {
-        return state.showGameGraph || state.showCommentBox
+        return (
+          state.showGameGraph ||
+          state.showCommentBox ||
+          state.editWorkspace?.referenceSnapshot != null
+        )
       },
       get gameInfo() {
         return self.getGameInfo()
@@ -297,8 +301,8 @@ class Sabaki extends EventEmitter {
         return 'B' in node.data
           ? 1
           : 'W' in node.data
-          ? -1
-          : -this.currentPlayer
+            ? -1
+            : -this.currentPlayer
       },
       get board() {
         return gametree.getBoard(this.gameTree, state.treePosition)
@@ -533,25 +537,16 @@ class Sabaki extends EventEmitter {
   }
 
   getTerritoryCompareAvailable(state = this.state) {
-    if (state.mode === 'edit') {
-      return state.editWorkspace?.referenceSnapshot != null
-    }
-
-    if (['scoring', 'estimator'].includes(state.mode)) return false
-    return this.getPreviousTreePosition(
-      state.treePosition,
-      this.getInferredState(state).gameTree,
-    ) != null
+    return (
+      state.mode === 'edit' && state.editWorkspace?.referenceSnapshot != null
+    )
   }
 
   getBoardAnalysisContext({state = this.state, tab = null} = {}) {
     if (state.mode === 'edit' && state.editWorkspace != null) {
       let activeTab = tab ?? state.editWorkspace.activeTab
-      let {
-        snapshotKey,
-        analysisKey,
-        ownershipKey,
-      } = this.getEditWorkspaceTabKeys(activeTab)
+      let {snapshotKey, analysisKey, ownershipKey} =
+        this.getEditWorkspaceTabKeys(activeTab)
       let snapshot = state.editWorkspace[snapshotKey]
       if (snapshot == null) return null
 
@@ -578,7 +573,9 @@ class Sabaki extends EventEmitter {
       treePosition: state.treePosition,
       analyzePlayer: this.getPlayer(state.treePosition),
       analysis:
-        state.analysisTreePosition === state.treePosition ? state.analysis : null,
+        state.analysisTreePosition === state.treePosition
+          ? state.analysis
+          : null,
       ownership: this.getCurrentOwnership(inferredState.analyzingEngineSyncer),
     }
   }
@@ -604,12 +601,17 @@ class Sabaki extends EventEmitter {
     let syncerId = this.getAnalysisSyncerId({requireOwnership})
 
     if (syncerId == null) {
+      syncer = await this.attachDefaultAnalysisEngine({requireOwnership})
+      syncerId = syncer?.id ?? null
+    }
+
+    if (syncerId == null) {
       await dialog.showMessageBox(
         i18n.t(
           'sabaki.engine',
           requireOwnership
-            ? 'Please attach an analysis engine that provides ownership data first.'
-            : 'Please start engine analysis first.',
+            ? 'Please configure or attach an analysis engine that provides ownership data first.'
+            : 'Please configure or attach an analysis engine first.',
         ),
         'warning',
       )
@@ -617,12 +619,83 @@ class Sabaki extends EventEmitter {
     }
 
     await this.startAnalysis(syncerId)
-    return this.state.attachedEngineSyncers.find((x) => x.id === syncerId) || null
+    return (
+      this.state.attachedEngineSyncers.find((x) => x.id === syncerId) || null
+    )
+  }
+
+  async attachDefaultAnalysisEngine({requireOwnership = false} = {}) {
+    let engines = setting
+      .get('engines.list')
+      .filter(
+        (engine) => engine != null && engine.path != null && engine.path !== '',
+      )
+
+    for (let engine of engines) {
+      let [syncer] = this.attachEngines([engine])
+      if (syncer == null) continue
+
+      let ready = await this.waitForEngineCommands(syncer)
+      if (
+        ready &&
+        this.getAnalyzeCommand(syncer) != null &&
+        (!requireOwnership || this.engineSupportsOwnership(syncer))
+      ) {
+        return syncer
+      }
+
+      await this.detachEngines([syncer.id])
+    }
+
+    return null
+  }
+
+  waitForEngineCommands(syncer, {timeout = 10000} = {}) {
+    if (syncer == null) return Promise.resolve(false)
+    if (syncer.commands.length > 0) return Promise.resolve(true)
+
+    return new Promise((resolve) => {
+      let done = false
+      let intervalId = null
+      let timeoutId = null
+
+      let finish = (ready) => {
+        if (done) return
+        done = true
+
+        clearInterval(intervalId)
+        clearTimeout(timeoutId)
+        syncer.removeListener('suspended-changed', check)
+        syncer.controller.removeListener('response-received', check)
+        syncer.controller.removeListener('stopped', handleStopped)
+        resolve(ready)
+      }
+
+      let check = () => {
+        if (syncer.commands.length > 0) {
+          finish(true)
+        }
+      }
+
+      let handleStopped = () => {
+        finish(false)
+      }
+
+      intervalId = setInterval(check, 50)
+      timeoutId = setTimeout(() => finish(syncer.commands.length > 0), timeout)
+      syncer.on('suspended-changed', check)
+      syncer.controller.on('response-received', check)
+      syncer.controller.on('stopped', handleStopped)
+      check()
+    })
   }
 
   // Edit Workspace Methods
 
-  clickEditWorkspaceVertex(vertex, {button = 0, ctrlKey = false, x = 0, y = 0} = {}) {
+  clickEditWorkspaceVertex(
+    vertex,
+    {button = 0, ctrlKey = false, x = 0, y = 0} = {},
+  ) {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
@@ -651,7 +724,9 @@ class Sabaki extends EventEmitter {
               if (currentWs == null) return
               let markerMap = currentWs[markerKey].map((row) => [...row])
               markerMap[vy][vx] = {type: 'label', label: value}
-              this.setState({editWorkspace: {...currentWs, [markerKey]: markerMap}})
+              this.setState({
+                editWorkspace: {...currentWs, [markerKey]: markerMap},
+              })
             },
           },
         ],
@@ -681,7 +756,12 @@ class Sabaki extends EventEmitter {
       this.scheduleEditWorkspaceAnalysis()
     } else if (['cross', 'triangle', 'square', 'circle'].includes(tool)) {
       let markerMap = ws[markerKey].map((row) => [...row])
-      let typeMap = {cross: 'cross', triangle: 'triangle', square: 'square', circle: 'circle'}
+      let typeMap = {
+        cross: 'cross',
+        triangle: 'triangle',
+        square: 'square',
+        circle: 'circle',
+      }
       let existing = markerMap[vy]?.[vx]
       markerMap[vy][vx] =
         existing?.type === typeMap[tool] ? null : {type: typeMap[tool]}
@@ -692,7 +772,10 @@ class Sabaki extends EventEmitter {
       if (!this.editVertexData || this.editVertexData[0] !== tool) {
         this.editVertexData = [tool, vertex]
       } else {
-        let lines = [...ws[linesKey], {v1: this.editVertexData[1], v2: vertex, type: tool}]
+        let lines = [
+          ...ws[linesKey],
+          {v1: this.editVertexData[1], v2: vertex, type: tool},
+        ]
         this.editVertexData = null
         this.setState({
           editWorkspace: {...ws, [linesKey]: lines},
@@ -740,18 +823,35 @@ class Sabaki extends EventEmitter {
 
   captureEditReference() {
     let ws = this.state.editWorkspace
-    if (ws == null || ws.currentSnapshot == null) return
+    if (ws == null) return
+
+    let sourceTab =
+      ws.activeTab === 'reference' && ws.referenceSnapshot != null
+        ? 'reference'
+        : 'current'
+    let targetTab = sourceTab === 'reference' ? 'current' : 'reference'
+    let {snapshotKey: sourceSnapshotKey} =
+      this.getEditWorkspaceTabKeys(sourceTab)
+    let {
+      snapshotKey: targetSnapshotKey,
+      analysisKey: targetAnalysisKey,
+      ownershipKey: targetOwnershipKey,
+      markerKey: targetMarkerKey,
+      linesKey: targetLinesKey,
+    } = this.getEditWorkspaceTabKeys(targetTab)
+    let sourceSnapshot = ws[sourceSnapshotKey]
+    if (sourceSnapshot == null) return
 
     this.setState({
       editWorkspace: {
         ...ws,
-        referenceSnapshot: cloneSnapshot(ws.currentSnapshot),
-        referenceAnalysis: null,
-        referenceOwnership: null,
-        referenceMarkerMap: ws.currentSnapshot.signMap.map((row) =>
+        [targetSnapshotKey]: cloneSnapshot(sourceSnapshot),
+        [targetAnalysisKey]: null,
+        [targetOwnershipKey]: null,
+        [targetMarkerKey]: sourceSnapshot.signMap.map((row) =>
           row.map(() => null),
         ),
-        referenceLines: [],
+        [targetLinesKey]: [],
       },
     })
     this.scheduleEditWorkspaceAnalysis()
@@ -781,14 +881,16 @@ class Sabaki extends EventEmitter {
     let snapshot = ws[key]
     if (snapshot == null) return
 
-    let nextSnapshot = {...cloneSnapshot(snapshot), nextPlayer: sign > 0 ? 1 : -1}
+    let nextSnapshot = {
+      ...cloneSnapshot(snapshot),
+      nextPlayer: sign > 0 ? 1 : -1,
+    }
 
     this.setState({
       editWorkspace: {...ws, [key]: nextSnapshot},
     })
     this.scheduleEditWorkspaceAnalysis()
   }
-
 
   scheduleEditWorkspaceAnalysis() {
     clearTimeout(this.editAnalysisId)
@@ -957,7 +1059,9 @@ class Sabaki extends EventEmitter {
 
   getAnalysisVisitLimit() {
     let maxVisits = +setting.get('board.analysis_max_visits')
-    return Number.isFinite(maxVisits) && maxVisits > 0 ? Math.round(maxVisits) : null
+    return Number.isFinite(maxVisits) && maxVisits > 0
+      ? Math.round(maxVisits)
+      : null
   }
 
   async runBoardAnalysis({
@@ -971,7 +1075,12 @@ class Sabaki extends EventEmitter {
     previewCacheMoves = null,
     onAnalysisUpdate = null,
   }) {
-    if (syncer == null || syncer.suspended || tree == null || treePosition == null) {
+    if (
+      syncer == null ||
+      syncer.suspended ||
+      tree == null ||
+      treePosition == null
+    ) {
       return null
     }
 
@@ -986,15 +1095,13 @@ class Sabaki extends EventEmitter {
 
     if (
       commandName.includes('kata') &&
-      this.state.areaToolEnabled &&
       this.state.analysisAreaVertices?.length > 0
     ) {
       let gameBoard = gametree.getBoard(tree, treePosition)
       let vertexStr = this.state.analysisAreaVertices
         .map((v) => gameBoard.stringifyVertex(v))
         .join(',')
-      let player = analyzePlayer > 0 ? 'b' : 'w'
-      args.push('allow', player, vertexStr, '999')
+      args.push('allow', 'b', vertexStr, '999', 'allow', 'w', vertexStr, '999')
     }
 
     let requestId =
@@ -1004,7 +1111,9 @@ class Sabaki extends EventEmitter {
     let visitLimit = this.getAnalysisVisitLimit()
     let maxTime = +setting.get('board.analysis_max_time')
     let timeoutMs =
-      Number.isFinite(maxTime) && maxTime > 0 ? Math.round(maxTime * 1000) : null
+      Number.isFinite(maxTime) && maxTime > 0
+        ? Math.round(maxTime * 1000)
+        : null
     let originTreePosition = this.state.treePosition
 
     if (pendingStateKey != null) {
@@ -1059,7 +1168,9 @@ class Sabaki extends EventEmitter {
 
           let bestVisits = Math.max(
             0,
-            ...syncer.analysis.variations.map((variation) => variation.visits || 0),
+            ...syncer.analysis.variations.map(
+              (variation) => variation.visits || 0,
+            ),
           )
           latestAnalysis = syncer.analysis
           onAnalysisUpdate?.(latestAnalysis)
@@ -1127,13 +1238,23 @@ class Sabaki extends EventEmitter {
     previewCacheMoves = null,
     onOwnershipUpdate = null,
   }) {
-    if (syncer == null || syncer.suspended || tree == null || treePosition == null) {
+    if (
+      syncer == null ||
+      syncer.suspended ||
+      tree == null ||
+      treePosition == null
+    ) {
       return null
     }
 
     let cachedOwnership =
       previewCacheMoves != null
-        ? this.getCachedPreviewOwnership(syncer.id, tree, treePosition, previewCacheMoves)
+        ? this.getCachedPreviewOwnership(
+            syncer.id,
+            tree,
+            treePosition,
+            previewCacheMoves,
+          )
         : this.getCachedOwnership(syncer.id, tree, treePosition)
     if (cachedOwnership != null) {
       onOwnershipUpdate?.(cachedOwnership)
@@ -1185,11 +1306,17 @@ class Sabaki extends EventEmitter {
       return true
     }
 
-    let syncer = await this.ensureAnalysisReady({requireOwnership: true})
-    if (syncer == null) return false
-
     this.hideInfoOverlay()
     this.setState({territoryEnabled: true})
+
+    let syncer = await this.ensureAnalysisReady({requireOwnership: true})
+    if (syncer == null) {
+      this.setState({
+        territoryEnabled: false,
+        territoryCompareEnabled: false,
+      })
+      return false
+    }
 
     if (
       this.state.mode !== 'edit' &&
@@ -1209,33 +1336,22 @@ class Sabaki extends EventEmitter {
   }
 
   async setTerritoryCompareEnabled(territoryCompareEnabled) {
-    if (territoryCompareEnabled === this.state.territoryCompareEnabled) return true
+    if (territoryCompareEnabled === this.state.territoryCompareEnabled)
+      return true
 
     if (!territoryCompareEnabled) {
       this.setState({territoryCompareEnabled: false})
       return true
     }
 
+    if (this.state.mode !== 'edit') return false
+
     let territoryReady = await this.setTerritoryEnabled(true)
     if (!territoryReady || !this.getTerritoryCompareAvailable()) {
       return false
     }
 
-    if (this.state.mode === 'edit') {
-      this.scheduleEditWorkspaceAnalysis()
-      this.setState({territoryCompareEnabled: true})
-      return true
-    }
-
-    let previousTreePosition = this.getPreviousTreePosition()
-    if (previousTreePosition == null) return false
-
-    let previousOwnership = this.getOwnershipForTreePosition(null, previousTreePosition)
-    if (previousOwnership == null) {
-      previousOwnership = await this.fetchOwnershipForTreePosition(previousTreePosition)
-    }
-    if (previousOwnership == null) return false
-
+    this.scheduleEditWorkspaceAnalysis()
     this.setState({territoryCompareEnabled: true})
     return true
   }
@@ -1244,21 +1360,6 @@ class Sabaki extends EventEmitter {
     return await this.setTerritoryCompareEnabled(
       !this.state.territoryCompareEnabled,
     )
-  }
-
-  setAreaToolEnabled(areaToolEnabled) {
-    if (areaToolEnabled === this.state.areaToolEnabled) return
-
-    this.setState({
-      areaToolEnabled,
-      analysisAreaSelecting: areaToolEnabled,
-      highlightVertices: [],
-    })
-    this.refreshActiveBoardAnalysis()
-  }
-
-  toggleAreaTool() {
-    this.setAreaToolEnabled(!this.state.areaToolEnabled)
   }
 
   async setOverlayMode(overlayMode) {
@@ -2143,10 +2244,10 @@ class Sabaki extends EventEmitter {
               strength >= 8
                 ? 'TE'
                 : strength >= 5
-                ? 'IT'
-                : strength >= 3
-                ? 'DO'
-                : 'BM'
+                  ? 'IT'
+                  : strength >= 3
+                    ? 'DO'
+                    : 'BM'
             let annotationValues = {BM: '1', DO: '', IT: '', TE: '1'}
             let winrate =
               Math.round(
@@ -2294,10 +2395,10 @@ class Sabaki extends EventEmitter {
         let blocked = []
         let [, i] = vertex
           .map((x, i) => Math.abs(x - nextVertex[i]))
-          .reduce(([max, i], x, j) => (x > max ? [x, j] : [max, i]), [
-            -Infinity,
-            -1,
-          ])
+          .reduce(
+            ([max, i], x, j) => (x > max ? [x, j] : [max, i]),
+            [-Infinity, -1],
+          )
 
         for (let x = 0; x < board.width; x++) {
           for (let y = 0; y < board.height; y++) {
@@ -3181,7 +3282,11 @@ class Sabaki extends EventEmitter {
     )
   }
 
-  async syncEngine(syncerId, treePosition, {tree = this.inferredState.gameTree} = {}) {
+  async syncEngine(
+    syncerId,
+    treePosition,
+    {tree = this.inferredState.gameTree} = {},
+  ) {
     let syncer = this.state.attachedEngineSyncers.find(
       (syncer) => syncer.id === syncerId,
     )
@@ -3590,13 +3695,25 @@ class Sabaki extends EventEmitter {
         ? -1
         : 1
       : data.B != null || (data.HA != null && +data.HA[0] >= 1)
-      ? -1
-      : 1
+        ? -1
+        : 1
   }
 
   setAnalysisArea(vertices) {
     this.setState({
+      analysisAreaRects: null,
       analysisAreaVertices: vertices,
+      highlightVertices: [],
+    })
+    this.refreshActiveBoardAnalysis()
+  }
+
+  setAnalysisAreaRects(rects, vertices) {
+    let hasVertices = vertices != null && vertices.length > 0
+
+    this.setState({
+      analysisAreaRects: hasVertices && rects != null ? rects : null,
+      analysisAreaVertices: hasVertices ? vertices : null,
       highlightVertices: [],
     })
     this.refreshActiveBoardAnalysis()
@@ -3604,6 +3721,7 @@ class Sabaki extends EventEmitter {
 
   clearAnalysisArea() {
     this.setState({
+      analysisAreaRects: null,
       analysisAreaVertices: null,
       highlightVertices: [],
     })
@@ -3639,22 +3757,22 @@ class Sabaki extends EventEmitter {
         data.BM != null
           ? 'BM'
           : data.TE != null
-          ? 'TE'
-          : data.DO != null
-          ? 'DO'
-          : data.IT != null
-          ? 'IT'
-          : null,
+            ? 'TE'
+            : data.DO != null
+              ? 'DO'
+              : data.IT != null
+                ? 'IT'
+                : null,
       positionAnnotation:
         data.UC != null
           ? 'UC'
           : data.GW != null
-          ? 'GW'
-          : data.DM != null
-          ? 'DM'
-          : data.GB != null
-          ? 'GB'
-          : null,
+            ? 'GW'
+            : data.DM != null
+              ? 'DM'
+              : data.GB != null
+                ? 'GB'
+                : null,
     }
   }
 

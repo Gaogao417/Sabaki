@@ -135,34 +135,17 @@ class App extends Component {
       let lowerKey = evt.key.toLowerCase()
 
       if (!typing && !evt.ctrlKey && !evt.metaKey) {
-        if (evt.key === 'Escape' && sabaki.state.areaToolEnabled) {
-          evt.preventDefault()
-          sabaki.setAreaToolEnabled(false)
-          return
-        }
-
-        if (
-          ['Backspace', 'Delete'].includes(evt.key) &&
-          sabaki.state.areaToolEnabled
-        ) {
-          evt.preventDefault()
-          sabaki.clearAnalysisArea()
-          return
-        }
-
         if (!evt.altKey && lowerKey === 't') {
           evt.preventDefault()
-          if (evt.shiftKey) {
+          if (
+            evt.shiftKey &&
+            sabaki.state.mode === 'edit' &&
+            sabaki.state.editWorkspace != null
+          ) {
             sabaki.toggleTerritoryCompareEnabled()
-          } else {
+          } else if (!evt.shiftKey) {
             sabaki.toggleTerritoryEnabled()
           }
-          return
-        }
-
-        if (!evt.altKey && !evt.shiftKey && lowerKey === 'a') {
-          evt.preventDefault()
-          sabaki.toggleAreaTool()
           return
         }
       }
@@ -177,7 +160,7 @@ class App extends Component {
       ) {
         let key = evt.key
 
-        if (['1', '2', '3', '4', 'Tab'].includes(key)) {
+        if (['1', '2', '3', '4', 'Tab'].includes(key) || lowerKey === 'r') {
           evt.preventDefault()
         }
 
@@ -198,6 +181,11 @@ class App extends Component {
 
         if (key === '4') {
           sabaki.setState({selectedTool: 'label'})
+          return
+        }
+
+        if (lowerKey === 'r') {
+          sabaki.captureEditReference()
           return
         }
 
@@ -395,40 +383,51 @@ class App extends Component {
 
     let inferredState = sabaki.inferredState
     let tree = inferredState.gameTree
-    let editWorkspaceActive = state.mode === 'edit' && state.editWorkspace != null
+    let editWorkspaceActive =
+      state.mode === 'edit' && state.editWorkspace != null
     let editWs = state.editWorkspace
-    let editRenderSnapshot =
-      editWorkspaceActive
-        ? (editWs.activeTab === 'reference'
-            ? editWs.referenceSnapshot
-            : editWs.currentSnapshot)
+    let editActiveTab =
+      editWorkspaceActive &&
+      editWs.activeTab === 'reference' &&
+      editWs.referenceSnapshot != null
+        ? 'reference'
+        : 'current'
+    let editPreviewTab =
+      editWorkspaceActive && editWs.referenceSnapshot != null
+        ? editActiveTab === 'reference'
+          ? 'current'
+          : 'reference'
         : null
+    let editActiveKeys = editWorkspaceActive
+      ? sabaki.getEditWorkspaceTabKeys(editActiveTab)
+      : null
+    let editPreviewKeys =
+      editWorkspaceActive && editPreviewTab != null
+        ? sabaki.getEditWorkspaceTabKeys(editPreviewTab)
+        : null
+    let editRenderSnapshot = editWorkspaceActive
+      ? editWs[editActiveKeys.snapshotKey]
+      : null
     let editRenderBoard =
       editRenderSnapshot == null ? null : boardFromSnapshot(editRenderSnapshot)
-    let editCurrentPlayer =
-      editWorkspaceActive
-        ? (editWs.activeTab === 'reference'
-            ? editWs.referenceSnapshot?.nextPlayer
-            : editWs.currentSnapshot?.nextPlayer) ?? inferredState.currentPlayer
-        : inferredState.currentPlayer
-    let editMarkerMap =
-      editWorkspaceActive
-        ? (editWs.activeTab === 'reference'
-            ? editWs.referenceMarkerMap
-            : editWs.currentMarkerMap)
-        : null
-    let editLines =
-      editWorkspaceActive
-        ? (editWs.activeTab === 'reference'
-            ? editWs.referenceLines
-            : editWs.currentLines)
-        : null
-    let editAnalysis =
-      editWorkspaceActive
-        ? (editWs.activeTab === 'reference'
-            ? editWs.referenceAnalysis
-            : editWs.currentAnalysis)
-        : null
+    let editCurrentPlayer = editWorkspaceActive
+      ? (editRenderSnapshot?.nextPlayer ?? inferredState.currentPlayer)
+      : inferredState.currentPlayer
+    let editMarkerMap = editWorkspaceActive
+      ? editWs[editActiveKeys.markerKey]
+      : null
+    let editLines = editWorkspaceActive ? editWs[editActiveKeys.linesKey] : null
+    let editAnalysis = editWorkspaceActive
+      ? editWs[editActiveKeys.analysisKey]
+      : null
+    let editPreviewSnapshot =
+      editPreviewKeys == null ? null : editWs[editPreviewKeys.snapshotKey]
+    let editPreviewBoard =
+      editPreviewSnapshot == null
+        ? null
+        : boardFromSnapshot(editPreviewSnapshot)
+    let editPreviewOwnership =
+      editPreviewKeys == null ? null : editWs[editPreviewKeys.ownershipKey]
     let scoreBoard, areaMap
     let comparePaintMap = null
     let compareMarkerMap = null
@@ -441,12 +440,11 @@ class App extends Component {
     let territoryDiffSourceType = null
     let compareMode = state.compareMode
     let territoryMode = state.territoryEnabled
-    let activeAnalysis =
-      editWorkspaceActive
-        ? editAnalysis
-        : state.analysisTreePosition === state.treePosition
-          ? state.analysis
-          : null
+    let activeAnalysis = editWorkspaceActive
+      ? editAnalysis
+      : state.analysisTreePosition === state.treePosition
+        ? state.analysis
+        : null
 
     if (['scoring', 'estimator'].includes(state.mode)) {
       // Calculate area map
@@ -510,9 +508,7 @@ class App extends Component {
     if (territoryMode) {
       let engineSyncer = inferredState.analyzingEngineSyncer
       territoryOwnership = editWorkspaceActive
-        ? (editWs.activeTab === 'reference'
-            ? editWs.referenceOwnership
-            : editWs.currentOwnership)
+        ? editWs[editActiveKeys.ownershipKey]
         : sabaki.getCurrentOwnership(engineSyncer)
 
       if (['scoring', 'estimator'].includes(state.mode)) {
@@ -536,58 +532,43 @@ class App extends Component {
             : t('The current analysis engine does not provide ownership data.')
       }
 
-      if (state.territoryCompareEnabled) {
-        if (
-          editWorkspaceActive &&
-          editWs.activeTab === 'reference' &&
-          editWs.referenceOwnership != null &&
-          editWs.currentOwnership != null
-        ) {
-          territoryDeltaMap = helper.getOwnershipDelta(
-            editWs.referenceOwnership,
-            editWs.currentOwnership,
-          )
-          territoryDiffAvailable = territoryDeltaMap != null
-          territoryDiffSourceType = 'reference'
-        } else if (!editWorkspaceActive) {
-          let previousTreePosition =
-            tree.get(state.treePosition)?.parentId ?? null
-          let previousOwnership =
-            previousTreePosition == null
-              ? null
-              : sabaki.getOwnershipForTreePosition(null, previousTreePosition)
-
-          territoryDeltaMap = helper.getOwnershipDelta(
-            previousOwnership,
-            territoryOwnership,
-          )
-          territoryDiffAvailable = territoryDeltaMap != null
-          territoryDiffSourceType = territoryDiffAvailable ? 'previous' : null
-        }
+      if (
+        state.territoryCompareEnabled &&
+        editWorkspaceActive &&
+        editPreviewOwnership != null &&
+        territoryOwnership != null
+      ) {
+        territoryDeltaMap = helper.getOwnershipDelta(
+          editPreviewOwnership,
+          territoryOwnership,
+        )
+        territoryDiffAvailable = territoryDeltaMap != null
+        territoryDiffSourceType = territoryDiffAvailable ? 'workspace' : null
       }
     }
 
-    let territoryStatusText =
-      !territoryMode
-        ? null
-        : editWorkspaceActive && editWs.activeTab === 'reference'
-          ? state.territoryCompareEnabled
-            ? t('Reference Territory Compare')
-            : t('Reference Territory')
-          : editWorkspaceActive
-            ? t('Current Territory')
-            : state.territoryCompareEnabled
-              ? t('Territory Compare')
-              : t('Territory')
+    let territoryStatusText = !territoryMode
+      ? null
+      : editWorkspaceActive
+        ? state.territoryCompareEnabled
+          ? t('Preview vs Large Board Territory')
+          : editActiveTab === 'reference'
+            ? t('Large: Reference Territory')
+            : t('Large: Current Territory')
+        : t('Territory')
 
     state = {
       ...state,
       ...inferredState,
       editWorkspaceActive,
+      editActiveTab,
+      editPreviewTab,
       editRenderBoard,
       editCurrentPlayer,
       editMarkerMap,
       editAnalysis,
+      editPreviewBoard,
+      editPreviewOwnership,
       activeAnalysis,
       compareMode,
       territoryMode,
@@ -603,6 +584,7 @@ class App extends Component {
       territoryDiffAvailable,
       territoryDiffSourceType,
       territoryStatusText,
+      comparisonOwnership: editWorkspaceActive ? editPreviewOwnership : null,
     }
 
     return h(
@@ -633,7 +615,6 @@ class App extends Component {
         territoryEnabled: state.territoryEnabled,
         territoryCompareEnabled: state.territoryCompareEnabled,
         territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
-        areaToolEnabled: state.areaToolEnabled,
         compareDisplayPreset: state.compareDisplayPreset,
         showWinrateGraph: state.showWinrateGraph,
         showGameGraph: state.showGameGraph,

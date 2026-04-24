@@ -119,7 +119,14 @@ let defaults = {
   'edit.max_history_count': 1000,
   'edit.show_removenode_warning': true,
   'edit.show_removeothervariations_warning': true,
-  'engines.list': [],
+  'engines.list': [
+    {
+      name: 'KataGo',
+      path: 'D:/Katago/engine',
+      args: 'gtp -model D:/Katago/model',
+      commands: '',
+    },
+  ],
   'engines.analyze_commands': ['analyze', 'kata-analyze', 'lz-analyze'],
   'engines.gemove_analyze_commands': [
     'genmove_analyze',

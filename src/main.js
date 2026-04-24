@@ -194,7 +194,7 @@ function buildMenu(props = {}) {
           let window = BrowserWindow.getFocusedWindow()
           if (!window) return
 
-          window.webContents.send(`menu-click-${item.id}`)
+          window.webContents.send('menu-click', item.id)
         }
       }
 

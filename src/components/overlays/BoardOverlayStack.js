@@ -22,7 +22,8 @@ export default class BoardOverlayStack extends Component {
 
   componentWillReceiveProps(nextProps) {
     if (
-      nextProps.gobanProps.treePosition !== this.props.gobanProps.treePosition ||
+      nextProps.gobanProps.treePosition !==
+        this.props.gobanProps.treePosition ||
       nextProps.baselineOwnership !== this.props.baselineOwnership ||
       nextProps.analysis !== this.props.analysis
     ) {
@@ -68,6 +69,7 @@ export default class BoardOverlayStack extends Component {
       lastMoveDiffAvailable,
       diffSourceType = null,
       keyPointSummary = null,
+      comparisonOwnership = null,
     },
     {
       hoveredVertex = null,
@@ -102,6 +104,7 @@ export default class BoardOverlayStack extends Component {
       unavailableReason == null && territoryMode
         ? getTerritoryDiffLayer({
             ownership: baselineOwnership,
+            comparisonOwnership,
             deltaMap: activeDeltaMap,
             hoveredVertex,
             hoveredRegion: territoryPaintLayer.hoveredRegion,
@@ -139,7 +142,9 @@ export default class BoardOverlayStack extends Component {
         className: territoryMode ? 'territory-mode' : gobanProps.className,
         analysis,
         paintMap:
-          territoryMode && unavailableReason == null
+          territoryMode &&
+          unavailableReason == null &&
+          territoryPaintLayer.paintMap != null
             ? territoryPaintLayer.paintMap.map((row, y) =>
                 row.map((value, x) => {
                   let areaValue = gobanProps.paintMap?.[y]?.[x] ?? 0
@@ -153,12 +158,7 @@ export default class BoardOverlayStack extends Component {
           territoryPaintLayer.markerMap,
           territoryDiffLayer.markerMap,
         ),
-        highlightVertices:
-          territoryMode &&
-          territoryPaintLayer.hoveredRegion != null &&
-          hoveredAnalysisVertex == null
-            ? territoryPaintLayer.hoveredRegion.vertices
-            : gobanProps.highlightVertices,
+        highlightVertices: gobanProps.highlightVertices,
         onVertexMouseMove: ({vertex, ...evt}) => {
           gobanProps.onVertexMouseMove?.({vertex, ...evt})
           this.setState({hoveredVertex: vertex})

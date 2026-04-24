@@ -7,6 +7,7 @@ view older versions of the documentation, you can browse by tag on GitHub.
 
 - [Building & Tests](guides/building-tests.md)
 - [Debugging](guides/debugging.md)
+- [Territory, Compare, and Analysis Area UX](design-report-territory-analysis-ux.md)
 
 ## User Guides
 

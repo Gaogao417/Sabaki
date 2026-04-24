@@ -19,15 +19,22 @@ export default class MainView extends Component {
 
     this.state = {
       gobanCrosshair: false,
+      areaModifierActive: false,
       overlayStatusProps: null,
     }
 
     this.handleTogglePlayer = () => {
-      let {gameTree, treePosition, currentPlayer, editWorkspaceActive} = this.props
+      let {
+        treePosition,
+        currentPlayer,
+        editWorkspaceActive,
+        editCurrentPlayer,
+      } = this.props
+      let player = editWorkspaceActive ? editCurrentPlayer : currentPlayer
       if (editWorkspaceActive) {
-        sabaki.setEditWorkspacePlayer(-currentPlayer)
+        sabaki.setEditWorkspacePlayer(-player)
       } else {
-        sabaki.setPlayer(treePosition, -currentPlayer)
+        sabaki.setPlayer(treePosition, -player)
       }
     }
 
@@ -55,7 +62,8 @@ export default class MainView extends Component {
     this.handleGobanVertexClick = this.handleGobanVertexClick.bind(this)
     this.handleGobanLineDraw = this.handleGobanLineDraw.bind(this)
     this.handleGobanAreaSelect = this.handleGobanAreaSelect.bind(this)
-    this.handleGobanAreaSelectPreview = this.handleGobanAreaSelectPreview.bind(this)
+    this.handleGobanAreaSelectPreview =
+      this.handleGobanAreaSelectPreview.bind(this)
   }
 
   computeRectangleVertices(start, end, width, height) {
@@ -76,63 +84,97 @@ export default class MainView extends Component {
     return vertices
   }
 
-  handleGobanAreaSelect({start, end, operation}) {
-    let {gameTree, treePosition, editWorkspaceActive, editRenderBoard} = this.props
-    let board =
-      editWorkspaceActive && editRenderBoard != null
-        ? editRenderBoard
-        : gametree.getBoard(gameTree, treePosition)
-    let vertices = this.computeRectangleVertices(start, end, board.width, board.height)
-    let vertexSet = new Set(
-      (this.props.analysisAreaVertices || []).map((vertex) => vertex.join(',')),
-    )
+  normalizeAreaRect(start, end) {
+    return {
+      start: [Math.min(start[0], end[0]), Math.min(start[1], end[1])],
+      end: [Math.max(start[0], end[0]), Math.max(start[1], end[1])],
+    }
+  }
 
-    for (let vertex of vertices) {
-      let key = vertex.join(',')
-      if (operation === 'subtract') {
-        vertexSet.delete(key)
-      } else {
-        vertexSet.add(key)
+  getActiveBoard() {
+    let {gameTree, treePosition, editWorkspaceActive, editRenderBoard} =
+      this.props
+
+    return editWorkspaceActive && editRenderBoard != null
+      ? editRenderBoard
+      : gametree.getBoard(gameTree, treePosition)
+  }
+
+  computeAreaVerticesFromRects(rects, board) {
+    let vertexSet = new Set()
+
+    for (let {start, end} of rects || []) {
+      for (let vertex of this.computeRectangleVertices(
+        start,
+        end,
+        board.width,
+        board.height,
+      )) {
+        let key = vertex.join(',')
+        if (vertexSet.has(key)) vertexSet.delete(key)
+        else vertexSet.add(key)
       }
     }
 
-    let nextVertices =
-      operation === 'replace'
-        ? vertices
-        : [...vertexSet].map((vertex) => vertex.split(',').map(Number))
-
-    sabaki.setAnalysisArea(nextVertices.length > 0 ? nextVertices : null)
+    return [...vertexSet].map((vertex) => vertex.split(',').map(Number))
   }
 
-  handleGobanAreaSelectPreview({start, end, operation}) {
-    let {gameTree, treePosition, editWorkspaceActive, editRenderBoard} = this.props
-    let board =
-      editWorkspaceActive && editRenderBoard != null
-        ? editRenderBoard
-        : gametree.getBoard(gameTree, treePosition)
-    let vertices = this.computeRectangleVertices(start, end, board.width, board.height)
-    if (operation === 'replace') {
-      sabaki.setState({highlightVertices: vertices})
+  rectContainsVertex(rect, vertex) {
+    return (
+      vertex[0] >= rect.start[0] &&
+      vertex[0] <= rect.end[0] &&
+      vertex[1] >= rect.start[1] &&
+      vertex[1] <= rect.end[1]
+    )
+  }
+
+  handleGobanAreaSelect({start, end, operation}) {
+    if (operation === 'clearAll') {
+      sabaki.clearAnalysisArea()
       return
     }
 
-    let currentVertices = new Set(
-      (this.props.analysisAreaVertices || []).map((vertex) => vertex.join(',')),
-    )
+    let board = this.getActiveBoard()
+    let rects = [...(this.props.analysisAreaRects || [])]
 
-    for (let vertex of vertices) {
-      let key = vertex.join(',')
-      if (operation === 'subtract') {
-        currentVertices.delete(key)
-      } else {
-        currentVertices.add(key)
-      }
+    if (operation === 'removeRect') {
+      let index = rects
+        .map((rect, index) => ({rect, index}))
+        .reverse()
+        .find(({rect}) => this.rectContainsVertex(rect, start))?.index
+
+      if (index == null) return
+
+      rects.splice(index, 1)
+    } else {
+      rects.push(this.normalizeAreaRect(start, end))
     }
 
+    sabaki.setAnalysisAreaRects(
+      rects,
+      this.computeAreaVerticesFromRects(rects, board),
+    )
+  }
+
+  handleGobanAreaSelectPreview({start, end, operation}) {
+    if (start == null || end == null) {
+      sabaki.setState({highlightVertices: []})
+      return
+    }
+
+    if (operation !== 'add') {
+      sabaki.setState({highlightVertices: []})
+      return
+    }
+
+    let board = this.getActiveBoard()
+    let rects = [
+      ...(this.props.analysisAreaRects || []),
+      this.normalizeAreaRect(start, end),
+    ]
+
     sabaki.setState({
-      highlightVertices: [...currentVertices].map((vertex) =>
-        vertex.split(',').map(Number),
-      ),
+      highlightVertices: this.computeAreaVerticesFromRects(rects, board),
     })
   }
 
@@ -140,18 +182,34 @@ export default class MainView extends Component {
     // Pressing Ctrl/Cmd should show crosshair cursor on Goban in edit mode
 
     document.addEventListener('keydown', (evt) => {
-      if (evt.key !== 'Control' && evt.key !== 'Meta') return
-
-      if (this.props.mode === 'edit') {
-        this.setState({gobanCrosshair: true})
+      if (evt.key === 'Control' || evt.key === 'Meta') {
+        if (this.props.mode === 'edit') {
+          this.setState({gobanCrosshair: true})
+        }
+        this.setState({areaModifierActive: true})
+      } else if (evt.key === 'Alt') {
+        this.setState({areaModifierActive: true})
       }
     })
 
     document.addEventListener('keyup', (evt) => {
-      if (evt.key !== 'Control' && evt.key !== 'Meta') return
-
-      if (this.props.mode === 'edit') {
-        this.setState({gobanCrosshair: false})
+      if (evt.key === 'Control' || evt.key === 'Meta') {
+        if (this.props.mode === 'edit') {
+          this.setState({gobanCrosshair: false})
+        }
+        this.setState({
+          areaModifierActive: evt.ctrlKey || evt.metaKey || evt.altKey,
+        })
+        if (!evt.ctrlKey && !evt.metaKey && !evt.altKey) {
+          sabaki.setState({highlightVertices: []})
+        }
+      } else if (evt.key === 'Alt') {
+        this.setState({
+          areaModifierActive: evt.ctrlKey || evt.metaKey || evt.altKey,
+        })
+        if (!evt.ctrlKey && !evt.metaKey && !evt.altKey) {
+          sabaki.setState({highlightVertices: []})
+        }
       }
     })
   }
@@ -176,7 +234,8 @@ export default class MainView extends Component {
     if (mode === 'edit' && editWorkspaceActive) {
       let ws = sabaki.state.editWorkspace
       if (ws != null) {
-        let linesKey = ws.activeTab === 'reference' ? 'referenceLines' : 'currentLines'
+        let linesKey =
+          ws.activeTab === 'reference' ? 'referenceLines' : 'currentLines'
         let lines = [...ws[linesKey], {v1, v2, type: selectedTool}]
         sabaki.setState({editWorkspace: {...ws, [linesKey]: lines}})
       }
@@ -217,6 +276,33 @@ export default class MainView extends Component {
     return nextMarkerMap
   }
 
+  renderBoardSurface({
+    territoryMode,
+    territoryOwnership,
+    overlayUnavailableReason,
+    gobanProps,
+    territoryDeltaMap = null,
+    territoryDiffAvailable = false,
+    territoryDiffSourceType = null,
+    comparisonOwnership = null,
+    onStatusChange = null,
+  }) {
+    return territoryMode
+      ? h(BoardOverlayStack, {
+          territoryMode,
+          baselineOwnership: territoryOwnership,
+          unavailableReason: overlayUnavailableReason,
+          gobanProps,
+          analysis: gobanProps.analysis,
+          lastMoveDeltaMap: territoryDeltaMap,
+          lastMoveDiffAvailable: territoryDiffAvailable,
+          diffSourceType: territoryDiffSourceType,
+          comparisonOwnership,
+          onStatusChange,
+        })
+      : h(Goban, gobanProps)
+  }
+
   render(
     {
       mode,
@@ -226,6 +312,7 @@ export default class MainView extends Component {
       treePosition,
       currentPlayer,
       editWorkspaceActive,
+      editActiveTab,
       editRenderBoard,
       editCurrentPlayer,
       editMarkerMap,
@@ -256,12 +343,13 @@ export default class MainView extends Component {
       territoryDiffAvailable,
       territoryDiffSourceType,
       territoryStatusText,
+      comparisonOwnership,
       graphHoverTreePosition,
       blockedGuesses,
 
       highlightVertices,
+      analysisAreaRects,
       analysisAreaVertices,
-      areaToolEnabled,
       analysisType,
       showAnalysis,
       showCoordinates,
@@ -278,7 +366,7 @@ export default class MainView extends Component {
       findVertex,
       editWorkspace: editWs,
     },
-    {gobanCrosshair},
+    {gobanCrosshair, areaModifierActive},
   ) {
     let compareReferencePosition =
       compareMode && compareReferenceTreePosition != null
@@ -318,9 +406,11 @@ export default class MainView extends Component {
       markerMap = compareMarkerMap
     }
 
-    if (areaToolEnabled && analysisAreaVertices != null) {
+    if (analysisAreaVertices != null) {
       paintMap = board.signMap.map((row) => row.map(() => 0))
-      let vertexSet = new Set(analysisAreaVertices.map((v) => `${v[0]},${v[1]}`))
+      let vertexSet = new Set(
+        analysisAreaVertices.map((v) => `${v[0]},${v[1]}`),
+      )
       for (let y = 0; y < board.height; y++) {
         for (let x = 0; x < board.width; x++) {
           if (!vertexSet.has(`${x},${y}`)) {
@@ -420,18 +510,19 @@ export default class MainView extends Component {
       highlightVertices:
         findVertex && mode === 'find' ? [findVertex] : highlightVertices,
       analysisType,
-      analysis:
-        !compareMode && showAnalysis ? activeAnalysis : null,
+      analysis: !compareMode && showAnalysis ? activeAnalysis : null,
       paintMap,
       markerMap:
-        editWorkspaceActive && editMarkerMap != null ? editMarkerMap : markerMap,
+        editWorkspaceActive && editMarkerMap != null
+          ? editMarkerMap
+          : markerMap,
       compareSelectedVertices,
       dimmedStones,
       overlayGhostStoneMap,
       comparePending,
       compareMode,
 
-      crosshair: gobanCrosshair || areaToolEnabled,
+      crosshair: gobanCrosshair || areaModifierActive,
       showCoordinates,
       showMoveColorization,
       showMoveNumbers: mode !== 'edit' && showMoveNumbers,
@@ -449,12 +540,12 @@ export default class MainView extends Component {
 
       onVertexClick: this.handleGobanVertexClick,
       onLineDraw: this.handleGobanLineDraw,
-      dragMode: mode === 'edit' && editWorkspaceActive && !areaToolEnabled,
-      onStoneDragEnd: mode === 'edit' && editWorkspaceActive
-        ? (evt) => sabaki.handleEditDragEnd(evt)
-        : null,
+      dragMode: mode === 'edit' && editWorkspaceActive,
+      onStoneDragEnd:
+        mode === 'edit' && editWorkspaceActive
+          ? (evt) => sabaki.handleEditDragEnd(evt)
+          : null,
 
-      areaSelectMode: areaToolEnabled,
       onAreaSelect: this.handleGobanAreaSelect,
       onAreaSelectPreview: this.handleGobanAreaSelectPreview,
     }
@@ -468,19 +559,18 @@ export default class MainView extends Component {
 
     let activeTools = [
       territoryMode ? territoryStatusText : null,
-      areaToolEnabled ? 'Area' : null,
       showAnalysis ? 'Heatmap' : null,
     ].filter(Boolean)
     let workspaceSummary = [
       editWorkspaceActive
-        ? editWs?.activeTab === 'reference'
-          ? 'Reference'
-          : 'Current'
+        ? editActiveTab === 'reference'
+          ? 'Large: Reference'
+          : 'Large: Current'
         : null,
-      activeTools.join(' • ') || null,
+      activeTools.join(' | ') || null,
     ]
       .filter(Boolean)
-      .join(' • ')
+      .join(' | ')
     if (workspaceSummary === '') workspaceSummary = null
 
     return h(
@@ -497,8 +587,6 @@ export default class MainView extends Component {
         playerRanks: gameInfo.playerRanks,
         playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
         engineSyncers,
-        areaToolEnabled,
-        areaSelectionActive: analysisAreaVertices != null,
         onCurrentPlayerClick: this.handleTogglePlayer,
       }),
 
@@ -509,19 +597,58 @@ export default class MainView extends Component {
           class: 'board-stage',
         },
 
-        territoryMode
-          ? h(BoardOverlayStack, {
+        editWorkspaceActive
+          ? h(
+              'div',
+              {class: 'edit-stage'},
+              h(
+                'section',
+                {class: 'edit-board-panel edit-board-panel--primary'},
+                h(
+                  'div',
+                  {class: 'edit-board-panel__header'},
+                  h(
+                    'strong',
+                    {},
+                    editActiveTab === 'reference'
+                      ? 'Large: Reference'
+                      : 'Large: Current',
+                  ),
+                  h(
+                    'span',
+                    {},
+                    territoryCompareEnabled
+                      ? 'Editable | Preview diff'
+                      : 'Editable',
+                  ),
+                ),
+                h(
+                  'div',
+                  {class: 'edit-board-panel__body'},
+                  this.renderBoardSurface({
+                    territoryMode,
+                    territoryOwnership,
+                    overlayUnavailableReason,
+                    gobanProps,
+                    territoryDeltaMap,
+                    territoryDiffAvailable,
+                    territoryDiffSourceType,
+                    comparisonOwnership,
+                    onStatusChange: this.handleOverlayStatusChange,
+                  }),
+                ),
+              ),
+            )
+          : this.renderBoardSurface({
               territoryMode,
-              baselineOwnership: territoryOwnership,
-              unavailableReason: overlayUnavailableReason,
+              territoryOwnership,
+              overlayUnavailableReason,
               gobanProps,
-              analysis: gobanProps.analysis,
-              lastMoveDeltaMap: territoryDeltaMap,
-              lastMoveDiffAvailable: territoryDiffAvailable,
-              diffSourceType: territoryDiffSourceType,
+              territoryDeltaMap,
+              territoryDiffAvailable,
+              territoryDiffSourceType,
               onStatusChange: this.handleOverlayStatusChange,
-            })
-          : h(Goban, gobanProps),
+            }),
       ),
 
       h(

@@ -7,6 +7,7 @@ import {
 
 export function getTerritoryDiffLayer({
   ownership,
+  comparisonOwnership = null,
   deltaMap,
   hoveredVertex,
   hoveredRegion,
@@ -21,7 +22,11 @@ export function getTerritoryDiffLayer({
   }
 
   return {
-    markerMap: buildCompareTerritoryMarkerMap(ownership, deltaMap),
+    markerMap: buildCompareTerritoryMarkerMap(
+      ownership,
+      deltaMap,
+      comparisonOwnership,
+    ),
     deltaSummary: buildOwnershipDeltaSummary(deltaMap),
     hoveredDelta: getDeltaAtVertex(deltaMap, hoveredVertex),
     hoveredRegionDeltaSummary: summarizeCompareTerritoryRegion(

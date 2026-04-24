@@ -42,7 +42,6 @@ exports.get = function(props = {}) {
     territoryEnabled,
     territoryCompareEnabled,
     territoryCompareAvailable,
-    areaToolEnabled,
     compareDisplayPreset,
     showWinrateGraph,
     showGameGraph,
@@ -687,19 +686,17 @@ exports.get = function(props = {}) {
           checked: !!territoryEnabled,
           click: () => sabaki.toggleTerritoryEnabled(),
         },
-        {
-          label: i18n.t('menu.view', 'Territory &Compare'),
-          type: 'checkbox',
-          checked: !!territoryCompareEnabled,
-          enabled: !!territoryCompareAvailable,
-          click: () => sabaki.toggleTerritoryCompareEnabled(),
-        },
-        {
-          label: i18n.t('menu.view', '&Area'),
-          type: 'checkbox',
-          checked: !!areaToolEnabled,
-          click: () => sabaki.toggleAreaTool(),
-        },
+        ...(mode !== 'edit'
+          ? []
+          : [
+              {
+                label: i18n.t('menu.view', 'Territory &Compare'),
+                type: 'checkbox',
+                checked: !!territoryCompareEnabled,
+                enabled: !!territoryCompareAvailable,
+                click: () => sabaki.toggleTerritoryCompareEnabled(),
+              },
+            ]),
         {
           label: i18n.t('menu.view', 'Show &Heatmap'),
           submenu: [

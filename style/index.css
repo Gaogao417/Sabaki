@@ -51,6 +51,10 @@
     align-items: center;
     gap: 10px;
   }
+  .toolbar-controls {
+    flex: none;
+    gap: 12px;
+  }
   .toolbar-players {
     flex: 1 1 auto;
   }
@@ -58,6 +62,14 @@
     flex: none;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+  .toolbar-modes,
+  .toolbar-overlays {
+    padding: 3px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, .32);
+    border: 1px solid rgba(255, 226, 138, .08);
+    gap: 2px;
   }
   .toolbar-player {
     min-width: 0;
@@ -114,23 +126,101 @@
     filter: invert(100%);
   }
   .toolbar-button {
-    min-height: 34px;
-    padding: 0 12px;
-    border-radius: 999px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 6px;
     color: #f5e9be;
-    background: rgba(255, 255, 255, .08);
-    transition: background .15s, color .15s, box-shadow .15s;
+    background: transparent;
+    transition: background .15s, box-shadow .15s;
+  }
+  .toolbar-button img {
+    filter: invert(1) opacity(.78);
   }
   .toolbar-button.selected {
-    background: rgba(255, 220, 123, .18);
-    color: #fff7d8;
-    box-shadow: inset 0 0 0 1px rgba(255, 229, 146, .25);
+    background: rgba(255, 220, 123, .22);
+    box-shadow: inset 0 0 0 1px rgba(255, 229, 146, .3);
   }
-  .toolbar-button.accent {
-    color: #fff1be;
+  .toolbar-button.selected img {
+    filter: invert(1) opacity(1);
+  }
+  .toolbar-button.accent img {
+    filter: invert(1) opacity(1);
   }
   .toolbar-button.disabled {
     opacity: .45;
+  }
+
+.edit-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  .edit-board-panel {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(42, 31, 12, .16);
+    box-shadow: inset 0 0 0 1px rgba(255, 245, 204, .09);
+  }
+  .edit-board-panel--primary {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  .edit-board-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #f6efcf;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .edit-board-panel__header span {
+    color: rgba(246, 239, 207, .72);
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .edit-board-panel__body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .05);
+  }
+  .edit-board-readonly {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  .edit-board-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 16px;
+    box-sizing: border-box;
+    color: rgba(246, 239, 207, .9);
+    text-align: center;
+  }
+  .edit-board-placeholder span {
+    color: rgba(246, 239, 207, .72);
+    font-size: 12px;
+  }
+  #goban-edit-preview {
+    box-shadow: 0 4px 14px rgba(20, 0, 15, .45);
   }
 
 .workspace-dock {
@@ -363,6 +453,44 @@
     margin-top: -10px;
   }
 
+  #edit ul.edit-workspace-actions {
+    gap: 6px;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255, 226, 138, .15);
+  }
+  #edit ul.edit-workspace-actions li a {
+    width: auto;
+    height: auto;
+    min-height: 28px;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #f8efc4;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, .06);
+    transition: background .15s, box-shadow .15s;
+  }
+  .edit #edit ul.edit-workspace-actions li a:hover {
+    background: rgba(255, 255, 255, .14);
+  }
+  .edit #edit ul.edit-workspace-actions li a.accent {
+    background: rgba(255, 200, 60, .25);
+    color: #fff5d0;
+    box-shadow: inset 0 0 0 1px rgba(255, 220, 100, .3);
+  }
+  .edit #edit ul.edit-workspace-actions li a.tab-active {
+    background: rgba(255, 220, 123, .22);
+    color: #fff7d8;
+    box-shadow: inset 0 0 0 1px rgba(255, 229, 146, .3);
+  }
+  .edit #edit ul.edit-workspace-actions li a.disabled {
+    opacity: .4;
+    cursor: default;
+    pointer-events: none;
+  }
+
 #autoplay label {
     color: rgba(255, 255, 255, .5);
   }
@@ -406,10 +534,14 @@
     background-color: rgba(255, 255, 255, .5);
   }
 
-@media (max-width: 980px) {
+@media (max-width: 680px) {
   .board-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .toolbar-controls {
+    width: 100%;
   }
 
   .toolbar-actions {
@@ -526,6 +658,57 @@
     position: relative;
     z-index: 1;
 }
+
+  #sidebar .graphproperties.has-edit-preview #slider {
+    top: 230px;
+    height: calc(100% - 230px);
+  }
+
+  #sidebar .graphproperties.has-edit-preview #graph {
+    top: 230px;
+    height: calc(100% - 230px);
+  }
+
+  .edit-preview-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 35px;
+    height: 210px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(33, 29, 18, .92);
+    border: 1px solid rgba(255, 245, 204, .14);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .42);
+    z-index: 3;
+  }
+
+  .edit-preview-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #f6efcf;
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  .edit-preview-panel__header span {
+    color: rgba(246, 239, 207, .72);
+    font-size: 11px;
+    text-transform: none;
+  }
+
+  .edit-preview-panel__body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    background: rgba(255, 255, 255, .05);
+  }
 
 #winrategraph {
     display: grid;
@@ -779,35 +962,42 @@
   .overlay-status-idle {
     background: rgba(223, 201, 119, .95);
   }
-  #goban.territory-mode .shudan-selection {
+  #goban.territory-mode .shudan-selection,
+  #goban-edit-preview.territory-mode .shudan-selection {
     border-color: rgba(255, 255, 255, .9);
     background: rgba(255, 255, 255, .16);
     box-shadow: 0 0 .65em rgba(255, 255, 255, .18);
   }
-  #goban.territory-mode .shudan-vertex[title="@territory-neutral"].shudan-marker_point .shudan-marker {
+  #goban.territory-mode .shudan-vertex[title="@territory-neutral"].shudan-marker_point .shudan-marker,
+  #goban-edit-preview.territory-mode .shudan-vertex[title="@territory-neutral"].shudan-marker_point .shudan-marker {
     fill: #f4c35f;
     opacity: .85;
     filter: drop-shadow(0 0 4px rgba(244, 195, 95, .7));
   }
-  #goban.territory-mode .shudan-vertex[title^="@territory-delta-strengthened-"].shudan-marker_point .shudan-marker {
+  #goban.territory-mode .shudan-vertex[title^="@territory-delta-strengthened-"].shudan-marker_point .shudan-marker,
+  #goban-edit-preview.territory-mode .shudan-vertex[title^="@territory-delta-strengthened-"].shudan-marker_point .shudan-marker {
     fill: #58d68d;
     opacity: .95;
     filter: drop-shadow(0 0 4px rgba(88, 214, 141, .8));
   }
-  #goban.territory-mode .shudan-vertex[title^="@territory-delta-weakened-"].shudan-marker_point .shudan-marker {
+  #goban.territory-mode .shudan-vertex[title^="@territory-delta-weakened-"].shudan-marker_point .shudan-marker,
+  #goban-edit-preview.territory-mode .shudan-vertex[title^="@territory-delta-weakened-"].shudan-marker_point .shudan-marker {
     fill: #ff7a7a;
     opacity: .95;
     filter: drop-shadow(0 0 4px rgba(255, 122, 122, .8));
   }
-  #goban.territory-mode .shudan-vertex[title$="-1"].shudan-marker_point .shudan-marker {
+  #goban.territory-mode .shudan-vertex[title$="-1"].shudan-marker_point .shudan-marker,
+  #goban-edit-preview.territory-mode .shudan-vertex[title$="-1"].shudan-marker_point .shudan-marker {
     transform: scale(.8);
     transform-origin: center;
   }
-  #goban.territory-mode .shudan-vertex[title$="-2"].shudan-marker_point .shudan-marker {
+  #goban.territory-mode .shudan-vertex[title$="-2"].shudan-marker_point .shudan-marker,
+  #goban-edit-preview.territory-mode .shudan-vertex[title$="-2"].shudan-marker_point .shudan-marker {
     transform: scale(1.15);
     transform-origin: center;
   }
-  #goban.territory-mode .shudan-vertex[title$="-3"].shudan-marker_point .shudan-marker {
+  #goban.territory-mode .shudan-vertex[title$="-3"].shudan-marker_point .shudan-marker,
+  #goban-edit-preview.territory-mode .shudan-vertex[title$="-3"].shudan-marker_point .shudan-marker {
     transform: scale(1.45);
     transform-origin: center;
   }
