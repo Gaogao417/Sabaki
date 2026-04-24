@@ -47,6 +47,7 @@ exports.get = function (props = {}) {
     showCommentBox,
     showLeftSidebar,
     engineGameOngoing,
+    quickAnalysisId,
   } = props
 
   let data = [
@@ -538,6 +539,21 @@ exports.get = function (props = {}) {
             }
 
             sabaki.generateMove(syncerId, sabaki.state.treePosition)
+          },
+        },
+        {type: 'separator'},
+        {
+          label: quickAnalysisId
+            ? i18n.t('menu.engines', 'Stop &Quick Analyze All')
+            : i18n.t('menu.engines', '&Quick Analyze All'),
+          accelerator: 'F6',
+          neverDisable: true,
+          click: () => {
+            if (quickAnalysisId) {
+              sabaki.stopQuickAnalysis()
+            } else {
+              sabaki.quickAnalyzeAllNodes()
+            }
           },
         },
       ],
