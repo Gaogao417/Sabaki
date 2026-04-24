@@ -72,8 +72,7 @@ export default class WinrateGraph extends Component {
 
     this.state = {
       invert: setting.get('view.winrategraph_invert'),
-      showWinrate: true,
-      showScoreLead: true,
+      metricMode: 'both', // 'winrate' | 'lead' | 'both'
     }
 
     setting.onDidChange(({key, value}) => {
@@ -91,12 +90,20 @@ export default class WinrateGraph extends Component {
 
     this.handleWinrateToggle = (evt) => {
       evt.preventDefault()
-      this.setState(({showWinrate}) => ({showWinrate: !showWinrate}))
+      this.setState(({metricMode}) => {
+        if (metricMode === 'lead') return {metricMode: 'lead'} // Can't turn off last metric
+        if (metricMode === 'both') return {metricMode: 'lead'}
+        return {metricMode: 'both'}
+      })
     }
 
     this.handleScoreLeadToggle = (evt) => {
       evt.preventDefault()
-      this.setState(({showScoreLead}) => ({showScoreLead: !showScoreLead}))
+      this.setState(({metricMode}) => {
+        if (metricMode === 'winrate') return {metricMode: 'winrate'} // Can't turn off last metric
+        if (metricMode === 'both') return {metricMode: 'winrate'}
+        return {metricMode: 'both'}
+      })
     }
   }
 
@@ -130,7 +137,9 @@ export default class WinrateGraph extends Component {
 
   render() {
     let {lastPlayer, currentIndex, data, scoreLeadData = []} = this.props
-    let {invert, showWinrate, showScoreLead} = this.state
+    let {invert, metricMode} = this.state
+    let showWinrate = metricMode !== 'lead'
+    let showScoreLead = metricMode !== 'winrate'
 
     let winrateValues = data.map(toNumber)
     let scoreLeadValues = scoreLeadData.map(toNumber)

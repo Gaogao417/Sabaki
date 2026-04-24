@@ -125,6 +125,7 @@ export default class BoardOverlayStack extends Component {
               : unavailableReason,
           territorySummary: territoryPaintLayer.territorySummary,
           hoveredRegion: territoryPaintLayer.hoveredRegion,
+          hoveredVertex,
           deltaSummary: territoryDiffLayer.deltaSummary,
           hoveredDelta: territoryDiffLayer.hoveredDelta,
           hoveredRegionDeltaSummary:

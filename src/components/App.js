@@ -48,6 +48,7 @@ class App extends Component {
 
     this.state = {
       ...sabaki.state,
+      overlayStatusProps: null,
     }
 
     sabaki.on('change', ({change, callback}) => this.setState(change, callback))
@@ -55,6 +56,14 @@ class App extends Component {
     let bind = (f) => f.bind(this)
     this.handleMainLayoutSplitChange = bind(this.handleMainLayoutSplitChange)
     this.handleMainLayoutSplitFinish = bind(this.handleMainLayoutSplitFinish)
+
+    this.handleOverlayStatusChange = (overlayStatusProps) => {
+      this.setState(({overlayStatusProps: current}) => {
+        let next = overlayStatusProps ?? null
+        if (JSON.stringify(current) === JSON.stringify(next)) return null
+        return {overlayStatusProps: next}
+      })
+    }
   }
 
   componentDidMount() {
@@ -363,6 +372,12 @@ class App extends Component {
     if (prevState.zoomFactor !== sabaki.state.zoomFactor) {
       sabaki.window.webContents.zoomFactor = sabaki.state.zoomFactor
     }
+
+    // Clear overlay status when territory mode turns off
+
+    if (prevState.territoryEnabled && !sabaki.state.territoryEnabled) {
+      this.setState({overlayStatusProps: null})
+    }
   }
 
   // User Interface
@@ -568,6 +583,22 @@ class App extends Component {
             : t('Large: Current Territory')
         : t('Territory')
 
+    // Calculate inspector summary for the right sidebar Inspector card
+    let inspectorSidebar = editWorkspaceActive || state.mode === 'play'
+    let inspectorBoard =
+      editWorkspaceActive && editRenderBoard != null
+        ? editRenderBoard
+        : gametree.getBoard(tree, state.treePosition)
+    let inspectorLevel = tree.getLevel(state.treePosition)
+    let inspectorSummary = inspectorSidebar
+      ? {
+          moveNumber: inspectorLevel,
+          currentPlayer: inferredState.currentPlayer,
+          playerCaptures: [1, -1].map((sign) => inspectorBoard.getCaptures(sign)),
+          boardHeight: inspectorBoard.height,
+        }
+      : null
+
     state = {
       ...state,
       ...inferredState,
@@ -596,6 +627,9 @@ class App extends Component {
       territoryDiffSourceType,
       territoryStatusText,
       comparisonOwnership: editWorkspaceActive ? editPreviewOwnership : null,
+      overlayStatusProps: this.state.overlayStatusProps,
+      onOverlayStatusChange: this.handleOverlayStatusChange,
+      inspectorSummary,
     }
 
     return h(

@@ -17,6 +17,25 @@ const propertiesMinHeight = setting.get('view.properties_minheight')
 const winrateGraphMinHeight = setting.get('view.winrategraph_minheight')
 const winrateGraphMaxHeight = setting.get('view.winrategraph_maxheight')
 
+// Helper functions for Inspector card
+const alpha = 'ABCDEFGHJKLMNOPQRSTUVWXYZ'
+
+function formatMetric(metric) {
+  if (metric == null) return '0.00 / 0'
+  return `${metric.sum.toFixed(2)} / ${metric.intersections}`
+}
+
+function formatOwner(owner) {
+  if (owner === 'neutral') return 'Neutral'
+  if (owner === 'black') return 'Black'
+  if (owner === 'white') return 'White'
+  return ''
+}
+
+function formatVertex([x, y], boardHeight) {
+  return `${alpha[x]}${boardHeight - y}`
+}
+
 export default class Sidebar extends Component {
   constructor(props) {
     super(props)
@@ -125,12 +144,8 @@ export default class Sidebar extends Component {
       compareReferenceTreePosition,
       compareTargetTreePosition,
       editWorkspaceActive,
-      editPreviewTab,
-      editPreviewBoard,
-      editPreviewOwnership,
-      territoryMode,
-      overlayUnavailableReason,
-      boardTransformation,
+      inspectorSummary,
+      overlayStatusProps,
 
       showWinrateGraph,
       showGameGraph,
@@ -150,46 +165,10 @@ export default class Sidebar extends Component {
       1,
     )
     let level = gameTree.getLevel(treePosition)
-    let showEditPreview = editWorkspaceActive && editPreviewBoard != null
-    let showGraphColumn = showGameGraph || showEditPreview
     let inspectorSidebar = editWorkspaceActive || mode === 'play'
     let hasAnalysisData =
       winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
     showWinrateGraph = showWinrateGraph && (inspectorSidebar || hasAnalysisData)
-    let editPreviewLabel =
-      editPreviewTab === 'reference' ? 'Preview: Reference' : 'Preview: Current'
-    let editPreviewGobanProps = showEditPreview
-      ? {
-          id: 'goban-edit-preview',
-          gameTree,
-          treePosition,
-          board: editPreviewBoard,
-          highlightVertices: [],
-          analysisType: null,
-          analysis: null,
-          paintMap: null,
-          markerMap: null,
-          compareSelectedVertices: [],
-          dimmedStones: [],
-          overlayGhostStoneMap: null,
-          comparePending: false,
-          compareMode: false,
-
-          crosshair: false,
-          showCoordinates: false,
-          showMoveColorization: false,
-          showMoveNumbers: false,
-          showNextMoves: false,
-          showSiblings: false,
-          fuzzyStonePlacement: false,
-          animateStonePlacement: false,
-
-          playVariation: null,
-          drawLineMode: null,
-          transformation: boardTransformation,
-          dragMode: false,
-        }
-      : null
 
     if (inspectorSidebar) {
       return h(
@@ -210,36 +189,87 @@ export default class Sidebar extends Component {
             onCurrentIndexChange: this.handleWinrateGraphChange,
           }),
 
-        showEditPreview &&
-          h(
-            'section',
-            {class: 'sidebar-card preview-card edit-preview-panel'},
-            h(
-              'div',
-              {class: 'card-header edit-preview-panel__header'},
-              h('strong', {class: 'card-title'}, editPreviewLabel),
-              h('span', {}, 'Read-only preview'),
-            ),
-            h(
-              'div',
-              {class: 'preview-body edit-preview-panel__body'},
-              h(
-                'div',
-                {class: 'edit-board-readonly mini-board'},
-                h(BoardOverlayStack, {
-                  territoryMode,
-                  baselineOwnership: editPreviewOwnership,
-                  unavailableReason: overlayUnavailableReason,
-                  gobanProps: editPreviewGobanProps,
-                  analysis: null,
-                  lastMoveDeltaMap: null,
-                  lastMoveDiffAvailable: false,
-                  diffSourceType: null,
-                  comparisonOwnership: null,
-                }),
+        // Inspector card with structured sections
+        h(
+          'section',
+          {class: 'sidebar-card inspector-card'},
+          h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, 'INSPECTOR')),
+          h('div', {class: 'inspector-card-body'},
+            // Section 1: Position Summary (always visible in inspector mode)
+            inspectorSummary != null &&
+              h('div', {class: 'inspector-section'},
+                h('div', {class: 'inspector-row'},
+                  h('strong', {}, 'Move'),
+                  h('span', {}, `${inspectorSummary.moveNumber}`),
+                ),
+                h('div', {class: 'inspector-row'},
+                  h('strong', {}, 'Captures'),
+                  h('span', {}, `B ${inspectorSummary.playerCaptures[0]} / W ${inspectorSummary.playerCaptures[1]}`),
+                ),
               ),
-            ),
+
+            // Section 2: Overlay Status (visible when territory mode active)
+            overlayStatusProps != null && overlayStatusProps.unavailableReason != null
+              ? h('div', {class: 'inspector-section inspector-warning'},
+                  h('span', {}, overlayStatusProps.unavailableReason),
+                )
+              : overlayStatusProps != null && overlayStatusProps.hoveredRegion != null
+                ? h('div', {class: 'inspector-section inspector-hover'},
+                    h('div', {class: 'inspector-row'},
+                      h('strong', {}, 'Region'),
+                      h('span', {}, formatOwner(overlayStatusProps.hoveredRegion.owner)),
+                    ),
+                    overlayStatusProps.hoveredVertex &&
+                      h('div', {class: 'inspector-row'},
+                        h('strong', {}, 'Vertex'),
+                        h('span', {}, formatVertex(overlayStatusProps.hoveredVertex, inspectorSummary?.boardHeight ?? 19)),
+                      ),
+                    h('div', {class: 'inspector-row'},
+                      h('strong', {}, 'Total'),
+                      h('span', {}, formatMetric(overlayStatusProps.hoveredRegion.total)),
+                    ),
+                    overlayStatusProps.hoveredDelta != null &&
+                      h('div', {class: 'inspector-row'},
+                        h('strong', {}, 'Delta'),
+                        h('span', {}, `${overlayStatusProps.hoveredDelta > 0 ? '+' : ''}${overlayStatusProps.hoveredDelta.toFixed(2)}`),
+                      ),
+                  )
+                : overlayStatusProps != null
+                  ? h('div', {class: 'inspector-section inspector-idle'},
+                      overlayStatusProps.territorySummary != null && [
+                        h('div', {class: 'inspector-row'},
+                          h('strong', {}, 'Black'),
+                          h('span', {}, formatMetric(overlayStatusProps.territorySummary.black.total)),
+                        ),
+                        h('div', {class: 'inspector-row'},
+                          h('strong', {}, 'White'),
+                          h('span', {}, formatMetric(overlayStatusProps.territorySummary.white.total)),
+                        ),
+                        h('div', {class: 'inspector-row'},
+                          h('strong', {}, 'Neutral'),
+                          h('span', {}, formatMetric(overlayStatusProps.territorySummary.neutral.total)),
+                        ),
+                      ],
+                      h('div', {class: 'inspector-hint'},
+                        h('span', {}, 'Hover a region to inspect ownership.'),
+                      ),
+                    )
+                  : null,
+
+            // Section 3: Diff summary (visible when comparing)
+            overlayStatusProps != null && overlayStatusProps.deltaSummary != null &&
+              h('div', {class: 'inspector-section inspector-diff'},
+                h('div', {class: 'inspector-row'},
+                  h('strong', {}, 'Black Gain'),
+                  h('span', {}, formatMetric(overlayStatusProps.deltaSummary.black)),
+                ),
+                h('div', {class: 'inspector-row'},
+                  h('strong', {}, 'White Gain'),
+                  h('span', {}, formatMetric(overlayStatusProps.deltaSummary.white)),
+                ),
+              ),
           ),
+        ),
 
         showGameGraph &&
           h(
@@ -344,46 +374,15 @@ export default class Sidebar extends Component {
 
         mainContent: h(SplitContainer, {
           vertical: true,
-          sideSize: !showGraphColumn ? 100 : !showCommentBox ? 0 : sidebarSplit,
+          sideSize: !showGameGraph ? 100 : !showCommentBox ? 0 : sidebarSplit,
           procentualSplit: true,
 
           mainContent: h(
             'div',
             {
               ref: (el) => (this.horizontalSplitContainer = el),
-              class: `graphproperties${showEditPreview ? ' has-edit-preview' : ''}`,
+              class: 'graphproperties',
             },
-
-            showEditPreview &&
-              h(
-                'section',
-                {class: 'edit-preview-panel'},
-                h(
-                  'div',
-                  {class: 'edit-preview-panel__header'},
-                  h('strong', {}, editPreviewLabel),
-                  h('span', {}, 'Read-only preview'),
-                ),
-                h(
-                  'div',
-                  {class: 'edit-preview-panel__body'},
-                  h(
-                    'div',
-                    {class: 'edit-board-readonly'},
-                    h(BoardOverlayStack, {
-                      territoryMode,
-                      baselineOwnership: editPreviewOwnership,
-                      unavailableReason: overlayUnavailableReason,
-                      gobanProps: editPreviewGobanProps,
-                      analysis: null,
-                      lastMoveDeltaMap: null,
-                      lastMoveDiffAvailable: false,
-                      diffSourceType: null,
-                      comparisonOwnership: null,
-                    }),
-                  ),
-                ),
-              ),
 
             h(Slider, {
               showSlider: showGameGraph,

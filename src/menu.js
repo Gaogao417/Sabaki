@@ -714,7 +714,7 @@ exports.get = function (props = {}) {
           label: i18n.t('menu.view', 'Show &Winrate Graph'),
           type: 'checkbox',
           checked: !!showWinrateGraph,
-          enabled: !!showGameGraph || !!showCommentBox,
+          enabled: !!showGameGraph || !!showCommentBox || mode === 'play',
           click: () => {
             toggleSetting('view.show_winrategraph')
             sabaki.setState(({showWinrateGraph}) => ({

@@ -286,7 +286,10 @@ class Sabaki extends EventEmitter {
         return (
           state.showGameGraph ||
           state.showCommentBox ||
-          state.editWorkspace?.referenceSnapshot != null
+          state.editWorkspace?.referenceSnapshot != null ||
+          state.territoryEnabled ||
+          state.mode === 'play' ||
+          (state.mode === 'edit' && state.editWorkspace != null)
         )
       },
       get gameInfo() {

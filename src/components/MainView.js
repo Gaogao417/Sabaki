@@ -20,7 +20,6 @@ export default class MainView extends Component {
     this.state = {
       gobanCrosshair: false,
       areaModifierActive: false,
-      overlayStatusProps: null,
     }
 
     this.handleTogglePlayer = () => {
@@ -47,17 +46,6 @@ export default class MainView extends Component {
         vertex: this.props.findVertex,
         text: this.props.findText,
       })
-
-    this.handleOverlayStatusChange = (overlayStatusProps) => {
-      this.setState(({overlayStatusProps: currentStatusProps}) => {
-        let nextStatus = overlayStatusProps ?? null
-        if (JSON.stringify(currentStatusProps) === JSON.stringify(nextStatus)) {
-          return null
-        }
-
-        return {overlayStatusProps: nextStatus}
-      })
-    }
 
     this.handleGobanVertexClick = this.handleGobanVertexClick.bind(this)
     this.handleGobanLineDraw = this.handleGobanLineDraw.bind(this)
@@ -218,10 +206,6 @@ export default class MainView extends Component {
     if (nextProps.mode !== 'edit') {
       this.setState({gobanCrosshair: false})
     }
-
-    if (!nextProps.territoryMode && this.state.overlayStatusProps != null) {
-      this.setState({overlayStatusProps: null})
-    }
   }
 
   handleGobanVertexClick(evt) {
@@ -285,7 +269,7 @@ export default class MainView extends Component {
     territoryDiffAvailable = false,
     territoryDiffSourceType = null,
     comparisonOwnership = null,
-    onStatusChange = null,
+    onStatusChange = this.props.onOverlayStatusChange,
   }) {
     return territoryMode
       ? h(BoardOverlayStack, {
@@ -557,22 +541,6 @@ export default class MainView extends Component {
       this.props.attachedEngineSyncers.find((syncer) => syncer.id === id),
     )
 
-    let activeTools = [
-      territoryMode ? territoryStatusText : null,
-      showAnalysis ? 'Heatmap' : null,
-    ].filter(Boolean)
-    let workspaceSummary = [
-      editWorkspaceActive
-        ? editActiveTab === 'reference'
-          ? 'Large: Reference'
-          : 'Large: Current'
-        : null,
-      activeTools.join(' | ') || null,
-    ]
-      .filter(Boolean)
-      .join(' | ')
-    if (workspaceSummary === '') workspaceSummary = null
-
     return h(
       'section',
       {id: 'main'},
@@ -656,8 +624,6 @@ export default class MainView extends Component {
         {
           mode,
           editWorkspaceActive,
-          overlayStatusProps: this.state.overlayStatusProps,
-          summaryText: workspaceSummary,
         },
         h(EditBar, {
           mode,

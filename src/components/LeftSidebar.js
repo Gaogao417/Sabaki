@@ -1,31 +1,16 @@
 import {h, Component} from 'preact'
-import {parseVertex} from '@sabaki/sgf'
 
 import sabaki from '../modules/sabaki.js'
 import SplitContainer from './helpers/SplitContainer.js'
 import GtpConsole from './sidebars/GtpConsole.js'
 import {EnginePeerList} from './sidebars/PeerList.js'
+import BoardOverlayStack from './overlays/BoardOverlayStack.js'
 
 const setting = {
   get: (key) => window.sabaki.setting.get(key),
   set: (key, value) => window.sabaki.setting.set(key, value),
 }
 const peerListMinHeight = setting.get('view.peerlist_minheight')
-const alpha = 'ABCDEFGHJKLMNOPQRSTUVWXYZ'
-
-function getMoveInfo(node, index, boardSize = [19, 19]) {
-  let color = node.data.B != null ? 1 : node.data.W != null ? -1 : 0
-  let value = color > 0 ? node.data.B[0] : color < 0 ? node.data.W[0] : null
-  let vertex = value == null || value === '' ? null : parseVertex(value)
-  let label =
-    vertex == null
-      ? value === ''
-        ? 'pass'
-        : '-'
-      : `${alpha[vertex[0]]}${boardSize[1] - vertex[1]}`
-
-  return {color, label, number: index}
-}
 
 export default class LeftSidebar extends Component {
   constructor() {
@@ -34,6 +19,7 @@ export default class LeftSidebar extends Component {
     this.state = {
       peerListHeight: setting.get('view.peerlist_height'),
       selectedEngineSyncerId: null,
+      engineLogExpanded: false,
     }
 
     this.handlePeerListHeightChange = ({sideSize}) => {
@@ -42,6 +28,10 @@ export default class LeftSidebar extends Component {
 
     this.handlePeerListHeightFinish = () => {
       setting.set('view.peerlist_height', this.state.peerListHeight)
+    }
+
+    this.handleEngineLogToggle = () => {
+      this.setState(({engineLogExpanded}) => ({engineLogExpanded: !engineLogExpanded}))
     }
 
     this.handleCommandControlStep = ({step}) => {
@@ -100,12 +90,16 @@ export default class LeftSidebar extends Component {
       consoleLog,
       mode,
       editWorkspaceActive,
-      currentLineNodes = [],
-      treePosition,
+      editPreviewBoard,
+      editPreviewOwnership,
+      editPreviewTab,
+      territoryMode,
+      overlayUnavailableReason,
+      boardTransformation,
       gameTree,
-      gameInfo,
+      treePosition,
     },
-    {peerListHeight, selectedEngineSyncerId},
+    {peerListHeight, selectedEngineSyncerId, engineLogExpanded},
   ) {
     let peerList = h(EnginePeerList, {
       attachedEngineSyncers,
@@ -136,13 +130,46 @@ export default class LeftSidebar extends Component {
       onSubmit: this.handleCommandSubmit,
       onControlStep: this.handleCommandControlStep,
     })
-    let moveNodes = currentLineNodes.filter(
-      (node) => node.data.B != null || node.data.W != null,
-    )
 
     let inspectorSidebar = editWorkspaceActive || mode === 'play'
 
     if (inspectorSidebar) {
+      // Compute engine log excerpt (last 5 lines)
+      let logExcerpt = consoleLog.slice(-5)
+
+      // Compute edit preview goban props for reference card
+      let showReferenceCard = editWorkspaceActive && editPreviewBoard != null
+      let editPreviewGobanProps = showReferenceCard
+        ? {
+            id: 'goban-edit-preview',
+            gameTree,
+            treePosition,
+            board: editPreviewBoard,
+            highlightVertices: [],
+            analysisType: null,
+            analysis: null,
+            paintMap: null,
+            markerMap: null,
+            compareSelectedVertices: [],
+            dimmedStones: [],
+            overlayGhostStoneMap: null,
+            comparePending: false,
+            compareMode: false,
+            crosshair: false,
+            showCoordinates: false,
+            showMoveColorization: false,
+            showMoveNumbers: false,
+            showNextMoves: false,
+            showSiblings: false,
+            fuzzyStonePlacement: false,
+            animateStonePlacement: false,
+            playVariation: null,
+            drawLineMode: null,
+            transformation: boardTransformation,
+            dragMode: false,
+          }
+        : null
+
       return h(
         'section',
         {
@@ -154,40 +181,91 @@ export default class LeftSidebar extends Component {
         peerList,
         h(
           'section',
-          {class: 'panel-card engine-log-card'},
-          h('div', {class: 'panel-title'}, 'ENGINE LOGS'),
-          console,
-        ),
-        h(
-          'section',
-          {class: 'panel-card move-list-card'},
-          h('div', {class: 'panel-title'}, 'MOVE LIST'),
-          h(
-            'ol',
-            {class: 'move-list'},
-            moveNodes.length === 0
-              ? h('li', {class: 'empty'}, 'No moves on the current line.')
-              : moveNodes.map((node, index) => {
-                  let move = getMoveInfo(node, index + 1, gameInfo.size)
-
-                  return h(
-                    'li',
-                    {
-                      key: node.id,
-                      class: `move-row${node.id === treePosition ? ' current' : ''}`,
-                      onClick: () =>
-                        sabaki.setCurrentTreePosition(gameTree, node.id),
-                    },
-                    h('span', {class: 'move-number'}, `${move.number}.`),
-                    h('span', {
-                      class: `stone-dot ${move.color > 0 ? 'black' : 'white'}`,
+          {class: 'panel-card engine-card'},
+          h('div', {class: 'panel-title'}, 'ENGINE'),
+          h('div', {class: 'engine-card-body'},
+            // Engine status summary
+            h('div', {class: 'engine-status-summary'},
+              h('span', {class: 'engine-count'},
+                `${attachedEngineSyncers.length} engine${attachedEngineSyncers.length !== 1 ? 's' : ''} attached`,
+              ),
+              analyzingEngineSyncerId != null && h('span', {class: 'engine-analyzing'}, 'Analyzing...'),
+            ),
+            // Collapsed: log excerpt + expand button
+            !engineLogExpanded && h('div', {class: 'engine-log-excerpt'},
+              h('ol', {class: 'log-excerpt-list'},
+                logExcerpt.length === 0
+                  ? h('li', {class: 'empty'}, 'No log entries yet.')
+                  : logExcerpt.map((entry, i) => {
+                      let text = entry.command || entry.response || ''
+                      return h('li', {key: i},
+                        h('span', {class: `log-entry ${entry.command ? 'command' : 'response'}`}, text),
+                      )
                     }),
-                    h('span', {class: 'move-vertex'}, move.label),
-                    h('span', {class: 'move-branch'}, '~'),
-                  )
+              ),
+            ),
+            !engineLogExpanded &&
+              h('button', {
+                class: 'engine-log-toggle',
+                onClick: this.handleEngineLogToggle,
+              }, 'Expand Console'),
+            // Expanded: full GtpConsole + collapse button
+            engineLogExpanded && h(GtpConsole, {
+              show: showLeftSidebar && engineLogExpanded,
+              consoleLog,
+              attached: attachedEngineSyncers
+                .map((syncer) =>
+                  syncer.id !== selectedEngineSyncerId
+                    ? null
+                    : {
+                        name: syncer.engine.name,
+                        get commands() {
+                          return syncer.commands
+                        },
+                      },
+                )
+                .find((x) => x != null),
+              onSubmit: this.handleCommandSubmit,
+              onControlStep: this.handleCommandControlStep,
             }),
+            engineLogExpanded &&
+              h('button', {
+                class: 'engine-log-toggle',
+                onClick: this.handleEngineLogToggle,
+              }, 'Collapse Console'),
           ),
         ),
+        showReferenceCard &&
+          h(
+            'section',
+            {class: 'panel-card reference-card'},
+            h('div', {class: 'panel-title'},
+              editPreviewTab === 'reference' ? 'REFERENCE' : 'CURRENT',
+              h('span', {class: 'reference-preview-label'}, 'Preview'),
+            ),
+            h('div', {class: 'reference-card-body'},
+              h(BoardOverlayStack, {
+                territoryMode,
+                baselineOwnership: editPreviewOwnership,
+                unavailableReason: overlayUnavailableReason,
+                gobanProps: editPreviewGobanProps,
+                analysis: null,
+                lastMoveDeltaMap: null,
+                lastMoveDiffAvailable: false,
+                diffSourceType: null,
+                comparisonOwnership: null,
+              }),
+            ),
+          ),
+        !showReferenceCard && mode === 'play' &&
+          h(
+            'section',
+            {class: 'panel-card reference-card'},
+            h('div', {class: 'panel-title'}, 'POSITION PREVIEW'),
+            h('div', {class: 'reference-card-body reference-empty'},
+              h('span', {}, 'Current position'),
+            ),
+          ),
       )
     }
 

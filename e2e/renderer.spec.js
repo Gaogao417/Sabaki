@@ -391,7 +391,7 @@ test.describe('Renderer Integration Tests', () => {
       await expect(page.locator('.edit-board-panel--primary')).toContainText(
         'Large: Current',
       )
-      await expect(page.locator('.edit-preview-panel')).toBeVisible()
+      await expect(page.locator('.left-inspector-sidebar .reference-card')).toBeVisible()
       await expect(compareButton).toHaveAttribute('aria-disabled', 'false')
 
       await compareButton.click()
@@ -538,6 +538,34 @@ test.describe('Renderer Integration Tests', () => {
         )
       })
       expect(snapshotMatches).toBe(true)
+    })
+
+    test('Inspector card shows overlay status in right sidebar', async ({
+      page,
+    }) => {
+      await page.evaluate(() => {
+        window.__sabaki.setMode('edit')
+      })
+      await page.waitForFunction(
+        () =>
+          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.editWorkspace != null,
+      )
+
+      await page.evaluate(() => {
+        window.__sabaki.setState({territoryEnabled: true})
+      })
+      await page.waitForFunction(() => window.__sabaki.state.territoryEnabled)
+
+      // Inspector card should be visible
+      await expect(page.locator('#sidebar .inspector-card')).toBeVisible()
+
+      // Inspector should show territory info (Position Summary section)
+      await expect(page.locator('#sidebar .inspector-section')).toContainText('Move')
+      await expect(page.locator('#sidebar .inspector-section')).toContainText('Captures')
+
+      // WorkspaceDock should NOT show overlay-status-bar (old location removed)
+      await expect(page.locator('.workspace-dock .overlay-status-bar')).toHaveCount(0)
     })
   })
 })
