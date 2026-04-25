@@ -119,14 +119,7 @@ let defaults = {
   'edit.max_history_count': 1000,
   'edit.show_removenode_warning': true,
   'edit.show_removeothervariations_warning': true,
-  'engines.list': [
-    {
-      name: 'KataGo',
-      path: 'D:/Katago/engine',
-      args: 'gtp -model D:/Katago/model',
-      commands: '',
-    },
-  ],
+  'engines.list': [],
   'engines.analyze_commands': ['analyze', 'kata-analyze', 'lz-analyze'],
   'engines.gemove_analyze_commands': [
     'genmove_analyze',
@@ -208,7 +201,7 @@ let defaults = {
   'view.show_leftsidebar': false,
   'view.show_comments': false,
   'view.show_coordinates': false,
-  'view.show_graph': false,
+  'view.show_graph': true,
   'view.show_move_colorization': true,
   'view.show_move_numbers': false,
   'view.show_next_moves': true,

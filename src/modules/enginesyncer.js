@@ -1,6 +1,6 @@
 import EventEmitter from 'events'
-import {existsSync} from 'fs'
-import {dirname, resolve} from 'path'
+import {existsSync, readdirSync} from 'fs'
+import {dirname, resolve, delimiter, join} from 'path'
 import argvsplit from 'argv-split'
 import {v4 as uuid} from 'uuid'
 
@@ -19,6 +19,74 @@ const setting = {
 
 const alpha = 'ABCDEFGHJKLMNOPQRSTUVWXYZ'
 const quitTimeout = setting.get('gtp.engine_quit_timeout')
+
+const engineSearchPaths = {
+  darwin: {
+    katago: [
+      '/opt/homebrew/bin/katago',
+      '/usr/local/bin/katago',
+      '/Applications/KataGo/katago',
+    ],
+    leelaz: ['/opt/homebrew/bin/leelaz', '/usr/local/bin/leelaz'],
+  },
+  linux: {
+    katago: [
+      '/usr/bin/katago',
+      '/usr/local/bin/katago',
+      '/snap/bin/katago',
+    ],
+    leelaz: ['/usr/bin/leelaz', '/usr/local/bin/leelaz'],
+  },
+  win32: {
+    katago: [
+      'C:\\Katago\\katago.exe',
+      'D:\\Katago\\katago.exe',
+      'C:\\Program Files\\Katago\\katago.exe',
+    ],
+    leelaz: [],
+  },
+}
+
+function findModelFile(engineDir) {
+  try {
+    for (let file of readdirSync(engineDir)) {
+      if (file.endsWith('.bin.gz') || file.endsWith('.bin')) {
+        return join(engineDir, file)
+      }
+    }
+  } catch (err) {}
+
+  return null
+}
+
+export function detectEngines() {
+  let platform = process.platform
+  let searchPaths = engineSearchPaths[platform] || {}
+  let found = []
+
+  for (let [engineName, paths] of Object.entries(searchPaths)) {
+    for (let p of paths) {
+      if (!existsSync(p)) continue
+
+      let engine = {name: engineName.charAt(0).toUpperCase() + engineName.slice(1), path: p, args: '', commands: ''}
+
+      if (engineName === 'katago') {
+        let modelFile = findModelFile(dirname(p))
+        if (modelFile == null) continue
+
+        engine.args = `gtp -model "${modelFile}"`
+      } else if (engineName === 'leelaz') {
+        let nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null'
+        engine.args = `gtp -w ${nullDevice}`
+      }
+
+      found.push(engine)
+      break
+    }
+  }
+
+  return found
+}
 
 function parseVertex(coord, size) {
   if (coord == null || coord === 'resign') return null
@@ -100,6 +168,7 @@ export default class EngineSyncer extends EventEmitter {
     this._busy = false
     this._suspended = true
     this._analysis = null
+    this.pathError = null
 
     this.id = uuid()
     this.engine = engine
@@ -107,118 +176,151 @@ export default class EngineSyncer extends EventEmitter {
     this.treePosition = null
 
     let absolutePath = resolve(path)
-    let executePath = existsSync(absolutePath) ? absolutePath : path
-    this.controller = new Controller(executePath, [...argvsplit(args)], {
-      cwd: dirname(absolutePath),
-    })
+    let executePath = absolutePath
 
-    this.stateTracker = new ControllerStateTracker(this.controller)
+    if (!existsSync(absolutePath)) {
+      // Try resolving via PATH (with PATHEXT on Windows)
+      let pathDirs = (process.env.PATH || '').split(delimiter)
+      let pathExts =
+        process.platform === 'win32'
+          ? (process.env.PATHEXT || '.exe;.cmd;.bat').split(';')
+          : ['']
+      let found = false
 
-    this.controller.on('started', () => {
-      this.treePosition = null
-      this.analysis = null
-
-      Promise.all([
-        this.controller.sendCommand({name: 'name'}),
-        this.controller.sendCommand({name: 'version'}),
-        this.controller.sendCommand({name: 'protocol_version'}),
-        this.controller
-          .sendCommand({name: 'list_commands'})
-          .then((response) => {
-            this.commands = response.content.split('\n')
-          }),
-        ...(commands != null && commands.trim() !== ''
-          ? commands
-              .split(';')
-              .filter((x) => x.trim() !== '')
-              .map((command) =>
-                this.controller.sendCommand(Command.fromString(command)),
-              )
-          : []),
-      ]).catch(noop)
-    })
-
-    this.controller.on('stopped', () => {
-      this.treePosition = null
-      this.analysis = null
-    })
-
-    this.controller.on(
-      'command-sent',
-      async ({command, subscribe, getResponse}) => {
-        if (
-          command.name.match(/^(lz-)?(genmove_)?analyze$/) != null ||
-          command.args.length > 0
-        ) {
-          // Handle analysis commands
-
-          let sign = command.args[0].toUpperCase() === 'W' ? -1 : 1
-          let boardsize = this.stateTracker.state.boardsize || [19, 19]
-          let board = newBoard(...boardsize)
-
-          subscribe(({line}) => {
-            // Parse analysis info
-
-            if (line.startsWith('info ')) {
-              let {variations, ownership} = parseAnalysis(line, board, sign)
-
-              let bestVariation = variations.reduce(
-                (best, variation) =>
-                  best == null || variation.winrate > best.winrate
-                    ? variation
-                    : best,
-                null,
-              )
-
-              this.analysis = {
-                sign,
-                variations,
-                ownership,
-                winrate: bestVariation == null ? null : bestVariation.winrate,
-                scoreLead:
-                  bestVariation == null ? null : bestVariation.scoreLead,
-              }
-            } else if (line.startsWith('play ')) {
-              sign = -sign
-
-              this.analysis = null
-              this.treePosition = null
-            }
-          })
-        } else if (this.treePosition != null) {
-          // Invalidate treePosition
-
-          let prevHistory = JSON.parse(
-            JSON.stringify(this.stateTracker.state.history),
-          )
-
-          await getResponse()
-
-          if (!equals(prevHistory, this.stateTracker.state.history)) {
-            this.treePosition = null
-            this.analysis = null
+      for (let dir of pathDirs) {
+        for (let ext of pathExts) {
+          let candidate = resolve(dir, path + ext)
+          if (existsSync(candidate)) {
+            executePath = candidate
+            found = true
+            break
           }
         }
-      },
-    )
+        if (found) break
+      }
 
-    // Sync properties
+      if (!found) {
+        this.pathError = t(
+          (p) =>
+            `Engine binary not found: "${p.path}". Please check the engine path in Preferences > Engines.`,
+          {path},
+        )
+      }
+    }
 
-    for (let eventName of [
-      'started',
-      'stopped',
-      'command-sent',
-      'response-received',
-    ]) {
-      this.controller.on(eventName, () => {
-        this.busy = this.controller.busy
-        this.suspended = this.controller.process == null
+    if (this.pathError == null) {
+      this.controller = new Controller(executePath, [...argvsplit(args)], {
+        cwd: dirname(executePath),
       })
+
+      this.stateTracker = new ControllerStateTracker(this.controller)
+
+      this.controller.on('started', () => {
+        this.treePosition = null
+        this.analysis = null
+
+        Promise.all([
+          this.controller.sendCommand({name: 'name'}),
+          this.controller.sendCommand({name: 'version'}),
+          this.controller.sendCommand({name: 'protocol_version'}),
+          this.controller
+            .sendCommand({name: 'list_commands'})
+            .then((response) => {
+              this.commands = response.content.split('\n')
+            }),
+          ...(commands != null && commands.trim() !== ''
+            ? commands
+                .split(';')
+                .filter((x) => x.trim() !== '')
+                .map((command) =>
+                  this.controller.sendCommand(Command.fromString(command)),
+                )
+            : []),
+        ]).catch(noop)
+      })
+
+      this.controller.on('stopped', () => {
+        this.treePosition = null
+        this.analysis = null
+      })
+
+      this.controller.on(
+        'command-sent',
+        async ({command, subscribe, getResponse}) => {
+          if (
+            command.name.match(/^(lz-)?(genmove_)?analyze$/) != null ||
+            command.args.length > 0
+          ) {
+            // Handle analysis commands
+
+            let sign = command.args[0].toUpperCase() === 'W' ? -1 : 1
+            let boardsize = this.stateTracker.state.boardsize || [19, 19]
+            let board = newBoard(...boardsize)
+
+            subscribe(({line}) => {
+              // Parse analysis info
+
+              if (line.startsWith('info ')) {
+                let {variations, ownership} = parseAnalysis(line, board, sign)
+
+                let bestVariation = variations.reduce(
+                  (best, variation) =>
+                    best == null || variation.winrate > best.winrate
+                      ? variation
+                      : best,
+                  null,
+                )
+
+                this.analysis = {
+                  sign,
+                  variations,
+                  ownership,
+                  winrate: bestVariation == null ? null : bestVariation.winrate,
+                  scoreLead:
+                    bestVariation == null ? null : bestVariation.scoreLead,
+                }
+              } else if (line.startsWith('play ')) {
+                sign = -sign
+
+                this.analysis = null
+                this.treePosition = null
+              }
+            })
+          } else if (this.treePosition != null) {
+            // Invalidate treePosition
+
+            let prevHistory = JSON.parse(
+              JSON.stringify(this.stateTracker.state.history),
+            )
+
+            await getResponse()
+
+            if (!equals(prevHistory, this.stateTracker.state.history)) {
+              this.treePosition = null
+              this.analysis = null
+            }
+          }
+        },
+      )
+
+      // Sync properties
+
+      for (let eventName of [
+        'started',
+        'stopped',
+        'command-sent',
+        'response-received',
+      ]) {
+        this.controller.on(eventName, () => {
+          this.busy = this.controller.busy
+          this.suspended = this.controller.process == null
+        })
+      }
     }
   }
 
   get state() {
-    return this.stateTracker.state
+    return this.stateTracker?.state
   }
 
   get busy() {
@@ -255,7 +357,19 @@ export default class EngineSyncer extends EventEmitter {
   }
 
   start() {
+    if (this.pathError != null) {
+      this.emit('error', new Error(this.pathError))
+      return
+    }
+
     this.controller.start()
+
+    // Propagate spawn errors (ENOENT, EACCES, etc.)
+    if (this.controller.process) {
+      this.controller.process.on('error', (err) => {
+        this.emit('error', err)
+      })
+    }
   }
 
   async stop() {

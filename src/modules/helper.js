@@ -44,13 +44,15 @@ export function isTextLikeElement(element) {
 const menuClickHandlers = new Map()
 let menuIdCounter = 0
 
-// Listen for menu click events from main process
-ipcRenderer.on('menu-click', (event, menuItemId) => {
-  const handler = menuClickHandlers.get(menuItemId)
-  if (handler) {
-    handler()
-  }
-})
+// Mocha imports this module in a plain Node process where ipcRenderer is unset.
+if (ipcRenderer?.on) {
+  ipcRenderer.on('menu-click', (event, menuItemId) => {
+    const handler = menuClickHandlers.get(menuItemId)
+    if (handler) {
+      handler()
+    }
+  })
+}
 
 export function popupMenu(template, x, y) {
   // Clear old handlers

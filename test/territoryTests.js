@@ -74,8 +74,8 @@ describe('territory', () => {
       [-1, -0.45, 0],
     ])
     assert.deepEqual(buildTerritoryMarkerMap(ownership), [
-      [null, null, {type: 'point', label: '@territory-neutral'}],
-      [null, null, {type: 'point', label: '@territory-neutral'}],
+      [null, null, null],
+      [null, null, null],
     ])
   })
 

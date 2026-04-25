@@ -17,3 +17,7 @@ test-results/
 .opencode/
 .tools/
 undefined/
+
+gtp.cfg
+gtp_logs/
+katago_data/

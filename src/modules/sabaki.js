@@ -11,7 +11,7 @@ import gtp from '@sabaki/gtp'
 import sgf from '@sabaki/sgf'
 
 import i18n from '../i18n.js'
-import EngineSyncer from './enginesyncer.js'
+import EngineSyncer, {detectEngines} from './enginesyncer.js'
 import * as dialog from './dialog.js'
 import * as fileformats from './fileformats/index.js'
 import * as gametree from './gametree.js'
@@ -665,6 +665,14 @@ class Sabaki extends EventEmitter {
       .filter(
         (engine) => engine != null && engine.path != null && engine.path !== '',
       )
+
+    // Auto-detect engines if none configured (transient — not persisted)
+    if (engines.length === 0) {
+      let detected = detectEngines()
+      if (detected.length > 0) {
+        engines = detected
+      }
+    }
 
     for (let engine of engines) {
       let [syncer] = this.attachEngines([engine])
@@ -2914,6 +2922,28 @@ class Sabaki extends EventEmitter {
       engine = {...engine, name: getEngineName(engine.name)}
 
       let syncer = new EngineSyncer(engine)
+
+      // Handle engine path errors
+      if (syncer.pathError) {
+        dialog.showMessageBox(syncer.pathError, 'error')
+        continue
+      }
+
+      syncer.on('error', (err) => {
+        let message
+        if (err.code === 'ENOENT') {
+          message = t(
+            'Engine binary not found. Please check the engine path in Preferences > Engines.',
+          )
+        } else if (err.code === 'EACCES') {
+          message = t(
+            'Engine binary is not executable. Please check file permissions.',
+          )
+        } else {
+          message = t('Failed to start engine: ') + err.message
+        }
+        dialog.showMessageBox(message, 'error')
+      })
 
       syncer.on('analysis-update', () => {
         if (this.state.analyzingEngineSyncerId === syncer.id) {

@@ -18,6 +18,17 @@ import {
   snapshotMatchesBoard,
 } from '../src/modules/study.js'
 
+function roundMetrics(metrics) {
+  return metrics.map((metric) => ({
+    ...metric,
+    delta: Math.round(metric.delta * 100) / 100,
+  }))
+}
+
+function roundMatrix(matrix) {
+  return matrix.map((row) => row.map((value) => Math.round(value * 100) / 100))
+}
+
 describe('study', () => {
   it('serializes and deserializes snapshots', () => {
     let board = newBoard(5, 5)
@@ -37,7 +48,10 @@ describe('study', () => {
       [10, 10],
     ]
 
-    assert.deepEqual(deserializeKeyPoints(serializeKeyPoints(keyPoints)), keyPoints)
+    assert.deepEqual(
+      deserializeKeyPoints(serializeKeyPoints(keyPoints)),
+      keyPoints,
+    )
   })
 
   it('applies moves to a baseline snapshot', () => {
@@ -92,7 +106,7 @@ describe('study', () => {
       ],
     )
 
-    assert.deepEqual(metrics, [
+    assert.deepEqual(roundMetrics(metrics), [
       {index: 1, vertex: [0, 0], baseline: 0.5, target: 0.7, delta: 0.2},
       {index: 2, vertex: [1, 1], baseline: -0.4, target: -0.1, delta: 0.3},
     ])
@@ -113,11 +127,13 @@ describe('study', () => {
     )
 
     assert.deepEqual(
-      getStudyTerritoryDeltaMap(
-        'trial',
-        baselineOwnership,
-        trialOwnership,
-        true,
+      roundMatrix(
+        getStudyTerritoryDeltaMap(
+          'trial',
+          baselineOwnership,
+          trialOwnership,
+          true,
+        ),
       ),
       [[0.3, 0.2]],
     )

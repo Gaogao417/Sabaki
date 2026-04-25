@@ -2,6 +2,8 @@ import {ipcRenderer} from 'electron'
 import {h, render, Component} from 'preact'
 import classNames from 'classnames'
 import fixPath from 'fix-path'
+import path from 'path'
+import fs from 'fs'
 
 import influence from '@sabaki/influence'
 
@@ -38,6 +40,22 @@ const leftSidebarMinWidth = setting.get('view.sidebar_minwidth')
 const sidebarMinWidth = setting.get('view.leftsidebar_minwidth')
 
 fixPath()
+
+// Ensure common binary directories are on PATH for engine discovery
+const extraPathsByPlatform = {
+  linux: ['/usr/local/bin', '/usr/bin', '/snap/bin', path.join(process.env.HOME || '', '.local/bin')],
+  darwin: ['/usr/local/bin', '/opt/homebrew/bin'],
+  win32: [],
+}
+
+const extraPaths = extraPathsByPlatform[process.platform] || []
+const currentPath = (process.env.PATH || '').split(path.delimiter)
+for (const p of extraPaths) {
+  if (p && !currentPath.includes(p) && fs.existsSync(p)) {
+    process.env.PATH = p + path.delimiter + process.env.PATH
+  }
+}
+
 const portableDir = process.env.PORTABLE_EXECUTABLE_DIR
 if (portableDir) process.chdir(portableDir)
 

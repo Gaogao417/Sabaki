@@ -160,4 +160,56 @@ test.describe('GTP Engine Integration Tests', () => {
     // Clean up
     await detachAndWait(page, syncerIds)
   })
+
+  test('collapsed engine excerpt tolerates object-backed log responses', async ({
+    page,
+  }) => {
+    const sgfPath = path.resolve(
+      __dirname,
+      '..',
+      'test',
+      'sgf',
+      'beginner_game.sgf',
+    )
+    const pageErrors = []
+
+    page.on('pageerror', (err) => {
+      pageErrors.push(String(err))
+    })
+
+    await loadSgfAndWait(page, sgfPath)
+
+    await page.evaluate(() => {
+      window.__sabaki.setState({
+        showLeftSidebar: true,
+        leftSidebarWidth: 320,
+        showSidebar: true,
+        showGameGraph: true,
+        showCommentBox: true,
+        sidebarWidth: 320,
+        consoleLog: [
+          {
+            name: 'Engine',
+            command: null,
+            response: {content: 'boot message', internal: true},
+            waiting: false,
+          },
+        ],
+      })
+    })
+
+    await page.waitForTimeout(200)
+
+    await expect(page.locator('#leftsidebar .engine-card')).toBeVisible()
+    await expect(page.locator('#leftsidebar .log-excerpt-list')).toContainText(
+      'boot message',
+    )
+    await page.getByRole('button', {name: 'Expand Console'}).click()
+    await expect(page.locator('#leftsidebar .gtp-console')).toBeVisible()
+    await expect(page.locator('#leftsidebar .gtp-console')).toContainText(
+      'boot message',
+    )
+    await expect(page.locator('#graph')).toBeVisible()
+    expect(pageErrors).toEqual([])
+  })
 })

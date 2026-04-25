@@ -12,6 +12,28 @@ const setting = {
 }
 const peerListMinHeight = setting.get('view.peerlist_minheight')
 
+function getConsoleExcerptText(entry) {
+  if (entry == null) return ''
+
+  if (entry.command != null) {
+    let {id, name = '', args = []} = entry.command
+    return [id, name, ...(args || [])].filter(Boolean).join(' ')
+  }
+
+  let response = entry.response
+  if (response == null) return ''
+
+  if (typeof response === 'string') return response
+
+  if (typeof response.content === 'string') {
+    let prefix = response.internal ? '' : response.error ? '? ' : '= '
+    return `${prefix}${response.content}`.trim()
+  }
+
+  if (response.internal) return 'Internal response'
+  return response.error ? 'Engine error' : 'Engine response'
+}
+
 export default class LeftSidebar extends Component {
   constructor() {
     super()
@@ -195,7 +217,7 @@ export default class LeftSidebar extends Component {
                 logExcerpt.length === 0
                   ? h('li', {class: 'empty'}, 'No log entries yet.')
                   : logExcerpt.map((entry, i) => {
-                      let text = entry.command || entry.response || ''
+                      let text = getConsoleExcerptText(entry)
                       return h('li', {key: i},
                         h('span', {class: `log-entry ${entry.command ? 'command' : 'response'}`}, text),
                       )
@@ -211,7 +233,7 @@ export default class LeftSidebar extends Component {
             engineLogExpanded && h(GtpConsole, {
               show: showLeftSidebar && engineLogExpanded,
               consoleLog,
-              attached: attachedEngineSyncers
+              attachedEngine: attachedEngineSyncers
                 .map((syncer) =>
                   syncer.id !== selectedEngineSyncerId
                     ? null
