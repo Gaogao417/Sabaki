@@ -200,6 +200,58 @@ test.describe('Renderer Integration Tests', () => {
       )
     })
 
+    test('game graph click works without prior mouse movement', async ({
+      page,
+    }) => {
+      const sgfPath = path.resolve(
+        __dirname,
+        '..',
+        'test',
+        'sgf',
+        'beginner_game.sgf',
+      )
+
+      await loadSgfAndWait(page, sgfPath)
+
+      await page.evaluate(() => {
+        window.__sabaki.setState({
+          showSidebar: true,
+          showGameGraph: true,
+          showCommentBox: true,
+          sidebarWidth: 320,
+        })
+      })
+
+      await page.waitForFunction(
+        () =>
+          document.querySelector('#graph svg') != null &&
+          document.querySelectorAll('#graph .node-group').length > 1,
+      )
+
+      const result = await page.evaluate(async () => {
+        const target = document.querySelector('#graph .node:not(.current)')
+
+        if (!target) return null
+
+        const before = window.__sabaki.state.treePosition
+        target.dispatchEvent(
+          new MouseEvent('click', {
+            bubbles: true,
+            button: 0,
+          }),
+        )
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        return {
+          before,
+          after: window.__sabaki.state.treePosition,
+        }
+      })
+
+      expect(result).not.toBeNull()
+      expect(result.after).not.toBe(result.before)
+    })
+
     test('ctrl adds analysis area boxes and alt removes them', async ({
       page,
     }) => {

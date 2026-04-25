@@ -46,7 +46,7 @@ export default class Sidebar extends Component {
     }
 
     this.handleGraphNodeClick = ({button, gameTree, treePosition, x, y}) => {
-      if (button === 0) {
+      if (button == null || button === 0) {
         sabaki.setCurrentTreePosition(gameTree, treePosition)
       } else {
         sabaki.openNodeMenu(treePosition, {x, y})

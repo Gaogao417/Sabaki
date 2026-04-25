@@ -42,6 +42,18 @@ class GameGraphNode extends Component {
         this.setState({hover})
       }
     }
+
+    this.handleClick = (evt) => {
+      let {onNodeClick = noop, gameTree, treePosition} = this.props
+      evt.stopPropagation()
+
+      onNodeClick(
+        Object.assign(evt, {
+          gameTree,
+          treePosition,
+        }),
+      )
+    }
   }
 
   componentDidMount() {
@@ -63,7 +75,10 @@ class GameGraphNode extends Component {
     )
   }
 
-  render({position: [left, top], type, current, fill, nodeSize}, {hover}) {
+  render(
+    {position: [left, top], type, current, fill, nodeSize},
+    {hover},
+  ) {
     let d = (() => {
       let nodeSize2 = nodeSize * 2
 
@@ -106,6 +121,8 @@ class GameGraphNode extends Component {
           hover,
           current,
         }),
+        onClick: this.handleClick,
+        onContextMenu: this.handleClick,
       }),
       h('path', {
         d,
@@ -114,6 +131,8 @@ class GameGraphNode extends Component {
           current,
         }),
         fill,
+        onClick: this.handleClick,
+        onContextMenu: this.handleClick,
       }),
     )
   }
@@ -230,6 +249,7 @@ class GameGraph extends Component {
     }
 
     if (showGameGraph !== this.props.showGameGraph) {
+      setTimeout(() => this.remeasure(), 100)
       setTimeout(() => this.updateCameraPosition(), 200)
     }
   }
@@ -272,6 +292,13 @@ class GameGraph extends Component {
     if (!this.props.showGameGraph || this.element == null) return
 
     let {left, top, width, height} = this.element.getBoundingClientRect()
+
+    if (width === 0 || height === 0) {
+      clearTimeout(this.remeasureId)
+      this.remeasureId = setTimeout(() => this.remeasure(), 100)
+      return
+    }
+
     this.setState({
       viewportSize: [width, height],
       viewportPosition: [left, top],
@@ -323,20 +350,33 @@ class GameGraph extends Component {
 
     let {onNodeClick = noop, gameTree, gridSize} = this.props
     let {
-      matrixDict: [matrix],
+      matrixDict,
       cameraPosition: [cx, cy],
     } = this.state
-    let [mx, my] = this.mousePosition
-    let [nearestX, nearestY] = [mx + cx, my + cy].map((z) =>
-      Math.round(z / gridSize),
-    )
 
-    if (!matrix[nearestY] || !matrix[nearestY][nearestX]) return
+    if (matrixDict == null) return
+
+    let rect = evt.currentTarget?.getBoundingClientRect()
+    let [vx, vy] =
+      rect == null ? this.state.viewportPosition : [rect.left, rect.top]
+
+    let treePosition = evt.treePosition
+
+    if (treePosition == null) {
+      let [matrix] = matrixDict
+      let [mx, my] = [evt.clientX - vx, evt.clientY - vy]
+      let [nearestX, nearestY] = [mx + cx, my + cy].map((z) =>
+        Math.round(z / gridSize),
+      )
+
+      if (!matrix[nearestY] || !matrix[nearestY][nearestX]) return
+      treePosition = matrix[nearestY][nearestX]
+    }
 
     onNodeClick(
       Object.assign(evt, {
         gameTree,
-        treePosition: matrix[nearestY][nearestX],
+        treePosition,
       }),
     )
   }
@@ -416,6 +456,9 @@ class GameGraph extends Component {
             fill: `rgb(${fillRGB.map((x) => x * opacity).join(',')})`,
             nodeSize: nodeSize + 1,
             gridSize,
+            gameTree,
+            treePosition: id,
+            onNodeClick: this.handleNodeClick,
           }),
         )
 
