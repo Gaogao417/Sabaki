@@ -7,7 +7,23 @@ const {
   attachAndWaitForEngines,
   detachAndWait,
   enginePath,
+  getRequiredKatagoEngine,
 } = require('./helpers')
+
+async function waitForLiveAnalysis(page, treePosition) {
+  await page.waitForFunction(
+    (expectedPos) => {
+      let {analysis, analysisTreePosition} = window.__sabaki.state
+      return (
+        analysis != null &&
+        analysisTreePosition === expectedPos &&
+        analysis.variations.length > 0
+      )
+    },
+    treePosition,
+    {timeout: 15000},
+  )
+}
 
 test.describe('GTP Engine Integration Tests', () => {
   test('attach and start engine', async ({page}) => {
@@ -211,5 +227,196 @@ test.describe('GTP Engine Integration Tests', () => {
     )
     await expect(page.locator('#graph')).toBeVisible()
     expect(pageErrors).toEqual([])
+  })
+})
+
+test.describe('Analysis Flow Tests', () => {
+  test('final node receives analysis after rapid navigation', async ({
+    page,
+  }) => {
+    const sgfPath = path.resolve(__dirname, '..', 'test', 'sgf', 'pro_game.sgf')
+    await loadSgfAndWait(page, sgfPath)
+
+    const syncerIds = await attachAndWaitForEngines(page, [
+      getRequiredKatagoEngine(),
+    ])
+
+    await page.evaluate((syncerId) => {
+      window.__sabaki.startAnalysis(syncerId)
+    }, syncerIds[0])
+
+    const nodeIds = await page.evaluate(() => {
+      let ids = []
+      let tree =
+        window.__sabaki.state.gameTrees[window.__sabaki.state.gameIndex]
+      let pos = tree.root.id
+      ids.push(pos)
+      for (let i = 0; i < 5; i++) {
+        let node = tree.get(pos)
+        if (node.children.length === 0) break
+        pos = node.children[0].id
+        ids.push(pos)
+      }
+      return ids
+    })
+
+    for (const nodeId of nodeIds) {
+      await page.evaluate((id) => {
+        let tree =
+          window.__sabaki.state.gameTrees[window.__sabaki.state.gameIndex]
+        window.__sabaki.setCurrentTreePosition(tree, id)
+      }, nodeId)
+    }
+
+    const finalNodeId = nodeIds[nodeIds.length - 1]
+    await waitForLiveAnalysis(page, finalNodeId)
+
+    const analysisState = await page.evaluate(() => ({
+      analysis: window.__sabaki.state.analysis,
+      analysisTreePosition: window.__sabaki.state.analysisTreePosition,
+      treePosition: window.__sabaki.state.treePosition,
+    }))
+
+    expect(analysisState.analysis).not.toBeNull()
+    expect(analysisState.analysisTreePosition).toBe(finalNodeId)
+    expect(analysisState.analysisTreePosition).toBe(analysisState.treePosition)
+
+    await detachAndWait(page, syncerIds)
+  })
+
+  test('analyzeMove bypasses ownership cache and refreshes live analysis', async ({
+    page,
+  }) => {
+    const sgfPath = path.resolve(__dirname, '..', 'test', 'sgf', 'pro_game.sgf')
+    await loadSgfAndWait(page, sgfPath)
+
+    const syncerIds = await attachAndWaitForEngines(page, [
+      getRequiredKatagoEngine(),
+    ])
+
+    await page.evaluate(() => {
+      for (let i = 0; i < 3; i++) window.__sabaki.goStep(1)
+    })
+
+    const nodeId = await page.evaluate(() => window.__sabaki.state.treePosition)
+
+    const result = await page.evaluate(
+      async ({syncerId, treePosition}) => {
+        let sabaki = window.__sabaki
+        let tree = sabaki.state.gameTrees[sabaki.state.gameIndex]
+        let syncer = sabaki.state.attachedEngineSyncers.find(
+          (s) => s.id === syncerId,
+        )
+        let originalRunBoardAnalysis = sabaki.runBoardAnalysis
+        let called = false
+
+        sabaki.cacheOwnership(syncerId, tree, treePosition, [[0.1]])
+        sabaki.setState({
+          analyzingEngineSyncerId: syncerId,
+          analysis: {variations: []},
+          analysisTreePosition: tree.root.id,
+        })
+
+        sabaki.runBoardAnalysis = async (options) => {
+          called = true
+          return {
+            sign: options.analyzePlayer,
+            variations: [],
+            ownership: [[0.2]],
+          }
+        }
+
+        try {
+          await sabaki.analyzeMove(treePosition)
+        } finally {
+          sabaki.runBoardAnalysis = originalRunBoardAnalysis
+        }
+
+        return {
+          called,
+          cachedOwnership: sabaki.getCachedOwnership(
+            syncer.id,
+            tree,
+            treePosition,
+          ),
+        }
+      },
+      {syncerId: syncerIds[0], treePosition: nodeId},
+    )
+
+    expect(result.cachedOwnership).not.toBeNull()
+    expect(result.called).toBe(true)
+
+    await detachAndWait(page, syncerIds)
+  })
+
+  test('stale analysis update triggers retry for current node', async ({
+    page,
+  }) => {
+    const sgfPath = path.resolve(__dirname, '..', 'test', 'sgf', 'pro_game.sgf')
+    await loadSgfAndWait(page, sgfPath)
+
+    const syncerIds = await attachAndWaitForEngines(page, [
+      getRequiredKatagoEngine(),
+    ])
+
+    const result = await page.evaluate((syncerId) => {
+      let tree =
+        window.__sabaki.state.gameTrees[window.__sabaki.state.gameIndex]
+      let nodeA = tree.root.children[0].id
+      let nodeB = tree.get(nodeA).children[0].id
+      let scheduledTreePosition = null
+      let syncer = window.__sabaki.state.attachedEngineSyncers.find(
+        (s) => s.id === syncerId,
+      )
+      let originalScheduleLiveAnalysis = window.__sabaki.scheduleLiveAnalysis
+
+      window.__sabaki.scheduleLiveAnalysis = (treePosition) => {
+        scheduledTreePosition = treePosition
+      }
+
+      window.__sabaki.setCurrentTreePosition(tree, nodeB)
+      window.__sabaki.setState({
+        analyzingEngineSyncerId: syncerId,
+        analysis: {variations: []},
+        analysisTreePosition: nodeB,
+      })
+
+      syncer.treePosition = nodeA
+      syncer.analysis = {
+        sign: 1,
+        variations: [
+          {
+            vertex: [3, 3],
+            visits: 100,
+            winrate: 54.32,
+            scoreLead: 3.5,
+            moves: [[3, 3]],
+          },
+        ],
+        ownership: Array(19)
+          .fill(0)
+          .map(() => Array(19).fill(0.1)),
+        winrate: 54.32,
+        scoreLead: 3.5,
+      }
+
+      window.__sabaki.scheduleLiveAnalysis = originalScheduleLiveAnalysis
+
+      return {
+        nodeA,
+        nodeB,
+        scheduledTreePosition,
+        analysisTreePosition: window.__sabaki.state.analysisTreePosition,
+        treePosition: window.__sabaki.state.treePosition,
+      }
+    }, syncerIds[0])
+
+    expect(result.nodeB).not.toBe(result.nodeA)
+    expect(result.scheduledTreePosition).toBe(result.nodeB)
+    expect(result.analysisTreePosition).not.toBe(result.nodeA)
+    expect(result.analysisTreePosition).toBe(result.treePosition)
+
+    await detachAndWait(page, syncerIds)
   })
 })

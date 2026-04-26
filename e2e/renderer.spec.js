@@ -178,24 +178,28 @@ test.describe('Renderer Integration Tests', () => {
       expect(stonesOnBoard).toBe(0)
     })
 
-    test('study workspace stays outside the board area', async ({page}) => {
+    test('workspace dock stays outside the board area in edit mode', async ({
+      page,
+    }) => {
       await page.evaluate(() => {
-        window.__sabaki.enterStudyMode()
+        window.__sabaki.setMode('edit')
       })
 
       await page.waitForFunction(
         () =>
           window.__sabaki &&
-          window.__sabaki.state.studyEnabled &&
-          document.querySelector('#study') != null,
+          window.__sabaki.state.mode === 'edit' &&
+          document.querySelector('.workspace-dock') != null,
       )
 
       const boardStageBox = await page.locator('main.board-stage').boundingBox()
-      const studyBox = await page.locator('#study').boundingBox()
+      const workspaceDockBox = await page
+        .locator('.workspace-dock')
+        .boundingBox()
 
       expect(boardStageBox).not.toBeNull()
-      expect(studyBox).not.toBeNull()
-      expect(studyBox.y).toBeGreaterThanOrEqual(
+      expect(workspaceDockBox).not.toBeNull()
+      expect(workspaceDockBox.y).toBeGreaterThanOrEqual(
         boardStageBox.y + boardStageBox.height,
       )
     })
@@ -429,6 +433,12 @@ test.describe('Renderer Integration Tests', () => {
           window.__sabaki.state.mode === 'edit' &&
           window.__sabaki.state.editWorkspace != null,
       )
+      await page.evaluate(() => {
+        window.__sabaki.setState({
+          showLeftSidebar: true,
+          leftSidebarWidth: 320,
+        })
+      })
 
       await expect(compareButton).toHaveCount(1)
       await expect(compareButton).toHaveAttribute('aria-disabled', 'true')
@@ -439,11 +449,14 @@ test.describe('Renderer Integration Tests', () => {
       await page.waitForFunction(
         () => window.__sabaki.state.editWorkspace?.referenceSnapshot != null,
       )
+      await expect(page.locator('#leftsidebar')).toBeVisible()
 
       await expect(page.locator('.edit-board-panel--primary')).toContainText(
         'Large: Current',
       )
-      await expect(page.locator('.left-inspector-sidebar .reference-card')).toBeVisible()
+      await expect(
+        page.locator('.left-inspector-sidebar .reference-card'),
+      ).toBeVisible()
       await expect(compareButton).toHaveAttribute('aria-disabled', 'false')
 
       await compareButton.click()
@@ -613,11 +626,17 @@ test.describe('Renderer Integration Tests', () => {
       await expect(page.locator('#sidebar .inspector-card')).toBeVisible()
 
       // Inspector should show territory info (Position Summary section)
-      await expect(page.locator('#sidebar .inspector-section')).toContainText('Move')
-      await expect(page.locator('#sidebar .inspector-section')).toContainText('Captures')
+      await expect(
+        page.locator('#sidebar .inspector-card .inspector-section').first(),
+      ).toContainText('Move')
+      await expect(
+        page.locator('#sidebar .inspector-card .inspector-section').first(),
+      ).toContainText('Captures')
 
       // WorkspaceDock should NOT show overlay-status-bar (old location removed)
-      await expect(page.locator('.workspace-dock .overlay-status-bar')).toHaveCount(0)
+      await expect(
+        page.locator('.workspace-dock .overlay-status-bar'),
+      ).toHaveCount(0)
     })
   })
 })

@@ -1,4 +1,5 @@
 const path = require('path')
+const {getKatagoEngine} = require('./katago-fixture')
 
 /**
  * Wait for the current game tree to have at least one child node,
@@ -103,6 +104,20 @@ const enginePath = path.resolve(
   'resignEngine.js',
 )
 
+function getRequiredKatagoEngine() {
+  const engine = getKatagoEngine()
+  if (engine == null) {
+    throw new Error(
+      [
+        'KataGo test fixture is missing.',
+        'Run ./e2e/setup_katago.sh or set KATAGO_BIN to a KataGo executable.',
+        'Expected model/config under ./katago_data.',
+      ].join(' '),
+    )
+  }
+  return engine
+}
+
 module.exports = {
   waitForGameLoad,
   loadSgfAndWait,
@@ -110,4 +125,5 @@ module.exports = {
   attachAndWaitForEngines,
   detachAndWait,
   enginePath,
+  getRequiredKatagoEngine,
 }

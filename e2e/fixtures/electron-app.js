@@ -2,6 +2,7 @@ const {test: base, _electron: electron} = require('@playwright/test')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
+const {getKatagoEngine} = require('../katago-fixture')
 
 const test = base.extend({
   electronApp: async ({}, use) => {
@@ -21,6 +22,13 @@ const test = base.extend({
       'game.goto_end_after_loading': false,
       'file.show_reload_warning': false,
       'infooverlay.duration': 0,
+      'board.analysis_max_time': 1,
+      'board.analysis_max_visits': 8,
+    }
+
+    const katagoEngine = getKatagoEngine()
+    if (katagoEngine != null) {
+      settings['engines.list'] = [katagoEngine]
     }
 
     // app.getPath('userData') returns <userDataDir>/Sabaki when

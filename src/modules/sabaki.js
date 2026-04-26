@@ -780,7 +780,12 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    if (button !== 0 && button !== 2 && !(helper.isMac && button === 0 && ctrlKey)) return
+    if (
+      button !== 0 &&
+      button !== 2 &&
+      !(helper.isMac && button === 0 && ctrlKey)
+    )
+      return
 
     if (['stone_1', 'stone_-1'].includes(tool)) {
       let sign = tool === 'stone_1' ? 1 : -1
@@ -1986,7 +1991,10 @@ class Sabaki extends EventEmitter {
 
   // Playing
 
-  clickVertex(vertex, {button = 0, ctrlKey = false, metaKey = false, x = 0, y = 0} = {}) {
+  clickVertex(
+    vertex,
+    {button = 0, ctrlKey = false, metaKey = false, x = 0, y = 0} = {},
+  ) {
     this.closeDrawer()
 
     let t = i18n.context('sabaki.play')
@@ -2614,24 +2622,8 @@ class Sabaki extends EventEmitter {
     ) {
       this.syncEditWorkspaceToCurrentPosition()
       this.scheduleEditWorkspaceAnalysis()
-    } else {
-      let syncer = this.inferredState.analyzingEngineSyncer
-
-      if (
-        syncer != null &&
-        navigated &&
-        (this.state.engineGameOngoing == null ||
-          ![
-            this.state.blackEngineSyncerId,
-            this.state.whiteEngineSyncerId,
-          ].includes(this.state.analyzingEngineSyncerId))
-      ) {
-        clearTimeout(this.continuousAnalysisId)
-
-        this.continuousAnalysisId = setTimeout(() => {
-          this.analyzeMove(treePosition)
-        }, setting.get('game.navigation_analysis_delay'))
-      }
+    } else if (navigated) {
+      this.scheduleLiveAnalysis(treePosition)
     }
   }
 
@@ -2958,10 +2950,15 @@ class Sabaki extends EventEmitter {
             return
           }
 
-          this.setState({
-            analysis: syncer.analysis,
-            analysisTreePosition: syncer.treePosition,
-          })
+          let currentAnalysisUpdate =
+            syncer.treePosition === this.state.treePosition
+
+          if (currentAnalysisUpdate) {
+            this.setState({
+              analysis: syncer.analysis,
+              analysisTreePosition: syncer.treePosition,
+            })
+          }
 
           if (syncer.analysis != null && syncer.treePosition != null) {
             if (syncer.analysis.ownership != null) {
@@ -2992,6 +2989,13 @@ class Sabaki extends EventEmitter {
             })
 
             this.setCurrentTreePosition(newTree, this.state.treePosition)
+          }
+
+          if (
+            syncer.treePosition != null &&
+            syncer.treePosition !== this.state.treePosition
+          ) {
+            this.scheduleLiveAnalysis(this.state.treePosition)
           }
         }
       })
@@ -3337,13 +3341,35 @@ class Sabaki extends EventEmitter {
     let syncer = this.inferredState.analyzingEngineSyncer
     if (syncer == null || syncer.suspended) return
 
-    await this.runOwnershipAnalysis({
+    await this.runBoardAnalysis({
       syncer,
       tree: this.inferredState.gameTree,
       treePosition,
       analyzePlayer: sign,
       requestGroup: 'analysis',
     })
+  }
+
+  scheduleLiveAnalysis(treePosition) {
+    let syncer = this.inferredState.analyzingEngineSyncer
+    if (syncer == null || syncer.suspended) return
+
+    if (
+      this.state.engineGameOngoing != null &&
+      [this.state.blackEngineSyncerId, this.state.whiteEngineSyncerId].includes(
+        this.state.analyzingEngineSyncerId,
+      )
+    ) {
+      return
+    }
+
+    if (this.state.mode === 'edit' && this.state.editWorkspace != null) return
+
+    clearTimeout(this.continuousAnalysisId)
+
+    this.continuousAnalysisId = setTimeout(() => {
+      this.analyzeMove(treePosition)
+    }, setting.get('game.navigation_analysis_delay'))
   }
 
   async startAnalysis(syncerId) {
@@ -3408,7 +3434,13 @@ class Sabaki extends EventEmitter {
     })
   }
 
-  waitForQuickAnalysis(syncer, treePosition, analysisId, visitLimit, timeoutMs) {
+  waitForQuickAnalysis(
+    syncer,
+    treePosition,
+    analysisId,
+    visitLimit,
+    timeoutMs,
+  ) {
     return new Promise((resolve) => {
       let settled = false
       let timeoutId = null
@@ -3461,7 +3493,10 @@ class Sabaki extends EventEmitter {
     let commandName = this.getAnalyzeCommand(syncer)
     if (commandName == null) {
       await dialog.showMessageBox(
-        i18n.t('sabaki.engine', 'The selected engine does not support analysis.'),
+        i18n.t(
+          'sabaki.engine',
+          'The selected engine does not support analysis.',
+        ),
         'warning',
       )
       return
@@ -3913,16 +3948,28 @@ class Sabaki extends EventEmitter {
 
   snapshotAsNewGame() {
     this.closeDrawer()
+
+    // Capture board before switching mode (edit workspace is destroyed on mode change)
+    let board
+    let playerSign
+    if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+      let snapshot = this.state.editWorkspace.currentSnapshot
+      board = boardFromSnapshot(snapshot)
+      playerSign = snapshot.nextPlayer
+    } else {
+      let {gameTree: tree} = this.inferredState
+      let treePosition = this.state.treePosition
+      board = gametree.getBoard(tree, treePosition)
+      playerSign = this.getPlayer(treePosition)
+    }
+
     this.setMode('play')
 
     let {gameTrees, gameCurrents} = this.state
     let {gameTree: tree} = this.inferredState
-    let treePosition = this.state.treePosition
     let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
     if (gameIndex < 0) return
 
-    let board = gametree.getBoard(tree, treePosition)
-    let playerSign = this.getPlayer(treePosition)
     let inherit = setting.get('edit.flatten_inherit_root_props')
 
     let newTree = gametree.new().mutate((draft) => {
@@ -3931,11 +3978,7 @@ class Sabaki extends EventEmitter {
           ? board.width.toString()
           : [board.width, board.height].join(':')
       draft.updateProperty(draft.root.id, 'SZ', [size])
-      draft.updateProperty(
-        draft.root.id,
-        'PL',
-        [playerSign > 0 ? 'B' : 'W'],
-      )
+      draft.updateProperty(draft.root.id, 'PL', [playerSign > 0 ? 'B' : 'W'])
 
       for (let x = 0; x < board.width; x++) {
         for (let y = 0; y < board.height; y++) {
