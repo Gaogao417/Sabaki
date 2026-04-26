@@ -751,9 +751,10 @@ class Sabaki extends EventEmitter {
     let [vx, vy] = vertex
 
     // Right-click stone toggle
-    if (button === 2 && ['stone_1', 'stone_-1'].includes(tool)) {
+    let isRightClick = button === 2 || (helper.isMac && button === 0 && ctrlKey)
+    if (isRightClick && ['stone_1', 'stone_-1'].includes(tool)) {
       tool = tool === 'stone_1' ? 'stone_-1' : 'stone_1'
-    } else if (button === 2 && ['number', 'label'].includes(tool)) {
+    } else if (isRightClick && ['number', 'label'].includes(tool)) {
       let t = i18n.context('sabaki.play')
       helper.popupMenu(
         [
@@ -779,7 +780,7 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    if (button !== 0 && button !== 2) return
+    if (button !== 0 && button !== 2 && !(helper.isMac && button === 0 && ctrlKey)) return
 
     if (['stone_1', 'stone_-1'].includes(tool)) {
       let sign = tool === 'stone_1' ? 1 : -1
@@ -1985,7 +1986,7 @@ class Sabaki extends EventEmitter {
 
   // Playing
 
-  clickVertex(vertex, {button = 0, ctrlKey = false, x = 0, y = 0} = {}) {
+  clickVertex(vertex, {button = 0, ctrlKey = false, metaKey = false, x = 0, y = 0} = {}) {
     this.closeDrawer()
 
     let t = i18n.context('sabaki.play')
@@ -2001,7 +2002,7 @@ class Sabaki extends EventEmitter {
     let [vx, vy] = vertex
 
     if (['play', 'autoplay'].includes(this.state.mode)) {
-      if (button === 0) {
+      if (button === 0 && !(helper.isMac && ctrlKey)) {
         if (board.get(vertex) === 0) {
           this.makeMove(vertex, {
             generateEngineMove: this.state.engineGameOngoing == null,
@@ -2013,7 +2014,7 @@ class Sabaki extends EventEmitter {
         ) {
           this.removeNode(treePosition)
         }
-      } else if (button === 2) {
+      } else if (button === 2 || (helper.isMac && button === 0 && ctrlKey)) {
         if (
           board.markers[vy][vx] != null &&
           board.markers[vy][vx].type === 'point'
@@ -2072,7 +2073,7 @@ class Sabaki extends EventEmitter {
       }
 
       // Legacy edit path (fallback when no workspace)
-      if (ctrlKey) {
+      if (helper.isMac ? metaKey : ctrlKey) {
         // Add coordinates to comment
 
         let coord = board.stringifyVertex(vertex)
@@ -2092,7 +2093,7 @@ class Sabaki extends EventEmitter {
 
       let tool = this.state.selectedTool
 
-      if (button === 2) {
+      if (button === 2 || (helper.isMac && button === 0 && ctrlKey)) {
         // Right mouse click
 
         if (['stone_1', 'stone_-1'].includes(tool)) {

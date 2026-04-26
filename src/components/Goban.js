@@ -132,7 +132,7 @@ export default class Goban extends Component {
   getAreaOperation(evt) {
     if (evt.altKey && evt.button === 2) return 'clearAll'
     if (evt.altKey && evt.button === 0) return 'removeRect'
-    if ((evt.ctrlKey || evt.metaKey) && evt.button === 0) return 'add'
+    if ((helper.isMac ? evt.metaKey : (evt.ctrlKey || evt.metaKey)) && evt.button === 0) return 'add'
     return null
   }
 

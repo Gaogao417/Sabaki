@@ -3,6 +3,7 @@ import {h, Component} from 'preact'
 
 import i18n from '../i18n.js'
 import sabaki from '../modules/sabaki.js'
+import * as helper from '../modules/helper.js'
 
 const t = i18n.context('ContentDisplay')
 const setting = {get: (key) => window.sabaki.setting.get(key)}
@@ -114,7 +115,7 @@ export default class ContentDisplay extends Component {
     }
 
     this.handleVariationMouseUp = (evt) => {
-      if (evt.button !== 2) return
+      if (!helper.isRightClick(evt)) return
 
       let {sign, moves, sibling} = getVariationInfo(evt.currentTarget)
 

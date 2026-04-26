@@ -23,6 +23,12 @@ export {
 } from './utils.js'
 
 export const linebreak = process.platform === 'win32' ? '\r\n' : '\n'
+export const isMac = process.platform === 'darwin'
+
+export function isRightClick(evt) {
+  if (evt.button === 2) return true
+  return isMac && evt.button === 0 && evt.ctrlKey
+}
 
 export function isTextLikeElement(element) {
   return (
