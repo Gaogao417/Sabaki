@@ -458,6 +458,12 @@ exports.get = function (props = {}) {
           accelerator: 'CmdOrCtrl+PageUp',
           click: () => sabaki.goToSiblingGame(-1),
         },
+        {type: 'separator'},
+        {
+          label: i18n.t('menu.navigation', 'Snaps&hot as New Game'),
+          accelerator: 'F7',
+          click: () => sabaki.snapshotAsNewGame(),
+        },
       ],
     },
     {

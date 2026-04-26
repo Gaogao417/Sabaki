@@ -3911,6 +3911,66 @@ class Sabaki extends EventEmitter {
     this.setPlayer(treePosition, playerSign)
   }
 
+  snapshotAsNewGame() {
+    this.closeDrawer()
+    this.setMode('play')
+
+    let {gameTrees, gameCurrents} = this.state
+    let {gameTree: tree} = this.inferredState
+    let treePosition = this.state.treePosition
+    let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
+    if (gameIndex < 0) return
+
+    let board = gametree.getBoard(tree, treePosition)
+    let playerSign = this.getPlayer(treePosition)
+    let inherit = setting.get('edit.flatten_inherit_root_props')
+
+    let newTree = gametree.new().mutate((draft) => {
+      let size =
+        board.width === board.height
+          ? board.width.toString()
+          : [board.width, board.height].join(':')
+      draft.updateProperty(draft.root.id, 'SZ', [size])
+      draft.updateProperty(
+        draft.root.id,
+        'PL',
+        [playerSign > 0 ? 'B' : 'W'],
+      )
+
+      for (let x = 0; x < board.width; x++) {
+        for (let y = 0; y < board.height; y++) {
+          let sign = board.get([x, y])
+          if (sign === 0) continue
+
+          draft.addToProperty(
+            draft.root.id,
+            sign > 0 ? 'AB' : 'AW',
+            sgf.stringifyVertex([x, y]),
+          )
+        }
+      }
+
+      for (let prop of inherit) {
+        if (tree.root.data[prop] != null) {
+          draft.updateProperty(draft.root.id, prop, tree.root.data[prop])
+        }
+      }
+    })
+
+    let newGameIndex = gameIndex + 1
+    let newGameTrees = [...gameTrees]
+    newGameTrees.splice(newGameIndex, 0, newTree)
+    let newGameCurrents = [...gameCurrents]
+    newGameCurrents.splice(newGameIndex, 0, {})
+
+    this.setState({
+      gameTrees: newGameTrees,
+      gameCurrents: newGameCurrents,
+    })
+
+    this.setCurrentTreePosition(newTree, newTree.root.id)
+  }
+
   makeMainVariation(treePosition) {
     this.closeDrawer()
     this.setMode('play')
