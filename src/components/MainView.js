@@ -439,24 +439,6 @@ export default class MainView extends Component {
                 {class: 'edit-board-panel edit-board-panel--primary'},
                 h(
                   'div',
-                  {class: 'edit-board-panel__header'},
-                  h(
-                    'strong',
-                    {},
-                    editActiveTab === 'reference'
-                      ? 'Large: Reference'
-                      : 'Large: Current',
-                  ),
-                  h(
-                    'span',
-                    {},
-                    territoryCompareEnabled
-                      ? 'Editable | Preview diff'
-                      : 'Editable',
-                  ),
-                ),
-                h(
-                  'div',
                   {class: 'edit-board-panel__body'},
                   this.renderBoardSurface({
                     territoryMode,

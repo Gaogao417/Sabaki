@@ -743,7 +743,8 @@ class Sabaki extends EventEmitter {
     if (ws == null) return
 
     let tab = ws.activeTab
-    let {snapshotKey, markerKey, linesKey} = this.getEditWorkspaceTabKeys(tab)
+    let {snapshotKey, markerKey, linesKey, analysisKey, ownershipKey} =
+      this.getEditWorkspaceTabKeys(tab)
     let snapshot = ws[snapshotKey]
     if (snapshot == null) return
 
@@ -810,17 +811,29 @@ class Sabaki extends EventEmitter {
         }
       }
 
+      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
       this.setState({
-        editWorkspace: {...ws, [snapshotKey]: nextSnapshot},
+        editWorkspace: {
+          ...ws,
+          [snapshotKey]: nextSnapshot,
+          [analysisKey]: null,
+          [ownershipKey]: null,
+        },
       })
-      this.scheduleEditWorkspaceAnalysis()
+      this.scheduleEditWorkspaceAnalysis(tab)
     } else if (tool === 'eraser') {
       let nextSnapshot = cloneSnapshot(snapshot)
       nextSnapshot.signMap[vy][vx] = 0
+      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
       this.setState({
-        editWorkspace: {...ws, [snapshotKey]: nextSnapshot},
+        editWorkspace: {
+          ...ws,
+          [snapshotKey]: nextSnapshot,
+          [analysisKey]: null,
+          [ownershipKey]: null,
+        },
       })
-      this.scheduleEditWorkspaceAnalysis()
+      this.scheduleEditWorkspaceAnalysis(tab)
     } else if (['cross', 'triangle', 'square', 'circle'].includes(tool)) {
       let markerMap = ws[markerKey].map((row) => [...row])
       let typeMap = {
@@ -936,7 +949,7 @@ class Sabaki extends EventEmitter {
 
     let {analysisKey} = this.getEditWorkspaceTabKeys(tab)
     if (ws[analysisKey] == null) {
-      this.scheduleEditWorkspaceAnalysis()
+      this.scheduleEditWorkspaceAnalysis(tab)
     }
   }
 
@@ -967,17 +980,17 @@ class Sabaki extends EventEmitter {
         [ownershipKey]: null,
       },
     })
-    this.scheduleEditWorkspaceAnalysis()
+    this.scheduleEditWorkspaceAnalysis(ws.activeTab)
   }
 
-  scheduleEditWorkspaceAnalysis() {
+  scheduleEditWorkspaceAnalysis(targetTab = null) {
     clearTimeout(this.editAnalysisId)
     this.editAnalysisId = setTimeout(() => {
-      this.refreshEditWorkspaceAnalysis()
+      this.refreshEditWorkspaceAnalysis(targetTab)
     }, 200)
   }
 
-  async refreshEditWorkspaceAnalysis() {
+  async refreshEditWorkspaceAnalysis(targetTab = null) {
     let generation = (this.editAnalysisGeneration =
       (this.editAnalysisGeneration || 0) + 1)
     let ws = this.state.editWorkspace
@@ -1002,14 +1015,14 @@ class Sabaki extends EventEmitter {
       editWorkspace: {...ws, analysisPending: true},
     })
 
-    let currentAnalysis = null
-    if (ws.currentSnapshot != null) {
-      let {tree, treePosition} = snapshotToGameTree(ws.currentSnapshot)
-      currentAnalysis = await this.runBoardAnalysis({
+    let analyzeTab = async (snapshot, analysisKey, ownershipKey) => {
+      if (snapshot == null) return null
+      let {tree, treePosition} = snapshotToGameTree(snapshot)
+      return await this.runBoardAnalysis({
         syncer,
         tree,
         treePosition,
-        analyzePlayer: ws.currentSnapshot.nextPlayer,
+        analyzePlayer: snapshot.nextPlayer,
         requestGroup: 'study',
         onAnalysisUpdate: (analysis) => {
           if (this.editAnalysisGeneration !== generation) return
@@ -1018,8 +1031,8 @@ class Sabaki extends EventEmitter {
             this.setState({
               editWorkspace: {
                 ...current,
-                currentAnalysis: analysis,
-                currentOwnership: analysis?.ownership ?? null,
+                [analysisKey]: analysis,
+                [ownershipKey]: analysis?.ownership ?? null,
               },
             })
           }
@@ -1027,32 +1040,34 @@ class Sabaki extends EventEmitter {
       })
     }
 
-    let referenceAnalysis = null
-    if (ws.referenceSnapshot != null) {
-      let {tree, treePosition} = snapshotToGameTree(ws.referenceSnapshot)
-      referenceAnalysis = await this.runBoardAnalysis({
-        syncer,
-        tree,
-        treePosition,
-        analyzePlayer: ws.referenceSnapshot.nextPlayer,
-        requestGroup: 'study',
-        onAnalysisUpdate: (analysis) => {
-          if (this.editAnalysisGeneration !== generation) return
-          let current = this.state.editWorkspace
-          if (current != null) {
-            this.setState({
-              editWorkspace: {
-                ...current,
-                referenceAnalysis: analysis,
-                referenceOwnership: analysis?.ownership ?? null,
-              },
-            })
-          }
-        },
-      })
-    }
+    let analyzeCurrent = targetTab == null || targetTab === 'current'
+    let analyzeReference = targetTab == null || targetTab === 'reference'
 
-    if (this.editAnalysisGeneration !== generation) return
+    let currentAnalysis = analyzeCurrent
+      ? await analyzeTab(
+          ws.currentSnapshot,
+          'currentAnalysis',
+          'currentOwnership',
+        )
+      : ws.currentAnalysis
+
+    let referenceAnalysis = analyzeReference
+      ? await analyzeTab(
+          ws.referenceSnapshot,
+          'referenceAnalysis',
+          'referenceOwnership',
+        )
+      : ws.referenceAnalysis
+
+    if (this.editAnalysisGeneration !== generation) {
+      let pendingWs = this.state.editWorkspace
+      if (pendingWs != null) {
+        this.setState({
+          editWorkspace: {...pendingWs, analysisPending: false},
+        })
+      }
+      return
+    }
 
     let finalWs = this.state.editWorkspace
     if (finalWs != null) {
@@ -1075,7 +1090,11 @@ class Sabaki extends EventEmitter {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
-    let {snapshotKey: key} = this.getEditWorkspaceTabKeys(ws.activeTab)
+    let {
+      snapshotKey: key,
+      analysisKey,
+      ownershipKey,
+    } = this.getEditWorkspaceTabKeys(ws.activeTab)
     let snapshot = ws[key]
     if (snapshot == null) return
 
@@ -1092,10 +1111,16 @@ class Sabaki extends EventEmitter {
     nextSnapshot.signMap[sy][sx] = 0
     nextSnapshot.signMap[ty][tx] = sourceSign
 
+    this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
     this.setState({
-      editWorkspace: {...ws, [key]: nextSnapshot},
+      editWorkspace: {
+        ...ws,
+        [key]: nextSnapshot,
+        [analysisKey]: null,
+        [ownershipKey]: null,
+      },
     })
-    this.scheduleEditWorkspaceAnalysis()
+    this.scheduleEditWorkspaceAnalysis(ws.activeTab)
   }
 
   getAnalyzeCommand(syncer) {
@@ -1297,7 +1322,8 @@ class Sabaki extends EventEmitter {
       if (
         this.state.analyzingEngineSyncerId === syncer.id &&
         this.state.treePosition === originTreePosition &&
-        requestGroup !== 'analysis'
+        requestGroup !== 'analysis' &&
+        !(this.state.mode === 'edit' && this.state.editWorkspace != null)
       ) {
         this.analyzeMove(originTreePosition)
       }

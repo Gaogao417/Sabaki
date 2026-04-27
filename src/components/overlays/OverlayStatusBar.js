@@ -162,7 +162,7 @@ export default function OverlayStatusBar({
               ? t('Territory diff comparing Reference against Current.')
               : diffSourceType === 'workspace'
                 ? t(
-                    'Territory diff comparing the preview board against the large board.',
+                    'Territory diff comparing Reference against Current.',
                   )
                 : t(
                     'Territory overlay active. Hover a region to inspect ownership.',

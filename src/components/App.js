@@ -547,10 +547,10 @@ class App extends Component {
       ? null
       : editWorkspaceActive
         ? state.territoryCompareEnabled
-          ? t('Preview vs Large Board Territory')
+          ? t('Reference vs Current Territory')
           : editActiveTab === 'reference'
-            ? t('Large: Reference Territory')
-            : t('Large: Current Territory')
+            ? t('Reference Territory')
+            : t('Current Territory')
         : t('Territory')
 
     // Calculate inspector summary for the right sidebar Inspector card
