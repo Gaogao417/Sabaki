@@ -23,7 +23,7 @@ const setting = isRenderer
 exports.get = function (props = {}) {
   let toggleSetting = (key) => setting.set(key, !setting.get(key))
   let selectTool = (tool) => (
-    sabaki.setMode('edit'),
+    sabaki.setMode('analysis'),
     sabaki.setState({selectedTool: tool})
   )
 
@@ -202,7 +202,7 @@ exports.get = function (props = {}) {
           label: i18n.t('menu.edit', 'Toggle &Analysis Mode'),
           accelerator: 'CmdOrCtrl+E',
           click: () =>
-            sabaki.setMode(sabaki.state.mode === 'edit' ? 'play' : 'edit'),
+            sabaki.setMode(sabaki.state.mode === 'analysis' ? 'play' : 'analysis'),
         },
         {
           label: i18n.t('menu.edit', '&Select Tool'),
@@ -212,7 +212,7 @@ exports.get = function (props = {}) {
               accelerator: 'CmdOrCtrl+1',
               click: () =>
                 selectTool(
-                  sabaki.state.mode !== 'edit' ||
+                  sabaki.state.mode !== 'analysis' ||
                     sabaki.state.selectedTool !== 'stone_1'
                     ? 'stone_1'
                     : 'stone_-1',
@@ -677,7 +677,7 @@ exports.get = function (props = {}) {
           checked: !!territoryEnabled,
           click: () => sabaki.toggleTerritoryEnabled(),
         },
-        ...(mode !== 'edit'
+        ...(mode !== 'analysis'
           ? []
           : [
               {

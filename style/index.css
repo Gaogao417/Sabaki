@@ -2779,3 +2779,133 @@
   background-color: rgba(0, 0, 0, .08);
   opacity: .58;
 }
+
+/* Recall Mode */
+
+.recall-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 8px;
+  gap: 12px;
+}
+
+.recall-progress {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.recall-complete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4caf50;
+}
+
+.recall-correct { color: #4caf50; font-weight: bold; }
+.recall-wrong { color: #f44336; font-weight: bold; }
+
+.recall-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.recall-actions button {
+  padding: 3px 10px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 3px;
+  background: rgba(255,255,255,.08);
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.recall-actions button:hover {
+  background: rgba(255,255,255,.15);
+}
+
+.recall-actions button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.recall-end-btn {
+  background: rgba(76,175,80,.2) !important;
+  border-color: rgba(76,175,80,.3) !important;
+}
+
+/* Problem Mode */
+
+.problem-bar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 8px;
+  width: 100%;
+  font-size: 12px;
+}
+
+.problem-header { display: flex; gap: 8px; align-items: center; }
+.problem-type { background: rgba(255,255,255,.1); padding: 2px 6px; border-radius: 3px; font-size: 11px; text-transform: capitalize; }
+.problem-side { font-size: 14px; }
+.problem-title { font-weight: bold; }
+
+.problem-info { max-height: 80px; overflow-y: auto; }
+.problem-description { color: rgba(255,255,255,.7); margin-bottom: 4px; }
+.problem-goal { color: rgba(255,255,255,.85); }
+
+.problem-stats { display: flex; gap: 12px; }
+.bad-move-count { color: #f44336; }
+
+.problem-result { font-weight: bold; font-size: 14px; text-align: center; padding: 4px; }
+.result-pass { color: #4caf50; }
+.result-soft { color: #ff9800; }
+.result-fail { color: #f44336; }
+
+.problem-actions { display: flex; gap: 6px; }
+.problem-actions button {
+  padding: 4px 12px; border: 1px solid rgba(255,255,255,.15);
+  border-radius: 3px; background: rgba(255,255,255,.08);
+  color: inherit; cursor: pointer; font-size: 12px;
+}
+.problem-actions button:hover { background: rgba(255,255,255,.15); }
+.problem-actions button:disabled { opacity: .4; cursor: default; }
+.problem-submit-btn { background: rgba(76,175,80,.2) !important; border-color: rgba(76,175,80,.3) !important; }
+.problem-next-btn { background: rgba(33,150,243,.2) !important; border-color: rgba(33,150,243,.3) !important; }
+
+.review-counter { font-size: 11px; color: rgba(255,255,255,.6); }
+
+/* Training Dashboard */
+
+.training-dashboard .drawer-body { padding: 16px; }
+.dashboard-section { margin-bottom: 16px; }
+.dashboard-section h3 { margin: 0 0 8px; font-size: 13px; color: rgba(255,255,255,.6); text-transform: uppercase; }
+
+.stat-row { display: flex; justify-content: space-between; padding: 4px 0; }
+.stat-row strong { font-size: 16px; }
+
+.dashboard-actions { display: flex; gap: 8px; margin-top: 8px; }
+.dashboard-actions button {
+  padding: 6px 16px; border: 1px solid rgba(255,255,255,.15);
+  border-radius: 4px; background: rgba(255,255,255,.08);
+  color: inherit; cursor: pointer; font-size: 12px;
+}
+.dashboard-actions button.primary { background: rgba(76,175,80,.3); border-color: rgba(76,175,80,.4); }
+.dashboard-actions button:hover { background: rgba(255,255,255,.15); }
+
+.game-list, .problem-list { list-style: none; padding: 0; margin: 0; }
+.game-list li, .problem-list li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.game-list li:last-child, .problem-list li:last-child { border-bottom: none; }
+.game-date { color: rgba(255,255,255,.4); font-size: 11px; }
+.game-list button, .problem-list button {
+  margin-left: auto; padding: 2px 8px; border: 1px solid rgba(255,255,255,.1);
+  border-radius: 3px; background: rgba(255,255,255,.05);
+  color: inherit; cursor: pointer; font-size: 11px;
+}
+.game-list button:hover, .problem-list button:hover { background: rgba(255,255,255,.1); }
+
+.problem-type-badge { font-size: 10px; padding: 1px 4px; border-radius: 2px; background: rgba(255,255,255,.1); text-transform: capitalize; }

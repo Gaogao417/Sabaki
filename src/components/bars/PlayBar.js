@@ -54,7 +54,7 @@ export default class PlayBar extends Component {
           },
           {
             label: t('&Analysis'),
-            click: () => sabaki.setMode('edit'),
+            click: () => sabaki.setMode('analysis'),
           },
           {
             label: t('&Find'),

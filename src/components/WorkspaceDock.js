@@ -8,8 +8,14 @@ export default function WorkspaceDock({mode, editWorkspaceActive, children}) {
   let activePanel =
     editWorkspaceActive
       ? t('Analysis Workspace')
-      : mode === 'edit'
+      : mode === 'analysis'
         ? t('Analysis Tools')
+        : mode === 'recall'
+          ? t('Recall')
+          : mode === 'problem'
+            ? t('Problem')
+            : mode === 'review'
+              ? t('Review')
         : mode === 'find'
           ? t('Find')
           : mode === 'guess'

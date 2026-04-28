@@ -92,7 +92,7 @@ class Sabaki extends EventEmitter {
       fuzzyStonePlacement: null,
       animateStonePlacement: null,
       boardTransformation: '',
-      // Edit workspace (set only when mode === 'edit')
+      // Analysis workspace (set only when mode === 'analysis')
       editWorkspace: null,
 
       // Sidebar
@@ -130,6 +130,31 @@ class Sabaki extends EventEmitter {
       inputBoxText: '',
       onInputBoxSubmit: helper.noop,
       onInputBoxCancel: helper.noop,
+
+      // Recall Mode
+
+      recallSession: null,
+      recallMoveIndex: 0,
+      recallExpectedMoves: [],
+      recallUserAttempts: [],
+      recallShowHint: false,
+      recallCompleted: false,
+
+      // Problem Mode
+
+      problemSession: null,
+      problemAttempt: null,
+      problemWorkspace: null,
+      problemEvalCache: [],
+      problemBadMoves: [],
+      problemSubmitted: false,
+      problemResult: null,
+
+      // Review Mode
+
+      reviewQueue: [],
+      reviewCurrentIndex: 0,
+      reviewTotalDue: 0,
 
       // Info Overlay
 
@@ -284,7 +309,7 @@ class Sabaki extends EventEmitter {
           state.editWorkspace?.referenceSnapshot != null ||
           state.territoryEnabled ||
           state.mode === 'play' ||
-          (state.mode === 'edit' && state.editWorkspace != null)
+          (state.mode === 'analysis' && state.editWorkspace != null)
         )
       },
       get gameInfo() {
@@ -379,8 +404,8 @@ class Sabaki extends EventEmitter {
 
     let stateChange = {mode}
 
-    // Clean up edit workspace when leaving edit mode
-    if (this.state.mode === 'edit' && mode !== 'edit') {
+    // Clean up edit workspace when leaving analysis mode
+    if (this.state.mode === 'analysis' && mode !== 'analysis') {
       clearTimeout(this.editAnalysisId)
       stateChange.editWorkspace = null
     }
@@ -400,8 +425,8 @@ class Sabaki extends EventEmitter {
         .then((result) => {
           this.setState({deadStones: result})
         })
-    } else if (mode === 'edit') {
-      // Seed edit workspace from current board position
+    } else if (mode === 'analysis') {
+      // Seed analysis workspace from current board position
       let tree = this.state.gameTrees[this.state.gameIndex]
       let board = gametree.getBoard(tree, this.state.treePosition)
       let currentPlayer = this.getPlayer(this.state.treePosition)
@@ -430,15 +455,21 @@ class Sabaki extends EventEmitter {
         textarea.selectionStart = textarea.selectionEnd = 0
         textarea.focus()
       })
+    } else if (mode === 'recall') {
+      if (this.state.recallSession == null) return
+    } else if (mode === 'problem') {
+      if (this.state.problemSession == null) return
+    } else if (mode === 'review') {
+      if (this.state.problemSession == null) return
     }
 
     this.setState(stateChange)
     this.events.emit('modeChange')
 
-    if (mode === 'edit') {
+    if (mode === 'analysis') {
       this.scheduleEditWorkspaceAnalysis()
     } else if (
-      mode !== 'edit' &&
+      mode !== 'analysis' &&
       this.state.territoryCompareEnabled &&
       !this.getTerritoryCompareAvailable()
     ) {
@@ -452,6 +483,515 @@ class Sabaki extends EventEmitter {
 
   closeDrawer() {
     this.openDrawer(null)
+  }
+
+  // Recall Mode
+
+  async startRecallSession(gameId, options = {}) {
+    let game = await window.sabaki.db.getGame(gameId)
+    if (!game) return
+
+    let trees = sgf.parse(game.sgf)
+    if (!trees || trees.length === 0) return
+    let tree = trees[0]
+
+    // Extract the move sequence from the game tree
+    let moves = []
+    let nodeId = tree.root.id
+    let innerTree = tree
+    while (true) {
+      let node = innerTree.get(nodeId)
+      if (!node) break
+      let sign = 0
+      let vertex = null
+      if (node.data.B && node.data.B[0] != null) {
+        sign = 1
+        vertex = node.data.B[0] === '' ? 'pass' : node.data.B[0]
+      } else if (node.data.W && node.data.W[0] != null) {
+        sign = -1
+        vertex = node.data.W[0] === '' ? 'pass' : node.data.W[0]
+      }
+      if (vertex != null) {
+        moves.push({sign, vertex: vertex === 'pass' ? null : vertex})
+      }
+      let children = node.children
+      if (children.length === 0) break
+      nodeId = children[0].id
+    }
+
+    let session = {
+      gameId,
+      mode: options.mode || 'full_game',
+      startMove: options.startMove || 0,
+    }
+    session = await window.sabaki.db.saveRecallSession(session)
+
+    this.setState({
+      recallSession: session,
+      recallMoveIndex: 0,
+      recallExpectedMoves: moves,
+      recallUserAttempts: [],
+      recallShowHint: false,
+      recallCompleted: false,
+    })
+
+    // Load the game tree and navigate to the start
+    this.newFile()
+    let loadedTrees = sgf.parse(game.sgf)
+    if (loadedTrees && loadedTrees.length > 0) {
+      this.loadGameTrees(loadedTrees)
+      // Navigate to root (empty board)
+      this.setCurrentTreePosition(loadedTrees[0], loadedTrees[0].root.id)
+    }
+
+    this.setMode('recall')
+  }
+
+  handleRecallMove(vertex) {
+    let {recallSession, recallMoveIndex, recallExpectedMoves, recallUserAttempts} = this.state
+    if (!recallSession || this.state.recallCompleted) return
+
+    let expected = recallExpectedMoves[recallMoveIndex]
+    if (!expected) return
+
+    // Navigate tree forward to get the board
+    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
+    let tree = gameTrees[gameIndex]
+    let board = gametree.getBoard(tree, treePosition)
+
+    // Handle passes
+    if (expected.vertex === null) {
+      recallUserAttempts.push({
+        moveNumber: recallMoveIndex,
+        expectedMove: 'pass',
+        userMove: 'pass',
+        isCorrect: true,
+        hintLevelUsed: 0,
+      })
+      this.recallNavigateNext()
+      this.setState({recallMoveIndex: recallMoveIndex + 1, recallUserAttempts})
+      this.checkRecallComplete()
+      return
+    }
+
+    let expectedCoord = board.parseVertex(expected.vertex)
+    let isCorrect = helper.vertexEquals(vertex, expectedCoord)
+
+    recallUserAttempts.push({
+      moveNumber: recallMoveIndex,
+      expectedMove: expected.vertex,
+      userMove: board.stringifyVertex(vertex),
+      isCorrect,
+      hintLevelUsed: this.state.recallShowHint ? 1 : 0,
+    })
+
+    if (isCorrect) {
+      this.recallNavigateNext()
+      this.setState({
+        recallMoveIndex: recallMoveIndex + 1,
+        recallUserAttempts,
+        recallShowHint: false,
+      })
+      this.checkRecallComplete()
+    } else {
+      this.setState({recallUserAttempts})
+    }
+  }
+
+  recallNavigateNext() {
+    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
+    let tree = gameTrees[gameIndex]
+    let currents = gameCurrents[gameIndex]
+    let nextNode = tree.navigate(treePosition, 1, currents)
+    if (nextNode) {
+      this.setCurrentTreePosition(tree, nextNode.id)
+    }
+  }
+
+  checkRecallComplete() {
+    let {recallMoveIndex, recallExpectedMoves} = this.state
+    if (recallMoveIndex >= recallExpectedMoves.length) {
+      this.setState({recallCompleted: true})
+    }
+  }
+
+  async endRecallSession() {
+    let {recallSession, recallUserAttempts} = this.state
+    if (!recallSession) return
+
+    let completedSession = {
+      ...recallSession,
+      completedAt: new Date().toISOString(),
+    }
+    await window.sabaki.db.saveRecallSession(completedSession)
+
+    if (recallUserAttempts.length > 0) {
+      await window.sabaki.db.saveRecallAttempts(
+        recallUserAttempts.map((a) => ({
+          ...a,
+          sessionId: recallSession.id,
+        })),
+      )
+    }
+
+    this.setMode('analysis')
+  }
+
+  skipRecallMove() {
+    let {recallMoveIndex, recallExpectedMoves, recallUserAttempts} = this.state
+    let expected = recallExpectedMoves[recallMoveIndex]
+    if (!expected) return
+
+    recallUserAttempts.push({
+      moveNumber: recallMoveIndex,
+      expectedMove: expected.vertex || 'pass',
+      userMove: 'skip',
+      isCorrect: false,
+      hintLevelUsed: 0,
+    })
+
+    this.recallNavigateNext()
+
+    this.setState({
+      recallMoveIndex: recallMoveIndex + 1,
+      recallUserAttempts,
+      recallShowHint: false,
+    })
+    this.checkRecallComplete()
+  }
+
+  showRecallHint() {
+    this.setState({recallShowHint: true})
+  }
+
+  // Problem Snapshot
+
+  snapshotAsProblem() {
+    if (this.state.mode !== 'analysis') return
+    this.openDrawer('problemEditor')
+  }
+
+  async createProblemFromSnapshot(options) {
+    let tree = this.state.gameTrees[this.state.gameIndex]
+    let board = gametree.getBoard(tree, this.state.treePosition)
+    let currentPlayer = this.getPlayer(this.state.treePosition)
+    let snapshot = createSnapshotFromBoard(board, currentPlayer)
+
+    let sgfStr = sgf.stringify([
+      snapshotToGameTree(snapshot, {moveNumber: 0}),
+    ])
+
+    let problem = {
+      sourceGameId: null,
+      sourceMoveNumber: null,
+      type: options.type || 'best_move',
+      positionSgf: sgfStr,
+      sideToMove: options.sideToMove || (currentPlayer > 0 ? 'black' : 'white'),
+      title: options.title || null,
+      positionDescription: options.positionDescription || '',
+      taskGoal: options.taskGoal || '',
+      referenceLines: options.referenceLines || [],
+      passRule: options.passRule || {evalDropThreshold: 5, requireNoSevereBadMove: true, compareWithReference: true},
+      tags: options.tags || [],
+      difficulty: options.difficulty || null,
+      status: options.status || 'inbox',
+    }
+
+    let saved = await window.sabaki.db.saveProblem(problem)
+    this.closeDrawer()
+    return saved
+  }
+
+  // Problem Mode
+
+  async startProblem(problemId) {
+    let problem = await window.sabaki.db.getProblem(problemId)
+    if (!problem) return
+
+    let trees = sgf.parse(problem.positionSgf)
+    if (!trees || trees.length === 0) return
+    let tree = trees[0]
+
+    let attempt = {
+      problemId: problem.id,
+      userLine: [],
+      moveEvaluations: [],
+      hintLevelUsed: 0,
+      generatedPunishmentProblemIds: [],
+    }
+    attempt = await window.sabaki.db.saveProblemAttempt(attempt)
+
+    this.setState({
+      problemSession: problem,
+      problemAttempt: attempt,
+      problemWorkspace: tree,
+      problemEvalCache: [],
+      problemBadMoves: [],
+      problemSubmitted: false,
+      problemResult: null,
+    })
+
+    this.loadGameTrees([tree])
+    this.setCurrentTreePosition(tree, tree.root.id)
+    this.setMode('problem')
+  }
+
+  handleProblemMove(vertex) {
+    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} = this.state
+    if (!problemSession || this.state.problemSubmitted) return
+
+    let {gameTrees, gameIndex, treePosition} = this.state
+    let tree = gameTrees[gameIndex]
+    let board = gametree.getBoard(tree, treePosition)
+
+    if (board.get(vertex) !== 0) return
+
+    let player = problemSession.sideToMove === 'black' ? 1 : -1
+    let currentPlayer = this.getPlayer(treePosition)
+
+    // Place the stone
+    let newTree = tree.mutate((draft) => {
+      draft.appendNode(treePosition, {
+        [player > 0 ? 'B' : 'W']: [sgf.stringifyVertex(vertex)],
+      })
+    })
+
+    let nextId = newTree.get(treePosition).children[0]?.id
+    if (nextId) {
+      this.setCurrentTreePosition(newTree, nextId)
+    }
+
+    let moveStr = board.stringifyVertex(vertex)
+    let userLine = [...(problemAttempt.userLine || []), moveStr]
+
+    // Basic evaluation using analysis data if available
+    let moveEval = {
+      moveIndex: userLine.length - 1,
+      move: moveStr,
+      isBadMove: false,
+      severity: 'none',
+    }
+
+    // Use current analysis to check if the move was bad
+    if (this.state.analysis) {
+      let {analysis} = this.state
+      let isSolverMove = (analysis.sign > 0 && player > 0) || (analysis.sign < 0 && player < 0)
+
+      let variation = analysis.variations.find((v) => helper.vertexEquals(v.vertex, vertex))
+      if (variation) {
+        // Check if this is significantly worse than the top move
+        let topWinrate = analysis.variations[0]?.winrate || 50
+        let moveWinrate = variation.winrate
+        let winrateDrop = isSolverMove ? topWinrate - moveWinrate : moveWinrate - topWinrate
+
+        if (analysis.variations[0]?.scoreLead != null && variation.scoreLead != null) {
+          let scoreDrop = isSolverMove
+            ? (analysis.variations[0].scoreLead - variation.scoreLead)
+            : (variation.scoreLead - analysis.variations[0].scoreLead)
+
+          // Adjust sign based on solver's perspective
+          if (player < 0) scoreDrop = -scoreDrop
+
+          moveEval.beforeScoreLead = analysis.variations[0].scoreLead
+          moveEval.afterScoreLead = variation.scoreLead
+          moveEval.scoreDrop = Math.abs(scoreDrop)
+
+          if (Math.abs(scoreDrop) > 8) {
+            moveEval.isBadMove = true
+            moveEval.severity = 'severe'
+          } else if (Math.abs(scoreDrop) > 5) {
+            moveEval.isBadMove = true
+            moveEval.severity = 'major'
+          } else if (Math.abs(scoreDrop) > 2) {
+            moveEval.isBadMove = true
+            moveEval.severity = 'minor'
+          }
+        }
+      }
+    }
+
+    problemEvalCache.push(moveEval)
+
+    if (moveEval.isBadMove) {
+      problemBadMoves.push({
+        moveIndex: moveEval.moveIndex,
+        move: moveStr,
+        severity: moveEval.severity,
+        scoreDrop: moveEval.scoreDrop,
+      })
+    }
+
+    let updatedAttempt = {...problemAttempt, userLine, moveEvaluations: problemEvalCache}
+    this.setState({
+      problemEvalCache,
+      problemBadMoves,
+      problemAttempt: updatedAttempt,
+    })
+  }
+
+  async submitProblemAttempt() {
+    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} = this.state
+    if (!problemSession || this.state.problemSubmitted) return
+
+    // Determine result
+    let result = 'pass'
+    let hasSevere = problemBadMoves.some((m) => m.severity === 'severe')
+    let hasMajor = problemBadMoves.some((m) => m.severity === 'major')
+
+    if (hasSevere) {
+      result = 'fail'
+    } else if (hasMajor) {
+      result = 'soft_pass'
+    }
+
+    let submittedAt = new Date().toISOString()
+    let updatedAttempt = {
+      ...problemAttempt,
+      submittedAt,
+      result,
+    }
+
+    await window.sabaki.db.saveProblemAttempt(updatedAttempt)
+
+    // Generate punishment problems for major/severe bad moves
+    let punishmentIds = []
+    for (let badMove of problemBadMoves.filter((m) => m.severity === 'major' || m.severity === 'severe')) {
+      let punishSide = problemSession.sideToMove === 'black' ? 'white' : 'black'
+      let punishment = await this.generatePunishmentProblem(badMove, problemSession, updatedAttempt, punishSide)
+      if (punishment) {
+        punishmentIds.push(punishment.id)
+      }
+    }
+
+    updatedAttempt.generatedPunishmentProblemIds = punishmentIds
+    await window.sabaki.db.saveProblemAttempt(updatedAttempt)
+
+    // Update review schedule
+    let dueAt = new Date()
+    if (result === 'fail') {
+      dueAt.setDate(dueAt.getDate() + 1)
+    } else if (result === 'soft_pass') {
+      dueAt.setDate(dueAt.getDate() + 3)
+    } else {
+      dueAt.setDate(dueAt.getDate() + 7)
+    }
+
+    await window.sabaki.db.upsertReviewSchedule({
+      itemId: problemSession.id,
+      itemType: 'problem',
+      dueAt: dueAt.toISOString(),
+      intervalDays: result === 'fail' ? 1 : result === 'soft_pass' ? 3 : 7,
+      lastResult: result,
+      consecutivePassCount: result === 'pass' ? 1 : 0,
+      totalFailCount: result === 'fail' ? 1 : 0,
+    })
+
+    this.setState({
+      problemSubmitted: true,
+      problemResult: result,
+      problemAttempt: updatedAttempt,
+    })
+
+    // If in review mode, advance to next
+    if (this.state.mode === 'review') {
+      this.advanceReview()
+    }
+  }
+
+  async generatePunishmentProblem(badMove, parentProblem, parentAttempt, punishSide) {
+    let {gameTrees, gameIndex, treePosition} = this.state
+    let tree = gameTrees[gameIndex]
+    let board = gametree.getBoard(tree, treePosition)
+    let snapshot = createSnapshotFromBoard(board, punishSide === 'black' ? 1 : -1)
+    let positionSgf = sgf.stringify([snapshotToGameTree(snapshot, {moveNumber: 0})])
+
+    let description = `Auto-generated from "${parentProblem.title || 'untitled'}". ` +
+      `The solver played ${badMove.move}, causing a ${badMove.severity} loss of ~${Math.round(badMove.scoreDrop || 0)} points. ` +
+      `Now it is ${punishSide}'s turn. Find the key punishment move.`
+
+    let problem = {
+      sourceProblemId: parentProblem.id,
+      type: 'punishment',
+      positionSgf,
+      sideToMove: punishSide,
+      title: `Punishment: ${parentProblem.title || 'Untitled'}`,
+      positionDescription: description,
+      taskGoal: `Find the punishment move after ${badMove.move}.`,
+      status: 'inbox',
+    }
+
+    let saved = await window.sabaki.db.saveProblem(problem)
+    return saved
+  }
+
+  undoProblemMove() {
+    let {problemAttempt, problemEvalCache, problemBadMoves} = this.state
+    if (!problemAttempt || problemEvalCache.length === 0) return
+
+    let userLine = [...(problemAttempt.userLine || [])]
+    let lastEval = problemEvalCache[problemEvalCache.length - 1]
+
+    userLine.pop()
+    problemEvalCache = problemEvalCache.slice(0, -1)
+    if (lastEval.isBadMove) {
+      problemBadMoves = problemBadMoves.filter((m) => m.moveIndex !== lastEval.moveIndex)
+    }
+
+    // Navigate back in tree
+    let {gameTrees, gameIndex, treePosition} = this.state
+    let tree = gameTrees[gameIndex]
+    let node = tree.get(treePosition)
+    if (node.parentId) {
+      this.setCurrentTreePosition(tree, node.parentId)
+    }
+
+    this.setState({
+      problemAttempt: {...problemAttempt, userLine},
+      problemEvalCache,
+      problemBadMoves,
+    })
+  }
+
+  exitProblemMode() {
+    this.setState({
+      problemSession: null,
+      problemAttempt: null,
+      problemSubmitted: false,
+      problemResult: null,
+    })
+    this.setMode('play')
+  }
+
+  // Review Mode
+
+  async startReviewSession() {
+    let dueItems = await window.sabaki.db.getDueReviews()
+    if (dueItems.length === 0) return
+
+    let queue = dueItems.map((item) => item.item_id)
+
+    this.setState({
+      reviewQueue: queue,
+      reviewCurrentIndex: 0,
+      reviewTotalDue: queue.length,
+    })
+
+    await this.startProblem(queue[0])
+    this.setMode('review')
+  }
+
+  async advanceReview() {
+    let {reviewQueue, reviewCurrentIndex} = this.state
+    let nextIndex = reviewCurrentIndex + 1
+
+    if (nextIndex >= reviewQueue.length) {
+      this.exitProblemMode()
+      return
+    }
+
+    this.setState({reviewCurrentIndex: nextIndex})
+    await this.startProblem(reviewQueue[nextIndex])
+    this.setMode('review')
   }
 
   setBusy(busy) {
@@ -552,12 +1092,12 @@ class Sabaki extends EventEmitter {
 
   getTerritoryCompareAvailable(state = this.state) {
     return (
-      state.mode === 'edit' && state.editWorkspace?.referenceSnapshot != null
+      state.mode === 'analysis' && state.editWorkspace?.referenceSnapshot != null
     )
   }
 
   getBoardAnalysisContext({state = this.state, tab = null} = {}) {
-    if (state.mode === 'edit' && state.editWorkspace != null) {
+    if (state.mode === 'analysis' && state.editWorkspace != null) {
       let activeTab = tab ?? state.editWorkspace.activeTab
       let {snapshotKey, analysisKey, ownershipKey} =
         this.getEditWorkspaceTabKeys(activeTab)
@@ -569,7 +1109,7 @@ class Sabaki extends EventEmitter {
 
       let {tree, treePosition} = context
       return {
-        source: 'edit',
+        source: 'analysis',
         tab: activeTab,
         tree,
         treePosition,
@@ -595,7 +1135,7 @@ class Sabaki extends EventEmitter {
   }
 
   refreshActiveBoardAnalysis() {
-    if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
       this.scheduleEditWorkspaceAnalysis()
     } else {
       this.analyzeMove(this.state.treePosition)
@@ -1323,7 +1863,7 @@ class Sabaki extends EventEmitter {
         this.state.analyzingEngineSyncerId === syncer.id &&
         this.state.treePosition === originTreePosition &&
         requestGroup !== 'analysis' &&
-        !(this.state.mode === 'edit' && this.state.editWorkspace != null)
+        !(this.state.mode === 'analysis' && this.state.editWorkspace != null)
       ) {
         this.analyzeMove(originTreePosition)
       }
@@ -1429,12 +1969,12 @@ class Sabaki extends EventEmitter {
     }
 
     if (
-      this.state.mode !== 'edit' &&
+      this.state.mode !== 'analysis' &&
       (this.state.analysisTreePosition !== this.state.treePosition ||
         this.getCurrentOwnership(syncer) == null)
     ) {
       this.analyzeMove(this.state.treePosition)
-    } else if (this.state.mode === 'edit') {
+    } else if (this.state.mode === 'analysis') {
       this.scheduleEditWorkspaceAnalysis()
     }
 
@@ -1454,7 +1994,7 @@ class Sabaki extends EventEmitter {
       return true
     }
 
-    if (this.state.mode !== 'edit') return false
+    if (this.state.mode !== 'analysis') return false
 
     let territoryReady = await this.setTerritoryEnabled(true)
     if (!territoryReady || !this.getTerritoryCompareAvailable()) {
@@ -1575,14 +2115,14 @@ class Sabaki extends EventEmitter {
   }
 
   undo() {
-    if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
       return
     }
     this.checkoutHistory(this.historyPointer - 1)
   }
 
   redo() {
-    if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
       return
     }
     this.checkoutHistory(this.historyPointer + 1)
@@ -2100,7 +2640,7 @@ class Sabaki extends EventEmitter {
           }
         }
       }
-    } else if (this.state.mode === 'edit') {
+    } else if (this.state.mode === 'analysis') {
       if (this.state.editWorkspace != null) {
         this.clickEditWorkspaceVertex(vertex, {button, ctrlKey, x, y})
         return
@@ -2198,6 +2738,20 @@ class Sabaki extends EventEmitter {
       } else {
         this.setState({findVertex: vertex})
         this.findMove(1, {vertex, text: this.state.findText})
+      }
+    } else if (this.state.mode === 'recall') {
+      if (button !== 0) return
+
+      let board = gametree.getBoard(tree, treePosition)
+      if (board.get(vertex) === 0) {
+        this.handleRecallMove(vertex)
+      }
+    } else if (this.state.mode === 'problem' || this.state.mode === 'review') {
+      if (button !== 0) return
+
+      let board = gametree.getBoard(tree, treePosition)
+      if (board.get(vertex) === 0) {
+        this.handleProblemMove(vertex)
       }
     } else if (this.state.mode === 'guess') {
       if (button !== 0) return
@@ -2596,7 +3150,7 @@ class Sabaki extends EventEmitter {
 
     let navigated = treePosition !== this.state.treePosition
 
-    if (navigated && this.state.mode === 'edit') {
+    if (navigated && this.state.mode === 'analysis') {
       clearTimeout(this.editAnalysisId)
     }
 
@@ -2643,7 +3197,7 @@ class Sabaki extends EventEmitter {
 
     if (
       navigated &&
-      this.state.mode === 'edit' &&
+      this.state.mode === 'analysis' &&
       this.state.editWorkspace != null
     ) {
       this.syncEditWorkspaceToCurrentPosition()
@@ -3389,7 +3943,7 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    if (this.state.mode === 'edit' && this.state.editWorkspace != null) return
+    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) return
 
     clearTimeout(this.continuousAnalysisId)
 
@@ -3426,7 +3980,7 @@ class Sabaki extends EventEmitter {
       (this.state.blackEngineSyncerId !== syncerId &&
         this.state.whiteEngineSyncerId !== syncerId)
     ) {
-      if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+      if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
         this.syncEditWorkspaceToCurrentPosition()
         this.scheduleEditWorkspaceAnalysis()
       } else {
@@ -3978,7 +4532,7 @@ class Sabaki extends EventEmitter {
     // Capture board before switching mode (edit workspace is destroyed on mode change)
     let board
     let playerSign
-    if (this.state.mode === 'edit' && this.state.editWorkspace != null) {
+    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
       let snapshot = this.state.editWorkspace.currentSnapshot
       board = boardFromSnapshot(snapshot)
       playerSign = snapshot.nextPlayer

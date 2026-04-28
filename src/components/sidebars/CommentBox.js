@@ -20,7 +20,7 @@ class CommentTitle extends Component {
   constructor() {
     super()
 
-    this.handleEditButtonClick = () => sabaki.setMode('edit')
+    this.handleEditButtonClick = () => sabaki.setMode('analysis')
 
     this.handleMoveNameHelpClick = (evt) => {
       evt.preventDefault()
@@ -283,7 +283,7 @@ export default class CommentBox extends Component {
   componentWillReceiveProps({treePosition, mode, title, comment}) {
     let treePositionChanged = treePosition !== this.props.treePosition
 
-    if (mode === 'edit') {
+    if (mode === 'analysis') {
       this.element.scrollTop = 0
       if (treePositionChanged) {
         this.textareaElement.scrollTop = 0

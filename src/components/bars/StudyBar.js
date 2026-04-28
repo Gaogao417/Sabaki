@@ -60,7 +60,7 @@ export default function StudyBar({
   let toolLabel =
     selectedTool === 'label'
       ? t('Key Points')
-      : mode === 'edit'
+      : mode === 'analysis'
         ? t('Analysis Mode')
         : t('Normal Mode')
   let statusText = baselineStepCurrent
@@ -140,7 +140,7 @@ export default function StudyBar({
         tool: 'stone_1',
         selectedTool,
         onClick: (tool) =>
-          sabaki.setState({selectedTool: tool, mode: 'edit'}),
+          sabaki.setState({selectedTool: tool, mode: 'analysis'}),
       }),
       h(ToolButton, {
         label: t('White'),

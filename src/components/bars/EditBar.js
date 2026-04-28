@@ -27,7 +27,7 @@ class EditBar extends Component {
   }
 
   shouldComponentUpdate(nextProps) {
-    return nextProps.mode !== this.props.mode || nextProps.mode === 'edit'
+    return nextProps.mode !== this.props.mode || nextProps.mode === 'analysis'
   }
 
   handleToolButtonClick(evt) {
@@ -70,7 +70,7 @@ class EditBar extends Component {
 
     return h(
       Bar,
-      Object.assign({type: 'edit'}, this.props),
+      Object.assign({type: 'analysis'}, this.props),
       h(
         'ul',
         {},
@@ -92,6 +92,20 @@ class EditBar extends Component {
           {class: 'edit-workspace-actions'},
           h('li', {}, h('span', {class: 'edit-analysis-pending'}, '...')),
         ),
+      h(
+        'ul',
+        {},
+        h('li', {},
+          h('a', {
+            title: t('Snapshot as Problem'),
+            href: '#',
+            onClick: (evt) => {
+              evt.preventDefault()
+              sabaki.snapshotAsProblem()
+            },
+          }, t('📋 Problem')),
+        ),
+      ),
     )
   }
 }

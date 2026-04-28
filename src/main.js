@@ -12,6 +12,7 @@ const {resolve} = require('path')
 const i18n = require('./i18n')
 const setting = require('./setting')
 const updater = require('./updater')
+const db = require('./modules/db')
 
 let windows = []
 let openfile = null
@@ -434,6 +435,25 @@ function setupIpcHandlers() {
     setting.loadThemes()
     return setting.getThemes()
   })
+  // Database (training system)
+  let dbReady = false
+  const dbInit = db.init(setting.userDataDirectory).then(() => { dbReady = true })
+
+  ipcMain.handle('db:saveGame', async (_, game) => { await dbInit; return db.saveGame(game) })
+  ipcMain.handle('db:getGame', async (_, id) => { await dbInit; return db.getGame(id) })
+  ipcMain.handle('db:getRecentGames', async (_, limit) => { await dbInit; return db.getRecentGames(limit) })
+  ipcMain.handle('db:saveRecallSession', async (_, session) => { await dbInit; return db.saveRecallSession(session) })
+  ipcMain.handle('db:saveRecallAttempts', async (_, attempts) => { await dbInit; return db.saveRecallAttempts(attempts) })
+  ipcMain.handle('db:saveProblem', async (_, problem) => { await dbInit; return db.saveProblem(problem) })
+  ipcMain.handle('db:getProblem', async (_, id) => { await dbInit; return db.getProblem(id) })
+  ipcMain.handle('db:getProblemsByStatus', async (_, status, limit) => { await dbInit; return db.getProblemsByStatus(status, limit) })
+  ipcMain.handle('db:saveProblemAttempt', async (_, attempt) => { await dbInit; return db.saveProblemAttempt(attempt) })
+  ipcMain.handle('db:saveBadMove', async (_, badMove) => { await dbInit; return db.saveBadMove(badMove) })
+  ipcMain.handle('db:updateBadMoveGeneratedProblem', async (_, badMoveId, problemId) => { await dbInit; return db.updateBadMoveGeneratedProblem(badMoveId, problemId) })
+  ipcMain.handle('db:getDueReviews', async (_) => { await dbInit; return db.getDueReviews() })
+  ipcMain.handle('db:upsertReviewSchedule', async (_, item) => { await dbInit; return db.upsertReviewSchedule(item) })
+  ipcMain.handle('db:getDashboardSummary', async (_) => { await dbInit; return db.getDashboardSummary() })
+
   ipcMain.on('setting:getPathsSync', (e) => {
     try {
       e.returnValue = {

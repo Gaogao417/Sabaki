@@ -135,6 +135,24 @@ window.sabaki = {
     writeText: (t) => ipcRenderer.invoke('clipboard:writeText', t),
   },
 
+  // Database (training system)
+  db: {
+    saveGame: (game) => ipcRenderer.invoke('db:saveGame', game),
+    getGame: (id) => ipcRenderer.invoke('db:getGame', id),
+    getRecentGames: (limit) => ipcRenderer.invoke('db:getRecentGames', limit),
+    saveRecallSession: (session) => ipcRenderer.invoke('db:saveRecallSession', session),
+    saveRecallAttempts: (attempts) => ipcRenderer.invoke('db:saveRecallAttempts', attempts),
+    saveProblem: (problem) => ipcRenderer.invoke('db:saveProblem', problem),
+    getProblem: (id) => ipcRenderer.invoke('db:getProblem', id),
+    getProblemsByStatus: (status, limit) => ipcRenderer.invoke('db:getProblemsByStatus', status, limit),
+    saveProblemAttempt: (attempt) => ipcRenderer.invoke('db:saveProblemAttempt', attempt),
+    saveBadMove: (badMove) => ipcRenderer.invoke('db:saveBadMove', badMove),
+    updateBadMoveGeneratedProblem: (badMoveId, problemId) => ipcRenderer.invoke('db:updateBadMoveGeneratedProblem', badMoveId, problemId),
+    getDueReviews: () => ipcRenderer.invoke('db:getDueReviews'),
+    upsertReviewSchedule: (item) => ipcRenderer.invoke('db:upsertReviewSchedule', item),
+    getDashboardSummary: () => ipcRenderer.invoke('db:getDashboardSummary'),
+  },
+
   // File path helper for Electron 32+ (File.path was removed)
   getPathForFile: (file) => {
     if (webUtils && webUtils.getPathForFile) {

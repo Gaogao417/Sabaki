@@ -5,6 +5,8 @@ import BoardToolbar from './BoardToolbar.js'
 import WorkspaceDock from './WorkspaceDock.js'
 import EditBar from './bars/EditBar.js'
 import GuessBar from './bars/GuessBar.js'
+import RecallBar from './bars/RecallBar.js'
+import ProblemBar from './bars/ProblemBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
 import ScoringBar from './bars/ScoringBar.js'
 import FindBar from './bars/FindBar.js'
@@ -167,11 +169,11 @@ export default class MainView extends Component {
   }
 
   componentDidMount() {
-    // Pressing Ctrl/Cmd should show crosshair cursor on Goban in edit mode
+    // Pressing Ctrl/Cmd should show crosshair cursor on Goban in analysis mode
 
     document.addEventListener('keydown', (evt) => {
       if (evt.key === 'Control' || evt.key === 'Meta') {
-        if (this.props.mode === 'edit') {
+        if (this.props.mode === 'analysis') {
           this.setState({gobanCrosshair: true})
         }
         this.setState({areaModifierActive: true})
@@ -182,7 +184,7 @@ export default class MainView extends Component {
 
     document.addEventListener('keyup', (evt) => {
       if (evt.key === 'Control' || evt.key === 'Meta') {
-        if (this.props.mode === 'edit') {
+        if (this.props.mode === 'analysis') {
           this.setState({gobanCrosshair: false})
         }
         this.setState({
@@ -203,7 +205,7 @@ export default class MainView extends Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    if (nextProps.mode !== 'edit') {
+    if (nextProps.mode !== 'analysis') {
       this.setState({gobanCrosshair: false})
     }
   }
@@ -215,7 +217,7 @@ export default class MainView extends Component {
   handleGobanLineDraw(evt) {
     let {v1, v2} = evt.line
     let {mode, editWorkspaceActive, selectedTool} = this.props
-    if (mode === 'edit' && editWorkspaceActive) {
+    if (mode === 'analysis' && editWorkspaceActive) {
       let ws = sabaki.state.editWorkspace
       if (ws != null) {
         let linesKey =
@@ -374,24 +376,24 @@ export default class MainView extends Component {
       crosshair: gobanCrosshair || areaModifierActive,
       showCoordinates,
       showMoveColorization,
-      showMoveNumbers: mode !== 'edit' && showMoveNumbers,
-      showNextMoves: !editWorkspaceActive && mode !== 'guess' && showNextMoves,
-      showSiblings: !editWorkspaceActive && mode !== 'guess' && showSiblings,
+      showMoveNumbers: mode !== 'analysis' && showMoveNumbers,
+      showNextMoves: !editWorkspaceActive && mode !== 'guess' && mode !== 'recall' && mode !== 'problem' && mode !== 'review' && showNextMoves,
+      showSiblings: !editWorkspaceActive && mode !== 'guess' && mode !== 'recall' && mode !== 'problem' && mode !== 'review' && showSiblings,
       fuzzyStonePlacement,
       animateStonePlacement,
 
       playVariation,
       drawLineMode:
-        mode === 'edit' && ['arrow', 'line'].includes(selectedTool)
+        mode === 'analysis' && ['arrow', 'line'].includes(selectedTool)
           ? selectedTool
           : null,
       transformation: boardTransformation,
 
       onVertexClick: this.handleGobanVertexClick,
       onLineDraw: this.handleGobanLineDraw,
-      dragMode: mode === 'edit' && editWorkspaceActive,
+      dragMode: mode === 'analysis' && editWorkspaceActive,
       onStoneDragEnd:
-        mode === 'edit' && editWorkspaceActive
+        mode === 'analysis' && editWorkspaceActive
           ? (evt) => sabaki.handleEditDragEnd(evt)
           : null,
 
@@ -482,6 +484,27 @@ export default class MainView extends Component {
         h(GuessBar, {
           mode,
           treePosition,
+        }),
+
+        h(RecallBar, {
+          mode,
+          recallMoveIndex: sabaki.state.recallMoveIndex,
+          recallExpectedMoves: sabaki.state.recallExpectedMoves,
+          recallCompleted: sabaki.state.recallCompleted,
+          recallUserAttempts: sabaki.state.recallUserAttempts,
+          recallShowHint: sabaki.state.recallShowHint,
+        }),
+
+        h(ProblemBar, {
+          mode,
+          problemSession: sabaki.state.problemSession,
+          problemAttempt: sabaki.state.problemAttempt,
+          problemSubmitted: sabaki.state.problemSubmitted,
+          problemResult: sabaki.state.problemResult,
+          problemBadMoves: sabaki.state.problemBadMoves,
+          reviewQueue: sabaki.state.reviewQueue,
+          reviewCurrentIndex: sabaki.state.reviewCurrentIndex,
+          reviewTotalDue: sabaki.state.reviewTotalDue,
         }),
 
         h(AutoplayBar, {

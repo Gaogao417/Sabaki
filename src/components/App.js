@@ -165,7 +165,7 @@ class App extends Component {
           evt.preventDefault()
           if (
             evt.shiftKey &&
-            sabaki.state.mode === 'edit' &&
+            sabaki.state.mode === 'analysis' &&
             sabaki.state.editWorkspace != null
           ) {
             sabaki.toggleTerritoryCompareEnabled()
@@ -177,7 +177,7 @@ class App extends Component {
       }
 
       if (
-        sabaki.state.mode === 'edit' &&
+        sabaki.state.mode === 'analysis' &&
         sabaki.state.editWorkspace != null &&
         !evt.ctrlKey &&
         !evt.metaKey &&
@@ -425,7 +425,7 @@ class App extends Component {
     let inferredState = sabaki.inferredState
     let tree = inferredState.gameTree
     let editWorkspaceActive =
-      state.mode === 'edit' && state.editWorkspace != null
+      state.mode === 'analysis' && state.editWorkspace != null
     let editWs = state.editWorkspace
     let editActiveTab =
       editWorkspaceActive &&

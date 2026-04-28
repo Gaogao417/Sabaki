@@ -8,6 +8,8 @@ import PreferencesDrawer from './drawers/PreferencesDrawer.js'
 import GameChooserDrawer from './drawers/GameChooserDrawer.js'
 import CleanMarkupDrawer from './drawers/CleanMarkupDrawer.js'
 import AdvancedPropertiesDrawer from './drawers/AdvancedPropertiesDrawer.js'
+import ProblemEditorDrawer from './drawers/ProblemEditorDrawer.js'
+import TrainingDashboardDrawer from './drawers/TrainingDashboardDrawer.js'
 
 export default class DrawerManager extends Component {
   constructor() {
@@ -131,6 +133,14 @@ export default class DrawerManager extends Component {
         handicap: +getRootProperty(gameTree, 'HA', 0),
 
         onSubmitButtonClick: this.handleScoreSubmit,
+      }),
+
+      h(ProblemEditorDrawer, {
+        show: openDrawer === 'problemEditor',
+      }),
+
+      h(TrainingDashboardDrawer, {
+        show: openDrawer === 'training',
       }),
     )
   }

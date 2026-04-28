@@ -221,8 +221,17 @@ export default class BoardToolbar extends Component {
             icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
             label: t('Analysis'),
             shortcut: 'Cmd/Ctrl+E',
-            selected: mode === 'edit',
-            onClick: () => sabaki.setMode('edit'),
+            selected: mode === 'analysis',
+            onClick: () => sabaki.setMode('analysis'),
+          }),
+        ),
+        h(
+          'div',
+          {class: 'toolbar-group toolbar-actions'},
+          h(ToolbarButton, {
+            icon: './node_modules/@primer/octicons/build/svg/list.svg',
+            label: t('Training'),
+            onClick: () => sabaki.openDrawer('training'),
           }),
         ),
         h(
