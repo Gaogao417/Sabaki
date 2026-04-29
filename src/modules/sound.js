@@ -51,3 +51,20 @@ export const playCapture = (() => {
 export const playPass = prepareFunction([new Audio('./data/pass.mp3')])
 
 export const playNewGame = prepareFunction([new Audio('./data/newgame.mp3')])
+
+export function playError() {
+  try {
+    let ctx = new AudioContext()
+    let osc = ctx.createOscillator()
+    let gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.value = 300
+    osc.type = 'square'
+    gain.gain.value = 0.15
+    osc.start()
+    osc.stop(ctx.currentTime + 0.12)
+  } catch (err) {
+    // Do nothing
+  }
+}

@@ -15,7 +15,7 @@ export default class DrawerManager extends Component {
   constructor() {
     super()
 
-    this.handleScoreSubmit = ({resultString}) => {
+    this.handleScoreSubmit = async ({resultString}) => {
       let gameTree = this.props.gameTrees[this.props.gameIndex]
       let newTree = gameTree.mutate((draft) => {
         draft.updateProperty(draft.root.id, 'RE', [resultString])
@@ -23,7 +23,13 @@ export default class DrawerManager extends Component {
 
       sabaki.setCurrentTreePosition(newTree, this.props.treePosition)
       sabaki.closeDrawer()
-      setTimeout(() => sabaki.setMode('play'), 500)
+
+      let saved = await sabaki.saveCurrentGame()
+      if (saved?.id) {
+        sabaki.startRecallSession(saved.id)
+      } else {
+        sabaki.setMode('play')
+      }
     }
 
     this.handleGameSelect = ({selectedTree}) => {

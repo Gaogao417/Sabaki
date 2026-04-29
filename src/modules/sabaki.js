@@ -459,6 +459,9 @@ class Sabaki extends EventEmitter {
       if (this.state.recallSession == null) return
     } else if (mode === 'problem') {
       if (this.state.problemSession == null) return
+      if (this.state.analyzingEngineSyncerId == null && this.state.attachedEngineSyncers.length > 0) {
+        stateChange.analyzingEngineSyncerId = this.state.attachedEngineSyncers[0].id
+      }
     } else if (mode === 'review') {
       if (this.state.problemSession == null) return
     }
@@ -594,6 +597,7 @@ class Sabaki extends EventEmitter {
       })
       this.checkRecallComplete()
     } else {
+      sound.playError()
       this.setState({recallUserAttempts})
     }
   }
@@ -662,6 +666,16 @@ class Sabaki extends EventEmitter {
 
   showRecallHint() {
     this.setState({recallShowHint: true})
+  }
+
+  async saveCurrentGame() {
+    let sgfStr = this.getSGF()
+    let tree = this.state.gameTrees[this.state.gameIndex]
+    let root = tree.get(tree.root.id)
+    let result = root.data.RE?.[0] || null
+    let game = {sgf: sgfStr, source: 'play', result}
+    let saved = await window.sabaki.db.saveGame(game)
+    return saved
   }
 
   // Problem Snapshot
@@ -734,6 +748,10 @@ class Sabaki extends EventEmitter {
     this.loadGameTrees([tree])
     this.setCurrentTreePosition(tree, tree.root.id)
     this.setMode('problem')
+
+    if (this.inferredState.analyzingEngineSyncer != null) {
+      this.analyzeMove(tree.root.id)
+    }
   }
 
   handleProblemMove(vertex) {
@@ -748,6 +766,9 @@ class Sabaki extends EventEmitter {
 
     let player = problemSession.sideToMove === 'black' ? 1 : -1
     let currentPlayer = this.getPlayer(treePosition)
+
+    // Capture pre-move analysis before modifying the tree
+    let preMoveAnalysis = this.state.analysis
 
     // Place the stone
     let newTree = tree.mutate((draft) => {
@@ -772,9 +793,9 @@ class Sabaki extends EventEmitter {
       severity: 'none',
     }
 
-    // Use current analysis to check if the move was bad
-    if (this.state.analysis) {
-      let {analysis} = this.state
+    // Use pre-move analysis to check if the move was bad
+    if (preMoveAnalysis) {
+      let analysis = preMoveAnalysis
       let isSolverMove = (analysis.sign > 0 && player > 0) || (analysis.sign < 0 && player < 0)
 
       let variation = analysis.variations.find((v) => helper.vertexEquals(v.vertex, vertex))
@@ -853,10 +874,26 @@ class Sabaki extends EventEmitter {
 
     await window.sabaki.db.saveProblemAttempt(updatedAttempt)
 
+    // Save all bad moves to bad_moves table
+    let punishSide = problemSession.sideToMove === 'black' ? 'white' : 'black'
+    for (let bm of problemBadMoves) {
+      await window.sabaki.db.saveBadMove({
+        problemId: problemSession.id,
+        attemptId: updatedAttempt.id,
+        moveIndex: bm.moveIndex,
+        move: bm.move,
+        positionBeforeMoveSgf: '',
+        positionAfterMoveSgf: '',
+        severity: bm.severity,
+        scoreDrop: bm.scoreDrop,
+        punishSide,
+        generatedProblemId: null,
+      })
+    }
+
     // Generate punishment problems for major/severe bad moves
     let punishmentIds = []
     for (let badMove of problemBadMoves.filter((m) => m.severity === 'major' || m.severity === 'severe')) {
-      let punishSide = problemSession.sideToMove === 'black' ? 'white' : 'black'
       let punishment = await this.generatePunishmentProblem(badMove, problemSession, updatedAttempt, punishSide)
       if (punishment) {
         punishmentIds.push(punishment.id)
@@ -2923,7 +2960,7 @@ class Sabaki extends EventEmitter {
     }
   }
 
-  makeResign({player = null} = {}) {
+  async makeResign({player = null} = {}) {
     let {gameTrees, gameIndex, treePosition} = this.state
     let {currentPlayer} = this.inferredState
     if (player == null) player = currentPlayer
@@ -2938,6 +2975,11 @@ class Sabaki extends EventEmitter {
     this.makeMove([-1, -1], {player})
 
     this.events.emit('resign', {player})
+
+    let saved = await this.saveCurrentGame()
+    if (saved?.id) {
+      this.startRecallSession(saved.id)
+    }
   }
 
   useTool(tool, vertex, argument = null) {
