@@ -418,6 +418,12 @@ export default class MainView extends Component {
           : mode === 'analysis'
             ? '复盘模式'
             : null
+    let workspaceSummary =
+      mode === 'analysis'
+        ? `复盘模式 · 当前第 ${gameTree.getLevel(treePosition)} 手 · 关键点 0 · 题目 0`
+        : mode === 'play'
+          ? `对局模式 · 当前第 ${gameTree.getLevel(treePosition)} 手`
+        : ''
 
     return h(
       'section',
@@ -433,46 +439,40 @@ export default class MainView extends Component {
         playerRanks: gameInfo.playerRanks,
         playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
         engineSyncers,
+        enginePanelOpen: this.props.enginePanelOpen,
         recallSession,
         openDrawer,
+        onEnginePanelToggle: this.props.onEnginePanelToggle,
         onCurrentPlayerClick: this.handleTogglePlayer,
       }),
 
       h(
         'main',
-        {
-          ref: (el) => (this.mainElement = el),
-          class: 'board-stage',
-        },
-
-        h(
-          'div',
-          {class: 'board-stage-body'},
-          editWorkspaceActive
-            ? h(
+        {ref: (el) => (this.mainElement = el)},
+        editWorkspaceActive
+          ? h(
+              'div',
+              {class: 'edit-stage'},
+              h(
                 'div',
-                {class: 'edit-stage'},
-                h(
-                  'section',
-                  {class: 'edit-board-panel edit-board-panel--primary'},
-                  h(
-                    'div',
-                    {class: 'edit-board-panel__body'},
-                    this.renderBoardSurface({
-                      territoryMode,
-                      territoryOwnership,
-                      overlayUnavailableReason,
-                      gobanProps,
-                      territoryDeltaMap,
-                      territoryDiffAvailable,
-                      territoryDiffSourceType,
-                      comparisonOwnership,
-                      onStatusChange: this.handleOverlayStatusChange,
-                    }),
-                  ),
-                ),
-              )
-            : this.renderBoardSurface({
+                {class: 'board-surface'},
+                this.renderBoardSurface({
+                  territoryMode,
+                  territoryOwnership,
+                  overlayUnavailableReason,
+                  gobanProps,
+                  territoryDeltaMap,
+                  territoryDiffAvailable,
+                  territoryDiffSourceType,
+                  comparisonOwnership,
+                  onStatusChange: this.handleOverlayStatusChange,
+                }),
+              ),
+            )
+          : h(
+              'div',
+              {class: 'board-surface'},
+              this.renderBoardSurface({
                 territoryMode,
                 territoryOwnership,
                 overlayUnavailableReason,
@@ -482,15 +482,7 @@ export default class MainView extends Component {
                 territoryDiffSourceType,
                 onStatusChange: this.handleOverlayStatusChange,
               }),
-        ),
-
-        modeStatus &&
-          h(
-            'footer',
-            {class: 'board-stage-footer'},
-            h('span', {}, modeStatus),
-            territoryStatusText && h('span', {}, territoryStatusText),
-          ),
+            ),
       ),
 
       h(
@@ -498,6 +490,7 @@ export default class MainView extends Component {
         {
           mode,
           editWorkspaceActive,
+          summary: workspaceSummary,
         },
         h(EditBar, {
           mode,

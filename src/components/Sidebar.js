@@ -26,9 +26,9 @@ function formatMetric(metric) {
 }
 
 function formatOwner(owner) {
-  if (owner === 'neutral') return 'Neutral'
-  if (owner === 'black') return 'Black'
-  if (owner === 'white') return 'White'
+  if (owner === 'neutral') return '中立'
+  if (owner === 'black') return '黑方'
+  if (owner === 'white') return '白方'
   return ''
 }
 
@@ -268,7 +268,7 @@ export default class Sidebar extends Component {
           class: 'inspector-sidebar',
         },
 
-        mode === 'analysis' &&
+        (mode === 'analysis' || mode === 'play') &&
           h(AnalysisSummaryCard, {
             analysis: activeAnalysis,
             boardHeight: inspectorSummary?.boardHeight ?? 19,
@@ -310,6 +310,31 @@ export default class Sidebar extends Component {
             ),
           ),
 
+        mode === 'recall' &&
+          h(
+            'section',
+            {class: 'sidebar-card inspector-card recall-side-card'},
+            h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, '结果反馈')),
+            h('div', {class: 'inspector-card-body'},
+              h('div', {class: 'analysis-summary-grid'},
+                h('div', {class: 'analysis-summary-metric'},
+                  h('span', {}, '正确'),
+                  h('strong', {}, `${(recallUserAttempts || []).filter((a) => a.isCorrect).length}`),
+                ),
+                h('div', {class: 'analysis-summary-metric'},
+                  h('span', {}, '错误'),
+                  h('strong', {}, `${(recallUserAttempts || []).filter((a) => !a.isCorrect).length}`),
+                ),
+              ),
+              h('div', {class: 'inspector-section'},
+                h('div', {class: 'inspector-row'},
+                  h('strong', {}, '总进度'),
+                  h('span', {}, `${Math.min(recallMoveIndex + 1, recallExpectedMoves?.length || 0)} / ${recallExpectedMoves?.length || 0}`),
+                ),
+              ),
+            ),
+          ),
+
         // Inspector card with structured sections
         mode !== 'recall' && h(
           'section',
@@ -320,12 +345,12 @@ export default class Sidebar extends Component {
             inspectorSummary != null &&
               h('div', {class: 'inspector-section'},
                 h('div', {class: 'inspector-row'},
-                  h('strong', {}, 'Move'),
+                  h('strong', {}, '手数'),
                   h('span', {}, `${inspectorSummary.moveNumber}`),
                 ),
                 h('div', {class: 'inspector-row'},
-                  h('strong', {}, 'Captures'),
-                  h('span', {}, `B ${inspectorSummary.playerCaptures[0]} / W ${inspectorSummary.playerCaptures[1]}`),
+                  h('strong', {}, '提子'),
+                  h('span', {}, `黑 ${inspectorSummary.playerCaptures[0]} / 白 ${inspectorSummary.playerCaptures[1]}`),
                 ),
               ),
 
@@ -337,21 +362,21 @@ export default class Sidebar extends Component {
               : overlayStatusProps != null && overlayStatusProps.hoveredRegion != null
                 ? h('div', {class: 'inspector-section inspector-hover'},
                     h('div', {class: 'inspector-row'},
-                      h('strong', {}, 'Region'),
+                      h('strong', {}, '区域'),
                       h('span', {}, formatOwner(overlayStatusProps.hoveredRegion.owner)),
                     ),
                     overlayStatusProps.hoveredVertex &&
                       h('div', {class: 'inspector-row'},
-                        h('strong', {}, 'Vertex'),
+                        h('strong', {}, '坐标'),
                         h('span', {}, formatVertex(overlayStatusProps.hoveredVertex, inspectorSummary?.boardHeight ?? 19)),
                       ),
                     h('div', {class: 'inspector-row'},
-                      h('strong', {}, 'Total'),
+                      h('strong', {}, '总计'),
                       h('span', {}, formatMetric(overlayStatusProps.hoveredRegion.total)),
                     ),
                     overlayStatusProps.hoveredDelta != null &&
                       h('div', {class: 'inspector-row'},
-                        h('strong', {}, 'Delta'),
+                        h('strong', {}, '变化'),
                         h('span', {}, `${overlayStatusProps.hoveredDelta > 0 ? '+' : ''}${overlayStatusProps.hoveredDelta.toFixed(2)}`),
                       ),
                   )
@@ -359,20 +384,20 @@ export default class Sidebar extends Component {
                   ? h('div', {class: 'inspector-section inspector-idle'},
                       overlayStatusProps.territorySummary != null && [
                         h('div', {class: 'inspector-row'},
-                          h('strong', {}, 'Black'),
+                          h('strong', {}, '黑方'),
                           h('span', {}, formatMetric(overlayStatusProps.territorySummary.black.total)),
                         ),
                         h('div', {class: 'inspector-row'},
-                          h('strong', {}, 'White'),
+                          h('strong', {}, '白方'),
                           h('span', {}, formatMetric(overlayStatusProps.territorySummary.white.total)),
                         ),
                         h('div', {class: 'inspector-row'},
-                          h('strong', {}, 'Neutral'),
+                          h('strong', {}, '中立'),
                           h('span', {}, formatMetric(overlayStatusProps.territorySummary.neutral.total)),
                         ),
                       ],
                       h('div', {class: 'inspector-hint'},
-                        h('span', {}, 'Hover a region to inspect ownership.'),
+                        h('span', {}, '悬停区域可查看归属。'),
                       ),
                     )
                   : null,
@@ -381,11 +406,11 @@ export default class Sidebar extends Component {
             overlayStatusProps != null && overlayStatusProps.deltaSummary != null &&
               h('div', {class: 'inspector-section inspector-diff'},
                 h('div', {class: 'inspector-row'},
-                  h('strong', {}, 'Black Gain'),
+                  h('strong', {}, '黑方收益'),
                   h('span', {}, formatMetric(overlayStatusProps.deltaSummary.black)),
                 ),
                 h('div', {class: 'inspector-row'},
-                  h('strong', {}, 'White Gain'),
+                  h('strong', {}, '白方收益'),
                   h('span', {}, formatMetric(overlayStatusProps.deltaSummary.white)),
                 ),
               ),
@@ -429,11 +454,18 @@ export default class Sidebar extends Component {
               h('div', {class: 'inspector-section'},
                 h('span', {}, editPreviewBoard != null ? '已捕捉参考局面，可与当前局面比较。' : '捕捉参考局面后可进行快照对比。'),
               ),
+              h('div', {class: 'inspector-section snapshot-output-actions'},
+                h('button', {
+                  type: 'button',
+                  class: 'workbench-button workbench-button--primary',
+                  onClick: () => sabaki.snapshotAsProblem(),
+                }, '生成题目'),
+              ),
             ),
           ),
 
         !editWorkspaceActive &&
-          mode !== 'recall' &&
+          !['play', 'recall', 'analysis'].includes(mode) &&
           showCommentBox &&
           h(
             'section',
@@ -441,7 +473,7 @@ export default class Sidebar extends Component {
             h(
               'div',
               {class: 'card-header'},
-              h('strong', {class: 'card-title'}, 'COMMENTS'),
+              h('strong', {class: 'card-title'}, '评论'),
             ),
             h(
               'div',

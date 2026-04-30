@@ -1,8 +1,6 @@
 import {h, Component} from 'preact'
 import Bar from './Bar.js'
-import i18n from '../../i18n.js'
-
-const t = i18n.context('ProblemBar')
+import sabaki from '../../modules/sabaki.js'
 
 class ProblemBar extends Component {
   render({mode, problemSession, problemSubmitted, problemResult, problemBadMoves, problemAttempt, reviewQueue, reviewCurrentIndex, reviewTotalDue}) {
@@ -11,7 +9,12 @@ class ProblemBar extends Component {
     let isReview = mode === 'review'
     let moveCount = (problemAttempt?.userLine || []).length
     let badMoveCount = problemBadMoves.length
-    let resultLabel = problemResult === 'pass' ? t('Pass') : problemResult === 'soft_pass' ? t('Soft Pass') : t('Fail')
+    let resultLabel =
+      problemResult === 'pass'
+        ? '通过'
+        : problemResult === 'soft_pass'
+          ? '勉强通过'
+          : '失败'
     let resultClass = problemResult === 'pass' ? 'result-pass' : problemResult === 'soft_pass' ? 'result-soft' : 'result-fail'
 
     return h(
@@ -19,7 +22,7 @@ class ProblemBar extends Component {
       Object.assign({type: 'problem'}, this.props),
       h('div', {class: 'problem-bar-content'},
         isReview && h('div', {class: 'review-counter'},
-          t('Review'), ' ', (reviewCurrentIndex || 0) + 1, '/', reviewTotalDue || 0,
+          '复习 ', (reviewCurrentIndex || 0) + 1, '/', reviewTotalDue || 0,
         ),
         h('div', {class: 'problem-header'},
           h('span', {class: 'problem-type'}, problemSession.type?.replace(/_/g, ' ') || ''),
@@ -33,13 +36,13 @@ class ProblemBar extends Component {
             problemSession.positionDescription,
           ),
           problemSession.taskGoal && h('div', {class: 'problem-goal'},
-            h('strong', {}, t('Goal: ')), problemSession.taskGoal,
+            h('strong', {}, '目标：'), problemSession.taskGoal,
           ),
         ),
         h('div', {class: 'problem-stats'},
-          h('span', {}, `${t('Moves')}: ${moveCount}`),
+          h('span', {}, `已下 ${moveCount} 手`),
           badMoveCount > 0 && h('span', {class: 'bad-move-count'},
-            `${t('Bad moves')}: ${badMoveCount}`,
+            `坏棋 ${badMoveCount}`,
           ),
         ),
         problemSubmitted && h('div', {class: ['problem-result', resultClass].join(' ')},
@@ -50,23 +53,23 @@ class ProblemBar extends Component {
             class: 'problem-undo-btn',
             onClick: () => sabaki.undoProblemMove(),
             disabled: moveCount === 0,
-          }, t('Undo')),
+          }, '撤销'),
           !problemSubmitted && h('button', {
             class: 'problem-submit-btn',
             onClick: () => sabaki.submitProblemAttempt(),
-          }, t('Submit')),
+          }, '提交答案'),
           problemSubmitted && !isReview && h('button', {
             class: 'problem-exit-btn',
             onClick: () => sabaki.exitProblemMode(),
-          }, t('Exit')),
+          }, '退出'),
           problemSubmitted && isReview && h('button', {
             class: 'problem-next-btn',
             onClick: () => sabaki.advanceReview(),
-          }, t('Next')),
+          }, '下一题'),
           !problemSubmitted && h('button', {
             class: 'problem-exit-btn',
             onClick: () => sabaki.exitProblemMode(),
-          }, t('Exit')),
+          }, '退出'),
         ),
       ),
     )

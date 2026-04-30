@@ -3,7 +3,6 @@ import classNames from 'classnames'
 
 import i18n from '../../i18n.js'
 import {noop} from '../../modules/helper.js'
-import Bar from './Bar.js'
 
 const t = i18n.context('EditBar')
 
@@ -64,27 +63,37 @@ class EditBar extends Component {
     )
   }
 
-  render({selectedTool, editWorkspace}, {stoneTool}) {
+  render({mode, selectedTool, editWorkspace}, {stoneTool}) {
+    if (mode !== 'analysis') return null
+
     let isSelected = ([, id]) =>
       id.replace(/_-?1$/, '') === selectedTool.replace(/_-?1$/, '')
 
     return h(
-      Bar,
-      Object.assign({type: 'analysis'}, this.props),
+      'section',
+      {
+        id: 'edit',
+        class: 'review-edit-bar bar current',
+      },
       h(
-        'ul',
-        {},
-        [
-          [t('Stone Tool'), `stone_${stoneTool}`],
-          [t('Cross Tool'), 'cross'],
-          [t('Triangle Tool'), 'triangle'],
-          [t('Square Tool'), 'square'],
-          [t('Circle Tool'), 'circle'],
-          [t('Line Tool'), 'line'],
-          [t('Arrow Tool'), 'arrow'],
-          [t('Label Tool'), 'label'],
-          [t('Number Tool'), 'number'],
-        ].map((x) => this.renderButton(...x, isSelected(x))),
+        'div',
+        {class: 'edit-tool-group'},
+        h('span', {class: 'edit-tool-group__label'}, '标注工具'),
+        h(
+          'ul',
+          {},
+          [
+            [t('Stone'), `stone_${stoneTool}`],
+            [t('Cross'), 'cross'],
+            [t('Triangle'), 'triangle'],
+            [t('Square'), 'square'],
+            [t('Circle'), 'circle'],
+            [t('Line'), 'line'],
+            [t('Arrow'), 'arrow'],
+            [t('Label'), 'label'],
+            [t('Number'), 'number'],
+          ].map((x) => this.renderButton(...x, isSelected(x))),
+        ),
       ),
       editWorkspace?.analysisPending &&
         h(
@@ -92,20 +101,6 @@ class EditBar extends Component {
           {class: 'edit-workspace-actions'},
           h('li', {}, h('span', {class: 'edit-analysis-pending'}, '...')),
         ),
-      h(
-        'ul',
-        {},
-        h('li', {},
-          h('a', {
-            title: t('Snapshot as Problem'),
-            href: '#',
-            onClick: (evt) => {
-              evt.preventDefault()
-              sabaki.snapshotAsProblem()
-            },
-          }, t('📋 Problem')),
-        ),
-      ),
     )
   }
 }

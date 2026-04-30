@@ -205,7 +205,7 @@ export class EnginePeerList extends Component {
         'ul',
         {},
         attachedEngineSyncers.length === 0
-          ? h('li', {class: 'empty'}, t('No engines attached.'))
+          ? h('li', {class: 'empty'}, '未连接引擎')
           : attachedEngineSyncers.map((syncer) =>
               h(EnginePeerListItem, {
                 key: syncer.id,

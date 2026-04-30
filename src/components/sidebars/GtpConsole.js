@@ -288,7 +288,7 @@ export default class GtpConsole extends Component {
         },
 
         consoleLog.length === 0
-          ? h('li', {class: 'empty'}, h('pre', {}, i18n.context('GtpConsole')('No engine logs yet.')))
+          ? h('li', {class: 'empty'}, h('pre', {}, '暂无日志'))
           : consoleLog.map(({name, command, response, waiting}, i) => {
               let sign = this.getSign(command)
 

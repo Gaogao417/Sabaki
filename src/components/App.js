@@ -13,6 +13,7 @@ import MainMenu from './MainMenu.js'
 import MainView from './MainView.js'
 import LeftSidebar from './LeftSidebar.js'
 import Sidebar from './Sidebar.js'
+import EngineFloatingPanel from './EngineFloatingPanel.js'
 import DrawerManager from './DrawerManager.js'
 import InputBox from './InputBox.js'
 import BusyScreen from './BusyScreen.js'
@@ -73,6 +74,16 @@ class App extends Component {
     let bind = (f) => f.bind(this)
     this.handleMainLayoutSplitChange = bind(this.handleMainLayoutSplitChange)
     this.handleMainLayoutSplitFinish = bind(this.handleMainLayoutSplitFinish)
+
+    this.handleEnginePanelToggle = () => {
+      this.setState(({enginePanelOpen}) => ({
+        enginePanelOpen: !enginePanelOpen,
+      }))
+    }
+
+    this.handleEnginePanelClose = () => {
+      this.setState({enginePanelOpen: false})
+    }
 
     this.handleOverlayStatusChange = (overlayStatusProps) => {
       this.setState(({overlayStatusProps: current}) => {
@@ -601,9 +612,12 @@ class App extends Component {
       overlayStatusProps: this.state.overlayStatusProps,
       onOverlayStatusChange: this.handleOverlayStatusChange,
       inspectorSummary,
+      enginePanelOpen: this.state.enginePanelOpen,
+      onEnginePanelToggle: this.handleEnginePanelToggle,
     }
 
     let workbenchMode = ['play', 'recall', 'analysis'].includes(state.mode)
+    let forceLeftSidebar = ['recall', 'analysis'].includes(state.mode)
     let getWorkbenchSideWidth = (size) => {
       if (!workbenchMode) return 0
 
@@ -614,7 +628,7 @@ class App extends Component {
 
       return Math.max(100, Math.min(requested, responsiveMax))
     }
-    let effectiveLeftSidebar = state.showLeftSidebar || workbenchMode
+    let effectiveLeftSidebar = forceLeftSidebar || state.showLeftSidebar
     let effectiveSidebar = state.showSidebar || workbenchMode
 
     return h(
@@ -675,6 +689,17 @@ class App extends Component {
 
         onChange: this.handleMainLayoutSplitChange,
         onFinish: this.handleMainLayoutSplitFinish,
+      }),
+
+      h(EngineFloatingPanel, {
+        open: this.state.enginePanelOpen,
+        attachedEngineSyncers: state.attachedEngineSyncers,
+        analyzingEngineSyncerId: state.analyzingEngineSyncerId,
+        blackEngineSyncerId: state.blackEngineSyncerId,
+        whiteEngineSyncerId: state.whiteEngineSyncerId,
+        engineGameOngoing: state.engineGameOngoing,
+        consoleLog: state.consoleLog,
+        onClose: this.handleEnginePanelClose,
       }),
 
       h(DrawerManager, state),

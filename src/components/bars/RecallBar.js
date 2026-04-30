@@ -1,8 +1,6 @@
 import {h, Component} from 'preact'
 import Bar from './Bar.js'
-import i18n from '../../i18n.js'
-
-const t = i18n.context('RecallBar')
+import sabaki from '../../modules/sabaki.js'
 
 class RecallBar extends Component {
   render({mode, recallMoveIndex, recallExpectedMoves, recallCompleted, recallUserAttempts, recallShowHint}) {
@@ -17,13 +15,13 @@ class RecallBar extends Component {
       h('div', {class: 'recall-status'},
         recallCompleted
           ? h('div', {class: 'recall-complete'},
-              h('strong', {}, t('Recall Complete!')),
-              h('span', {}, ` ${correctCount}/${total} ` + t('correct')),
+              h('strong', {}, '回忆完成'),
+              h('span', {}, ` ${correctCount}/${total} 正确`),
             )
           : h('div', {class: 'recall-progress'},
-              h('span', {}, t('Move')),
+              h('span', {}, '第'),
               h('strong', {}, ` ${current + 1} `),
-              h('span', {}, `/ ${total}`),
+              h('span', {}, `手 / 共 ${total} 手`),
               lastAttempt && h(
                 'span',
                 {class: lastAttempt.isCorrect ? 'recall-correct' : 'recall-wrong'},
@@ -35,15 +33,15 @@ class RecallBar extends Component {
             class: 'recall-hint-btn',
             onClick: () => sabaki.showRecallHint(),
             disabled: recallShowHint,
-          }, t('Hint')),
+          }, '提示'),
           !recallCompleted && h('button', {
             class: 'recall-skip-btn',
             onClick: () => sabaki.skipRecallMove(),
-          }, t('Skip')),
+          }, '跳过'),
           h('button', {
             class: 'recall-end-btn',
             onClick: () => sabaki.endRecallSession(),
-          }, recallCompleted ? t('Start Analysis') : t('End Recall')),
+          }, recallCompleted ? '进入复盘' : '结束回忆'),
         ),
       ),
     )

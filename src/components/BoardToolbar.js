@@ -243,9 +243,11 @@ export default class BoardToolbar extends Component {
       playerRanks,
       playerCaptures,
       engineSyncers,
+      enginePanelOpen,
       recallSession,
       openDrawer,
       onCurrentPlayerClick = helper.noop,
+      onEnginePanelToggle = helper.noop,
     },
     {playerBusy},
   ) {
@@ -266,7 +268,7 @@ export default class BoardToolbar extends Component {
         disabled: recallSession == null,
         title:
           recallSession == null
-            ? 'No recall session. Start one from the training drawer.'
+            ? '暂无回忆任务，请从训练面板开始。'
             : null,
       },
       {
@@ -351,6 +353,13 @@ export default class BoardToolbar extends Component {
         h(
           'div',
           {class: 'toolbar-group toolbar-actions toolbar-overlays'},
+          h(ToolbarButton, {
+            icon: './node_modules/@primer/octicons/build/svg/server.svg',
+            label: '引擎',
+            selected: enginePanelOpen,
+            accent: enginePanelOpen,
+            onClick: onEnginePanelToggle,
+          }),
           h(ToolbarButton, {
             icon: './node_modules/@primer/octicons/build/svg/eye.svg',
             label: t('Territory'),
