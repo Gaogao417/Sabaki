@@ -38,6 +38,46 @@ function ToolbarButton({
   )
 }
 
+function WorkbenchButton({variant = 'secondary', icon, label, onClick}) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: classNames('workbench-button', `workbench-button--${variant}`),
+      onClick,
+    },
+    icon && h('img', {src: icon, width: 14, height: 14, alt: ''}),
+    h('span', {}, label),
+  )
+}
+
+function ModeTab({
+  mode,
+  active,
+  disabled = false,
+  label,
+  icon,
+  accent,
+  title = null,
+  onClick,
+}) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: classNames('mode-tab', `mode-tab--${accent}`, {
+        active,
+        disabled,
+      }),
+      disabled,
+      title,
+      onClick: () => onClick(mode),
+    },
+    h('img', {src: icon, width: 15, height: 15, alt: ''}),
+    h('span', {}, label),
+  )
+}
+
 export default class BoardToolbar extends Component {
   constructor(props) {
     super(props)
@@ -149,6 +189,48 @@ export default class BoardToolbar extends Component {
     )
   }
 
+  renderModeActions(mode) {
+    if (mode === 'play') {
+      return [
+        h(WorkbenchButton, {
+          variant: 'primary',
+          icon: './node_modules/@primer/octicons/build/svg/plus.svg',
+          label: '新对局',
+          onClick: () => sabaki.newFile({playSound: true, showInfo: true}),
+        }),
+        h(WorkbenchButton, {
+          icon: './node_modules/@primer/octicons/build/svg/gear.svg',
+          label: '对局设置',
+          onClick: () => sabaki.openDrawer('info'),
+        }),
+        h(WorkbenchButton, {
+          variant: 'danger',
+          icon: './node_modules/@primer/octicons/build/svg/stop.svg',
+          label: '认输',
+          onClick: () => sabaki.makeResign(),
+        }),
+      ]
+    }
+
+    if (mode === 'analysis') {
+      return [
+        h(WorkbenchButton, {
+          variant: 'primary',
+          icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
+          label: '新建复盘',
+          onClick: () => sabaki.resetAnalysisWorkspace(),
+        }),
+        h(WorkbenchButton, {
+          icon: './node_modules/@primer/octicons/build/svg/gear.svg',
+          label: '复盘设置',
+          onClick: () => sabaki.openDrawer('preferences'),
+        }),
+      ]
+    }
+
+    return null
+  }
+
   render(
     {
       mode,
@@ -161,13 +243,59 @@ export default class BoardToolbar extends Component {
       playerRanks,
       playerCaptures,
       engineSyncers,
+      recallSession,
+      openDrawer,
       onCurrentPlayerClick = helper.noop,
     },
     {playerBusy},
   ) {
+    let modes = [
+      {
+        mode: 'play',
+        label: '对局模式',
+        icon: './node_modules/@primer/octicons/build/svg/play.svg',
+        accent: 'play',
+        active: mode === 'play',
+      },
+      {
+        mode: 'recall',
+        label: '回忆模式',
+        icon: './node_modules/@primer/octicons/build/svg/light-bulb.svg',
+        accent: 'recall',
+        active: mode === 'recall',
+        disabled: recallSession == null,
+        title:
+          recallSession == null
+            ? 'No recall session. Start one from the training drawer.'
+            : null,
+      },
+      {
+        mode: 'analysis',
+        label: '复盘模式',
+        icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
+        accent: 'analysis',
+        active: mode === 'analysis',
+      },
+      {
+        mode: 'training',
+        label: '训练模式',
+        icon: './node_modules/@primer/octicons/build/svg/list-unordered.svg',
+        accent: 'training',
+        active: openDrawer === 'training',
+      },
+    ]
+
+    let handleModeSelect = (nextMode) => {
+      if (nextMode === 'training') {
+        sabaki.openDrawer('training')
+      } else {
+        sabaki.setMode(nextMode)
+      }
+    }
+
     return h(
       'section',
-      {class: 'board-toolbar'},
+      {class: 'board-toolbar mode-bar'},
       h(
         'div',
         {class: 'toolbar-group toolbar-players'},
@@ -206,34 +334,20 @@ export default class BoardToolbar extends Component {
         ),
       ),
       h(
+        'nav',
+        {class: 'mode-tabs', 'aria-label': 'Workbench modes'},
+        modes.map((item) =>
+          h(ModeTab, {
+            key: item.mode,
+            ...item,
+            onClick: handleModeSelect,
+          }),
+        ),
+      ),
+      h(
         'div',
         {class: 'toolbar-group toolbar-controls'},
-        h(
-          'div',
-          {class: 'toolbar-group toolbar-actions toolbar-modes'},
-          h(ToolbarButton, {
-            icon: './node_modules/@primer/octicons/build/svg/play.svg',
-            label: t('Play'),
-            selected: mode === 'play',
-            onClick: () => sabaki.setMode('play'),
-          }),
-          h(ToolbarButton, {
-            icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
-            label: t('Analysis'),
-            shortcut: 'Cmd/Ctrl+E',
-            selected: mode === 'analysis',
-            onClick: () => sabaki.setMode('analysis'),
-          }),
-        ),
-        h(
-          'div',
-          {class: 'toolbar-group toolbar-actions'},
-          h(ToolbarButton, {
-            icon: './node_modules/@primer/octicons/build/svg/list.svg',
-            label: t('Training'),
-            onClick: () => sabaki.openDrawer('training'),
-          }),
-        ),
+        h('div', {class: 'mode-actions'}, this.renderModeActions(mode)),
         h(
           'div',
           {class: 'toolbar-group toolbar-actions toolbar-overlays'},

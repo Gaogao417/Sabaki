@@ -36,6 +36,88 @@ function formatVertex([x, y], boardHeight) {
   return `${alpha[x]}${boardHeight - y}`
 }
 
+function formatOptionalVertex(vertex, boardHeight) {
+  return vertex == null ? '-' : formatVertex(vertex, boardHeight)
+}
+
+function formatSignedNumber(value, digits = 1) {
+  if (value == null) return '-'
+
+  let rounded = Math.round(value * 10 ** digits) / 10 ** digits
+  if (rounded === 0) rounded = 0
+  return `${rounded > 0 ? '+' : ''}${rounded}`
+}
+
+function formatWinrate(value, sign) {
+  if (value == null) return '-'
+
+  let displayed = sign < 0 ? 100 - value : value
+  return `${Math.round(displayed * 10) / 10}%`
+}
+
+function AnalysisSummaryCard({analysis, boardHeight}) {
+  let hasAnalysis =
+    analysis != null &&
+    Array.isArray(analysis.variations) &&
+    analysis.variations.length > 0
+  let candidates = hasAnalysis ? analysis.variations.slice(0, 3) : []
+
+  return h(
+    'section',
+    {class: 'sidebar-card inspector-card ai-analysis-card'},
+    h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, 'AI 分析')),
+    h(
+      'div',
+      {class: 'inspector-card-body'},
+      !hasAnalysis &&
+        h(
+          'div',
+          {class: 'analysis-empty-state analysis-empty-state--compact'},
+          h('strong', {}, '暂无分析数据'),
+          h('span', {}, '启动引擎分析后显示胜率、目数和候选点。'),
+        ),
+      hasAnalysis &&
+        h(
+          'div',
+          {class: 'analysis-summary-grid'},
+          h(
+            'div',
+            {class: 'analysis-summary-metric'},
+            h('span', {}, '胜率'),
+            h('strong', {}, formatWinrate(analysis.winrate, analysis.sign)),
+          ),
+          h(
+            'div',
+            {class: 'analysis-summary-metric'},
+            h('span', {}, '目差'),
+            h('strong', {}, formatSignedNumber(
+              analysis.sign < 0 && analysis.scoreLead != null
+                ? -analysis.scoreLead
+                : analysis.scoreLead,
+            )),
+          ),
+        ),
+      candidates.length > 0 &&
+        h(
+          'ol',
+          {class: 'candidate-move-list'},
+          candidates.map((variation, index) =>
+            h(
+              'li',
+              {key: index},
+              h('strong', {}, formatOptionalVertex(variation.vertex, boardHeight)),
+              h('span', {}, `${formatWinrate(variation.winrate, analysis.sign)} / ${formatSignedNumber(
+                analysis.sign < 0 && variation.scoreLead != null
+                  ? -variation.scoreLead
+                  : variation.scoreLead,
+              )}`),
+            ),
+          ),
+        ),
+    ),
+  )
+}
+
 export default class Sidebar extends Component {
   constructor(props) {
     super(props)
@@ -105,7 +187,13 @@ export default class Sidebar extends Component {
 
   shouldComponentUpdate(nextProps) {
     return (
-      nextProps.showSidebar != this.props.showSidebar || nextProps.showSidebar
+      nextProps.showSidebar != this.props.showSidebar ||
+      nextProps.mode !== this.props.mode ||
+      nextProps.treePosition !== this.props.treePosition ||
+      nextProps.recallMoveIndex !== this.props.recallMoveIndex ||
+      nextProps.recallUserAttempts !== this.props.recallUserAttempts ||
+      nextProps.showSidebar ||
+      ['play', 'recall', 'analysis'].includes(nextProps.mode)
     )
   }
 
@@ -127,8 +215,15 @@ export default class Sidebar extends Component {
       gameCurrents,
       treePosition,
       editWorkspaceActive,
+      editPreviewBoard,
+      activeAnalysis,
       inspectorSummary,
       overlayStatusProps,
+      recallMoveIndex,
+      recallExpectedMoves,
+      recallCompleted,
+      recallUserAttempts,
+      recallShowHint,
 
       showWinrateGraph,
       showGameGraph,
@@ -148,12 +243,23 @@ export default class Sidebar extends Component {
       1,
     )
     let level = gameTree.getLevel(treePosition)
-    let inspectorSidebar = editWorkspaceActive || mode === 'play'
+    let workbenchSidebar = ['play', 'recall', 'analysis'].includes(mode)
+    let inspectorSidebar = editWorkspaceActive || workbenchSidebar
     let hasAnalysisData =
       winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
-    showWinrateGraph = showWinrateGraph && (inspectorSidebar || hasAnalysisData)
+    showWinrateGraph =
+      showWinrateGraph &&
+      mode !== 'analysis' &&
+      (inspectorSidebar || hasAnalysisData)
 
     if (inspectorSidebar) {
+      let recallLastAttempt =
+        recallUserAttempts?.length > 0
+          ? recallUserAttempts[recallUserAttempts.length - 1]
+          : null
+      let recallExpected =
+        recallExpectedMoves?.[recallMoveIndex]?.vertex ?? null
+
       return h(
         'section',
         {
@@ -161,6 +267,12 @@ export default class Sidebar extends Component {
           id: 'sidebar',
           class: 'inspector-sidebar',
         },
+
+        mode === 'analysis' &&
+          h(AnalysisSummaryCard, {
+            analysis: activeAnalysis,
+            boardHeight: inspectorSummary?.boardHeight ?? 19,
+          }),
 
         showWinrateGraph &&
           h(WinrateGraph, {
@@ -172,11 +284,37 @@ export default class Sidebar extends Component {
             onCurrentIndexChange: this.handleWinrateGraphChange,
           }),
 
+        mode === 'recall' &&
+          h(
+            'section',
+            {class: 'sidebar-card inspector-card recall-side-card'},
+            h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, '回忆提示')),
+            h('div', {class: 'inspector-card-body'},
+              h('div', {class: 'inspector-section'},
+                h('div', {class: 'inspector-row'},
+                  h('strong', {}, '下一手'),
+                  h('span', {}, recallShowHint && recallExpected != null ? recallExpected : '保持回忆'),
+                ),
+                h('div', {class: 'inspector-hint'},
+                  recallShowHint ? '提示已显示，落子后会继续推进。' : '需要时从左栏打开提示。',
+                ),
+              ),
+              recallLastAttempt &&
+                h('div', {class: `inspector-section ${recallLastAttempt.isCorrect ? '' : 'inspector-warning'}`},
+                  h('span', {}, recallLastAttempt.isCorrect ? '上一手正确。' : `上一手实际应为 ${recallLastAttempt.expectedMove}。`),
+                ),
+              recallCompleted &&
+                h('div', {class: 'inspector-section'},
+                  h('span', {}, '本轮回忆完成，可以进入复盘。'),
+                ),
+            ),
+          ),
+
         // Inspector card with structured sections
-        h(
+        mode !== 'recall' && h(
           'section',
           {class: 'sidebar-card inspector-card'},
-          h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, 'INSPECTOR')),
+          h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, mode === 'analysis' ? '局面点评' : '局面信息')),
           h('div', {class: 'inspector-card-body'},
             // Section 1: Position Summary (always visible in inspector mode)
             inspectorSummary != null &&
@@ -261,7 +399,7 @@ export default class Sidebar extends Component {
           h(
             'div',
             {class: 'card-header'},
-            h('strong', {class: 'card-title'}, 'GAME TREE'),
+            h('strong', {class: 'card-title'}, mode === 'recall' ? '轻量变化树' : '变化树'),
           ),
           h(
             'div',
@@ -282,7 +420,20 @@ export default class Sidebar extends Component {
           ),
         ),
 
+        mode === 'analysis' &&
+          h(
+            'section',
+            {class: 'sidebar-card inspector-card'},
+            h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, '快照对比')),
+            h('div', {class: 'inspector-card-body'},
+              h('div', {class: 'inspector-section'},
+                h('span', {}, editPreviewBoard != null ? '已捕捉参考局面，可与当前局面比较。' : '捕捉参考局面后可进行快照对比。'),
+              ),
+            ),
+          ),
+
         !editWorkspaceActive &&
+          mode !== 'recall' &&
           showCommentBox &&
           h(
             'section',
@@ -444,7 +595,8 @@ Sidebar.getDerivedStateFromProps = function ({
   winrateData,
   scoreLeadData = [],
 }) {
-  let inspectorSidebar = editWorkspaceActive || mode === 'play'
+  let inspectorSidebar =
+    editWorkspaceActive || ['play', 'recall', 'analysis'].includes(mode)
   let hasAnalysisData =
     winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
 

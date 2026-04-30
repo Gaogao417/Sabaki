@@ -399,14 +399,19 @@ class App extends Component {
 
   handleMainLayoutSplitChange({beginSideSize, endSideSize}) {
     sabaki.setState(
-      ({leftSidebarWidth, sidebarWidth, showLeftSidebar}) => ({
-        leftSidebarWidth: showLeftSidebar
-          ? Math.max(beginSideSize, leftSidebarMinWidth)
-          : leftSidebarWidth,
-        sidebarWidth: sabaki.inferredState.showSidebar
-          ? Math.max(endSideSize, sidebarMinWidth)
-          : sidebarWidth,
-      }),
+      ({leftSidebarWidth, sidebarWidth, showLeftSidebar, mode}) => {
+        let workbenchMode = ['play', 'recall', 'analysis'].includes(mode)
+        return {
+          leftSidebarWidth:
+            showLeftSidebar || workbenchMode
+              ? Math.max(beginSideSize, leftSidebarMinWidth)
+              : leftSidebarWidth,
+          sidebarWidth:
+            sabaki.inferredState.showSidebar || workbenchMode
+              ? Math.max(endSideSize, sidebarMinWidth)
+              : sidebarWidth,
+        }
+      },
       () => window.dispatchEvent(new Event('resize')),
     )
   }
@@ -554,7 +559,8 @@ class App extends Component {
         : t('Territory')
 
     // Calculate inspector summary for the right sidebar Inspector card
-    let inspectorSidebar = editWorkspaceActive || state.mode === 'play'
+    let inspectorSidebar =
+      editWorkspaceActive || ['play', 'analysis'].includes(state.mode)
     let inspectorBoard =
       editWorkspaceActive && editRenderBoard != null
         ? editRenderBoard
@@ -597,14 +603,29 @@ class App extends Component {
       inspectorSummary,
     }
 
+    let workbenchMode = ['play', 'recall', 'analysis'].includes(state.mode)
+    let getWorkbenchSideWidth = (size) => {
+      if (!workbenchMode) return 0
+
+      let requested = Math.min(320, Math.max(280, size || 300))
+      let availableWidth =
+        typeof window === 'undefined' ? 1440 : window.innerWidth
+      let responsiveMax = Math.floor((availableWidth - 220) / 2)
+
+      return Math.max(100, Math.min(requested, responsiveMax))
+    }
+    let effectiveLeftSidebar = state.showLeftSidebar || workbenchMode
+    let effectiveSidebar = state.showSidebar || workbenchMode
+
     return h(
       'section',
       {
         class: classNames({
           editWorkspace: state.editWorkspaceActive,
-          inspectorShell: state.mode === 'play' || state.editWorkspaceActive,
-          showleftsidebar: state.showLeftSidebar,
-          showsidebar: state.showSidebar,
+          inspectorShell: workbenchMode || state.editWorkspaceActive,
+          modeLayout: workbenchMode,
+          showleftsidebar: effectiveLeftSidebar,
+          showsidebar: effectiveSidebar,
           [state.mode]: true,
         }),
       },
@@ -635,9 +656,18 @@ class App extends Component {
 
       h(TripleSplitContainer, {
         id: 'mainlayout',
+        class: workbenchMode ? 'mode-layout' : '',
 
-        beginSideSize: state.showLeftSidebar ? state.leftSidebarWidth : 0,
-        endSideSize: state.showSidebar ? state.sidebarWidth : 0,
+        beginSideSize: effectiveLeftSidebar
+          ? workbenchMode
+            ? getWorkbenchSideWidth(state.leftSidebarWidth)
+            : state.leftSidebarWidth
+          : 0,
+        endSideSize: effectiveSidebar
+          ? workbenchMode
+            ? getWorkbenchSideWidth(state.sidebarWidth)
+            : state.sidebarWidth
+          : 0,
 
         beginSideContent: h(LeftSidebar, state),
         mainContent: h(MainView, state),

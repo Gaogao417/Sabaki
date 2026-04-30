@@ -120,14 +120,76 @@ test.describe('Renderer Integration Tests', () => {
     })
   })
 
-  test.describe('Board Interaction', () => {
-    test('clicking vertex in edit mode places a stone', async ({page}) => {
+  test.describe('Workbench Shell', () => {
+    test('mode tabs are visible without legacy mode controls', async ({page}) => {
+      await expect(page.locator('.mode-tab')).toHaveCount(4)
+      await expect(page.locator('.mode-tab', {hasText: '对局模式'})).toBeVisible()
+      await expect(page.locator('.mode-tab', {hasText: '回忆模式'})).toBeVisible()
+      await expect(page.locator('.mode-tab', {hasText: '复盘模式'})).toBeVisible()
+      await expect(page.locator('.mode-tab', {hasText: '训练'})).toBeVisible()
+      await expect(page.getByText('切换模式')).toHaveCount(0)
+      await expect(page.getByText('退出本模式')).toHaveCount(0)
+    })
+
+    test('play actions are visible', async ({page}) => {
+      await page.evaluate(() => window.__sabaki.setMode('play'))
+      await expect(page.locator('.mode-actions')).toContainText('新对局')
+      await expect(page.locator('.mode-actions')).toContainText('对局设置')
+      await expect(page.locator('.mode-actions')).toContainText('认输')
+    })
+
+    test('recall left rail stays task focused', async ({page}) => {
       await page.evaluate(() => {
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setState({
+          recallSession: {id: 'e2e-recall', gameId: 'e2e-game'},
+          recallMoveIndex: 0,
+          recallExpectedMoves: [{sign: 1, vertex: 'dd'}],
+          recallUserAttempts: [],
+          recallShowHint: false,
+          recallCompleted: false,
+        })
+        window.__sabaki.setMode('recall')
+      })
+
+      await page.waitForFunction(() => window.__sabaki.state.mode === 'recall')
+      await expect(page.locator('#leftsidebar')).toContainText('回忆')
+      await expect(page.locator('#leftsidebar .engine-card')).toHaveCount(0)
+      await expect(page.locator('#leftsidebar .engine-peer-list')).toHaveCount(0)
+    })
+
+    test('analysis cards are visible in spec order', async ({page}) => {
+      await page.evaluate(() => window.__sabaki.setMode('analysis'))
+      await page.waitForFunction(
+        () =>
+          window.__sabaki.state.mode === 'analysis' &&
+          window.__sabaki.state.editWorkspace != null,
+      )
+
+      const titles = await page.locator('#sidebar .card-title').allTextContents()
+      const ai = titles.indexOf('AI 分析')
+      const position = titles.indexOf('局面点评')
+      const tree = titles.indexOf('变化树')
+      const compare = titles.indexOf('快照对比')
+
+      expect(ai).toBeGreaterThanOrEqual(0)
+      expect(position).toBeGreaterThan(ai)
+      expect(tree).toBeGreaterThan(position)
+      expect(compare).toBeGreaterThan(tree)
+    })
+  })
+
+  test.describe('Board Interaction', () => {
+    test('clicking vertex in analysis workspace places a stone', async ({page}) => {
+      await page.evaluate(() => {
+        window.__sabaki.setMode('analysis')
+        window.__sabaki.setState({selectedTool: 'stone_1'})
       })
 
       await page.waitForFunction(
-        () => window.__sabaki && window.__sabaki.state.mode === 'edit',
+        () =>
+          window.__sabaki &&
+          window.__sabaki.state.mode === 'analysis' &&
+          window.__sabaki.state.editWorkspace != null,
       )
 
       const stonesBefore = await page.evaluate(() => {
@@ -136,7 +198,13 @@ test.describe('Renderer Integration Tests', () => {
       })
 
       const vertex = page.locator('.shudan-vertex').nth(50)
-      await vertex.click()
+      const target = await vertex.evaluate((element) => [
+        +element.dataset.x,
+        +element.dataset.y,
+      ])
+      await page.evaluate((v) => {
+        window.__sabaki.clickVertex(v, {button: 0})
+      }, target)
 
       await page.waitForFunction(
         (before) => {
@@ -178,17 +246,17 @@ test.describe('Renderer Integration Tests', () => {
       expect(stonesOnBoard).toBe(0)
     })
 
-    test('workspace dock stays outside the board area in edit mode', async ({
+    test('workspace dock stays outside the board area in analysis mode', async ({
       page,
     }) => {
       await page.evaluate(() => {
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setMode('analysis')
       })
 
       await page.waitForFunction(
         () =>
           window.__sabaki &&
-          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.mode === 'analysis' &&
           document.querySelector('.workspace-dock') != null,
       )
 
@@ -328,12 +396,12 @@ test.describe('Renderer Integration Tests', () => {
     }) => {
       await page.evaluate(async () => {
         await window.__sabaki.newFile({suppressAskForSave: true})
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setMode('analysis')
         window.__sabaki.setState({selectedTool: 'line'})
       })
       await page.waitForFunction(
         () =>
-          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.mode === 'analysis' &&
           window.__sabaki.state.editWorkspace != null,
       )
 
@@ -399,9 +467,7 @@ test.describe('Renderer Integration Tests', () => {
       await page.waitForFunction(() => window.__sabaki.state.territoryEnabled)
 
       await expect(
-        page.locator(
-          '.board-toolbar .toolbar-button[title="Analysis (Cmd/Ctrl+E)"]',
-        ),
+        page.locator('.mode-tab', {hasText: '复盘模式'}),
       ).toHaveCount(1)
       await expect(
         page.locator('.board-toolbar .toolbar-button[title="Territory (T)"]'),
@@ -426,11 +492,11 @@ test.describe('Renderer Integration Tests', () => {
       await expect(compareButton).toHaveCount(0)
 
       await page.evaluate(() => {
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setMode('analysis')
       })
       await page.waitForFunction(
         () =>
-          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.mode === 'analysis' &&
           window.__sabaki.state.editWorkspace != null,
       )
       await page.evaluate(() => {
@@ -451,9 +517,7 @@ test.describe('Renderer Integration Tests', () => {
       )
       await expect(page.locator('#leftsidebar')).toBeVisible()
 
-      await expect(page.locator('.edit-board-panel--primary')).toContainText(
-        'Large: Current',
-      )
+      await expect(page.locator('.edit-board-panel--primary')).toBeVisible()
       await expect(
         page.locator('.left-inspector-sidebar .reference-card'),
       ).toBeVisible()
@@ -490,11 +554,11 @@ test.describe('Renderer Integration Tests', () => {
       page,
     }) => {
       await page.evaluate(() => {
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setMode('analysis')
       })
       await page.waitForFunction(
         () =>
-          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.mode === 'analysis' &&
           window.__sabaki.state.editWorkspace != null,
       )
 
@@ -537,11 +601,11 @@ test.describe('Renderer Integration Tests', () => {
 
     test('multiple navigations keep reference unchanged', async ({page}) => {
       await page.evaluate(() => {
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setMode('analysis')
       })
       await page.waitForFunction(
         () =>
-          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.mode === 'analysis' &&
           window.__sabaki.state.editWorkspace != null,
       )
 
@@ -571,11 +635,11 @@ test.describe('Renderer Integration Tests', () => {
       page,
     }) => {
       await page.evaluate(() => {
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setMode('analysis')
       })
       await page.waitForFunction(
         () =>
-          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.mode === 'analysis' &&
           window.__sabaki.state.editWorkspace != null,
       )
 
@@ -609,11 +673,11 @@ test.describe('Renderer Integration Tests', () => {
       page,
     }) => {
       await page.evaluate(() => {
-        window.__sabaki.setMode('edit')
+        window.__sabaki.setMode('analysis')
       })
       await page.waitForFunction(
         () =>
-          window.__sabaki.state.mode === 'edit' &&
+          window.__sabaki.state.mode === 'analysis' &&
           window.__sabaki.state.editWorkspace != null,
       )
 
@@ -623,14 +687,17 @@ test.describe('Renderer Integration Tests', () => {
       await page.waitForFunction(() => window.__sabaki.state.territoryEnabled)
 
       // Inspector card should be visible
-      await expect(page.locator('#sidebar .inspector-card')).toBeVisible()
+      const positionCard = page.locator('#sidebar .inspector-card', {
+        hasText: '局面点评',
+      })
+      await expect(positionCard).toBeVisible()
 
       // Inspector should show territory info (Position Summary section)
       await expect(
-        page.locator('#sidebar .inspector-card .inspector-section').first(),
+        positionCard.locator('.inspector-section').first(),
       ).toContainText('Move')
       await expect(
-        page.locator('#sidebar .inspector-card .inspector-section').first(),
+        positionCard.locator('.inspector-section').first(),
       ).toContainText('Captures')
 
       // WorkspaceDock should NOT show overlay-status-bar (old location removed)

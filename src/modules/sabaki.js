@@ -399,6 +399,41 @@ class Sabaki extends EventEmitter {
 
   // User Interface
 
+  createAnalysisWorkspace() {
+    let tree = this.state.gameTrees[this.state.gameIndex]
+    let board = gametree.getBoard(tree, this.state.treePosition)
+    let currentPlayer = this.getPlayer(this.state.treePosition)
+    let snapshot = createSnapshotFromBoard(board, currentPlayer)
+
+    return {
+      currentSnapshot: snapshot,
+      referenceSnapshot: null,
+      activeTab: 'current',
+      currentAnalysis: null,
+      currentOwnership: null,
+      referenceAnalysis: null,
+      referenceOwnership: null,
+      analysisPending: false,
+      currentMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
+      referenceMarkerMap: null,
+      currentLines: [],
+      referenceLines: [],
+    }
+  }
+
+  resetAnalysisWorkspace() {
+    clearTimeout(this.editAnalysisId)
+
+    this.setState(
+      {
+        mode: 'analysis',
+        editWorkspace: this.createAnalysisWorkspace(),
+      },
+      () => this.scheduleEditWorkspaceAnalysis(),
+    )
+    this.events.emit('modeChange')
+  }
+
   setMode(mode) {
     if (this.state.mode === mode) return
 
@@ -427,25 +462,7 @@ class Sabaki extends EventEmitter {
         })
     } else if (mode === 'analysis') {
       // Seed analysis workspace from current board position
-      let tree = this.state.gameTrees[this.state.gameIndex]
-      let board = gametree.getBoard(tree, this.state.treePosition)
-      let currentPlayer = this.getPlayer(this.state.treePosition)
-      let snapshot = createSnapshotFromBoard(board, currentPlayer)
-
-      stateChange.editWorkspace = {
-        currentSnapshot: snapshot,
-        referenceSnapshot: null,
-        activeTab: 'current',
-        currentAnalysis: null,
-        currentOwnership: null,
-        referenceAnalysis: null,
-        referenceOwnership: null,
-        analysisPending: false,
-        currentMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
-        referenceMarkerMap: null,
-        currentLines: [],
-        referenceLines: [],
-      }
+      stateChange.editWorkspace = this.createAnalysisWorkspace()
 
       this.waitForRender().then(() => {
         let textarea = document.querySelector('#properties .edit textarea')
@@ -492,15 +509,28 @@ class Sabaki extends EventEmitter {
 
   async startRecallSession(gameId, options = {}) {
     let game = await window.sabaki.db.getGame(gameId)
-    if (!game) return
+    if (!game) {
+      console.warn('[startRecallSession] game not found for gameId:', gameId)
+      return
+    }
+
+    console.log('[startRecallSession] gameId:', gameId, 'sgf length:', game.sgf?.length, 'sgf preview:', game.sgf?.slice(0, 100))
 
     let trees = sgf.parse(game.sgf)
-    if (!trees || trees.length === 0) return
+    console.log('[startRecallSession] parsed trees count:', trees?.length, 'trees type:', typeof trees, 'isArray:', Array.isArray(trees))
+    if (!trees || trees.length === 0) {
+      console.warn('[startRecallSession] no trees returned from sgf.parse, trees:', trees)
+      return
+    }
     let tree = trees[0]
+    console.log('[startRecallSession] tree type:', tree?.constructor?.name, 'has root:', !!tree?.root, 'root:', tree?.root, 'root.id:', tree?.root?.id)
 
     // Extract the move sequence from the game tree
     let moves = []
     let nodeId = tree.root.id
+    if (nodeId == null) {
+      console.error('[startRecallSession] tree.root.id is null/undefined! root:', JSON.stringify(tree?.root)?.slice(0, 500))
+    }
     let innerTree = tree
     while (true) {
       let node = innerTree.get(nodeId)
@@ -541,6 +571,7 @@ class Sabaki extends EventEmitter {
     // Load the game tree and navigate to the start
     this.newFile()
     let loadedTrees = sgf.parse(game.sgf)
+    console.log('[startRecallSession] loadedTrees count:', loadedTrees?.length, 'loadedTrees[0].root.id:', loadedTrees?.[0]?.root?.id)
     if (loadedTrees && loadedTrees.length > 0) {
       this.loadGameTrees(loadedTrees)
       // Navigate to root (empty board)

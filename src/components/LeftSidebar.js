@@ -34,6 +34,33 @@ function getConsoleExcerptText(entry) {
   return response.error ? 'Engine error' : 'Engine response'
 }
 
+function Panel({title, actions, children}) {
+  return h(
+    'section',
+    {class: 'panel-card workbench-panel-card'},
+    h(
+      'div',
+      {class: 'panel-title'},
+      title,
+      actions && h('div', {class: 'panel-title-actions'}, actions),
+    ),
+    h('div', {class: 'workbench-panel-body'}, children),
+  )
+}
+
+function PanelButton({children, variant = 'secondary', disabled = false, onClick}) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: `workbench-button workbench-button--${variant}`,
+      disabled,
+      onClick,
+    },
+    children,
+  )
+}
+
 export default class LeftSidebar extends Component {
   constructor() {
     super()
@@ -54,6 +81,10 @@ export default class LeftSidebar extends Component {
 
     this.handleEngineLogToggle = () => {
       this.setState(({engineLogExpanded}) => ({engineLogExpanded: !engineLogExpanded}))
+    }
+
+    this.handleReviewNoteInput = (evt) => {
+      sabaki.setComment(this.props.treePosition, {comment: evt.currentTarget.value})
     }
 
     this.handleCommandControlStep = ({step}) => {
@@ -97,7 +128,12 @@ export default class LeftSidebar extends Component {
   shouldComponentUpdate(nextProps) {
     return (
       nextProps.showLeftSidebar != this.props.showLeftSidebar ||
-      nextProps.showLeftSidebar
+      nextProps.mode !== this.props.mode ||
+      nextProps.treePosition !== this.props.treePosition ||
+      nextProps.recallMoveIndex !== this.props.recallMoveIndex ||
+      nextProps.recallUserAttempts !== this.props.recallUserAttempts ||
+      nextProps.showLeftSidebar ||
+      ['play', 'recall', 'analysis'].includes(nextProps.mode)
     )
   }
 
@@ -120,6 +156,13 @@ export default class LeftSidebar extends Component {
       boardTransformation,
       gameTree,
       treePosition,
+      gameInfo,
+      currentPlayer,
+      recallMoveIndex,
+      recallExpectedMoves,
+      recallCompleted,
+      recallUserAttempts,
+      recallShowHint,
     },
     {peerListHeight, selectedEngineSyncerId, engineLogExpanded},
   ) {
@@ -153,11 +196,20 @@ export default class LeftSidebar extends Component {
       onControlStep: this.handleCommandControlStep,
     })
 
-    let inspectorSidebar = editWorkspaceActive || mode === 'play'
+    let workbenchSidebar = ['play', 'recall', 'analysis'].includes(mode)
+    let inspectorSidebar = editWorkspaceActive || workbenchSidebar
 
     if (inspectorSidebar) {
       // Compute engine log excerpt (last 5 lines)
       let logExcerpt = consoleLog.slice(-5)
+      let recallTotal = recallExpectedMoves?.length ?? 0
+      let recallCorrect = (recallUserAttempts || []).filter((a) => a.isCorrect).length
+      let recallLastAttempt =
+        recallUserAttempts?.length > 0
+          ? recallUserAttempts[recallUserAttempts.length - 1]
+          : null
+      let node = gameTree.get(treePosition)
+      let reviewNote = node?.data.C?.[0] ?? ''
 
       // Compute edit preview goban props for reference card
       let showReferenceCard = editWorkspaceActive && editPreviewBoard != null
@@ -198,11 +250,91 @@ export default class LeftSidebar extends Component {
           class: 'inspector-sidebar left-inspector-sidebar',
         },
 
-        peerList,
-        h(
+        mode === 'play' &&
+          h(Panel, {title: '当前对局'},
+            h('div', {class: 'workbench-stat-list'},
+              h('div', {}, h('strong', {}, '黑方'), h('span', {}, gameInfo?.playerNames?.[0] || 'Black')),
+              h('div', {}, h('strong', {}, '白方'), h('span', {}, gameInfo?.playerNames?.[1] || 'White')),
+              h('div', {}, h('strong', {}, '当前手番'), h('span', {}, currentPlayer > 0 ? '黑棋' : '白棋')),
+            ),
+          ),
+        mode === 'play' &&
+          h(Panel, {title: '局面控制'},
+            h('div', {class: 'workbench-action-grid'},
+              h(PanelButton, {variant: 'primary', onClick: () => sabaki.makeMove([-1, -1])}, '停一手'),
+              h(PanelButton, {onClick: () => sabaki.setMode('find')}, '查找'),
+              h(PanelButton, {onClick: () => sabaki.setMode('scoring')}, '数子'),
+              h(PanelButton, {onClick: () => sabaki.setMode('estimator')}, '形势判断'),
+            ),
+          ),
+        mode === 'recall' &&
+          h(Panel, {title: '全局回忆任务'},
+            h('div', {class: 'recall-workbench-summary'},
+              h('div', {class: 'recall-progress-ring'},
+                recallTotal === 0 ? '0%' : `${Math.round((recallMoveIndex / recallTotal) * 100)}%`,
+              ),
+              h('div', {class: 'workbench-stat-list'},
+                h('div', {}, h('strong', {}, '进度'), h('span', {}, `${Math.min(recallMoveIndex + 1, recallTotal || 1)} / ${recallTotal || 0}`)),
+                h('div', {}, h('strong', {}, '正确'), h('span', {}, `${recallCorrect} 手`)),
+                h('div', {}, h('strong', {}, '状态'), h('span', {}, recallCompleted ? '已完成' : '进行中')),
+              ),
+            ),
+            recallLastAttempt &&
+              h(
+                'p',
+                {class: recallLastAttempt.isCorrect ? 'recall-correct' : 'recall-wrong'},
+                recallLastAttempt.isCorrect ? '上一手校对正确' : '上一手需要复盘',
+              ),
+            h('div', {class: 'workbench-action-row'},
+              h(PanelButton, {
+                variant: 'primary',
+                disabled: recallCompleted,
+                onClick: () => sabaki.skipRecallMove(),
+              }, '校对 / 跳过'),
+              h(PanelButton, {
+                disabled: recallCompleted || recallShowHint,
+                onClick: () => sabaki.showRecallHint(),
+              }, '提示'),
+              h(PanelButton, {
+                variant: 'danger',
+                onClick: () => sabaki.endRecallSession(),
+              }, recallCompleted ? '进入复盘' : '结束回忆'),
+            ),
+          ),
+        mode === 'analysis' &&
+          h(Panel, {title: '复盘流程'},
+            h('ol', {class: 'review-flow-list'},
+              h('li', {class: 'active'}, '定位关键局面'),
+              h('li', {}, '标记失误与好手'),
+              h('li', {}, '对比参考变化'),
+              h('li', {}, '沉淀复盘笔记'),
+            ),
+          ),
+        mode === 'analysis' &&
+          h(Panel, {title: '关键点 / 失误 / 备注'},
+            h('div', {class: 'workbench-filter-row'},
+              h('button', {class: 'filter-chip active'}, '全部'),
+              h('button', {class: 'filter-chip'}, '关键点'),
+              h('button', {class: 'filter-chip'}, '失误'),
+              h('button', {class: 'filter-chip'}, '备注'),
+            ),
+            h('p', {class: 'workbench-muted'}, '使用右侧变化树和评论区整理当前局面的复盘线索。'),
+          ),
+        mode === 'analysis' &&
+          h(Panel, {title: '复盘笔记'},
+            h('textarea', {
+              class: 'review-note-pad',
+              value: reviewNote,
+              placeholder: 'Notes for this move',
+              onInput: this.handleReviewNoteInput,
+            }),
+          ),
+        mode !== 'recall' && peerList,
+        mode !== 'recall' &&
+          h(
           'section',
           {class: 'panel-card engine-card'},
-          h('div', {class: 'panel-title'}, 'ENGINE'),
+          h('div', {class: 'panel-title'}, mode === 'play' ? '引擎日志' : 'ENGINE'),
           h('div', {class: 'engine-card-body'},
             // Engine status summary
             h('div', {class: 'engine-status-summary'},
