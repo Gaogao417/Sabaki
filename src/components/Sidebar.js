@@ -65,7 +65,11 @@ function AnalysisSummaryCard({analysis, boardHeight}) {
   return h(
     'section',
     {class: 'sidebar-card inspector-card ai-analysis-card'},
-    h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, 'AI 分析')),
+    h(
+      'div',
+      {class: 'card-header'},
+      h('strong', {class: 'card-title'}, 'AI 分析'),
+    ),
     h(
       'div',
       {class: 'inspector-card-body'},
@@ -90,11 +94,15 @@ function AnalysisSummaryCard({analysis, boardHeight}) {
             'div',
             {class: 'analysis-summary-metric'},
             h('span', {}, '目差'),
-            h('strong', {}, formatSignedNumber(
-              analysis.sign < 0 && analysis.scoreLead != null
-                ? -analysis.scoreLead
-                : analysis.scoreLead,
-            )),
+            h(
+              'strong',
+              {},
+              formatSignedNumber(
+                analysis.sign < 0 && analysis.scoreLead != null
+                  ? -analysis.scoreLead
+                  : analysis.scoreLead,
+              ),
+            ),
           ),
         ),
       candidates.length > 0 &&
@@ -105,12 +113,20 @@ function AnalysisSummaryCard({analysis, boardHeight}) {
             h(
               'li',
               {key: index},
-              h('strong', {}, formatOptionalVertex(variation.vertex, boardHeight)),
-              h('span', {}, `${formatWinrate(variation.winrate, analysis.sign)} / ${formatSignedNumber(
-                analysis.sign < 0 && variation.scoreLead != null
-                  ? -variation.scoreLead
-                  : variation.scoreLead,
-              )}`),
+              h(
+                'strong',
+                {},
+                formatOptionalVertex(variation.vertex, boardHeight),
+              ),
+              h(
+                'span',
+                {},
+                `${formatWinrate(variation.winrate, analysis.sign)} / ${formatSignedNumber(
+                  analysis.sign < 0 && variation.scoreLead != null
+                    ? -variation.scoreLead
+                    : variation.scoreLead,
+                )}`,
+              ),
             ),
           ),
         ),
@@ -268,7 +284,7 @@ export default class Sidebar extends Component {
           class: 'inspector-sidebar',
         },
 
-        (mode === 'analysis' || mode === 'play') &&
+        mode === 'analysis' &&
           h(AnalysisSummaryCard, {
             analysis: activeAnalysis,
             boardHeight: inspectorSummary?.boardHeight ?? 19,
@@ -288,23 +304,55 @@ export default class Sidebar extends Component {
           h(
             'section',
             {class: 'sidebar-card inspector-card recall-side-card'},
-            h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, '回忆提示')),
-            h('div', {class: 'inspector-card-body'},
-              h('div', {class: 'inspector-section'},
-                h('div', {class: 'inspector-row'},
+            h(
+              'div',
+              {class: 'card-header'},
+              h('strong', {class: 'card-title'}, '回忆提示'),
+            ),
+            h(
+              'div',
+              {class: 'inspector-card-body'},
+              h(
+                'div',
+                {class: 'inspector-section'},
+                h(
+                  'div',
+                  {class: 'inspector-row'},
                   h('strong', {}, '下一手'),
-                  h('span', {}, recallShowHint && recallExpected != null ? recallExpected : '保持回忆'),
+                  h(
+                    'span',
+                    {},
+                    recallShowHint && recallExpected != null
+                      ? recallExpected
+                      : '保持回忆',
+                  ),
                 ),
-                h('div', {class: 'inspector-hint'},
-                  recallShowHint ? '提示已显示，落子后会继续推进。' : '需要时从左栏打开提示。',
+                h(
+                  'div',
+                  {class: 'inspector-hint'},
+                  recallShowHint
+                    ? '提示已显示，落子后会继续推进。'
+                    : '需要时从左栏打开提示。',
                 ),
               ),
               recallLastAttempt &&
-                h('div', {class: `inspector-section ${recallLastAttempt.isCorrect ? '' : 'inspector-warning'}`},
-                  h('span', {}, recallLastAttempt.isCorrect ? '上一手正确。' : `上一手实际应为 ${recallLastAttempt.expectedMove}。`),
+                h(
+                  'div',
+                  {
+                    class: `inspector-section ${recallLastAttempt.isCorrect ? '' : 'inspector-warning'}`,
+                  },
+                  h(
+                    'span',
+                    {},
+                    recallLastAttempt.isCorrect
+                      ? '上一手正确。'
+                      : `上一手实际应为 ${recallLastAttempt.expectedMove}。`,
+                  ),
                 ),
               recallCompleted &&
-                h('div', {class: 'inspector-section'},
+                h(
+                  'div',
+                  {class: 'inspector-section'},
                   h('span', {}, '本轮回忆完成，可以进入复盘。'),
                 ),
             ),
@@ -314,152 +362,331 @@ export default class Sidebar extends Component {
           h(
             'section',
             {class: 'sidebar-card inspector-card recall-side-card'},
-            h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, '结果反馈')),
-            h('div', {class: 'inspector-card-body'},
-              h('div', {class: 'analysis-summary-grid'},
-                h('div', {class: 'analysis-summary-metric'},
+            h(
+              'div',
+              {class: 'card-header'},
+              h('strong', {class: 'card-title'}, '结果反馈'),
+            ),
+            h(
+              'div',
+              {class: 'inspector-card-body'},
+              h(
+                'div',
+                {class: 'analysis-summary-grid'},
+                h(
+                  'div',
+                  {class: 'analysis-summary-metric'},
                   h('span', {}, '正确'),
-                  h('strong', {}, `${(recallUserAttempts || []).filter((a) => a.isCorrect).length}`),
+                  h(
+                    'strong',
+                    {},
+                    `${(recallUserAttempts || []).filter((a) => a.isCorrect).length}`,
+                  ),
                 ),
-                h('div', {class: 'analysis-summary-metric'},
+                h(
+                  'div',
+                  {class: 'analysis-summary-metric'},
                   h('span', {}, '错误'),
-                  h('strong', {}, `${(recallUserAttempts || []).filter((a) => !a.isCorrect).length}`),
+                  h(
+                    'strong',
+                    {},
+                    `${(recallUserAttempts || []).filter((a) => !a.isCorrect).length}`,
+                  ),
                 ),
               ),
-              h('div', {class: 'inspector-section'},
-                h('div', {class: 'inspector-row'},
+              h(
+                'div',
+                {class: 'inspector-section'},
+                h(
+                  'div',
+                  {class: 'inspector-row'},
                   h('strong', {}, '总进度'),
-                  h('span', {}, `${Math.min(recallMoveIndex + 1, recallExpectedMoves?.length || 0)} / ${recallExpectedMoves?.length || 0}`),
+                  h(
+                    'span',
+                    {},
+                    `${Math.min(recallMoveIndex + 1, recallExpectedMoves?.length || 0)} / ${recallExpectedMoves?.length || 0}`,
+                  ),
                 ),
               ),
             ),
           ),
 
         // Inspector card with structured sections
-        mode !== 'recall' && h(
-          'section',
-          {class: 'sidebar-card inspector-card'},
-          h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, mode === 'analysis' ? '局面点评' : '局面信息')),
-          h('div', {class: 'inspector-card-body'},
-            // Section 1: Position Summary (always visible in inspector mode)
-            inspectorSummary != null &&
-              h('div', {class: 'inspector-section'},
-                h('div', {class: 'inspector-row'},
-                  h('strong', {}, '手数'),
-                  h('span', {}, `${inspectorSummary.moveNumber}`),
-                ),
-                h('div', {class: 'inspector-row'},
-                  h('strong', {}, '提子'),
-                  h('span', {}, `黑 ${inspectorSummary.playerCaptures[0]} / 白 ${inspectorSummary.playerCaptures[1]}`),
-                ),
+        mode !== 'recall' &&
+          h(
+            'section',
+            {class: 'sidebar-card inspector-card'},
+            h(
+              'div',
+              {class: 'card-header'},
+              h(
+                'strong',
+                {class: 'card-title'},
+                mode === 'analysis' ? '局面点评' : '局面信息',
               ),
+            ),
+            h(
+              'div',
+              {class: 'inspector-card-body'},
+              // Section 1: Position Summary (always visible in inspector mode)
+              inspectorSummary != null &&
+                h(
+                  'div',
+                  {class: 'inspector-section'},
+                  h(
+                    'div',
+                    {class: 'inspector-row'},
+                    h('strong', {}, '手数'),
+                    h('span', {}, `${inspectorSummary.moveNumber}`),
+                  ),
+                  h(
+                    'div',
+                    {class: 'inspector-row'},
+                    h('strong', {}, '提子'),
+                    h(
+                      'span',
+                      {},
+                      `黑 ${inspectorSummary.playerCaptures[0]} / 白 ${inspectorSummary.playerCaptures[1]}`,
+                    ),
+                  ),
+                  mode === 'analysis' &&
+                    h(
+                      'div',
+                      {class: 'inspector-row'},
+                      h('strong', {}, '综合评价'),
+                      h('span', {}, '--'),
+                    ),
+                ),
 
-            // Section 2: Overlay Status (visible when territory mode active)
-            overlayStatusProps != null && overlayStatusProps.unavailableReason != null
-              ? h('div', {class: 'inspector-section inspector-warning'},
-                  h('span', {}, overlayStatusProps.unavailableReason),
-                )
-              : overlayStatusProps != null && overlayStatusProps.hoveredRegion != null
-                ? h('div', {class: 'inspector-section inspector-hover'},
-                    h('div', {class: 'inspector-row'},
-                      h('strong', {}, '区域'),
-                      h('span', {}, formatOwner(overlayStatusProps.hoveredRegion.owner)),
-                    ),
-                    overlayStatusProps.hoveredVertex &&
-                      h('div', {class: 'inspector-row'},
-                        h('strong', {}, '坐标'),
-                        h('span', {}, formatVertex(overlayStatusProps.hoveredVertex, inspectorSummary?.boardHeight ?? 19)),
-                      ),
-                    h('div', {class: 'inspector-row'},
-                      h('strong', {}, '总计'),
-                      h('span', {}, formatMetric(overlayStatusProps.hoveredRegion.total)),
-                    ),
-                    overlayStatusProps.hoveredDelta != null &&
-                      h('div', {class: 'inspector-row'},
-                        h('strong', {}, '变化'),
-                        h('span', {}, `${overlayStatusProps.hoveredDelta > 0 ? '+' : ''}${overlayStatusProps.hoveredDelta.toFixed(2)}`),
-                      ),
+              // Section 2: Overlay Status (visible when territory mode active)
+              overlayStatusProps != null &&
+                overlayStatusProps.unavailableReason != null
+                ? h(
+                    'div',
+                    {class: 'inspector-section inspector-warning'},
+                    h('span', {}, overlayStatusProps.unavailableReason),
                   )
-                : overlayStatusProps != null
-                  ? h('div', {class: 'inspector-section inspector-idle'},
-                      overlayStatusProps.territorySummary != null && [
-                        h('div', {class: 'inspector-row'},
-                          h('strong', {}, '黑方'),
-                          h('span', {}, formatMetric(overlayStatusProps.territorySummary.black.total)),
+                : overlayStatusProps != null &&
+                    overlayStatusProps.hoveredRegion != null
+                  ? h(
+                      'div',
+                      {class: 'inspector-section inspector-hover'},
+                      h(
+                        'div',
+                        {class: 'inspector-row'},
+                        h('strong', {}, '区域'),
+                        h(
+                          'span',
+                          {},
+                          formatOwner(overlayStatusProps.hoveredRegion.owner),
                         ),
-                        h('div', {class: 'inspector-row'},
-                          h('strong', {}, '白方'),
-                          h('span', {}, formatMetric(overlayStatusProps.territorySummary.white.total)),
-                        ),
-                        h('div', {class: 'inspector-row'},
-                          h('strong', {}, '中立'),
-                          h('span', {}, formatMetric(overlayStatusProps.territorySummary.neutral.total)),
-                        ),
-                      ],
-                      h('div', {class: 'inspector-hint'},
-                        h('span', {}, '悬停区域可查看归属。'),
                       ),
+                      overlayStatusProps.hoveredVertex &&
+                        h(
+                          'div',
+                          {class: 'inspector-row'},
+                          h('strong', {}, '坐标'),
+                          h(
+                            'span',
+                            {},
+                            formatVertex(
+                              overlayStatusProps.hoveredVertex,
+                              inspectorSummary?.boardHeight ?? 19,
+                            ),
+                          ),
+                        ),
+                      h(
+                        'div',
+                        {class: 'inspector-row'},
+                        h('strong', {}, '总计'),
+                        h(
+                          'span',
+                          {},
+                          formatMetric(overlayStatusProps.hoveredRegion.total),
+                        ),
+                      ),
+                      overlayStatusProps.hoveredDelta != null &&
+                        h(
+                          'div',
+                          {class: 'inspector-row'},
+                          h('strong', {}, '变化'),
+                          h(
+                            'span',
+                            {},
+                            `${overlayStatusProps.hoveredDelta > 0 ? '+' : ''}${overlayStatusProps.hoveredDelta.toFixed(2)}`,
+                          ),
+                        ),
                     )
-                  : null,
+                  : overlayStatusProps != null
+                    ? h(
+                        'div',
+                        {class: 'inspector-section inspector-idle'},
+                        overlayStatusProps.territorySummary != null && [
+                          h(
+                            'div',
+                            {class: 'inspector-row'},
+                            h('strong', {}, '黑方'),
+                            h(
+                              'span',
+                              {},
+                              formatMetric(
+                                overlayStatusProps.territorySummary.black.total,
+                              ),
+                            ),
+                          ),
+                          h(
+                            'div',
+                            {class: 'inspector-row'},
+                            h('strong', {}, '白方'),
+                            h(
+                              'span',
+                              {},
+                              formatMetric(
+                                overlayStatusProps.territorySummary.white.total,
+                              ),
+                            ),
+                          ),
+                          h(
+                            'div',
+                            {class: 'inspector-row'},
+                            h('strong', {}, '中立'),
+                            h(
+                              'span',
+                              {},
+                              formatMetric(
+                                overlayStatusProps.territorySummary.neutral
+                                  .total,
+                              ),
+                            ),
+                          ),
+                        ],
+                        h(
+                          'div',
+                          {class: 'inspector-hint'},
+                          h('span', {}, '悬停区域可查看归属。'),
+                        ),
+                      )
+                    : null,
 
-            // Section 3: Diff summary (visible when comparing)
-            overlayStatusProps != null && overlayStatusProps.deltaSummary != null &&
-              h('div', {class: 'inspector-section inspector-diff'},
-                h('div', {class: 'inspector-row'},
-                  h('strong', {}, '黑方收益'),
-                  h('span', {}, formatMetric(overlayStatusProps.deltaSummary.black)),
+              // Section 3: Diff summary (visible when comparing)
+              overlayStatusProps != null &&
+                overlayStatusProps.deltaSummary != null &&
+                h(
+                  'div',
+                  {class: 'inspector-section inspector-diff'},
+                  h(
+                    'div',
+                    {class: 'inspector-row'},
+                    h('strong', {}, '黑方收益'),
+                    h(
+                      'span',
+                      {},
+                      formatMetric(overlayStatusProps.deltaSummary.black),
+                    ),
+                  ),
+                  h(
+                    'div',
+                    {class: 'inspector-row'},
+                    h('strong', {}, '白方收益'),
+                    h(
+                      'span',
+                      {},
+                      formatMetric(overlayStatusProps.deltaSummary.white),
+                    ),
+                  ),
                 ),
-                h('div', {class: 'inspector-row'},
-                  h('strong', {}, '白方收益'),
-                  h('span', {}, formatMetric(overlayStatusProps.deltaSummary.white)),
-                ),
+            ),
+          ),
+
+        mode === 'play' &&
+          h(AnalysisSummaryCard, {
+            analysis: activeAnalysis,
+            boardHeight: inspectorSummary?.boardHeight ?? 19,
+          }),
+
+        ['play', 'recall', 'analysis'].includes(mode) &&
+          h(
+            'section',
+            {class: 'sidebar-card game-tree-card'},
+            h(
+              'div',
+              {class: 'card-header'},
+              h(
+                'strong',
+                {class: 'card-title'},
+                mode === 'recall' ? '轻量变化树' : '变化树',
               ),
-          ),
-        ),
+            ),
+            h(
+              'div',
+              {class: 'game-tree-body'},
+              showGameGraph
+                ? h(GameGraph, {
+                    ref: (component) => (this.gameGraph = component),
 
-        showGameGraph &&
-          h(
-          'section',
-          {class: 'sidebar-card game-tree-card'},
-          h(
-            'div',
-            {class: 'card-header'},
-            h('strong', {class: 'card-title'}, mode === 'recall' ? '轻量变化树' : '变化树'),
-          ),
-          h(
-            'div',
-            {class: 'game-tree-body'},
-            h(GameGraph, {
-              ref: (component) => (this.gameGraph = component),
+                    gameTree,
+                    gameCurrents: gameCurrents[gameIndex],
+                    treePosition,
+                    showGameGraph: true,
+                    height: 100,
+                    gridSize: graphGridSize,
+                    nodeSize: graphNodeSize,
 
-              gameTree,
-              gameCurrents: gameCurrents[gameIndex],
-              treePosition,
-              showGameGraph: true,
-              height: 100,
-              gridSize: graphGridSize,
-              nodeSize: graphNodeSize,
-
-              onNodeClick: this.handleGraphNodeClick,
-            }),
+                    onNodeClick: this.handleGraphNodeClick,
+                  })
+                : h(
+                    'div',
+                    {
+                      class:
+                        'analysis-empty-state analysis-empty-state--compact',
+                    },
+                    h('strong', {}, '暂无变化'),
+                    h(
+                      'span',
+                      {},
+                      mode === 'analysis'
+                        ? '在对局过程中将自动记录变化，或通过标注生成变化。'
+                        : '在对局过程中将自动记录变化。',
+                    ),
+                  ),
+            ),
           ),
-        ),
 
         mode === 'analysis' &&
           h(
             'section',
             {class: 'sidebar-card inspector-card'},
-            h('div', {class: 'card-header'}, h('strong', {class: 'card-title'}, '快照对比')),
-            h('div', {class: 'inspector-card-body'},
-              h('div', {class: 'inspector-section'},
-                h('span', {}, editPreviewBoard != null ? '已捕捉参考局面，可与当前局面比较。' : '捕捉参考局面后可进行快照对比。'),
+            h(
+              'div',
+              {class: 'card-header'},
+              h('strong', {class: 'card-title'}, '快照对比'),
+            ),
+            h(
+              'div',
+              {class: 'inspector-card-body'},
+              h(
+                'div',
+                {class: 'inspector-section'},
+                h(
+                  'span',
+                  {},
+                  editPreviewBoard != null
+                    ? '已捕捉参考局面，可与当前局面比较。'
+                    : '捕捉参考局面后可进行快照对比。',
+                ),
               ),
-              h('div', {class: 'inspector-section snapshot-output-actions'},
-                h('button', {
-                  type: 'button',
-                  class: 'workbench-button workbench-button--primary',
-                  onClick: () => sabaki.snapshotAsProblem(),
-                }, '生成题目'),
+              h(
+                'div',
+                {class: 'inspector-section snapshot-output-actions'},
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'workbench-button workbench-button--primary',
+                    onClick: () => sabaki.captureEditReference(),
+                  },
+                  '添加快照',
+                ),
               ),
             ),
           ),

@@ -44,7 +44,12 @@ fixPath()
 
 // Ensure common binary directories are on PATH for engine discovery
 const extraPathsByPlatform = {
-  linux: ['/usr/local/bin', '/usr/bin', '/snap/bin', path.join(process.env.HOME || '', '.local/bin')],
+  linux: [
+    '/usr/local/bin',
+    '/usr/bin',
+    '/snap/bin',
+    path.join(process.env.HOME || '', '.local/bin'),
+  ],
   darwin: ['/usr/local/bin', '/opt/homebrew/bin'],
   win32: [],
 }
@@ -197,7 +202,11 @@ class App extends Component {
       ) {
         let key = evt.key
 
-        if (['1', '2', '3', '4', 'Tab'].includes(key) || lowerKey === 'r' || lowerKey === 'p') {
+        if (
+          ['1', '2', '3', '4', 'Tab'].includes(key) ||
+          lowerKey === 'r' ||
+          lowerKey === 'p'
+        ) {
           evt.preventDefault()
         }
 
@@ -581,7 +590,9 @@ class App extends Component {
       ? {
           moveNumber: inspectorLevel,
           currentPlayer: inferredState.currentPlayer,
-          playerCaptures: [1, -1].map((sign) => inspectorBoard.getCaptures(sign)),
+          playerCaptures: [1, -1].map((sign) =>
+            inspectorBoard.getCaptures(sign),
+          ),
           boardHeight: inspectorBoard.height,
         }
       : null
@@ -617,7 +628,7 @@ class App extends Component {
     }
 
     let workbenchMode = ['play', 'recall', 'analysis'].includes(state.mode)
-    let forceLeftSidebar = ['recall', 'analysis'].includes(state.mode)
+    let forceLeftSidebar = workbenchMode
     let getWorkbenchSideWidth = (size) => {
       if (!workbenchMode) return 0
 

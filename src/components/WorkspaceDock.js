@@ -11,9 +11,9 @@ export default class WorkspaceDock extends Component {
     let activePanel = isReviewDock
       ? '复盘工作区'
       : mode === 'play'
-        ? '棋盘工作区'
+        ? '对局工作区'
         : mode === 'recall'
-          ? '回忆'
+          ? '回忆工作区'
           : mode === 'problem'
             ? '当前题目'
             : mode === 'review'
@@ -29,6 +29,23 @@ export default class WorkspaceDock extends Component {
                       : '棋盘工作区'
 
     let shouldShowContent = isReviewDock || !isPassiveDock
+    let simpleTools =
+      isPassiveDock &&
+      h(
+        'div',
+        {class: 'workspace-dock__tools'},
+        h(
+          'button',
+          {type: 'button', class: 'dock-tool dock-tool--active'},
+          '选择',
+        ),
+        h('button', {type: 'button', class: 'dock-tool'}, '手型'),
+        h('span', {class: 'dock-divider'}),
+        h('button', {type: 'button', class: 'dock-tool'}, '-'),
+        h('button', {type: 'button', class: 'dock-tool'}, '+'),
+        h('span', {class: 'dock-divider'}),
+        h('button', {type: 'button', class: 'dock-tool'}, '全屏'),
+      )
 
     return h(
       'section',
@@ -38,11 +55,29 @@ export default class WorkspaceDock extends Component {
       h(
         'div',
         {class: 'workspace-dock__header'},
-        h('strong', {}, activePanel),
-        (isReviewDock || isPassiveDock) &&
-          h('span', {class: 'workspace-dock__summary'}, summary),
+        h(
+          'div',
+          {class: 'workspace-dock__status'},
+          h('strong', {}, activePanel),
+          (isReviewDock || isPassiveDock) &&
+            h('span', {class: 'workspace-dock__summary'}, summary),
+        ),
+        simpleTools,
       ),
       shouldShowContent && h('section', {class: 'workspace-stack'}, children),
+      isReviewDock &&
+        h(
+          'div',
+          {class: 'workspace-dock__review-actions'},
+          h('button', {type: 'button', class: 'dock-tool'}, '撤销'),
+          h(
+            'button',
+            {type: 'button', class: 'dock-tool', disabled: true},
+            '重做',
+          ),
+          h('button', {type: 'button', class: 'dock-tool'}, '清空'),
+          h('button', {type: 'button', class: 'dock-tool'}, '100%'),
+        ),
     )
   }
 }

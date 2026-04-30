@@ -378,9 +378,22 @@ export default class MainView extends Component {
       crosshair: gobanCrosshair || areaModifierActive,
       showCoordinates,
       showMoveColorization,
-      showMoveNumbers: mode !== 'analysis' && showMoveNumbers,
-      showNextMoves: !editWorkspaceActive && mode !== 'guess' && mode !== 'recall' && mode !== 'problem' && mode !== 'review' && showNextMoves,
-      showSiblings: !editWorkspaceActive && mode !== 'guess' && mode !== 'recall' && mode !== 'problem' && mode !== 'review' && showSiblings,
+      showMoveNumbers:
+        mode === 'recall' || (mode !== 'analysis' && showMoveNumbers),
+      showNextMoves:
+        !editWorkspaceActive &&
+        mode !== 'guess' &&
+        mode !== 'recall' &&
+        mode !== 'problem' &&
+        mode !== 'review' &&
+        showNextMoves,
+      showSiblings:
+        !editWorkspaceActive &&
+        mode !== 'guess' &&
+        mode !== 'recall' &&
+        mode !== 'problem' &&
+        mode !== 'review' &&
+        showSiblings,
       fuzzyStonePlacement,
       animateStonePlacement,
 
@@ -410,20 +423,14 @@ export default class MainView extends Component {
       this.props.attachedEngineSyncers.find((syncer) => syncer.id === id),
     )
 
-    let modeStatus =
-      mode === 'play'
-        ? '对局模式'
-        : mode === 'recall'
-          ? `回忆模式 · ${sabaki.state.recallMoveIndex}/${sabaki.state.recallExpectedMoves.length}`
-          : mode === 'analysis'
-            ? '复盘模式'
-            : null
     let workspaceSummary =
       mode === 'analysis'
-        ? `复盘模式 · 当前第 ${gameTree.getLevel(treePosition)} 手 · 关键点 0 · 题目 0`
+        ? `当前第 ${gameTree.getLevel(treePosition)} 手 | 关键点 0 · 题目 0`
         : mode === 'play'
-          ? `对局模式 · 当前第 ${gameTree.getLevel(treePosition)} 手`
-        : ''
+          ? `当前第 ${gameTree.getLevel(treePosition)} 手 | 未连接引擎`
+          : mode === 'recall'
+            ? `当前进度 ${sabaki.state.recallMoveIndex}/${sabaki.state.recallExpectedMoves.length} | 等待输入下一手`
+            : ''
 
     return h(
       'section',
@@ -448,7 +455,7 @@ export default class MainView extends Component {
 
       h(
         'main',
-        {ref: (el) => (this.mainElement = el)},
+        {ref: (el) => (this.mainElement = el), class: 'board-stage'},
         editWorkspaceActive
           ? h(
               'div',

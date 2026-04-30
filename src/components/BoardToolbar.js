@@ -174,23 +174,27 @@ export default class BoardToolbar extends Component {
           engine: syncer != null,
         }),
       },
-      h('span', {class: 'stone-indicator'}, sign > 0 ? t('B') : t('W')),
+      h('span', {class: 'stone-indicator'}, ''),
       h(
-        'span',
-        {
-          class: 'name',
-          title: syncer != null ? t('Engine') : player,
-        },
-        syncer == null ? player : syncer.engine.name,
+        'div',
+        {class: 'toolbar-player__text'},
+        h(
+          'span',
+          {
+            class: 'name',
+            title: syncer != null ? t('Engine') : player,
+          },
+          sign > 0 ? '黑棋' : '白棋',
+        ),
+        h('span', {class: 'captures'}, `提子 ${captures}`),
       ),
       syncer == null && rank && h('span', {class: 'rank'}, rank),
       syncer != null && busy && h(TextSpinner),
-      h('span', {class: 'captures'}, captures),
     )
   }
 
   renderModeActions(mode) {
-    if (mode === 'play') {
+    if (mode === 'play' || mode === 'recall') {
       return [
         h(WorkbenchButton, {
           variant: 'primary',
@@ -217,13 +221,24 @@ export default class BoardToolbar extends Component {
         h(WorkbenchButton, {
           variant: 'primary',
           icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
-          label: '新建复盘',
-          onClick: () => sabaki.resetAnalysisWorkspace(),
+          label: '新建题目',
+          onClick: () => sabaki.snapshotAsProblem(),
         }),
         h(WorkbenchButton, {
           icon: './node_modules/@primer/octicons/build/svg/gear.svg',
           label: '复盘设置',
           onClick: () => sabaki.openDrawer('preferences'),
+        }),
+        h(WorkbenchButton, {
+          icon: './node_modules/@primer/octicons/build/svg/list-unordered.svg',
+          label: '',
+          onClick: () => sabaki.resetAnalysisWorkspace(),
+        }),
+        h(WorkbenchButton, {
+          variant: 'danger',
+          icon: './node_modules/@primer/octicons/build/svg/stop.svg',
+          label: '认输',
+          onClick: () => sabaki.makeResign(),
         }),
       ]
     }
@@ -251,6 +266,7 @@ export default class BoardToolbar extends Component {
     },
     {playerBusy},
   ) {
+    let workbenchMode = ['play', 'recall', 'analysis'].includes(mode)
     let modes = [
       {
         mode: 'play',
@@ -267,9 +283,7 @@ export default class BoardToolbar extends Component {
         active: mode === 'recall',
         disabled: recallSession == null,
         title:
-          recallSession == null
-            ? '暂无回忆任务，请从训练面板开始。'
-            : null,
+          recallSession == null ? '暂无回忆任务，请从训练面板开始。' : null,
       },
       {
         mode: 'analysis',
@@ -278,21 +292,10 @@ export default class BoardToolbar extends Component {
         accent: 'analysis',
         active: mode === 'analysis',
       },
-      {
-        mode: 'training',
-        label: '训练模式',
-        icon: './node_modules/@primer/octicons/build/svg/list-unordered.svg',
-        accent: 'training',
-        active: openDrawer === 'training',
-      },
     ]
 
     let handleModeSelect = (nextMode) => {
-      if (nextMode === 'training') {
-        sabaki.openDrawer('training')
-      } else {
-        sabaki.setMode(nextMode)
-      }
+      sabaki.setMode(nextMode)
     }
 
     return h(
@@ -350,54 +353,56 @@ export default class BoardToolbar extends Component {
         'div',
         {class: 'toolbar-group toolbar-controls'},
         h('div', {class: 'mode-actions'}, this.renderModeActions(mode)),
-        h(
-          'div',
-          {class: 'toolbar-group toolbar-actions toolbar-overlays'},
-          h(ToolbarButton, {
-            icon: './node_modules/@primer/octicons/build/svg/server.svg',
-            label: '引擎',
-            selected: enginePanelOpen,
-            accent: enginePanelOpen,
-            onClick: onEnginePanelToggle,
-          }),
-          h(ToolbarButton, {
-            icon: './node_modules/@primer/octicons/build/svg/eye.svg',
-            label: t('Territory'),
-            shortcut: 'T',
-            selected: territoryEnabled,
-            accent: territoryEnabled,
-            onClick: () => sabaki.toggleTerritoryEnabled(),
-          }),
-          territoryEnabled &&
-            editWorkspaceActive &&
+        !workbenchMode &&
+          h(
+            'div',
+            {class: 'toolbar-group toolbar-actions toolbar-overlays'},
             h(ToolbarButton, {
-              icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
-              label: t('Territory Compare'),
-              shortcut: 'Shift+T',
-              selected: territoryCompareEnabled,
-              accent: territoryCompareEnabled,
-              disabled: !territoryCompareAvailable,
-              onClick: () => sabaki.toggleTerritoryCompareEnabled(),
+              icon: './node_modules/@primer/octicons/build/svg/server.svg',
+              label: '引擎',
+              selected: enginePanelOpen,
+              accent: enginePanelOpen,
+              onClick: onEnginePanelToggle,
             }),
-        ),
-        h(
-          'a',
-          {
-            ref: (el) => (this.menuButtonElement = el),
-            href: '#',
-            class: 'toolbar-menu',
-            title: t('More Actions'),
-            onClick: (evt) => {
-              evt.preventDefault()
-              this.handleMenuClick()
+            h(ToolbarButton, {
+              icon: './node_modules/@primer/octicons/build/svg/eye.svg',
+              label: t('Territory'),
+              shortcut: 'T',
+              selected: territoryEnabled,
+              accent: territoryEnabled,
+              onClick: () => sabaki.toggleTerritoryEnabled(),
+            }),
+            territoryEnabled &&
+              editWorkspaceActive &&
+              h(ToolbarButton, {
+                icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
+                label: t('Territory Compare'),
+                shortcut: 'Shift+T',
+                selected: territoryCompareEnabled,
+                accent: territoryCompareEnabled,
+                disabled: !territoryCompareAvailable,
+                onClick: () => sabaki.toggleTerritoryCompareEnabled(),
+              }),
+          ),
+        !workbenchMode &&
+          h(
+            'a',
+            {
+              ref: (el) => (this.menuButtonElement = el),
+              href: '#',
+              class: 'toolbar-menu',
+              title: t('More Actions'),
+              onClick: (evt) => {
+                evt.preventDefault()
+                this.handleMenuClick()
+              },
             },
-          },
-          h('img', {
-            src: './node_modules/@primer/octicons/build/svg/three-bars.svg',
-            height: 18,
-            alt: t('More Actions'),
-          }),
-        ),
+            h('img', {
+              src: './node_modules/@primer/octicons/build/svg/three-bars.svg',
+              height: 18,
+              alt: t('More Actions'),
+            }),
+          ),
       ),
     )
   }

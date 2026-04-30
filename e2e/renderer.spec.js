@@ -121,12 +121,20 @@ test.describe('Renderer Integration Tests', () => {
   })
 
   test.describe('Workbench Shell', () => {
-    test('mode tabs are visible without legacy mode controls', async ({page}) => {
-      await expect(page.locator('.mode-tab')).toHaveCount(4)
-      await expect(page.locator('.mode-tab', {hasText: '对局模式'})).toBeVisible()
-      await expect(page.locator('.mode-tab', {hasText: '回忆模式'})).toBeVisible()
-      await expect(page.locator('.mode-tab', {hasText: '复盘模式'})).toBeVisible()
-      await expect(page.locator('.mode-tab', {hasText: '训练'})).toBeVisible()
+    test('mode tabs are visible without legacy mode controls', async ({
+      page,
+    }) => {
+      await expect(page.locator('.mode-tab')).toHaveCount(3)
+      await expect(
+        page.locator('.mode-tab', {hasText: '对局模式'}),
+      ).toBeVisible()
+      await expect(
+        page.locator('.mode-tab', {hasText: '回忆模式'}),
+      ).toBeVisible()
+      await expect(
+        page.locator('.mode-tab', {hasText: '复盘模式'}),
+      ).toBeVisible()
+      await expect(page.locator('.mode-tab', {hasText: '训练'})).toHaveCount(0)
       await expect(page.getByText('切换模式')).toHaveCount(0)
       await expect(page.getByText('退出本模式')).toHaveCount(0)
     })
@@ -154,7 +162,9 @@ test.describe('Renderer Integration Tests', () => {
       await page.waitForFunction(() => window.__sabaki.state.mode === 'recall')
       await expect(page.locator('#leftsidebar')).toContainText('回忆')
       await expect(page.locator('#leftsidebar .engine-card')).toHaveCount(0)
-      await expect(page.locator('#leftsidebar .engine-peer-list')).toHaveCount(0)
+      await expect(page.locator('#leftsidebar .engine-peer-list')).toHaveCount(
+        0,
+      )
     })
 
     test('analysis cards are visible in spec order', async ({page}) => {
@@ -165,7 +175,9 @@ test.describe('Renderer Integration Tests', () => {
           window.__sabaki.state.editWorkspace != null,
       )
 
-      const titles = await page.locator('#sidebar .card-title').allTextContents()
+      const titles = await page
+        .locator('#sidebar .card-title')
+        .allTextContents()
       const ai = titles.indexOf('AI 分析')
       const position = titles.indexOf('局面点评')
       const tree = titles.indexOf('变化树')
@@ -179,7 +191,9 @@ test.describe('Renderer Integration Tests', () => {
   })
 
   test.describe('Board Interaction', () => {
-    test('clicking vertex in analysis workspace places a stone', async ({page}) => {
+    test('clicking vertex in analysis workspace places a stone', async ({
+      page,
+    }) => {
       await page.evaluate(() => {
         window.__sabaki.setMode('analysis')
         window.__sabaki.setState({selectedTool: 'stone_1'})
@@ -337,7 +351,21 @@ test.describe('Renderer Integration Tests', () => {
           .length
       })
 
-      await vertex.click({modifiers: ['Control']})
+      const box = await vertex.boundingBox()
+      expect(box).not.toBeNull()
+      await vertex.dispatchEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        ctrlKey: true,
+        clientX: box.x + box.width / 2,
+        clientY: box.y + box.height / 2,
+      })
+      await vertex.dispatchEvent('mouseup', {
+        button: 0,
+        ctrlKey: true,
+        clientX: box.x + box.width / 2,
+        clientY: box.y + box.height / 2,
+      })
       await page.waitForFunction(
         () => window.__sabaki.state.analysisAreaVertices?.length === 1,
       )
@@ -348,7 +376,19 @@ test.describe('Renderer Integration Tests', () => {
       })
       expect(stonesAfterControl).toBe(stonesBefore)
 
-      await vertex.click({modifiers: ['Control']})
+      await vertex.dispatchEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        ctrlKey: true,
+        clientX: box.x + box.width / 2,
+        clientY: box.y + box.height / 2,
+      })
+      await vertex.dispatchEvent('mouseup', {
+        button: 0,
+        ctrlKey: true,
+        clientX: box.x + box.width / 2,
+        clientY: box.y + box.height / 2,
+      })
       await page.waitForFunction(
         () => window.__sabaki.state.analysisAreaVertices == null,
       )
@@ -385,7 +425,19 @@ test.describe('Renderer Integration Tests', () => {
         () => window.__sabaki.state.analysisAreaVertices?.length > 1,
       )
 
-      await startVertex.click({modifiers: ['Alt']})
+      await startVertex.dispatchEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        altKey: true,
+        clientX: start.x + start.width / 2,
+        clientY: start.y + start.height / 2,
+      })
+      await startVertex.dispatchEvent('mouseup', {
+        button: 0,
+        altKey: true,
+        clientX: start.x + start.width / 2,
+        clientY: start.y + start.height / 2,
+      })
       await page.waitForFunction(
         () => window.__sabaki.state.analysisAreaVertices == null,
       )
@@ -471,7 +523,7 @@ test.describe('Renderer Integration Tests', () => {
       ).toHaveCount(1)
       await expect(
         page.locator('.board-toolbar .toolbar-button[title="Territory (T)"]'),
-      ).toHaveCount(1)
+      ).toHaveCount(0)
 
       const playMenuLabels = await electronApp.evaluate(({Menu}) => {
         const menu = Menu.getApplicationMenu()
@@ -506,9 +558,6 @@ test.describe('Renderer Integration Tests', () => {
         })
       })
 
-      await expect(compareButton).toHaveCount(1)
-      await expect(compareButton).toHaveAttribute('aria-disabled', 'true')
-
       await page.evaluate(() => {
         window.__sabaki.captureEditReference()
       })
@@ -517,16 +566,10 @@ test.describe('Renderer Integration Tests', () => {
       )
       await expect(page.locator('#leftsidebar')).toBeVisible()
 
-      await expect(page.locator('.edit-board-panel--primary')).toBeVisible()
+      await expect(page.locator('.board-surface')).toBeVisible()
       await expect(
         page.locator('.left-inspector-sidebar .reference-card'),
-      ).toBeVisible()
-      await expect(compareButton).toHaveAttribute('aria-disabled', 'false')
-
-      await compareButton.click()
-      await page.waitForFunction(
-        () => window.__sabaki.state.territoryCompareEnabled,
-      )
+      ).toHaveCount(0)
 
       await page.evaluate(() => {
         window.__sabaki.toggleEditTab('reference')
@@ -695,10 +738,10 @@ test.describe('Renderer Integration Tests', () => {
       // Inspector should show territory info (Position Summary section)
       await expect(
         positionCard.locator('.inspector-section').first(),
-      ).toContainText('Move')
+      ).toContainText('手数')
       await expect(
         positionCard.locator('.inspector-section').first(),
-      ).toContainText('Captures')
+      ).toContainText('提子')
 
       // WorkspaceDock should NOT show overlay-status-bar (old location removed)
       await expect(
