@@ -20,6 +20,24 @@ List of this parameters can be found in engine documentation.
 
   Arguments: `gtp -model /path/to/model.txt.gz -config /path/to/gtp_example.cfg`
 
+  In Sabaki's engine preferences, put only the executable in the path field and
+  put KataGo's options in the arguments field. Quote model and config paths when
+  they contain spaces.
+
+  Windows example:
+
+  Path: `C:\Program Files\KataGo\katago.exe`
+
+  Arguments:
+  `gtp -model "C:\KataGo Models\model.bin.gz" -config "C:\KataGo\gtp.cfg"`
+
+  macOS example:
+
+  Path: `/opt/homebrew/bin/katago`
+
+  Arguments:
+  `gtp -model "/Users/me/KataGo Models/model.bin.gz" -config "/Users/me/KataGo/gtp.cfg"`
+
 - [**GNU Go**](http://www.gnu.org/software/gnugo): There are binaries available
   for Windows. On Linux and macOS you can compile the engine from source. There
   are also

@@ -1,6 +1,6 @@
 import EventEmitter from 'events'
 import {existsSync, readdirSync} from 'fs'
-import {dirname, resolve, delimiter, join} from 'path'
+import path from 'path'
 import argvsplit from 'argv-split'
 import {v4 as uuid} from 'uuid'
 
@@ -30,11 +30,7 @@ const engineSearchPaths = {
     leelaz: ['/opt/homebrew/bin/leelaz', '/usr/local/bin/leelaz'],
   },
   linux: {
-    katago: [
-      '/usr/bin/katago',
-      '/usr/local/bin/katago',
-      '/snap/bin/katago',
-    ],
+    katago: ['/usr/bin/katago', '/usr/local/bin/katago', '/snap/bin/katago'],
     leelaz: ['/usr/bin/leelaz', '/usr/local/bin/leelaz'],
   },
   win32: {
@@ -51,7 +47,7 @@ function findModelFile(engineDir) {
   try {
     for (let file of readdirSync(engineDir)) {
       if (file.endsWith('.bin.gz') || file.endsWith('.bin')) {
-        return join(engineDir, file)
+        return path.join(engineDir, file)
       }
     }
   } catch (err) {}
@@ -68,10 +64,15 @@ export function detectEngines() {
     for (let p of paths) {
       if (!existsSync(p)) continue
 
-      let engine = {name: engineName.charAt(0).toUpperCase() + engineName.slice(1), path: p, args: '', commands: ''}
+      let engine = {
+        name: engineName.charAt(0).toUpperCase() + engineName.slice(1),
+        path: p,
+        args: '',
+        commands: '',
+      }
 
       if (engineName === 'katago') {
-        let modelFile = findModelFile(dirname(p))
+        let modelFile = findModelFile(path.dirname(p))
         if (modelFile == null) continue
 
         engine.args = `gtp -model "${modelFile}"`
@@ -86,6 +87,112 @@ export function detectEngines() {
   }
 
   return found
+}
+
+function stripWrappingQuotes(value) {
+  let result = `${value || ''}`.trim()
+  let first = result[0]
+  let last = result[result.length - 1]
+
+  return result.length >= 2 &&
+    ((first === '"' && last === '"') || (first === "'" && last === "'"))
+    ? result.slice(1, -1)
+    : result
+}
+
+function getPathModule(platform) {
+  return platform === 'win32' ? path.win32 : path.posix
+}
+
+function hasKnownWindowsExtension(enginePath, pathModule) {
+  return pathModule.extname(enginePath) !== ''
+}
+
+function getWindowsPathExts(env) {
+  let pathExt = env.PATHEXT || '.exe;.cmd;.bat'
+
+  return pathExt
+    .split(';')
+    .map((x) => x.trim())
+    .filter((x) => x !== '')
+}
+
+function getPathCandidates(command, {platform, env, pathModule}) {
+  let pathDirs = (env.PATH || '').split(pathModule.delimiter)
+  let extensions = getExecutableExtensions(command, {platform, env, pathModule})
+
+  let candidates = []
+
+  for (let dir of pathDirs) {
+    if (dir === '') continue
+
+    for (let extension of extensions) {
+      candidates.push(pathModule.resolve(dir, command + extension))
+    }
+  }
+
+  return candidates
+}
+
+function getExecutableExtensions(command, {platform, env, pathModule}) {
+  return platform === 'win32' && !hasKnownWindowsExtension(command, pathModule)
+    ? ['', ...getWindowsPathExts(env)]
+    : ['']
+}
+
+export function resolveEngineExecutable(enginePath, options = {}) {
+  let platform = options.platform || process.platform
+  let env = options.env || process.env
+  let pathModule = options.pathModule || getPathModule(platform)
+  let exists = options.existsSync || existsSync
+  let input = stripWrappingQuotes(enginePath)
+
+  if (input === '') {
+    return {
+      error: t('Engine binary not found: empty path.'),
+    }
+  }
+
+  let absolutePath = pathModule.resolve(input)
+  if (exists(absolutePath)) return {path: absolutePath}
+
+  for (let extension of getExecutableExtensions(input, {
+    platform,
+    env,
+    pathModule,
+  })) {
+    let candidate = absolutePath + extension
+    if (candidate !== absolutePath && exists(candidate))
+      return {path: candidate}
+  }
+
+  for (let candidate of getPathCandidates(input, {platform, env, pathModule})) {
+    if (exists(candidate)) return {path: candidate}
+  }
+
+  return {
+    error: t(
+      (p) =>
+        `Engine binary not found: "${p.path}". Please check the engine path in Preferences > Engines.`,
+      {path: enginePath},
+    ),
+  }
+}
+
+export function parseEngineArgs(args) {
+  try {
+    return {
+      args: args == null || args.trim() === '' ? [] : argvsplit(args),
+    }
+  } catch (err) {
+    return {
+      error: t(
+        (p) =>
+          `Invalid engine arguments: ${p.message}. Please check quoting in Preferences > Engines.`,
+        {message: err.message},
+      ),
+    }
+  }
 }
 
 function parseVertex(coord, size) {
@@ -163,7 +270,7 @@ export default class EngineSyncer extends EventEmitter {
   constructor(engine) {
     super()
 
-    let {path, args, commands} = engine
+    let {path: enginePath, args, commands} = engine
 
     this._busy = false
     this._suspended = true
@@ -175,42 +282,15 @@ export default class EngineSyncer extends EventEmitter {
     this.commands = []
     this.treePosition = null
 
-    let absolutePath = resolve(path)
-    let executePath = absolutePath
+    let executable = resolveEngineExecutable(enginePath)
+    let parsedArgs = parseEngineArgs(args || '')
+    let executePath = executable.path
 
-    if (!existsSync(absolutePath)) {
-      // Try resolving via PATH (with PATHEXT on Windows)
-      let pathDirs = (process.env.PATH || '').split(delimiter)
-      let pathExts =
-        process.platform === 'win32'
-          ? (process.env.PATHEXT || '.exe;.cmd;.bat').split(';')
-          : ['']
-      let found = false
-
-      for (let dir of pathDirs) {
-        for (let ext of pathExts) {
-          let candidate = resolve(dir, path + ext)
-          if (existsSync(candidate)) {
-            executePath = candidate
-            found = true
-            break
-          }
-        }
-        if (found) break
-      }
-
-      if (!found) {
-        this.pathError = t(
-          (p) =>
-            `Engine binary not found: "${p.path}". Please check the engine path in Preferences > Engines.`,
-          {path},
-        )
-      }
-    }
+    this.pathError = executable.error || parsedArgs.error || null
 
     if (this.pathError == null) {
-      this.controller = new Controller(executePath, [...argvsplit(args)], {
-        cwd: dirname(executePath),
+      this.controller = new Controller(executePath, parsedArgs.args, {
+        cwd: path.dirname(executePath),
       })
 
       this.stateTracker = new ControllerStateTracker(this.controller)

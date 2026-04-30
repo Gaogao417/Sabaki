@@ -172,7 +172,7 @@ for e in engines:
 new_engine = {
     'name': '$ENGINE_NAME',
     'path': '$KATAGO_BIN_JSON',
-    'args': 'gtp -model $MODEL_PATH_JSON -config $CONFIG_PATH_JSON'
+    'args': 'gtp -model \"$MODEL_PATH_JSON\" -config \"$CONFIG_PATH_JSON\"'
 }
 engines.insert(0, new_engine)
 settings['engines.list'] = engines
