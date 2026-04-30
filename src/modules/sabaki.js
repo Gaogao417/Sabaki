@@ -603,13 +603,13 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    let expectedCoord = board.parseVertex(expected.vertex)
+    let expectedCoord = sgf.parseVertex(expected.vertex)
     let isCorrect = helper.vertexEquals(vertex, expectedCoord)
 
     recallUserAttempts.push({
       moveNumber: recallMoveIndex,
       expectedMove: expected.vertex,
-      userMove: board.stringifyVertex(vertex),
+      userMove: sgf.stringifyVertex(vertex),
       isCorrect,
       hintLevelUsed: this.state.recallShowHint ? 1 : 0,
     })
