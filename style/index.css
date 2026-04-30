@@ -4343,3 +4343,81 @@ button:active {
   background: rgba(255, 255, 255, 0.1);
   text-transform: capitalize;
 }
+
+/* ===== WorkbenchShell — fixed top/middle/bottom skeleton ===== */
+
+.workbench-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #f7f8fa;
+}
+
+.workbench-shell__inner {
+  max-width: 1680px;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 20px;
+}
+
+.workbench-shell__main {
+  display: grid;
+  grid-template-columns: 304px minmax(560px, 1fr) 304px;
+  gap: 24px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workbench-shell__left,
+.workbench-shell__right {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.workbench-shell__center {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modeLayout.inspectorShell .workbench-shell #main {
+  background: transparent;
+  box-shadow: none;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  gap: 0;
+}
+
+.modeLayout .workbench-shell #main > main.board-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+}
+
+.modeLayout .workbench-shell .board-surface {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modeLayout.inspectorShell .workbench-shell #leftsidebar,
+.modeLayout.inspectorShell .workbench-shell #sidebar {
+  padding: 0;
+}

@@ -432,26 +432,30 @@ export default class MainView extends Component {
             ? `当前进度 ${sabaki.state.recallMoveIndex}/${sabaki.state.recallExpectedMoves.length} | 等待输入下一手`
             : ''
 
+    let workbenchShell = this.props.workbenchShell
+
     return h(
       'section',
       {id: 'main'},
-      h(BoardToolbar, {
-        mode,
-        editWorkspaceActive,
-        territoryEnabled: territoryMode,
-        territoryCompareEnabled,
-        territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
-        currentPlayer,
-        playerNames: gameInfo.playerNames,
-        playerRanks: gameInfo.playerRanks,
-        playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
-        engineSyncers,
-        enginePanelOpen: this.props.enginePanelOpen,
-        recallSession,
-        openDrawer,
-        onEnginePanelToggle: this.props.onEnginePanelToggle,
-        onCurrentPlayerClick: this.handleTogglePlayer,
-      }),
+
+      !workbenchShell &&
+        h(BoardToolbar, {
+          mode,
+          editWorkspaceActive,
+          territoryEnabled: territoryMode,
+          territoryCompareEnabled,
+          territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
+          currentPlayer,
+          playerNames: gameInfo.playerNames,
+          playerRanks: gameInfo.playerRanks,
+          playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
+          engineSyncers,
+          enginePanelOpen: this.props.enginePanelOpen,
+          recallSession,
+          openDrawer,
+          onEnginePanelToggle: this.props.onEnginePanelToggle,
+          onCurrentPlayerClick: this.handleTogglePlayer,
+        }),
 
       h(
         'main',
@@ -492,79 +496,80 @@ export default class MainView extends Component {
             ),
       ),
 
-      h(
-        WorkspaceDock,
-        {
-          mode,
-          editWorkspaceActive,
-          summary: workspaceSummary,
-        },
-        h(EditBar, {
-          mode,
-          selectedTool,
-          onToolButtonClick: this.handleToolButtonClick,
-          editWorkspace: editWs,
-        }),
+      !workbenchShell &&
+        h(
+          WorkspaceDock,
+          {
+            mode,
+            editWorkspaceActive,
+            summary: workspaceSummary,
+          },
+          h(EditBar, {
+            mode,
+            selectedTool,
+            onToolButtonClick: this.handleToolButtonClick,
+            editWorkspace: editWs,
+          }),
 
-        h(GuessBar, {
-          mode,
-          treePosition,
-        }),
+          h(GuessBar, {
+            mode,
+            treePosition,
+          }),
 
-        h(RecallBar, {
-          mode,
-          recallMoveIndex: sabaki.state.recallMoveIndex,
-          recallExpectedMoves: sabaki.state.recallExpectedMoves,
-          recallCompleted: sabaki.state.recallCompleted,
-          recallUserAttempts: sabaki.state.recallUserAttempts,
-          recallShowHint: sabaki.state.recallShowHint,
-        }),
+          h(RecallBar, {
+            mode,
+            recallMoveIndex: sabaki.state.recallMoveIndex,
+            recallExpectedMoves: sabaki.state.recallExpectedMoves,
+            recallCompleted: sabaki.state.recallCompleted,
+            recallUserAttempts: sabaki.state.recallUserAttempts,
+            recallShowHint: sabaki.state.recallShowHint,
+          }),
 
-        h(ProblemBar, {
-          mode,
-          problemSession: sabaki.state.problemSession,
-          problemAttempt: sabaki.state.problemAttempt,
-          problemSubmitted: sabaki.state.problemSubmitted,
-          problemResult: sabaki.state.problemResult,
-          problemBadMoves: sabaki.state.problemBadMoves,
-          reviewQueue: sabaki.state.reviewQueue,
-          reviewCurrentIndex: sabaki.state.reviewCurrentIndex,
-          reviewTotalDue: sabaki.state.reviewTotalDue,
-        }),
+          h(ProblemBar, {
+            mode,
+            problemSession: sabaki.state.problemSession,
+            problemAttempt: sabaki.state.problemAttempt,
+            problemSubmitted: sabaki.state.problemSubmitted,
+            problemResult: sabaki.state.problemResult,
+            problemBadMoves: sabaki.state.problemBadMoves,
+            reviewQueue: sabaki.state.reviewQueue,
+            reviewCurrentIndex: sabaki.state.reviewCurrentIndex,
+            reviewTotalDue: sabaki.state.reviewTotalDue,
+          }),
 
-        h(AutoplayBar, {
-          mode,
-          gameTree,
-          gameCurrents: gameCurrents[gameIndex],
-          treePosition,
-        }),
+          h(AutoplayBar, {
+            mode,
+            gameTree,
+            gameCurrents: gameCurrents[gameIndex],
+            treePosition,
+          }),
 
-        h(ScoringBar, {
-          type: 'scoring',
-          mode,
-          method: scoringMethod,
-          scoreBoard,
-          areaMap,
-          komi,
-          handicap,
-        }),
+          h(ScoringBar, {
+            type: 'scoring',
+            mode,
+            method: scoringMethod,
+            scoreBoard,
+            areaMap,
+            komi,
+            handicap,
+          }),
 
-        h(ScoringBar, {
-          type: 'estimator',
-          mode,
-          method: scoringMethod,
-          scoreBoard,
-          areaMap,
-          komi,
-          handicap,
-        }),
+          h(ScoringBar, {
+            type: 'estimator',
+            mode,
+            method: scoringMethod,
+            scoreBoard,
+            areaMap,
+            komi,
+            handicap,
+          }),
 
-        h(FindBar, {
-          mode,
-          findText,
-          onButtonClick: this.handleFindButtonClick,
-        }),
-      ),
+          h(FindBar, {
+            mode,
+            findText,
+            onButtonClick: this.handleFindButtonClick,
+          }),
+        ),
     )
   }
 }

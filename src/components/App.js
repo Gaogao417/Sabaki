@@ -8,6 +8,7 @@ import fs from 'fs'
 import influence from '@sabaki/influence'
 
 import TripleSplitContainer from './helpers/TripleSplitContainer.js'
+import WorkbenchShell from './WorkbenchShell.js'
 import ThemeManager from './ThemeManager.js'
 import MainMenu from './MainMenu.js'
 import MainView from './MainView.js'
@@ -629,16 +630,6 @@ class App extends Component {
 
     let workbenchMode = ['play', 'recall', 'analysis'].includes(state.mode)
     let forceLeftSidebar = workbenchMode
-    let getWorkbenchSideWidth = (size) => {
-      if (!workbenchMode) return 0
-
-      let requested = Math.min(320, Math.max(280, size || 300))
-      let availableWidth =
-        typeof window === 'undefined' ? 1440 : window.innerWidth
-      let responsiveMax = Math.floor((availableWidth - 220) / 2)
-
-      return Math.max(100, Math.min(requested, responsiveMax))
-    }
     let effectiveLeftSidebar = forceLeftSidebar || state.showLeftSidebar
     let effectiveSidebar = state.showSidebar || workbenchMode
 
@@ -679,28 +670,23 @@ class App extends Component {
         quickAnalysisId: state.quickAnalysisId,
       }),
 
-      h(TripleSplitContainer, {
-        id: 'mainlayout',
-        class: workbenchMode ? 'mode-layout' : '',
+      workbenchMode
+        ? h(WorkbenchShell, state)
+        : h(TripleSplitContainer, {
+            id: 'mainlayout',
 
-        beginSideSize: effectiveLeftSidebar
-          ? workbenchMode
-            ? getWorkbenchSideWidth(state.leftSidebarWidth)
-            : state.leftSidebarWidth
-          : 0,
-        endSideSize: effectiveSidebar
-          ? workbenchMode
-            ? getWorkbenchSideWidth(state.sidebarWidth)
-            : state.sidebarWidth
-          : 0,
+            beginSideSize: effectiveLeftSidebar
+              ? state.leftSidebarWidth
+              : 0,
+            endSideSize: effectiveSidebar ? state.sidebarWidth : 0,
 
-        beginSideContent: h(LeftSidebar, state),
-        mainContent: h(MainView, state),
-        endSideContent: h(Sidebar, state),
+            beginSideContent: h(LeftSidebar, state),
+            mainContent: h(MainView, state),
+            endSideContent: h(Sidebar, state),
 
-        onChange: this.handleMainLayoutSplitChange,
-        onFinish: this.handleMainLayoutSplitFinish,
-      }),
+            onChange: this.handleMainLayoutSplitChange,
+            onFinish: this.handleMainLayoutSplitFinish,
+          }),
 
       h(EngineFloatingPanel, {
         open: this.state.enginePanelOpen,
