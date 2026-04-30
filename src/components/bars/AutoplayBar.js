@@ -78,7 +78,7 @@ export default class AutoplayBar extends Component {
         let vertex = parseVertex(
           node.data.B != null ? node.data.B[0] : node.data.W[0],
         )
-        sabaki.makeMove(vertex, {player: node.data.B ? 1 : -1})
+        sabaki.makeMove(vertex, {player: node.data.B ? 1 : -1, generateEngineMove: false})
       }
 
       sabaki.events.addListener('navigate', this.stopAutoplay)

@@ -2990,7 +2990,7 @@ class Sabaki extends EventEmitter {
       }
 
       if (helper.vertexEquals(vertex, nextVertex)) {
-        this.makeMove(vertex, {player: nextNode.data.B != null ? 1 : -1})
+        this.makeMove(vertex, {player: nextNode.data.B != null ? 1 : -1, generateEngineMove: false})
       } else {
         if (
           board.get(vertex) !== 0 ||
@@ -3023,10 +3023,14 @@ class Sabaki extends EventEmitter {
     this.events.emit('vertexClick')
   }
 
-  async makeMove(vertex, {player = null, generateEngineMove = false} = {}) {
+  async makeMove(vertex, {player = null, generateEngineMove = null} = {}) {
     if (!['play', 'autoplay', 'guess'].includes(this.state.mode)) {
       this.closeDrawer()
       this.setMode('play')
+    }
+
+    if (generateEngineMove == null) {
+      generateEngineMove = this.state.engineGameOngoing == null
     }
 
     let t = i18n.context('sabaki.play')
@@ -3156,7 +3160,7 @@ class Sabaki extends EventEmitter {
     console.log('[makeResign] newTree.root.id:', newTree.root.id, 'newTree RE:', newTree.root.data.RE, 'NOTE: newTree is created but NOT applied to state!')
 
     this.makeMainVariation(treePosition)
-    this.makeMove([-1, -1], {player})
+    this.makeMove([-1, -1], {player, generateEngineMove: false})
 
     this.events.emit('resign', {player})
 
@@ -4058,6 +4062,17 @@ class Sabaki extends EventEmitter {
       newTree,
       !positionMoved ? newTreePosition : currentTreePosition,
     )
+
+    if (pass && !positionMoved) {
+      let parentNode = currentTree.get(treePosition)
+      let otherColor = color === 'B' ? 'W' : 'B'
+      let prevPass =
+        parentNode.data[otherColor] != null &&
+        parentNode.data[otherColor][0] === ''
+      if (prevPass) {
+        this.setMode('scoring')
+      }
+    }
 
     syncer.treePosition = newTreePosition
 
