@@ -166,6 +166,12 @@ export default class WorkbenchShell extends Component {
               selectedTool,
               onToolButtonClick: this.handleToolButtonClick,
               editWorkspace: editWs,
+              territoryEnabled: props.territoryMode,
+              territoryCompareEnabled: props.territoryCompareEnabled,
+              territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
+              editWorkspaceActive,
+              areaSelectMode: props.areaSelectMode,
+              analysisAreaVertices: props.analysisAreaVertices,
             }),
 
             h(GuessBar, {

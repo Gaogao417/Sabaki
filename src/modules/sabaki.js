@@ -77,6 +77,7 @@ class Sabaki extends EventEmitter {
 
       analysisAreaRects: null,
       analysisAreaVertices: null,
+      areaSelectMode: false,
       territoryEnabled: false,
       territoryCompareEnabled: false,
       highlightVertices: [],
@@ -4403,6 +4404,10 @@ class Sabaki extends EventEmitter {
       highlightVertices: [],
     })
     this.refreshActiveBoardAnalysis()
+  }
+
+  toggleAreaSelectMode() {
+    this.setState({areaSelectMode: !this.state.areaSelectMode})
   }
 
   setPlayer(treePosition, sign) {

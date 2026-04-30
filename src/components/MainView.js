@@ -375,7 +375,7 @@ export default class MainView extends Component {
       dimmedStones,
       overlayGhostStoneMap,
 
-      crosshair: gobanCrosshair || areaModifierActive,
+      crosshair: gobanCrosshair || areaModifierActive || this.props.areaSelectMode,
       showCoordinates,
       showMoveColorization,
       showMoveNumbers:
@@ -414,6 +414,7 @@ export default class MainView extends Component {
 
       onAreaSelect: this.handleGobanAreaSelect,
       onAreaSelectPreview: this.handleGobanAreaSelectPreview,
+      areaSelectMode: this.props.areaSelectMode,
     }
 
     let engineSyncers = [

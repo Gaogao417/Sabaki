@@ -1,9 +1,11 @@
 import {h, Component} from 'preact'
 
 import sabaki from '../modules/sabaki.js'
+import * as gametree from '../modules/gametree.js'
 import SplitContainer from './helpers/SplitContainer.js'
 import GtpConsole from './sidebars/GtpConsole.js'
 import {EnginePeerList} from './sidebars/PeerList.js'
+import MiniGoban from './MiniGoban.js'
 
 const setting = {
   get: (key) => window.sabaki.setting.get(key),
@@ -40,39 +42,6 @@ function PanelButton({
       onClick,
     },
     children,
-  )
-}
-
-function ModeIntro({mode}) {
-  let meta =
-    mode === 'recall'
-      ? {
-          icon: './node_modules/@primer/octicons/build/svg/light-bulb.svg',
-          title: '回忆模式',
-          text: '在记忆中回忆下一手',
-        }
-      : mode === 'analysis'
-        ? {
-            icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
-            title: '复盘模式',
-            text: '定位关键局面，分析变化，沉淀笔记',
-          }
-        : {
-            icon: './node_modules/@primer/octicons/build/svg/play.svg',
-            title: '对局模式',
-            text: '与电脑或引擎进行对局练习',
-          }
-
-  return h(
-    'div',
-    {class: `mode-intro mode-intro--${mode}`},
-    h(
-      'div',
-      {class: 'mode-intro__heading'},
-      h('img', {src: meta.icon, alt: '', width: 22, height: 22}),
-      h('strong', {}, meta.title),
-    ),
-    h('p', {}, meta.text),
   )
 }
 
@@ -153,6 +122,7 @@ export default class LeftSidebar extends Component {
     mode,
     gameTree,
     treePosition,
+    editPreviewBoard,
     recallMoveIndex,
     recallExpectedMoves,
     recallCompleted,
@@ -170,6 +140,7 @@ export default class LeftSidebar extends Component {
     let node = gameTree.get(treePosition)
     let reviewNote = node?.data.C?.[0] ?? ''
     let moveNumber = gameTree.getLevel(treePosition)
+    let rootBoard = gametree.getBoard(gameTree, gameTree.root.id)
 
     return h(
       'section',
@@ -179,37 +150,6 @@ export default class LeftSidebar extends Component {
         class: 'inspector-sidebar left-inspector-sidebar',
       },
 
-      mode === 'play' &&
-        h(
-          Panel,
-          {title: '当前模式'},
-          h(ModeIntro, {mode}),
-          h('div', {class: 'workbench-divider'}),
-          h(
-            'div',
-            {class: 'mode-status-block'},
-            h('strong', {}, '当前行棋'),
-            h(
-              'div',
-              {class: 'mode-status-line'},
-              h('span', {class: 'mini-stone mini-stone--black'}),
-              h('span', {}, '黑棋'),
-            ),
-            h('p', {}, '您执黑先行'),
-          ),
-          h(
-            'div',
-            {class: 'mode-status-block'},
-            h('strong', {}, '对局状态'),
-            h(
-              'div',
-              {class: 'mode-status-line'},
-              h('span', {class: 'status-dot status-dot--blue'}),
-              h('span', {}, '准备开始'),
-            ),
-            h('p', {}, `第 ${moveNumber} 手`),
-          ),
-        ),
       mode === 'play' &&
         h(
           Panel,
@@ -253,10 +193,7 @@ export default class LeftSidebar extends Component {
       mode === 'recall' &&
         h(
           Panel,
-          {title: '当前模式'},
-          h(ModeIntro, {mode}),
-          h('div', {class: 'workbench-divider'}),
-          h('strong', {class: 'task-label'}, '全局回忆任务'),
+          {title: '全局回忆任务'},
           h(
             'div',
             {class: 'recall-workbench-summary'},
@@ -335,41 +272,6 @@ export default class LeftSidebar extends Component {
           ),
         ),
       mode === 'analysis' &&
-        h(Panel, {title: '当前模式'}, h(ModeIntro, {mode})),
-      mode === 'analysis' &&
-        h(
-          Panel,
-          {title: '复盘流程'},
-          h(
-            'ol',
-            {class: 'review-flow-list'},
-            h(
-              'li',
-              {class: 'active'},
-              h('strong', {}, '定位关键局面'),
-              h('span', {}, '选择复盘的关键时刻'),
-            ),
-            h(
-              'li',
-              {},
-              h('strong', {}, '标注好手与对手'),
-              h('span', {}, '标记双方关键手法'),
-            ),
-            h(
-              'li',
-              {},
-              h('strong', {}, '对比参考变化'),
-              h('span', {}, '分析多种变化与结果'),
-            ),
-            h(
-              'li',
-              {},
-              h('strong', {}, '沉淀复盘笔记'),
-              h('span', {}, '记录思考与改进'),
-            ),
-          ),
-        ),
-      mode === 'analysis' &&
         h(
           Panel,
           {title: '关键点筛选'},
@@ -401,14 +303,34 @@ export default class LeftSidebar extends Component {
       mode === 'analysis' &&
         h(
           Panel,
-          {title: ''},
+          {title: '快照对比'},
           h(
-            PanelButton,
-            {
-              variant: 'primary',
-              onClick: () => sabaki.snapshotAsProblem(),
-            },
-            '生成题目',
+            'div',
+            {class: 'snapshot-preview'},
+            h(MiniGoban, {
+              board: editPreviewBoard ?? rootBoard,
+              maxSize: 200,
+              visible: true,
+            }),
+          ),
+          h(
+            'span',
+            {class: 'workbench-muted'},
+            editPreviewBoard != null
+              ? '已捕捉参考局面，可与当前局面比较。'
+              : '点击按钮捕捉当前局面作为参考快照。',
+          ),
+          h(
+            'div',
+            {class: 'workbench-action-row'},
+            h(
+              PanelButton,
+              {
+                variant: 'primary',
+                onClick: () => sabaki.captureEditReference(),
+              },
+              '添加快照',
+            ),
           ),
         ),
     )

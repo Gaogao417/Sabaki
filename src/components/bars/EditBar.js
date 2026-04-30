@@ -2,6 +2,7 @@ import {h, Component} from 'preact'
 import classNames from 'classnames'
 
 import i18n from '../../i18n.js'
+import sabaki from '../../modules/sabaki.js'
 import {noop} from '../../modules/helper.js'
 
 const t = i18n.context('EditBar')
@@ -63,7 +64,26 @@ class EditBar extends Component {
     )
   }
 
-  render({mode, selectedTool, editWorkspace}, {stoneTool}) {
+  renderActionButton(title, {icon, selected = false, disabled = false, onClick}) {
+    return h(
+      'li',
+      {class: classNames({selected, disabled})},
+      h(
+        'a',
+        {
+          title,
+          href: '#',
+          onClick: (evt) => {
+            evt.preventDefault()
+            if (!disabled) onClick()
+          },
+        },
+        h('img', {src: icon}),
+      ),
+    )
+  }
+
+  render({mode, selectedTool, editWorkspace, territoryEnabled, territoryCompareEnabled, territoryCompareAvailable, editWorkspaceActive, areaSelectMode, analysisAreaVertices}, {stoneTool}) {
     if (mode !== 'analysis') return null
 
     let isSelected = ([, id]) =>
@@ -93,6 +113,38 @@ class EditBar extends Component {
             [t('Label'), 'label'],
             [t('Number'), 'number'],
           ].map((x) => this.renderButton(...x, isSelected(x))),
+        ),
+      ),
+      h(
+        'div',
+        {class: 'edit-tool-group'},
+        h('span', {class: 'edit-tool-group__label'}, '分析工具'),
+        h(
+          'ul',
+          {},
+          this.renderActionButton('区域选择', {
+            icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
+            selected: areaSelectMode,
+            onClick: () => sabaki.toggleAreaSelectMode(),
+          }),
+          analysisAreaVertices != null &&
+            this.renderActionButton('清除区域', {
+              icon: './node_modules/@primer/octicons/build/svg/x.svg',
+              onClick: () => sabaki.clearAnalysisArea(),
+            }),
+          this.renderActionButton(t('Territory'), {
+            icon: './node_modules/@primer/octicons/build/svg/eye.svg',
+            selected: territoryEnabled,
+            onClick: () => sabaki.toggleTerritoryEnabled(),
+          }),
+          territoryEnabled &&
+            editWorkspaceActive &&
+            this.renderActionButton(t('Territory Compare'), {
+              icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
+              selected: territoryCompareEnabled,
+              disabled: !territoryCompareAvailable,
+              onClick: () => sabaki.toggleTerritoryCompareEnabled(),
+            }),
         ),
       ),
       editWorkspace?.analysisPending &&

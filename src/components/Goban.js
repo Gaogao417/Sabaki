@@ -16,6 +16,10 @@ export default class Goban extends Component {
   constructor(props) {
     super(props)
 
+    this.handleWindowResize = () => {
+      this.resize()
+    }
+
     for (let handler of [
       'handleVertexMouseUp',
       'handleVertexMouseDown',
@@ -66,16 +70,18 @@ export default class Goban extends Component {
 
     // Resize board when window is resizing
 
-    window.addEventListener('resize', () => {
-      this.resize()
-    })
+    window.addEventListener('resize', this.handleWindowResize)
 
+    this.updateResizeObserver()
     this.resize()
     this.componentWillReceiveProps()
   }
 
   componentDidUpdate() {
     if (!this.element || !this.element.parentElement) return
+
+    this.updateResizeObserver()
+    this.resize()
 
     let {maxWidth, maxHeight} = this.state
 
@@ -96,6 +102,11 @@ export default class Goban extends Component {
 
   componentWillUnmount() {
     clearTimeout(this.centerId)
+    window.removeEventListener('resize', this.handleWindowResize)
+
+    if (this.resizeObserver != null) {
+      this.resizeObserver.disconnect()
+    }
   }
 
   componentWillReceiveProps(nextProps = {}) {
@@ -116,10 +127,8 @@ export default class Goban extends Component {
   resize() {
     if (!this.element || !this.element.parentElement) return
 
-    let {
-      offsetWidth: maxWidth,
-      offsetHeight: maxHeight,
-    } = this.element.parentElement
+    let {offsetWidth: maxWidth, offsetHeight: maxHeight} =
+      this.element.parentElement
 
     if (
       maxWidth !== this.state.maxWidth ||
@@ -129,10 +138,39 @@ export default class Goban extends Component {
     }
   }
 
+  updateResizeObserver() {
+    if (
+      typeof ResizeObserver === 'undefined' ||
+      !this.element ||
+      !this.element.parentElement
+    ) {
+      return
+    }
+
+    let parentElement = this.element.parentElement
+    if (parentElement === this.observedResizeElement) return
+
+    if (this.resizeObserver == null) {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.resize()
+      })
+    } else {
+      this.resizeObserver.disconnect()
+    }
+
+    this.resizeObserver.observe(parentElement)
+    this.observedResizeElement = parentElement
+  }
+
   getAreaOperation(evt) {
     if (evt.altKey && evt.button === 2) return 'clearAll'
     if (evt.altKey && evt.button === 0) return 'removeRect'
-    if ((helper.isMac ? evt.metaKey : (evt.ctrlKey || evt.metaKey)) && evt.button === 0) return 'add'
+    if (evt.button === 0 && this.props.areaSelectMode) return 'add'
+    if (
+      (helper.isMac ? evt.metaKey : evt.ctrlKey || evt.metaKey) &&
+      evt.button === 0
+    )
+      return 'add'
     return null
   }
 
@@ -545,7 +583,12 @@ export default class Goban extends Component {
     }
 
     // Draw drag ghost stone
-    if (dragMode && this.dragging && dragTarget != null && this.dragSource != null) {
+    if (
+      dragMode &&
+      this.dragging &&
+      dragTarget != null &&
+      this.dragSource != null
+    ) {
       if (ghostStoneMap.length === 0) {
         ghostStoneMap = board.signMap.map((row) => row.map((_) => null))
       }
@@ -650,8 +693,9 @@ export default class Goban extends Component {
                     ? i18n.formatNumber(winrate) +
                       (Math.floor(winrate) === winrate ? '%' : '')
                     : analysisType === 'scoreLead' && scoreLead != null
-                    ? (scoreLead >= 0 ? '+' : '') + i18n.formatNumber(scoreLead)
-                    : '–',
+                      ? (scoreLead >= 0 ? '+' : '') +
+                        i18n.formatNumber(scoreLead)
+                      : '–',
                   visits < 1000
                     ? i18n.formatNumber(visits)
                     : i18n.formatNumber(Math.round(visits / 100) / 10) + 'k',
@@ -691,9 +735,7 @@ export default class Goban extends Component {
       }),
       heatMap: gobantransformer.transformMap(heatMap, transformation),
       lines: lines.map(transformLine),
-      selectedVertices: highlightVertices.map(
-        transformVertex,
-      ),
+      selectedVertices: highlightVertices.map(transformVertex),
       dimmedVertices: dimmedStones.map(transformVertex),
 
       onVertexMouseUp: this.handleVertexMouseUp,

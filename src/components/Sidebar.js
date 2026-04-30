@@ -652,45 +652,6 @@ export default class Sidebar extends Component {
             ),
           ),
 
-        mode === 'analysis' &&
-          h(
-            'section',
-            {class: 'sidebar-card inspector-card'},
-            h(
-              'div',
-              {class: 'card-header'},
-              h('strong', {class: 'card-title'}, '快照对比'),
-            ),
-            h(
-              'div',
-              {class: 'inspector-card-body'},
-              h(
-                'div',
-                {class: 'inspector-section'},
-                h(
-                  'span',
-                  {},
-                  editPreviewBoard != null
-                    ? '已捕捉参考局面，可与当前局面比较。'
-                    : '捕捉参考局面后可进行快照对比。',
-                ),
-              ),
-              h(
-                'div',
-                {class: 'inspector-section snapshot-output-actions'},
-                h(
-                  'button',
-                  {
-                    type: 'button',
-                    class: 'workbench-button workbench-button--primary',
-                    onClick: () => sabaki.captureEditReference(),
-                  },
-                  '添加快照',
-                ),
-              ),
-            ),
-          ),
-
         !editWorkspaceActive &&
           !['play', 'recall', 'analysis'].includes(mode) &&
           showCommentBox &&
