@@ -507,30 +507,41 @@ class Sabaki extends EventEmitter {
 
   // Recall Mode
 
+  // 启动复盘回忆会话：加载已保存的棋局，进入回忆模式
+  //
+  // 调用链：makeResign → saveCurrentGame → startRecallSession（本方法）
+  //
+  // 此前的 BUG：曾在这里同时发出三个异步调用而没有 await：
+  //   this.newFile()                              // 异步，没等它完成
+  //   this.loadGameTrees(loadedTrees)             // 异步，没等它完成
+  //   this.setCurrentTreePosition(newTree, id)    // 同步，立即执行
+  //
+  // JavaScript 的 async 函数在遇到 await 时会"暂停"并立刻把控制权还给调用者，
+  // 所以 newFile() 和 loadGameTrees() 还没来得及更新 state.gameTrees，
+  // setCurrentTreePosition 就已经执行了。此时：
+  //   - state.gameTrees 里还是旧棋谱（root.id = 5）
+  //   - 传入的 newTree 来自重新解析的 SGF（root.id = 51）
+  //   - findIndex 在旧棋谱中找不到新树 → gameIndex = -1
+  //   - setState({gameIndex: -1})
+  //   - React 渲染时 state.gameTrees[-1] → undefined → getPlayer() 崩溃
+  //
+  // 修复：只用一个 await loadGameTrees() 即可，它内部已经会：
+  //   1. 用新棋树替换 state.gameTrees
+  //   2. 导航到根节点（调用 setCurrentTreePosition）
+  // 所以不需要单独的 newFile() 和 setCurrentTreePosition()
   async startRecallSession(gameId, options = {}) {
     let game = await window.sabaki.db.getGame(gameId)
-    if (!game) {
-      console.warn('[startRecallSession] game not found for gameId:', gameId)
-      return
-    }
+    if (!game) return
 
-    console.log('[startRecallSession] gameId:', gameId, 'sgf length:', game.sgf?.length, 'sgf preview:', game.sgf?.slice(0, 100))
-
+    // 解析 SGF，得到棋树（trees[0]）和走子序列（moves）
     let trees = fileformats.sgf.parse(game.sgf)
-    console.log('[startRecallSession] parsed trees count:', trees?.length, 'trees type:', typeof trees, 'isArray:', Array.isArray(trees))
-    if (!trees || trees.length === 0) {
-      console.warn('[startRecallSession] no trees returned from sgf.parse, trees:', trees)
-      return
-    }
-    let tree = trees[0]
-    console.log('[startRecallSession] tree type:', tree?.constructor?.name, 'has root:', !!tree?.root, 'root:', tree?.root, 'root.id:', tree?.root?.id)
+    if (!trees || trees.length === 0) return
 
-    // Extract the move sequence from the game tree
+    let tree = trees[0]
+
+    // 遍历棋树，提取每一步走子，用于回忆模式的验证
     let moves = []
     let nodeId = tree.root.id
-    if (nodeId == null) {
-      console.error('[startRecallSession] tree.root.id is null/undefined! root:', JSON.stringify(tree?.root)?.slice(0, 500))
-    }
     let innerTree = tree
     while (true) {
       let node = innerTree.get(nodeId)
@@ -552,6 +563,7 @@ class Sabaki extends EventEmitter {
       nodeId = children[0].id
     }
 
+    // 创建回忆会话记录到数据库
     let session = {
       gameId,
       mode: options.mode || 'full_game',
@@ -559,6 +571,7 @@ class Sabaki extends EventEmitter {
     }
     session = await window.sabaki.db.saveRecallSession(session)
 
+    // 先设置回忆相关的 state（不涉及 gameTrees）
     this.setState({
       recallSession: session,
       recallMoveIndex: 0,
@@ -568,7 +581,9 @@ class Sabaki extends EventEmitter {
       recallCompleted: false,
     })
 
-    // Load the game tree and navigate to the start
+    // 关键：必须 await，等 loadGameTrees 完整执行完毕后再继续
+    // loadGameTrees 内部会：替换 gameTrees → 导航到根节点 → 更新 treePosition
+    // 如果不 await，后续渲染时 gameIndex 会指向不存在的树，导致崩溃
     if (trees && trees.length > 0) {
       await this.loadGameTrees(trees, {suppressAskForSave: true})
     }
@@ -2988,6 +3003,8 @@ class Sabaki extends EventEmitter {
     }
   }
 
+  // 认输流程：makeResign → saveCurrentGame → startRecallSession
+  // 三个步骤是串行 await 的，不存在竞态问题
   async makeResign({player = null} = {}) {
     let {gameTrees, gameIndex, treePosition} = this.state
     let {currentPlayer} = this.inferredState
@@ -2995,21 +3012,18 @@ class Sabaki extends EventEmitter {
     let color = player > 0 ? 'W' : 'B'
     let tree = gameTrees[gameIndex]
 
-    console.log('[makeResign] player:', player, 'color:', color, 'tree.root.id:', tree.root.id, 'treePosition:', treePosition)
-
     let newTree = tree.mutate((draft) => {
       draft.updateProperty(draft.root.id, 'RE', [`${color}+Resign`])
     })
-
-    console.log('[makeResign] newTree.root.id:', newTree.root.id, 'newTree RE:', newTree.root.data.RE, 'NOTE: newTree is created but NOT applied to state!')
 
     this.makeMainVariation(treePosition)
     this.makeMove([-1, -1], {player})
 
     this.events.emit('resign', {player})
 
+    // 步骤1: 保存当前棋局到数据库
     let saved = await this.saveCurrentGame()
-    console.log('[makeResign] saveCurrentGame result:', saved)
+    // 步骤2: 用保存的棋局 ID 启动复盘回忆会话（见下方 startRecallSession）
     if (saved?.id) {
       this.startRecallSession(saved.id)
     }
