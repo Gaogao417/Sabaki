@@ -516,7 +516,7 @@ class Sabaki extends EventEmitter {
 
     console.log('[startRecallSession] gameId:', gameId, 'sgf length:', game.sgf?.length, 'sgf preview:', game.sgf?.slice(0, 100))
 
-    let trees = sgf.parse(game.sgf)
+    let trees = fileformats.sgf.parse(game.sgf)
     console.log('[startRecallSession] parsed trees count:', trees?.length, 'trees type:', typeof trees, 'isArray:', Array.isArray(trees))
     if (!trees || trees.length === 0) {
       console.warn('[startRecallSession] no trees returned from sgf.parse, trees:', trees)
@@ -569,13 +569,8 @@ class Sabaki extends EventEmitter {
     })
 
     // Load the game tree and navigate to the start
-    this.newFile()
-    let loadedTrees = sgf.parse(game.sgf)
-    console.log('[startRecallSession] loadedTrees count:', loadedTrees?.length, 'loadedTrees[0].root.id:', loadedTrees?.[0]?.root?.id)
-    if (loadedTrees && loadedTrees.length > 0) {
-      this.loadGameTrees(loadedTrees)
-      // Navigate to root (empty board)
-      this.setCurrentTreePosition(loadedTrees[0], loadedTrees[0].root.id)
+    if (trees && trees.length > 0) {
+      await this.loadGameTrees(trees, {suppressAskForSave: true})
     }
 
     this.setMode('recall')
@@ -702,8 +697,10 @@ class Sabaki extends EventEmitter {
   async saveCurrentGame() {
     let sgfStr = this.getSGF()
     let tree = this.state.gameTrees[this.state.gameIndex]
+    console.log('[saveCurrentGame] tree.root.id:', tree.root.id, 'sgf length:', sgfStr?.length, 'sgf preview:', sgfStr?.slice(0, 150))
     let root = tree.get(tree.root.id)
     let result = root.data.RE?.[0] || null
+    console.log('[saveCurrentGame] result:', result, 'root.id:', root?.id)
     let game = {sgf: sgfStr, source: 'play', result}
     let saved = await window.sabaki.db.saveGame(game)
     return saved
@@ -753,7 +750,7 @@ class Sabaki extends EventEmitter {
     let problem = await window.sabaki.db.getProblem(problemId)
     if (!problem) return
 
-    let trees = sgf.parse(problem.positionSgf)
+    let trees = fileformats.sgf.parse(problem.positionSgf)
     if (!trees || trees.length === 0) return
     let tree = trees[0]
 
@@ -2998,9 +2995,13 @@ class Sabaki extends EventEmitter {
     let color = player > 0 ? 'W' : 'B'
     let tree = gameTrees[gameIndex]
 
+    console.log('[makeResign] player:', player, 'color:', color, 'tree.root.id:', tree.root.id, 'treePosition:', treePosition)
+
     let newTree = tree.mutate((draft) => {
       draft.updateProperty(draft.root.id, 'RE', [`${color}+Resign`])
     })
+
+    console.log('[makeResign] newTree.root.id:', newTree.root.id, 'newTree RE:', newTree.root.data.RE, 'NOTE: newTree is created but NOT applied to state!')
 
     this.makeMainVariation(treePosition)
     this.makeMove([-1, -1], {player})
@@ -3008,6 +3009,7 @@ class Sabaki extends EventEmitter {
     this.events.emit('resign', {player})
 
     let saved = await this.saveCurrentGame()
+    console.log('[makeResign] saveCurrentGame result:', saved)
     if (saved?.id) {
       this.startRecallSession(saved.id)
     }
