@@ -72,6 +72,7 @@ export function getGameInfo(tree) {
     gameComment: getRootProperty(tree, 'GC'),
     date: getRootProperty(tree, 'DT'),
     result: getRootProperty(tree, 'RE'),
+    rules: getRootProperty(tree, 'RU'),
     komi,
     handicap,
     size,
@@ -110,6 +111,7 @@ export function setGameInfo(tree, data) {
       gameComment: 'GC',
       date: 'DT',
       result: 'RE',
+      rules: 'RU',
       komi: 'KM',
       handicap: 'HA',
     }

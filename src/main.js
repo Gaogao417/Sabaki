@@ -41,6 +41,7 @@ const settingsKeys = [
   'board.overlay_mode',
   'board.show_analysis',
   'board.analysis_interval',
+  'board.analysis_max_time',
   'board.analysis_max_visits',
   'board.variation_replay_mode',
   'board.variation_replay_interval',

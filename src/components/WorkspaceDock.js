@@ -1,11 +1,12 @@
 import {h, Component} from 'preact'
 
 import i18n from '../i18n.js'
+import sabaki from '../modules/sabaki.js'
 
 const t = i18n.context('WorkspaceDock')
 
 export default class WorkspaceDock extends Component {
-  render({mode, editWorkspaceActive, summary, children}) {
+  render({mode, editWorkspaceActive, summary, treePosition, children}) {
     let isReviewDock = editWorkspaceActive || mode === 'analysis'
     let isPassiveDock = mode === 'play' || mode === 'recall'
     let activePanel = isReviewDock
@@ -36,15 +37,50 @@ export default class WorkspaceDock extends Component {
         {class: 'workspace-dock__tools'},
         h(
           'button',
-          {type: 'button', class: 'dock-tool dock-tool--active'},
-          '选择',
+          {type: 'button', class: 'dock-tool', onClick: () => sabaki.undo()},
+          '悔棋',
         ),
-        h('button', {type: 'button', class: 'dock-tool'}, '手型'),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'dock-tool',
+            onClick: () => sabaki.makeMove([-1, -1]),
+          },
+          '停一手',
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'dock-tool dock-tool--danger',
+            onClick: () => sabaki.makeResign(),
+          },
+          '认输',
+        ),
         h('span', {class: 'dock-divider'}),
-        h('button', {type: 'button', class: 'dock-tool'}, '-'),
-        h('button', {type: 'button', class: 'dock-tool'}, '+'),
-        h('span', {class: 'dock-divider'}),
-        h('button', {type: 'button', class: 'dock-tool'}, '全屏'),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'dock-tool dock-tool--active',
+            onClick: () =>
+              sabaki.setComment(treePosition || sabaki.state.treePosition, {
+                hotspot: true,
+                moveAnnotation: 'IT',
+              }),
+          },
+          '标记重点复盘',
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'dock-tool',
+            onClick: () => sabaki.setMode('analysis'),
+          },
+          '重点复盘',
+        ),
       )
 
     return h(

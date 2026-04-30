@@ -142,8 +142,69 @@ test.describe('Renderer Integration Tests', () => {
     test('play actions are visible', async ({page}) => {
       await page.evaluate(() => window.__sabaki.setMode('play'))
       await expect(page.locator('.mode-actions')).toContainText('新对局')
-      await expect(page.locator('.mode-actions')).toContainText('对局设置')
+      await expect(page.locator('.mode-actions')).toContainText('引擎管理')
       await expect(page.locator('.mode-actions')).toContainText('认输')
+    })
+
+    test('new game opens lightweight dialog', async ({page}) => {
+      await page.evaluate(() => window.__sabaki.setMode('play'))
+
+      await page.locator('.mode-actions button', {hasText: '新对局'}).click()
+
+      await expect(page.locator('.new-game-dialog')).toBeVisible()
+      await expect(page.locator('.new-game-dialog')).toContainText('对局双方')
+      await expect(page.locator('.new-game-dialog')).toContainText('棋盘与规则')
+      await expect(page.locator('.new-game-dialog')).toContainText('人类')
+      await expect(page.locator('.new-game-dialog')).toContainText('AI')
+      await expect(page.locator('.new-game-dialog')).not.toContainText('AI1')
+      await expect(page.locator('.new-game-dialog')).not.toContainText('AI2')
+      await expect(page.locator('#info.show')).toHaveCount(0)
+    })
+
+    test('engine management is a single engine form', async ({page}) => {
+      await page.evaluate(() => window.__sabaki.setMode('play'))
+
+      await page
+        .locator('.mode-actions button', {hasText: '引擎管理'})
+        .click()
+
+      await expect(page.locator('#engine-management.show')).toBeVisible()
+      await expect(page.locator('#engine-management')).toContainText(
+        '配置一个全局 AI 引擎',
+      )
+      await expect(page.locator('#engine-management')).toContainText('基础信息')
+      await expect(page.locator('#engine-management')).toContainText(
+        'KataGo 计算量',
+      )
+      await expect(
+        page.locator('#engine-management input[name="visits"]'),
+      ).toHaveValue('800')
+      await expect(
+        page.locator('#engine-management input[name="playouts"]'),
+      ).toHaveValue('0')
+      await expect(
+        page.locator('#engine-management input[name="maxTime"]'),
+      ).toHaveValue('15')
+      await expect(
+        page.locator('#engine-management input[name="candidates"]'),
+      ).toHaveValue('40')
+      await expect(
+        page.locator('#engine-management input[name="temperature"]'),
+      ).toHaveValue('1')
+      await expect(page.locator('#engine-management .engines-list')).toHaveCount(
+        0,
+      )
+      await expect(page.locator('#engine-management')).not.toContainText('Add')
+    })
+
+    test('play mode keeps sidebars out of the main board workspace', async ({
+      page,
+    }) => {
+      await page.evaluate(() => window.__sabaki.setMode('play'))
+
+      await expect(page.locator('.workbench-shell__left')).toHaveCount(0)
+      await expect(page.locator('.workbench-shell__right')).toHaveCount(0)
+      await expect(page.locator('.workbench-shell__main--board-focused')).toBeVisible()
     })
 
     test('recall left rail stays task focused', async ({page}) => {
@@ -181,12 +242,13 @@ test.describe('Renderer Integration Tests', () => {
       const ai = titles.indexOf('AI 分析')
       const position = titles.indexOf('局面点评')
       const tree = titles.indexOf('变化树')
-      const compare = titles.indexOf('快照对比')
 
       expect(ai).toBeGreaterThanOrEqual(0)
       expect(position).toBeGreaterThan(ai)
       expect(tree).toBeGreaterThan(position)
-      expect(compare).toBeGreaterThan(tree)
+      await expect(
+        page.locator('#leftsidebar .panel-title', {hasText: '快照对比'}),
+      ).toBeVisible()
     })
   })
 

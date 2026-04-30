@@ -28,7 +28,7 @@ test.describe('Smoke Tests', () => {
     await expect(page.locator('#main')).toBeVisible()
     await expect(page.locator('.board-toolbar')).toBeVisible()
     await expect(page.locator('.workspace-dock')).toBeVisible()
-    await expect(page.locator('#mainlayout')).toBeVisible()
+    await expect(page.locator('.workbench-shell')).toBeVisible()
   })
 
   test('load SGF via IPC from main process', async ({electronApp, page}) => {

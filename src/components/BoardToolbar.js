@@ -200,12 +200,12 @@ export default class BoardToolbar extends Component {
           variant: 'primary',
           icon: './node_modules/@primer/octicons/build/svg/plus.svg',
           label: '新对局',
-          onClick: () => sabaki.newFile({playSound: true, showInfo: true}),
+          onClick: () => sabaki.openDrawer('newgame'),
         }),
         h(WorkbenchButton, {
           icon: './node_modules/@primer/octicons/build/svg/gear.svg',
-          label: '对局设置',
-          onClick: () => sabaki.openDrawer('info'),
+          label: '引擎管理',
+          onClick: () => sabaki.openDrawer('enginemanagement'),
         }),
         h(WorkbenchButton, {
           variant: 'danger',
@@ -226,8 +226,8 @@ export default class BoardToolbar extends Component {
         }),
         h(WorkbenchButton, {
           icon: './node_modules/@primer/octicons/build/svg/gear.svg',
-          label: '复盘设置',
-          onClick: () => sabaki.openDrawer('preferences'),
+          label: '引擎管理',
+          onClick: () => sabaki.openDrawer('enginemanagement'),
         }),
         h(WorkbenchButton, {
           icon: './node_modules/@primer/octicons/build/svg/list-unordered.svg',

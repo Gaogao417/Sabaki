@@ -212,6 +212,7 @@ test.describe('GTP Engine Integration Tests', () => {
           },
         ],
       })
+      window.__sabaki.setMode('find')
     })
 
     await page.waitForTimeout(200)

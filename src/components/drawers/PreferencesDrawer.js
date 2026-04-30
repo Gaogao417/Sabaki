@@ -5,7 +5,6 @@ import classNames from 'classnames'
 import {join} from 'path'
 import {rimraf} from 'rimraf'
 import {v4 as uuid} from 'uuid'
-import natsort from 'natsort'
 
 import i18n from '../../i18n.js'
 import sabaki from '../../modules/sabaki.js'
@@ -617,21 +616,38 @@ class EngineItem extends Component {
     super()
 
     this.handleChange = (evt) => {
-      let {id, name, path, args, commands, onChange = noop} = this.props
+      let {engine, onChange = noop} = this.props
       let element = evt.currentTarget
 
-      onChange({id, name, path, args, commands, [element.name]: element.value})
+      onChange({
+        ...engine,
+        [element.name]:
+          element.type === 'checkbox' ? element.checked : element.value,
+      })
     }
 
-    this.handleBrowseButtonClick = async () => {
+    this.handleAnalysisChange = (evt) => {
+      let {engine, onChange = noop} = this.props
+      let element = evt.currentTarget
+
+      onChange({
+        ...engine,
+        analysis: {
+          ...(engine.analysis || {}),
+          [element.name]: element.value,
+        },
+      })
+    }
+
+    this.browsePath = async (key) => {
       let result = await showOpenDialog({
         properties: ['openFile'],
         filters: [{name: t('All Files'), extensions: ['*']}],
       })
       if (!result || result.length === 0) return
 
-      let {id, name, args, commands, onChange = noop} = this.props
-      onChange({id, name, args, commands, path: result[0]})
+      let {engine, onChange = noop} = this.props
+      onChange({...engine, [key]: result[0]})
     }
 
     this.handleRemoveButtonClick = () => {
@@ -640,7 +656,61 @@ class EngineItem extends Component {
     }
   }
 
-  render({name, path, args, commands}) {
+  renderPathInput(key, placeholder, value) {
+    return h(
+      'p',
+      {},
+      h(
+        'a',
+        {
+          class: 'browse',
+          title: t('Browse...'),
+          onClick: () => this.browsePath(key),
+        },
+
+        h('img', {
+          src: './node_modules/@primer/octicons/build/svg/file-directory.svg',
+        }),
+      ),
+      h('input', {
+        type: 'text',
+        placeholder,
+        value: value || '',
+        name: key,
+        onChange: this.handleChange,
+      }),
+    )
+  }
+
+  renderAnalysisInput(name, placeholder, value, step = 1) {
+    return h(
+      'label',
+      {class: 'engine-analysis-field'},
+      h('span', {}, placeholder),
+      h('input', {
+        type: 'number',
+        min: 0,
+        step,
+        name,
+        value: value || '',
+        onChange: this.handleAnalysisChange,
+      }),
+    )
+  }
+
+  render({engine}) {
+    let {
+      name,
+      path,
+      args,
+      commands,
+      enabled = true,
+      kind = 'generic',
+      modelPath,
+      configPath,
+      analysis = {},
+    } = engine
+
     return h(
       'li',
       {},
@@ -657,6 +727,17 @@ class EngineItem extends Component {
 
           h('img', {src: './node_modules/@primer/octicons/build/svg/x.svg'}),
         ),
+        h(
+          'label',
+          {class: 'engine-enabled'},
+          h('input', {
+            type: 'checkbox',
+            name: 'enabled',
+            checked: enabled !== false,
+            onChange: this.handleChange,
+          }),
+          ' 启用 ',
+        ),
         h('input', {
           type: 'text',
           placeholder: t('(Unnamed Engine)'),
@@ -667,13 +748,32 @@ class EngineItem extends Component {
       ),
       h(
         'p',
+        {class: 'engine-kind-row'},
+        h('label', {}, '类型 '),
+        h(
+          'select',
+          {
+            name: 'kind',
+            value: kind,
+            onChange: this.handleChange,
+          },
+          h('option', {value: 'generic'}, '通用 GTP'),
+          h('option', {value: 'katago'}, 'KataGo'),
+        ),
+      ),
+      kind === 'katago' &&
+        this.renderPathInput('modelPath', 'KataGo model file', modelPath),
+      kind === 'katago' &&
+        this.renderPathInput('configPath', 'KataGo config file', configPath),
+      h(
+        'p',
         {},
         h(
           'a',
           {
             class: 'browse',
             title: t('Browse…'),
-            onClick: this.handleBrowseButtonClick,
+            onClick: () => this.browsePath('path'),
           },
 
           h('img', {
@@ -710,6 +810,30 @@ class EngineItem extends Component {
           onChange: this.handleChange,
         }),
       ),
+      kind === 'katago' &&
+        h(
+          'div',
+          {class: 'engine-analysis-grid'},
+          this.renderAnalysisInput('visits', 'visits', analysis.visits),
+          this.renderAnalysisInput('playouts', 'playouts', analysis.playouts),
+          this.renderAnalysisInput(
+            'maxTime',
+            '思考时间(s)',
+            analysis.maxTime,
+            0.1,
+          ),
+          this.renderAnalysisInput(
+            'candidates',
+            '候选点数量',
+            analysis.candidates,
+          ),
+          this.renderAnalysisInput(
+            'temperature',
+            '温度',
+            analysis.temperature,
+            0.1,
+          ),
+        ),
     )
   }
 }
@@ -718,29 +842,56 @@ class EnginesTab extends Component {
   constructor() {
     super()
 
-    this.handleItemChange = ({id, name, path, args, commands}) => {
+    this.handleItemChange = (engine) => {
       let engines = this.props.engines.slice()
 
-      engines[id] = {name, path, args, commands}
+      engines[engine.index] = this.normalizeEngine(engine)
       setting.set('engines.list', engines)
     }
 
-    this.handleItemRemove = ({id}) => {
+    this.handleItemRemove = ({engine}) => {
       let engines = this.props.engines.slice()
 
-      engines.splice(id, 1)
+      engines.splice(engine.index, 1)
       setting.set('engines.list', engines)
     }
 
     this.handleAddButtonClick = (evt) => {
       evt.preventDefault()
 
-      let engines = [{name: '', path: '', args: ''}, ...this.props.engines]
+      let engines = [
+        {
+          id: uuid(),
+          name: '',
+          path: '',
+          args: '',
+          enabled: true,
+          kind: 'generic',
+        },
+        ...this.props.engines,
+      ]
       setting.set('engines.list', engines)
 
       setImmediate(() => {
         this.element.querySelector('.engines-list li:first-child input').focus()
       })
+    }
+  }
+
+  normalizeEngine(engine) {
+    let {index, ...data} = engine
+
+    return {
+      id: data.id || uuid(),
+      enabled: data.enabled !== false,
+      kind: data.kind || 'generic',
+      name: data.name || '',
+      path: data.path || '',
+      args: data.args || '',
+      commands: data.commands || '',
+      modelPath: data.modelPath || '',
+      configPath: data.configPath || '',
+      analysis: data.analysis || {},
     }
   }
 
@@ -771,13 +922,9 @@ class EnginesTab extends Component {
         h(
           'ul',
           {},
-          engines.map(({name, path, args, commands}, id) =>
+          engines.map((engine, id) =>
             h(EngineItem, {
-              id,
-              name,
-              path,
-              args,
-              commands,
+              engine: this.normalizeEngine({...engine, index: id}),
 
               onChange: this.handleItemChange,
               onRemove: this.handleItemRemove,
@@ -824,13 +971,6 @@ export default class PreferencesDrawer extends Component {
     // On closing
 
     if (prevProps.show && !this.props.show) {
-      // Sort engines
-
-      let cmp = natsort({insensitive: true})
-      let engines = [...this.props.engines].sort((x, y) => cmp(x.name, y.name))
-
-      setting.set('engines.list', engines)
-
       // Validate GTP logging path
 
       if (sabaki.state.attachedEngineSyncers.length > 0) {

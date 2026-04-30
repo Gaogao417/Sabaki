@@ -504,6 +504,7 @@ export default class MainView extends Component {
             mode,
             editWorkspaceActive,
             summary: workspaceSummary,
+            treePosition,
           },
           h(EditBar, {
             mode,

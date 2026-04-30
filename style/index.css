@@ -4376,6 +4376,13 @@ button:active {
   overflow: hidden;
 }
 
+.workbench-shell__main--board-focused {
+  grid-template-columns: minmax(420px, 1fr);
+  max-width: 1160px;
+  width: 100%;
+  justify-self: center;
+}
+
 .workbench-shell__left,
 .workbench-shell__right {
   overflow-y: auto;
@@ -4423,4 +4430,315 @@ button:active {
 .modeLayout.inspectorShell .workbench-shell #leftsidebar,
 .modeLayout.inspectorShell .workbench-shell #sidebar {
   padding: 0;
+}
+
+.dock-tool--danger {
+  color: var(--ui-danger);
+  border-color: rgba(220, 59, 49, 0.26);
+}
+
+.new-game-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.new-game-dialog {
+  width: min(560px, calc(100vw - 48px));
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.25);
+}
+
+.new-game-dialog header,
+.new-game-dialog footer,
+.new-game-dialog__player-row,
+.new-game-dialog__field {
+  display: flex;
+  align-items: center;
+}
+
+.new-game-dialog header,
+.new-game-dialog footer {
+  justify-content: space-between;
+}
+
+.new-game-dialog h2,
+.new-game-dialog h3 {
+  margin: 0;
+  color: var(--ui-text);
+}
+
+.new-game-dialog h2 {
+  font-size: 20px;
+}
+
+.new-game-dialog h3 {
+  font-size: 14px;
+}
+
+.new-game-dialog__close {
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: 24px;
+}
+
+.new-game-dialog__section {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.74);
+}
+
+.new-game-dialog__player-row {
+  gap: 12px;
+}
+
+.new-game-dialog__player-row strong {
+  min-width: 52px;
+}
+
+.new-game-dialog__stone {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 999px;
+}
+
+.new-game-dialog__stone.black {
+  background: radial-gradient(circle at 35% 28%, #45413d, #050505 76%);
+}
+
+.new-game-dialog__stone.white {
+  background: radial-gradient(circle at 35% 25%, #fff, #d8dce0 82%);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.new-game-dialog__segmented {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.new-game-dialog__segmented button {
+  min-width: 74px;
+  min-height: 34px;
+  border: 0;
+  border-right: 1px solid var(--ui-border);
+  background: transparent;
+  color: var(--ui-text-secondary);
+}
+
+.new-game-dialog__segmented button:last-child {
+  border-right: 0;
+}
+
+.new-game-dialog__segmented button.active {
+  background: var(--ui-blue-soft);
+  color: var(--ui-blue);
+  font-weight: 700;
+}
+
+.new-game-dialog select,
+.new-game-dialog input {
+  min-height: 34px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.new-game-dialog__player-row > select {
+  margin-left: auto;
+  max-width: 148px;
+}
+
+.new-game-dialog__engine-name {
+  margin-left: auto;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.new-game-dialog__field {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.new-game-dialog__field select,
+.new-game-dialog__field input {
+  width: 260px;
+  padding: 0 10px;
+}
+
+.new-game-dialog footer {
+  margin-top: 18px;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.new-game-dialog footer button {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border);
+}
+
+.new-game-dialog footer .primary {
+  border-color: var(--ui-blue);
+  background: var(--ui-blue);
+  color: #fff;
+}
+
+.engine-enabled {
+  margin: 0 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.engine-kind-row select {
+  min-width: 150px;
+}
+
+.engine-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(80px, 1fr));
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.engine-analysis-field {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ui-text-secondary);
+}
+
+.engine-analysis-field input {
+  width: 100%;
+}
+
+#engine-management.engine-management-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.18);
+  color: var(--ui-text);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.engine-management-modal {
+  width: min(1120px, calc(100vw - 64px));
+  max-height: calc(100vh - 72px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.25);
+}
+
+.engine-management-modal__header,
+.engine-modal-card__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.engine-management-modal__header {
+  margin-bottom: 18px;
+}
+
+.engine-management-modal__header h2,
+.engine-modal-card h3 {
+  margin: 0;
+}
+
+.engine-management-modal__close {
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: 24px;
+}
+
+.engine-modal-card {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.engine-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin-top: 16px;
+}
+
+.engine-modal-field,
+.engine-analysis-field {
+  display: grid;
+  gap: 6px;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.engine-modal-field--wide {
+  grid-column: 1 / -1;
+}
+
+.engine-modal-field input,
+.engine-analysis-field input {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ui-text);
+}
+
+.engine-modal-path-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.engine-modal-browse {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ui-text);
+}
+
+@media screen and (max-width: 760px) {
+  .engine-modal-grid,
+  .engine-analysis-grid {
+    grid-template-columns: 1fr;
+  }
 }

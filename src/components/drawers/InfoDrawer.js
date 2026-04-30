@@ -247,8 +247,7 @@ export default class InfoDrawer extends Component {
         {
           label: t('Manage Engines…'),
           click: () => {
-            sabaki.setState({preferencesTab: 'engines'})
-            sabaki.openDrawer('preferences')
+            sabaki.openDrawer('enginemanagement')
           },
         },
       ].filter((x) => !!x)

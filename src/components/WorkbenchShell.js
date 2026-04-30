@@ -12,6 +12,7 @@ import ProblemBar from './bars/ProblemBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
 import ScoringBar from './bars/ScoringBar.js'
 import FindBar from './bars/FindBar.js'
+import classNames from 'classnames'
 
 import sabaki from '../modules/sabaki.js'
 import * as gametree from '../modules/gametree.js'
@@ -130,13 +131,18 @@ export default class WorkbenchShell extends Component {
 
         h(
           'div',
-          {class: 'workbench-shell__main'},
+          {
+            class: classNames('workbench-shell__main', {
+              'workbench-shell__main--board-focused': mode === 'play',
+            }),
+          },
 
-          h(
-            'div',
-            {class: 'workbench-shell__left'},
-            h(LeftSidebar, props),
-          ),
+          mode !== 'play' &&
+            h(
+              'div',
+              {class: 'workbench-shell__left'},
+              h(LeftSidebar, props),
+            ),
 
           h(
             'div',
@@ -144,11 +150,12 @@ export default class WorkbenchShell extends Component {
             h(MainView, {...props, workbenchShell: true}),
           ),
 
-          h(
-            'div',
-            {class: 'workbench-shell__right'},
-            h(Sidebar, props),
-          ),
+          mode !== 'play' &&
+            h(
+              'div',
+              {class: 'workbench-shell__right'},
+              h(Sidebar, props),
+            ),
         ),
 
         h(
@@ -160,6 +167,7 @@ export default class WorkbenchShell extends Component {
               mode,
               editWorkspaceActive,
               summary: workspaceSummary,
+              treePosition,
             },
             h(EditBar, {
               mode,

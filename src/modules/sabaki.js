@@ -1754,7 +1754,8 @@ class Sabaki extends EventEmitter {
     }
 
     try {
-      let maxVisits = +setting.get('board.analysis_max_visits')
+      let analysis = syncer.engine.analysis || {}
+      let maxVisits = +(analysis.visits || setting.get('board.analysis_max_visits'))
       if (Number.isFinite(maxVisits) && maxVisits > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
@@ -1762,21 +1763,52 @@ class Sabaki extends EventEmitter {
         })
       }
 
-      let maxTime = +setting.get('board.analysis_max_time')
+      let maxPlayouts = +analysis.playouts
+      if (Number.isFinite(maxPlayouts) && maxPlayouts > 0) {
+        await syncer.queueCommand({
+          name: 'kata-set-param',
+          args: ['maxPlayouts', Math.round(maxPlayouts).toString()],
+        })
+      }
+
+      let maxTime = +(analysis.maxTime || setting.get('board.analysis_max_time'))
       if (Number.isFinite(maxTime) && maxTime > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
           args: ['maxTime', maxTime.toString()],
         })
       }
+
+      let temperature = +analysis.temperature
+      if (Number.isFinite(temperature) && temperature > 0) {
+        await syncer.queueCommand({
+          name: 'kata-set-param',
+          args: ['rootPolicyTemperature', temperature.toString()],
+        })
+      }
+
+      if (syncer.commands.includes('kata-set-rules')) {
+        let rules = gametree.getRootProperty(this.inferredState.gameTree, 'RU')
+        if (rules) {
+          await syncer.queueCommand({
+            name: 'kata-set-rules',
+            args: [rules],
+          })
+        }
+      }
     } catch (err) {}
   }
 
-  getAnalysisVisitLimit() {
-    let maxVisits = +setting.get('board.analysis_max_visits')
+  getAnalysisVisitLimit(syncer = null) {
+    let maxVisits = +(syncer?.engine.analysis?.visits || setting.get('board.analysis_max_visits'))
     return Number.isFinite(maxVisits) && maxVisits > 0
       ? Math.round(maxVisits)
       : null
+  }
+
+  getAnalysisMaxTime(syncer = null) {
+    let maxTime = +(syncer?.engine.analysis?.maxTime || setting.get('board.analysis_max_time'))
+    return Number.isFinite(maxTime) && maxTime > 0 ? maxTime : null
   }
 
   async runBoardAnalysis({
@@ -1806,7 +1838,14 @@ class Sabaki extends EventEmitter {
       analyzePlayer > 0 ? 'B' : 'W',
       setting.get('board.analysis_interval').toString(),
     ]
-    if (commandName.includes('kata')) args.push('ownership', 'true')
+    if (commandName.includes('kata')) {
+      args.push('ownership', 'true')
+
+      let candidates = +syncer.engine.analysis?.candidates
+      if (Number.isFinite(candidates) && candidates > 0) {
+        args.push('maxmoves', Math.round(candidates).toString())
+      }
+    }
 
     if (
       commandName.includes('kata') &&
@@ -1823,12 +1862,9 @@ class Sabaki extends EventEmitter {
       requestGroup === 'analysis'
         ? ++this.analysisRequestId
         : ++this.auxAnalysisRequestId
-    let visitLimit = this.getAnalysisVisitLimit()
-    let maxTime = +setting.get('board.analysis_max_time')
-    let timeoutMs =
-      Number.isFinite(maxTime) && maxTime > 0
-        ? Math.round(maxTime * 1000)
-        : null
+    let visitLimit = this.getAnalysisVisitLimit(syncer)
+    let maxTime = this.getAnalysisMaxTime(syncer)
+    let timeoutMs = maxTime != null ? Math.round(maxTime * 1000) : null
     let originTreePosition = this.state.treePosition
 
     if (pendingStateKey != null) {
@@ -2236,6 +2272,121 @@ class Sabaki extends EventEmitter {
         draft.updateProperty(draft.root.id, prop, rootData[prop])
       }
     })
+  }
+
+  normalizeEngineConfig(engine, index = 0) {
+    if (engine == null) return null
+
+    let kind =
+      engine.kind ||
+      (/katago/i.test(engine.name || '') || /katago/i.test(engine.path || '')
+        ? 'katago'
+        : 'generic')
+    let args = engine.args || ''
+
+    if (kind === 'katago') {
+      let parts = ['gtp']
+      if (engine.modelPath) parts.push('-model', `"${engine.modelPath}"`)
+      if (engine.configPath) parts.push('-config', `"${engine.configPath}"`)
+
+      if (args.trim() === '') {
+        args = parts.join(' ')
+      } else if (!/\bgtp\b/.test(args)) {
+        args = `${parts.join(' ')} ${args}`.trim()
+      }
+    }
+
+    return {
+      id: engine.id || `engine-${index}`,
+      enabled: engine.enabled !== false,
+      kind,
+      ...engine,
+      args,
+    }
+  }
+
+  getConfiguredEngine(engineIndex) {
+    let engines = setting.get('engines.list') || []
+    let engine = engines[engineIndex]
+    return this.normalizeEngineConfig(engine, engineIndex)
+  }
+
+  getOrAttachEngine(engineIndex) {
+    let engine = this.getConfiguredEngine(engineIndex)
+    if (engine == null || engine.enabled === false) return null
+
+    let syncer = this.state.attachedEngineSyncers.find((syncer) => {
+      let attached = syncer.engine
+      if (attached.id != null && engine.id != null) return attached.id === engine.id
+
+      return (
+        attached.path === engine.path &&
+        attached.args === engine.args &&
+        attached.name === engine.name
+      )
+    })
+
+    return syncer || this.attachEngines([engine])[0]
+  }
+
+  async startConfiguredGame({
+    black = {type: 'human'},
+    white = {type: 'human'},
+    boardSize = '19',
+    komi = setting.get('game.default_komi'),
+    handicap = setting.get('game.default_handicap'),
+    rules = 'chinese',
+  } = {}) {
+    if (!(await this.askForSave())) return
+
+    setting
+      .set('game.default_board_size', boardSize.toString())
+      .set('game.default_komi', isNaN(komi) ? 0 : +komi)
+      .set('game.default_handicap', isNaN(handicap) ? 0 : +handicap)
+
+    let blackSyncer = black.type === 'engine' ? this.getOrAttachEngine(black.engineIndex) : null
+    let whiteSyncer = white.type === 'engine' ? this.getOrAttachEngine(white.engineIndex) : null
+
+    let emptyTree = gametree.setGameInfo(this.getEmptyGameTree(), {
+      blackName: blackSyncer?.engine.name || null,
+      whiteName: whiteSyncer?.engine.name || null,
+      rules,
+      komi,
+      handicap,
+      size: boardSize
+        .toString()
+        .split(':')
+        .map((x) => +x),
+    })
+
+    await this.loadGameTrees([emptyTree], {suppressAskForSave: true})
+
+    this.closeDrawer()
+    this.setState({
+      blackEngineSyncerId: blackSyncer?.id || null,
+      whiteEngineSyncerId: whiteSyncer?.id || null,
+    })
+
+    if (blackSyncer != null || whiteSyncer != null) {
+      await Promise.all(
+        [blackSyncer, whiteSyncer]
+          .filter((syncer) => syncer != null)
+          .map((syncer) => this.waitForEngineCommands(syncer, {timeout: 5000})),
+      )
+    }
+
+    let treePosition = this.state.treePosition
+    let nextPlayer = this.getPlayer(treePosition)
+
+    if (blackSyncer != null && whiteSyncer != null) {
+      this.startEngineGame(treePosition)
+    } else if (nextPlayer > 0 && blackSyncer != null) {
+      this.generateMove(blackSyncer.id, treePosition)
+    } else if (nextPlayer < 0 && whiteSyncer != null) {
+      this.generateMove(whiteSyncer.id, treePosition)
+    }
+
+    sound.playNewGame()
   }
 
   async newFile({
@@ -3810,6 +3961,10 @@ class Sabaki extends EventEmitter {
           .get('engines.gemove_analyze_commands')
           .find((x) => syncer.commands.includes(x)) || 'genmove'
 
+      if (commandName.includes('kata') || syncer.commands.includes('kata-set-param')) {
+        await this.configureKataAnalysis(syncer)
+      }
+
       if (commandName === 'genmove') {
         let response = await syncer.queueCommand({
           name: commandName,
@@ -3821,10 +3976,15 @@ class Sabaki extends EventEmitter {
         coord = response.content
       } else {
         let interval = setting.get('board.analysis_interval').toString()
+        let args = [color, interval]
+        let candidates = +syncer.engine.analysis?.candidates
+        if (commandName.includes('kata') && Number.isFinite(candidates) && candidates > 0) {
+          args.push('maxmoves', Math.round(candidates).toString())
+        }
 
         coord = await new Promise(async (resolve) => {
           await syncer.queueCommand(
-            {name: commandName, args: [color, interval]},
+            {name: commandName, args},
             ({line}) => {
               if (!line.startsWith('play ')) return
               resolve(line.slice('play '.length))
@@ -5048,8 +5208,7 @@ class Sabaki extends EventEmitter {
         {
           label: t('Manage &Engines…'),
           click: () => {
-            this.setState({preferencesTab: 'engines'})
-            this.openDrawer('preferences')
+            this.openDrawer('enginemanagement')
           },
         },
       ].filter((x) => !!x),

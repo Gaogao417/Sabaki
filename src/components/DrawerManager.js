@@ -5,11 +5,13 @@ import {getRootProperty} from '../modules/gametree.js'
 import InfoDrawer from './drawers/InfoDrawer.js'
 import ScoreDrawer from './drawers/ScoreDrawer.js'
 import PreferencesDrawer from './drawers/PreferencesDrawer.js'
+import EngineManagementDrawer from './drawers/EngineManagementDrawer.js'
 import GameChooserDrawer from './drawers/GameChooserDrawer.js'
 import CleanMarkupDrawer from './drawers/CleanMarkupDrawer.js'
 import AdvancedPropertiesDrawer from './drawers/AdvancedPropertiesDrawer.js'
 import ProblemEditorDrawer from './drawers/ProblemEditorDrawer.js'
 import TrainingDashboardDrawer from './drawers/TrainingDashboardDrawer.js'
+import NewGameDialog from './drawers/NewGameDialog.js'
 
 export default class DrawerManager extends Component {
   constructor() {
@@ -106,6 +108,17 @@ export default class DrawerManager extends Component {
         tab: preferencesTab,
         engines,
         graphGridSize,
+      }),
+
+      h(EngineManagementDrawer, {
+        show: openDrawer === 'enginemanagement',
+        engines,
+      }),
+
+      h(NewGameDialog, {
+        show: openDrawer === 'newgame',
+        gameInfo,
+        engines,
       }),
 
       h(GameChooserDrawer, {

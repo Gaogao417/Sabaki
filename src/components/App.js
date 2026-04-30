@@ -629,9 +629,10 @@ class App extends Component {
     }
 
     let workbenchMode = ['play', 'recall', 'analysis'].includes(state.mode)
-    let forceLeftSidebar = workbenchMode
+    let forceLeftSidebar = workbenchMode && state.mode !== 'play'
     let effectiveLeftSidebar = forceLeftSidebar || state.showLeftSidebar
-    let effectiveSidebar = state.showSidebar || workbenchMode
+    let effectiveSidebar =
+      state.showSidebar || (workbenchMode && state.mode !== 'play')
 
     return h(
       'section',
