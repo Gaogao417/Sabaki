@@ -4,7 +4,7 @@ import i18n from '../../i18n.js'
 import sabaki from '../../modules/sabaki.js'
 import {wait, popupMenu} from '../../modules/helper.js'
 
-import Drawer from './Drawer.js'
+import Modal from '../Modal.js'
 
 const t = i18n.context('CleanMarkupDrawer')
 const setting = {
@@ -45,10 +45,7 @@ export default class CleanMarkupDrawer extends Component {
   constructor() {
     super()
 
-    this.handleCloseButtonClick = (evt) => {
-      evt.preventDefault()
-      sabaki.closeDrawer()
-    }
+    this.handleClose = () => sabaki.closeDrawer()
 
     this.handleRemoveButtonClick = (evt) => {
       evt.preventDefault()
@@ -124,20 +121,19 @@ export default class CleanMarkupDrawer extends Component {
 
   render({show}) {
     return h(
-      Drawer,
+      Modal,
       {
-        type: 'cleanmarkup',
         show,
+        title: t('Clean Markup'),
+        onClose: this.handleClose,
       },
 
-      h('h2', {}, t('Clean Markup')),
-
       h(
-        'form',
-        {},
+        'div',
+        {class: 'cleanmarkup-dialog__grid'},
         h(
           'ul',
-          {},
+          {class: 'cleanmarkup-dialog__col'},
           h(CleanMarkupItem, {
             id: 'cleanmarkup.cross',
             text: t('Cross markers'),
@@ -157,7 +153,7 @@ export default class CleanMarkupDrawer extends Component {
         ),
         h(
           'ul',
-          {},
+          {class: 'cleanmarkup-dialog__col'},
           h(CleanMarkupItem, {
             id: 'cleanmarkup.line',
             text: t('Line markers'),
@@ -173,7 +169,7 @@ export default class CleanMarkupDrawer extends Component {
         ),
         h(
           'ul',
-          {},
+          {class: 'cleanmarkup-dialog__col'},
           h(CleanMarkupItem, {
             id: 'cleanmarkup.comments',
             text: t('Comments'),
@@ -191,22 +187,28 @@ export default class CleanMarkupDrawer extends Component {
             text: t('Winrate data'),
           }),
         ),
+      ),
 
+      h(
+        'footer',
+        {class: 'cleanmarkup-dialog__footer'},
         h(
-          'p',
-          {},
-          h(
-            'button',
-            {
-              type: 'button',
-              class: 'dropdown',
-              onClick: this.handleRemoveButtonClick,
-            },
-            t('Remove'),
-          ),
-          ' ',
-
-          h('button', {onClick: this.handleCloseButtonClick}, t('Close')),
+          'button',
+          {
+            type: 'button',
+            class: 'modal-btn modal-btn--secondary',
+            onClick: this.handleRemoveButtonClick,
+          },
+          t('Remove'),
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'modal-btn modal-btn--primary',
+            onClick: this.handleClose,
+          },
+          t('Close'),
         ),
       ),
     )

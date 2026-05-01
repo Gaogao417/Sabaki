@@ -5,7 +5,7 @@ import sabaki from '../../modules/sabaki.js'
 import {showInputBox, showMessageBox} from '../../modules/dialog.js'
 import {noop} from '../../modules/helper.js'
 
-import Drawer from './Drawer.js'
+import Modal from '../Modal.js'
 
 const t = i18n.context('AdvancedPropertiesDrawer')
 const blockedProperties = ['AP', 'CA']
@@ -103,10 +103,7 @@ export default class AdvancedPropertiesDrawer extends Component {
   constructor(props) {
     super(props)
 
-    this.handleCloseButtonClick = (evt) => {
-      if (evt) evt.preventDefault()
-      sabaki.closeDrawer()
-    }
+    this.handleClose = () => sabaki.closeDrawer()
 
     this.handleAddButtonClick = async (evt) => {
       evt.preventDefault()
@@ -170,7 +167,7 @@ export default class AdvancedPropertiesDrawer extends Component {
   }
 
   componentWillReceiveProps({treePosition}) {
-    if (treePosition !== this.props.treePosition) {
+    if (treePosition !== this.props.treePosition && this.propertiesElement) {
       this.propertiesElement.scrollTop = 0
     }
   }
@@ -182,53 +179,63 @@ export default class AdvancedPropertiesDrawer extends Component {
       .sort()
 
     return h(
-      Drawer,
+      Modal,
       {
-        type: 'advancedproperties',
         show,
+        title: t('Advanced Properties'),
+        onClose: this.handleClose,
+        width: 'min(680px, calc(100vw - 48px))',
       },
 
       h(
-        'form',
-        {},
+        'div',
+        {
+          ref: (el) => (this.propertiesElement = el),
+          class: 'advprops-dialog__list',
+        },
+
         h(
-          'div',
-          {
-            ref: (el) => (this.propertiesElement = el),
-            class: 'properties-list',
-          },
+          'table',
+          {},
+          properties.map((property) =>
+            node.data[property].map((value, i) =>
+              h(PropertyItem, {
+                key: `${property}-${i}`,
 
-          h(
-            'table',
-            {},
-            properties.map((property) =>
-              node.data[property].map((value, i) =>
-                h(PropertyItem, {
-                  key: `${property}-${i}`,
+                property,
+                value,
+                index: node.data[property].length === 1 ? null : i,
+                disabled: blockedProperties.includes(property),
 
-                  property,
-                  value,
-                  index: node.data[property].length === 1 ? null : i,
-                  disabled: blockedProperties.includes(property),
-
-                  onChange: this.handlePropertyChange,
-                  onRemove: this.handlePropertyRemove,
-                  onSubmit: this.handleCloseButtonClick,
-                }),
-              ),
+                onChange: this.handlePropertyChange,
+                onRemove: this.handlePropertyRemove,
+                onSubmit: this.handleClose,
+              }),
             ),
           ),
         ),
+      ),
 
+      h(
+        'footer',
+        {class: 'advprops-dialog__footer'},
         h(
-          'p',
-          {},
-          h(
-            'button',
-            {class: 'add', type: 'button', onClick: this.handleAddButtonClick},
-            t('Add'),
-          ),
-          h('button', {onClick: this.handleCloseButtonClick}, t('Close')),
+          'button',
+          {
+            type: 'button',
+            class: 'modal-btn modal-btn--secondary',
+            onClick: this.handleAddButtonClick,
+          },
+          t('Add'),
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'modal-btn modal-btn--primary',
+            onClick: this.handleClose,
+          },
+          t('Close'),
         ),
       ),
     )

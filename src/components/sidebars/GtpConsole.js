@@ -3,6 +3,7 @@ import classNames from 'classnames'
 import {Command} from '@sabaki/gtp'
 
 import sabaki from '../../modules/sabaki.js'
+import {formatTimestamp} from '../../modules/applogger.js'
 import ContentDisplay from '../ContentDisplay.js'
 import TextSpinner from '../TextSpinner.js'
 import {noop, popupMenu} from '../../modules/helper.js'
@@ -84,6 +85,30 @@ class ConsoleResponseEntry extends Component {
             waiting && h('div', {class: 'internal'}, h(TextSpinner)),
           )
         : h('pre', {}, h('span', {class: 'internal'}, h(TextSpinner))),
+    )
+  }
+}
+
+class AppLogEntry extends Component {
+  shouldComponentUpdate({entry}) {
+    return entry !== this.props.entry
+  }
+
+  render({entry}) {
+    let time = formatTimestamp(entry.timestamp)
+
+    return h(
+      'li',
+      {class: `app-log app-log-${entry.level}`},
+      h('pre', {}, [
+        h('span', {class: 'app-log-time'}, time),
+        ' ',
+        h('span', {class: `app-log-level app-log-level-${entry.level}`}, entry.level.toUpperCase()),
+        ' ',
+        h('span', {class: 'app-log-category'}, entry.category),
+        ' ',
+        h('span', {class: 'app-log-message'}, entry.message),
+      ]),
     )
   }
 }
@@ -226,6 +251,10 @@ export default class GtpConsole extends Component {
   constructor() {
     super()
 
+    this.state = {
+      logFilter: 'gtp',
+    }
+
     this.scrollToBottom = true
 
     this.handleContextMenu = (evt) => {
@@ -241,6 +270,10 @@ export default class GtpConsole extends Component {
         evt.clientX,
         evt.clientY,
       )
+    }
+
+    this.handleFilterChange = (filter) => {
+      this.setState({logFilter: filter})
     }
   }
 
@@ -274,10 +307,38 @@ export default class GtpConsole extends Component {
     return 0
   }
 
-  render({consoleLog, attachedEngine}) {
+  render({consoleLog, attachedEngine}, {logFilter}) {
+    let filteredLog = consoleLog.filter((entry) => {
+      if (logFilter === 'all') return true
+      if (logFilter === 'gtp') return !entry.appLog
+      return entry.appLog === true
+    })
+
+    let filters = [
+      {id: 'gtp', label: 'GTP'},
+      {id: 'app', label: 'App'},
+      {id: 'all', label: 'All'},
+    ]
+
     return h(
       'section',
       {class: 'gtp-console'},
+
+      h(
+        'div',
+        {class: 'log-filter'},
+        filters.map(({id, label}) =>
+          h(
+            'button',
+            {
+              key: id,
+              class: classNames('log-filter-btn', {active: logFilter === id}),
+              onClick: () => this.handleFilterChange(id),
+            },
+            label,
+          ),
+        ),
+      ),
 
       h(
         'ol',
@@ -287,20 +348,26 @@ export default class GtpConsole extends Component {
           onContextMenu: this.handleContextMenu,
         },
 
-        consoleLog.length === 0
+        filteredLog.length === 0
           ? h('li', {class: 'empty'}, h('pre', {}, '暂无日志'))
-          : consoleLog.map(({name, command, response, waiting}, i) => {
+          : filteredLog.map((entry, i) => {
+              if (entry.appLog) {
+                return h(AppLogEntry, {key: `app-${i}`, entry})
+              }
+
+              let {name, command, response, waiting} = entry
               let sign = this.getSign(command)
 
               return [
                 command ||
                 i === 0 ||
-                consoleLog[i - 1].name !== name ||
-                (sign !== 0 && consoleLog[i - 1].sign !== sign)
-                  ? h(ConsoleCommandEntry, {sign, name, command})
+                filteredLog[i - 1].name !== name ||
+                (sign !== 0 && filteredLog[i - 1].sign !== sign)
+                  ? h(ConsoleCommandEntry, {key: `cmd-${i}`, sign, name, command})
                   : null,
 
                 h(ConsoleResponseEntry, {
+                  key: `res-${i}`,
                   response,
                   waiting: response == null || waiting,
                 }),

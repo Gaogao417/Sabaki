@@ -5,7 +5,7 @@ import i18n from '../../i18n.js'
 import sabaki from '../../modules/sabaki.js'
 import {noop, getScore} from '../../modules/helper.js'
 
-import Drawer from './Drawer.js'
+import Modal from '../Modal.js'
 
 const t = i18n.context('ScoreDrawer')
 const setting = {get: (key) => window.sabaki.setting.get(key)}
@@ -69,7 +69,7 @@ export default class ScoreDrawer extends Component {
     this.handleTerritoryButtonClick = () =>
       setting.set('scoring.method', 'territory')
     this.handleAreaButtonClick = () => setting.set('scoring.method', 'area')
-    this.handleCloseButtonClick = () => sabaki.closeDrawer()
+    this.handleClose = () => sabaki.closeDrawer()
 
     this.handleSubmitButtonClick = (evt) => {
       evt.preventDefault()
@@ -92,96 +92,113 @@ export default class ScoreDrawer extends Component {
       result > 0 ? `B+${result}` : result < 0 ? `W+${-result}` : t('Draw')
 
     return h(
-      Drawer,
+      Modal,
       {
-        type: 'score',
         show,
+        title: t('Score'),
+        onClose: this.handleClose,
       },
 
-      h('h2', {}, t('Score')),
-
       h(
-        'ul',
-        {class: 'tab-bar'},
+        'div',
+        {class: 'score-dialog__tabs'},
         h(
-          'li',
-          {class: classNames({current: method === 'area'})},
-          h(
-            'a',
-            {
-              href: '#',
-              onClick: this.handleAreaButtonClick,
-            },
-            t('Area'),
-          ),
+          'button',
+          {
+            type: 'button',
+            class: classNames('score-dialog__tab', {active: method === 'area'}),
+            onClick: this.handleAreaButtonClick,
+          },
+          t('Area'),
         ),
         h(
-          'li',
-          {class: classNames({current: method === 'territory'})},
-          h(
-            'a',
-            {
-              href: '#',
-              onClick: this.handleTerritoryButtonClick,
-            },
-            t('Territory'),
-          ),
+          'button',
+          {
+            type: 'button',
+            class: classNames('score-dialog__tab', {
+              active: method === 'territory',
+            }),
+            onClick: this.handleTerritoryButtonClick,
+          },
+          t('Territory'),
         ),
       ),
 
       h(
-        'table',
-        {},
+        'div',
+        {class: 'score-dialog__table-wrap'},
         h(
-          'thead',
-          {},
+          'table',
+          {class: 'score-dialog__table'},
           h(
-            'tr',
+            'thead',
             {},
-            h('th'),
-            h('th', {disabled: method === 'territory'}, t('Area')),
-            h('th', {disabled: method === 'area'}, t('Territory')),
-            h('th', {disabled: method === 'area'}, t('Captures')),
-            h('th', {}, t('Komi')),
-            h('th', {disabled: method === 'territory'}, t('Handicap')),
-            h('th', {}, t('Total')),
+            h(
+              'tr',
+              {},
+              h('th'),
+              h(
+                'th',
+                {class: classNames({disabled: method === 'territory'})},
+                t('Area'),
+              ),
+              h(
+                'th',
+                {class: classNames({disabled: method === 'area'})},
+                t('Territory'),
+              ),
+              h(
+                'th',
+                {class: classNames({disabled: method === 'area'})},
+                t('Captures'),
+              ),
+              h('th', {}, t('Komi')),
+              h(
+                'th',
+                {class: classNames({disabled: method === 'territory'})},
+                t('Handicap'),
+              ),
+              h('th', {}, t('Total')),
+            ),
           ),
-        ),
-        h(
-          'tbody',
-          {},
-          h(ScoreRow, {method, score, komi, handicap: 0, sign: 1}),
-          h(ScoreRow, {method, score, komi, handicap, sign: -1}),
+          h(
+            'tbody',
+            {},
+            h(ScoreRow, {method, score, komi, handicap: 0, sign: 1}),
+            h(ScoreRow, {method, score, komi, handicap, sign: -1}),
+          ),
         ),
       ),
 
       h(
-        'form',
-        {},
+        'footer',
+        {class: 'score-dialog__footer'},
         h(
-          'p',
-          {},
+          'span',
+          {class: 'score-dialog__result'},
           t('Result:'),
           ' ',
-          h('span', {class: 'result'}, this.resultString),
-          ' ',
-
+          h('strong', {}, this.resultString),
+        ),
+        h(
+          'div',
+          {class: 'score-dialog__actions'},
           !estimating &&
             h(
               'button',
               {
-                type: 'submit',
+                type: 'button',
+                class: 'modal-btn modal-btn--primary',
                 onClick: this.handleSubmitButtonClick,
               },
               t('Update Result'),
             ),
-          ' ',
-
           h(
             'button',
             {
-              type: 'reset',
-              onClick: this.handleCloseButtonClick,
+              type: 'button',
+              class: 'modal-btn modal-btn--secondary',
+              onClick: this.handleClose,
             },
             t('Close'),
           ),

@@ -15,7 +15,7 @@ import {
   isWritableDirectory,
 } from '../../modules/helper.js'
 import * as gtplogger from '../../modules/gtplogger.js'
-import Drawer from './Drawer.js'
+import Modal from '../Modal.js'
 
 const setting = {
   get: (key) => window.sabaki.setting.get(key),
@@ -58,7 +58,7 @@ class PreferencesItem extends Component {
   render({text}, {checked}) {
     return h(
       'li',
-      {class: 'preferences-item'},
+      {},
       h(
         'label',
         {},
@@ -125,10 +125,10 @@ class GeneralTab extends Component {
   render({graphGridSize}) {
     return h(
       'div',
-      {class: 'general'},
+      {class: 'prefs-dialog__section'},
       h(
         'ul',
-        {},
+        {class: 'prefs-dialog__check-list'},
         h(PreferencesItem, {
           id: 'app.enable_hardware_acceleration',
           text: t('Enable hardware acceleration if possible'),
@@ -157,7 +157,7 @@ class GeneralTab extends Component {
 
         h(
           'li',
-          {class: 'select'},
+          {class: 'prefs-dialog__select'},
           h(
             'label',
             {},
@@ -200,7 +200,7 @@ class GeneralTab extends Component {
 
         h(
           'li',
-          {class: 'select'},
+          {class: 'prefs-dialog__select'},
           h(
             'label',
             {},
@@ -243,7 +243,7 @@ class GeneralTab extends Component {
 
         h(
           'li',
-          {class: 'select'},
+          {class: 'prefs-dialog__select'},
           h(
             'label',
             {},
@@ -287,7 +287,7 @@ class GeneralTab extends Component {
 
       h(
         'ul',
-        {},
+        {class: 'prefs-dialog__check-list'},
         h(PreferencesItem, {
           id: 'comments.show_move_interpretation',
           text: t('Show automatic move titles'),
@@ -366,7 +366,7 @@ class PathInputItem extends Component {
   render({text}, {value}) {
     return h(
       'li',
-      {class: 'path-input-item'},
+      {class: 'prefs-dialog__path-item'},
       h(
         'label',
         {},
@@ -382,7 +382,7 @@ class PathInputItem extends Component {
         h(
           'a',
           {
-            class: 'browse',
+            class: 'prefs-dialog__browse',
             onClick: this.handleBrowseButtonClick,
           },
           h('img', {
@@ -398,7 +398,7 @@ class PathInputItem extends Component {
             : existsSync(value)) &&
           h(
             'a',
-            {class: 'invalid'},
+            {class: 'prefs-dialog__invalid'},
             h('img', {
               src: './node_modules/@primer/octicons/build/svg/alert.svg',
               title: this.props.chooseDirectory
@@ -489,12 +489,12 @@ class ThemesTab extends Component {
 
     return h(
       'div',
-      {class: 'themes'},
+      {class: 'prefs-dialog__section'},
       h('h3', {}, t('Custom Images')),
 
       h(
         'ul',
-        {class: 'userpaths'},
+        {class: 'prefs-dialog__userpaths'},
         h(PathInputItem, {
           id: 'theme.custom_blackstones',
           text: t('Black stone image:'),
@@ -554,7 +554,7 @@ class ThemesTab extends Component {
 
         h(
           'div',
-          {class: 'install'},
+          {},
           h(
             'button',
             {
@@ -569,6 +569,7 @@ class ThemesTab extends Component {
             {
               href: `https://github.com/SabakiHQ/Sabaki/blob/v${sabaki.version}/docs/guides/theme-directory.md`,
               onClick: this.handleLinkClick,
+              style: {cursor: 'pointer', color: 'var(--ui-blue)'},
             },
             t('Get more themes…'),
           ),
@@ -578,7 +579,7 @@ class ThemesTab extends Component {
       currentTheme && [
         h(
           'p',
-          {class: 'meta'},
+          {},
           currentTheme.author &&
             t((p) => `by ${p.author}`, {
               author: currentTheme.author,
@@ -588,10 +589,10 @@ class ThemesTab extends Component {
             h(
               'a',
               {
-                class: 'homepage',
                 href: currentTheme.homepage,
                 title: currentTheme.homepage,
                 onClick: this.handleLinkClick,
+                style: {cursor: 'pointer', color: 'var(--ui-blue)'},
               },
               t('Homepage'),
             ),
@@ -599,9 +600,13 @@ class ThemesTab extends Component {
 
         h(
           'p',
-          {class: 'description'},
+          {},
           currentTheme.version &&
-            h('span', {class: 'version'}, 'v' + currentTheme.version),
+            h(
+              'span',
+              {class: 'prefs-dialog__version'},
+              'v' + currentTheme.version,
+            ),
           ' ',
 
           currentTheme.description,
@@ -663,7 +668,7 @@ class EngineItem extends Component {
       h(
         'a',
         {
-          class: 'browse',
+          class: 'prefs-dialog__browse',
           title: t('Browse...'),
           onClick: () => this.browsePath(key),
         },
@@ -720,7 +725,7 @@ class EngineItem extends Component {
         h(
           'a',
           {
-            class: 'remove',
+            class: 'prefs-dialog__remove',
             title: t('Remove'),
             onClick: this.handleRemoveButtonClick,
           },
@@ -729,7 +734,7 @@ class EngineItem extends Component {
         ),
         h(
           'label',
-          {class: 'engine-enabled'},
+          {},
           h('input', {
             type: 'checkbox',
             name: 'enabled',
@@ -748,7 +753,7 @@ class EngineItem extends Component {
       ),
       h(
         'p',
-        {class: 'engine-kind-row'},
+        {},
         h('label', {}, '类型 '),
         h(
           'select',
@@ -771,7 +776,7 @@ class EngineItem extends Component {
         h(
           'a',
           {
-            class: 'browse',
+            class: 'prefs-dialog__browse',
             title: t('Browse…'),
             onClick: () => this.browsePath('path'),
           },
@@ -873,7 +878,9 @@ class EnginesTab extends Component {
       setting.set('engines.list', engines)
 
       setImmediate(() => {
-        this.element.querySelector('.engines-list li:first-child input').focus()
+        this.element
+          .querySelector('.prefs-dialog__engine-list li:first-child input')
+          .focus()
       })
     }
   }
@@ -898,27 +905,41 @@ class EnginesTab extends Component {
   render({engines}) {
     return h(
       'div',
-      {ref: (el) => (this.element = el), class: 'engines'},
+      {ref: (el) => (this.element = el), class: 'prefs-dialog__section'},
       h(
-        'div',
-        {class: 'gtpconsolelog'},
-        h(
-          'ul',
-          {},
-          h(PreferencesItem, {
-            id: 'gtp.console_log_enabled',
-            text: t('Enable GTP logging to directory:'),
-          }),
+        'ul',
+        {class: 'prefs-dialog__check-list'},
+        h(PreferencesItem, {
+          id: 'gtp.console_log_enabled',
+          text: t('Enable GTP logging to directory:'),
+        }),
 
-          h(PathInputItem, {
-            id: 'gtp.console_log_path',
-            chooseDirectory: true,
-          }),
-        ),
+        h(PathInputItem, {
+          id: 'gtp.console_log_path',
+          chooseDirectory: true,
+        }),
+      ),
+      h(
+        'ul',
+        {class: 'prefs-dialog__check-list'},
+        h(PreferencesItem, {
+          id: 'app.logging_enabled',
+          text: t('Enable application logging:'),
+        }),
+
+        h(PreferencesItem, {
+          id: 'app.logging_file_enabled',
+          text: t('Write logs to file:'),
+        }),
+
+        h(PathInputItem, {
+          id: 'app.logging_file_path',
+          chooseDirectory: true,
+        }),
       ),
       h(
         'div',
-        {class: 'engines-list'},
+        {class: 'prefs-dialog__engine-list'},
         h(
           'ul',
           {},
@@ -938,7 +959,11 @@ class EnginesTab extends Component {
         {},
         h(
           'button',
-          {type: 'button', onClick: this.handleAddButtonClick},
+          {
+            type: 'button',
+            class: 'modal-btn modal-btn--secondary',
+            onClick: this.handleAddButtonClick,
+          },
           t('Add'),
         ),
       ),
@@ -950,8 +975,7 @@ export default class PreferencesDrawer extends Component {
   constructor() {
     super()
 
-    this.handleCloseButtonClick = (evt) => {
-      evt.preventDefault()
+    this.handleClose = () => {
       sabaki.closeDrawer()
     }
 
@@ -994,59 +1018,71 @@ export default class PreferencesDrawer extends Component {
 
   render({show, tab, engines, graphGridSize}) {
     return h(
-      Drawer,
+      Modal,
       {
-        type: 'preferences',
         show,
+        title: t('Preferences'),
+        onClose: this.handleClose,
+        width: 'min(640px, calc(100vw - 48px))',
       },
 
       h(
-        'ul',
-        {class: 'tab-bar'},
+        'div',
+        {class: 'prefs-dialog__tabs'},
         h(
-          'li',
+          'button',
           {
-            class: classNames({general: true, current: tab === 'general'}),
+            type: 'button',
+            class: classNames('prefs-dialog__tab', 'general', {
+              active: tab === 'general',
+            }),
             onClick: this.handleTabClick,
           },
-
-          h('a', {href: '#'}, t('General')),
+          t('General'),
         ),
         h(
-          'li',
+          'button',
           {
-            class: classNames({themes: true, current: tab === 'themes'}),
+            type: 'button',
+            class: classNames('prefs-dialog__tab', 'themes', {
+              active: tab === 'themes',
+            }),
             onClick: this.handleTabClick,
           },
-
-          h('a', {href: '#'}, t('Themes')),
+          t('Themes'),
         ),
         h(
-          'li',
+          'button',
           {
-            class: classNames({engines: true, current: tab === 'engines'}),
+            type: 'button',
+            class: classNames('prefs-dialog__tab', 'engines', {
+              active: tab === 'engines',
+            }),
             onClick: this.handleTabClick,
           },
-
-          h('a', {href: '#'}, t('Engines')),
+          t('Engines'),
         ),
       ),
 
       h(
-        'form',
-        {class: classNames(tab, 'tab-content')},
-        h(GeneralTab, {graphGridSize}),
-        h(ThemesTab),
-        h(EnginesTab, {engines}),
+        'div',
+        {class: classNames('prefs-dialog__content', tab)},
+        tab === 'general' && h(GeneralTab, {graphGridSize}),
+        tab === 'themes' && h(ThemesTab),
+        tab === 'engines' && h(EnginesTab, {engines}),
+      ),
 
+      h(
+        'footer',
+        {class: 'prefs-dialog__footer'},
         h(
-          'p',
-          {},
-          h(
-            'button',
-            {type: 'button', onClick: this.handleCloseButtonClick},
-            t('Close'),
-          ),
+          'button',
+          {
+            type: 'button',
+            class: 'modal-btn modal-btn--primary',
+            onClick: this.handleClose,
+          },
+          t('Close'),
         ),
       ),
     )
