@@ -477,8 +477,12 @@ class Sabaki extends EventEmitter {
       if (this.state.recallSession == null) return
     } else if (mode === 'problem') {
       if (this.state.problemSession == null) return
-      if (this.state.analyzingEngineSyncerId == null && this.state.attachedEngineSyncers.length > 0) {
-        stateChange.analyzingEngineSyncerId = this.state.attachedEngineSyncers[0].id
+      if (
+        this.state.analyzingEngineSyncerId == null &&
+        this.state.attachedEngineSyncers.length > 0
+      ) {
+        stateChange.analyzingEngineSyncerId =
+          this.state.attachedEngineSyncers[0].id
       }
     } else if (mode === 'review') {
       if (this.state.problemSession == null) return
@@ -515,22 +519,51 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    console.log('[startRecallSession] gameId:', gameId, 'sgf length:', game.sgf?.length, 'sgf preview:', game.sgf?.slice(0, 100))
+    console.log(
+      '[startRecallSession] gameId:',
+      gameId,
+      'sgf length:',
+      game.sgf?.length,
+      'sgf preview:',
+      game.sgf?.slice(0, 100),
+    )
 
     let trees = fileformats.sgf.parse(game.sgf)
-    console.log('[startRecallSession] parsed trees count:', trees?.length, 'trees type:', typeof trees, 'isArray:', Array.isArray(trees))
+    console.log(
+      '[startRecallSession] parsed trees count:',
+      trees?.length,
+      'trees type:',
+      typeof trees,
+      'isArray:',
+      Array.isArray(trees),
+    )
     if (!trees || trees.length === 0) {
-      console.warn('[startRecallSession] no trees returned from sgf.parse, trees:', trees)
+      console.warn(
+        '[startRecallSession] no trees returned from sgf.parse, trees:',
+        trees,
+      )
       return
     }
     let tree = trees[0]
-    console.log('[startRecallSession] tree type:', tree?.constructor?.name, 'has root:', !!tree?.root, 'root:', tree?.root, 'root.id:', tree?.root?.id)
+    console.log(
+      '[startRecallSession] tree type:',
+      tree?.constructor?.name,
+      'has root:',
+      !!tree?.root,
+      'root:',
+      tree?.root,
+      'root.id:',
+      tree?.root?.id,
+    )
 
     // Extract the move sequence from the game tree
     let moves = []
     let nodeId = tree.root.id
     if (nodeId == null) {
-      console.error('[startRecallSession] tree.root.id is null/undefined! root:', JSON.stringify(tree?.root)?.slice(0, 500))
+      console.error(
+        '[startRecallSession] tree.root.id is null/undefined! root:',
+        JSON.stringify(tree?.root)?.slice(0, 500),
+      )
     }
     let innerTree = tree
     while (true) {
@@ -578,7 +611,12 @@ class Sabaki extends EventEmitter {
   }
 
   handleRecallMove(vertex) {
-    let {recallSession, recallMoveIndex, recallExpectedMoves, recallUserAttempts} = this.state
+    let {
+      recallSession,
+      recallMoveIndex,
+      recallExpectedMoves,
+      recallUserAttempts,
+    } = this.state
     if (!recallSession || this.state.recallCompleted) return
 
     let expected = recallExpectedMoves[recallMoveIndex]
@@ -698,7 +736,14 @@ class Sabaki extends EventEmitter {
   async saveCurrentGame() {
     let sgfStr = this.getSGF()
     let tree = this.state.gameTrees[this.state.gameIndex]
-    console.log('[saveCurrentGame] tree.root.id:', tree.root.id, 'sgf length:', sgfStr?.length, 'sgf preview:', sgfStr?.slice(0, 150))
+    console.log(
+      '[saveCurrentGame] tree.root.id:',
+      tree.root.id,
+      'sgf length:',
+      sgfStr?.length,
+      'sgf preview:',
+      sgfStr?.slice(0, 150),
+    )
     let root = tree.get(tree.root.id)
     let result = root.data.RE?.[0] || null
     console.log('[saveCurrentGame] result:', result, 'root.id:', root?.id)
@@ -720,9 +765,7 @@ class Sabaki extends EventEmitter {
     let currentPlayer = this.getPlayer(this.state.treePosition)
     let snapshot = createSnapshotFromBoard(board, currentPlayer)
 
-    let sgfStr = sgf.stringify([
-      snapshotToGameTree(snapshot, {moveNumber: 0}),
-    ])
+    let sgfStr = sgf.stringify([snapshotToGameTree(snapshot, {moveNumber: 0})])
 
     let problem = {
       sourceGameId: null,
@@ -734,7 +777,11 @@ class Sabaki extends EventEmitter {
       positionDescription: options.positionDescription || '',
       taskGoal: options.taskGoal || '',
       referenceLines: options.referenceLines || [],
-      passRule: options.passRule || {evalDropThreshold: 5, requireNoSevereBadMove: true, compareWithReference: true},
+      passRule: options.passRule || {
+        evalDropThreshold: 5,
+        requireNoSevereBadMove: true,
+        compareWithReference: true,
+      },
       tags: options.tags || [],
       difficulty: options.difficulty || null,
       status: options.status || 'inbox',
@@ -784,7 +831,8 @@ class Sabaki extends EventEmitter {
   }
 
   handleProblemMove(vertex) {
-    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} = this.state
+    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} =
+      this.state
     if (!problemSession || this.state.problemSubmitted) return
 
     let {gameTrees, gameIndex, treePosition} = this.state
@@ -825,19 +873,27 @@ class Sabaki extends EventEmitter {
     // Use pre-move analysis to check if the move was bad
     if (preMoveAnalysis) {
       let analysis = preMoveAnalysis
-      let isSolverMove = (analysis.sign > 0 && player > 0) || (analysis.sign < 0 && player < 0)
+      let isSolverMove =
+        (analysis.sign > 0 && player > 0) || (analysis.sign < 0 && player < 0)
 
-      let variation = analysis.variations.find((v) => helper.vertexEquals(v.vertex, vertex))
+      let variation = analysis.variations.find((v) =>
+        helper.vertexEquals(v.vertex, vertex),
+      )
       if (variation) {
         // Check if this is significantly worse than the top move
         let topWinrate = analysis.variations[0]?.winrate || 50
         let moveWinrate = variation.winrate
-        let winrateDrop = isSolverMove ? topWinrate - moveWinrate : moveWinrate - topWinrate
+        let winrateDrop = isSolverMove
+          ? topWinrate - moveWinrate
+          : moveWinrate - topWinrate
 
-        if (analysis.variations[0]?.scoreLead != null && variation.scoreLead != null) {
+        if (
+          analysis.variations[0]?.scoreLead != null &&
+          variation.scoreLead != null
+        ) {
           let scoreDrop = isSolverMove
-            ? (analysis.variations[0].scoreLead - variation.scoreLead)
-            : (variation.scoreLead - analysis.variations[0].scoreLead)
+            ? analysis.variations[0].scoreLead - variation.scoreLead
+            : variation.scoreLead - analysis.variations[0].scoreLead
 
           // Adjust sign based on solver's perspective
           if (player < 0) scoreDrop = -scoreDrop
@@ -871,7 +927,11 @@ class Sabaki extends EventEmitter {
       })
     }
 
-    let updatedAttempt = {...problemAttempt, userLine, moveEvaluations: problemEvalCache}
+    let updatedAttempt = {
+      ...problemAttempt,
+      userLine,
+      moveEvaluations: problemEvalCache,
+    }
     this.setState({
       problemEvalCache,
       problemBadMoves,
@@ -880,7 +940,8 @@ class Sabaki extends EventEmitter {
   }
 
   async submitProblemAttempt() {
-    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} = this.state
+    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} =
+      this.state
     if (!problemSession || this.state.problemSubmitted) return
 
     // Determine result
@@ -922,8 +983,15 @@ class Sabaki extends EventEmitter {
 
     // Generate punishment problems for major/severe bad moves
     let punishmentIds = []
-    for (let badMove of problemBadMoves.filter((m) => m.severity === 'major' || m.severity === 'severe')) {
-      let punishment = await this.generatePunishmentProblem(badMove, problemSession, updatedAttempt, punishSide)
+    for (let badMove of problemBadMoves.filter(
+      (m) => m.severity === 'major' || m.severity === 'severe',
+    )) {
+      let punishment = await this.generatePunishmentProblem(
+        badMove,
+        problemSession,
+        updatedAttempt,
+        punishSide,
+      )
       if (punishment) {
         punishmentIds.push(punishment.id)
       }
@@ -964,14 +1032,25 @@ class Sabaki extends EventEmitter {
     }
   }
 
-  async generatePunishmentProblem(badMove, parentProblem, parentAttempt, punishSide) {
+  async generatePunishmentProblem(
+    badMove,
+    parentProblem,
+    parentAttempt,
+    punishSide,
+  ) {
     let {gameTrees, gameIndex, treePosition} = this.state
     let tree = gameTrees[gameIndex]
     let board = gametree.getBoard(tree, treePosition)
-    let snapshot = createSnapshotFromBoard(board, punishSide === 'black' ? 1 : -1)
-    let positionSgf = sgf.stringify([snapshotToGameTree(snapshot, {moveNumber: 0})])
+    let snapshot = createSnapshotFromBoard(
+      board,
+      punishSide === 'black' ? 1 : -1,
+    )
+    let positionSgf = sgf.stringify([
+      snapshotToGameTree(snapshot, {moveNumber: 0}),
+    ])
 
-    let description = `Auto-generated from "${parentProblem.title || 'untitled'}". ` +
+    let description =
+      `Auto-generated from "${parentProblem.title || 'untitled'}". ` +
       `The solver played ${badMove.move}, causing a ${badMove.severity} loss of ~${Math.round(badMove.scoreDrop || 0)} points. ` +
       `Now it is ${punishSide}'s turn. Find the key punishment move.`
 
@@ -1000,7 +1079,9 @@ class Sabaki extends EventEmitter {
     userLine.pop()
     problemEvalCache = problemEvalCache.slice(0, -1)
     if (lastEval.isBadMove) {
-      problemBadMoves = problemBadMoves.filter((m) => m.moveIndex !== lastEval.moveIndex)
+      problemBadMoves = problemBadMoves.filter(
+        (m) => m.moveIndex !== lastEval.moveIndex,
+      )
     }
 
     // Navigate back in tree
@@ -1158,7 +1239,8 @@ class Sabaki extends EventEmitter {
 
   getTerritoryCompareAvailable(state = this.state) {
     return (
-      state.mode === 'analysis' && state.editWorkspace?.referenceSnapshot != null
+      state.mode === 'analysis' &&
+      state.editWorkspace?.referenceSnapshot != null
     )
   }
 
@@ -1755,7 +1837,9 @@ class Sabaki extends EventEmitter {
 
     try {
       let analysis = syncer.engine.analysis || {}
-      let maxVisits = +(analysis.visits || setting.get('board.analysis_max_visits'))
+      let maxVisits = +(
+        analysis.visits || setting.get('board.analysis_max_visits')
+      )
       if (Number.isFinite(maxVisits) && maxVisits > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
@@ -1771,7 +1855,9 @@ class Sabaki extends EventEmitter {
         })
       }
 
-      let maxTime = +(analysis.maxTime || setting.get('board.analysis_max_time'))
+      let maxTime = +(
+        analysis.maxTime || setting.get('board.analysis_max_time')
+      )
       if (Number.isFinite(maxTime) && maxTime > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
@@ -1800,14 +1886,19 @@ class Sabaki extends EventEmitter {
   }
 
   getAnalysisVisitLimit(syncer = null) {
-    let maxVisits = +(syncer?.engine.analysis?.visits || setting.get('board.analysis_max_visits'))
+    let maxVisits = +(
+      syncer?.engine.analysis?.visits ||
+      setting.get('board.analysis_max_visits')
+    )
     return Number.isFinite(maxVisits) && maxVisits > 0
       ? Math.round(maxVisits)
       : null
   }
 
   getAnalysisMaxTime(syncer = null) {
-    let maxTime = +(syncer?.engine.analysis?.maxTime || setting.get('board.analysis_max_time'))
+    let maxTime = +(
+      syncer?.engine.analysis?.maxTime || setting.get('board.analysis_max_time')
+    )
     return Number.isFinite(maxTime) && maxTime > 0 ? maxTime : null
   }
 
@@ -2053,7 +2144,6 @@ class Sabaki extends EventEmitter {
       this.hideInfoOverlay()
       this.setState({
         territoryEnabled: false,
-        territoryCompareEnabled: false,
       })
       return true
     }
@@ -2097,9 +2187,20 @@ class Sabaki extends EventEmitter {
     }
 
     if (this.state.mode !== 'analysis') return false
+    if (this.state.editWorkspace == null) return false
 
-    let territoryReady = await this.setTerritoryEnabled(true)
-    if (!territoryReady || !this.getTerritoryCompareAvailable()) {
+    if (this.state.editWorkspace.referenceSnapshot == null) {
+      this.captureEditReference()
+    }
+
+    this.hideInfoOverlay()
+    let syncer = await this.ensureAnalysisReady({requireOwnership: true})
+    if (syncer == null) {
+      this.setState({territoryCompareEnabled: false})
+      return false
+    }
+
+    if (!this.getTerritoryCompareAvailable()) {
       return false
     }
 
@@ -2317,7 +2418,8 @@ class Sabaki extends EventEmitter {
 
     let syncer = this.state.attachedEngineSyncers.find((syncer) => {
       let attached = syncer.engine
-      if (attached.id != null && engine.id != null) return attached.id === engine.id
+      if (attached.id != null && engine.id != null)
+        return attached.id === engine.id
 
       return (
         attached.path === engine.path &&
@@ -2344,8 +2446,10 @@ class Sabaki extends EventEmitter {
       .set('game.default_komi', isNaN(komi) ? 0 : +komi)
       .set('game.default_handicap', isNaN(handicap) ? 0 : +handicap)
 
-    let blackSyncer = black.type === 'engine' ? this.getOrAttachEngine(black.engineIndex) : null
-    let whiteSyncer = white.type === 'engine' ? this.getOrAttachEngine(white.engineIndex) : null
+    let blackSyncer =
+      black.type === 'engine' ? this.getOrAttachEngine(black.engineIndex) : null
+    let whiteSyncer =
+      white.type === 'engine' ? this.getOrAttachEngine(white.engineIndex) : null
 
     let emptyTree = gametree.setGameInfo(this.getEmptyGameTree(), {
       blackName: blackSyncer?.engine.name || null,
@@ -2990,7 +3094,10 @@ class Sabaki extends EventEmitter {
       }
 
       if (helper.vertexEquals(vertex, nextVertex)) {
-        this.makeMove(vertex, {player: nextNode.data.B != null ? 1 : -1, generateEngineMove: false})
+        this.makeMove(vertex, {
+          player: nextNode.data.B != null ? 1 : -1,
+          generateEngineMove: false,
+        })
       } else {
         if (
           board.get(vertex) !== 0 ||
@@ -3151,13 +3258,28 @@ class Sabaki extends EventEmitter {
     let color = player > 0 ? 'W' : 'B'
     let tree = gameTrees[gameIndex]
 
-    console.log('[makeResign] player:', player, 'color:', color, 'tree.root.id:', tree.root.id, 'treePosition:', treePosition)
+    console.log(
+      '[makeResign] player:',
+      player,
+      'color:',
+      color,
+      'tree.root.id:',
+      tree.root.id,
+      'treePosition:',
+      treePosition,
+    )
 
     let newTree = tree.mutate((draft) => {
       draft.updateProperty(draft.root.id, 'RE', [`${color}+Resign`])
     })
 
-    console.log('[makeResign] newTree.root.id:', newTree.root.id, 'newTree RE:', newTree.root.data.RE, 'NOTE: newTree is created but NOT applied to state!')
+    console.log(
+      '[makeResign] newTree.root.id:',
+      newTree.root.id,
+      'newTree RE:',
+      newTree.root.data.RE,
+      'NOTE: newTree is created but NOT applied to state!',
+    )
 
     this.makeMainVariation(treePosition)
     this.makeMove([-1, -1], {player, generateEngineMove: false})
@@ -3965,7 +4087,10 @@ class Sabaki extends EventEmitter {
           .get('engines.gemove_analyze_commands')
           .find((x) => syncer.commands.includes(x)) || 'genmove'
 
-      if (commandName.includes('kata') || syncer.commands.includes('kata-set-param')) {
+      if (
+        commandName.includes('kata') ||
+        syncer.commands.includes('kata-set-param')
+      ) {
         await this.configureKataAnalysis(syncer)
       }
 
@@ -3982,18 +4107,19 @@ class Sabaki extends EventEmitter {
         let interval = setting.get('board.analysis_interval').toString()
         let args = [color, interval]
         let candidates = +syncer.engine.analysis?.candidates
-        if (commandName.includes('kata') && Number.isFinite(candidates) && candidates > 0) {
+        if (
+          commandName.includes('kata') &&
+          Number.isFinite(candidates) &&
+          candidates > 0
+        ) {
           args.push('maxmoves', Math.round(candidates).toString())
         }
 
         coord = await new Promise(async (resolve) => {
-          await syncer.queueCommand(
-            {name: commandName, args},
-            ({line}) => {
-              if (!line.startsWith('play ')) return
-              resolve(line.slice('play '.length))
-            },
-          )
+          await syncer.queueCommand({name: commandName, args}, ({line}) => {
+            if (!line.startsWith('play ')) return
+            resolve(line.slice('play '.length))
+          })
 
           resolve()
         })
@@ -4194,7 +4320,8 @@ class Sabaki extends EventEmitter {
       return
     }
 
-    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) return
+    if (this.state.mode === 'analysis' && this.state.editWorkspace != null)
+      return
 
     clearTimeout(this.continuousAnalysisId)
 

@@ -259,7 +259,9 @@ class App extends Component {
       }
 
       if (evt.key === 'Escape') {
-        if (sabaki.state.territoryEnabled) {
+        if (sabaki.state.territoryCompareEnabled) {
+          sabaki.setTerritoryCompareEnabled(false)
+        } else if (sabaki.state.territoryEnabled) {
           sabaki.setTerritoryEnabled(false)
         } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
@@ -501,7 +503,9 @@ class App extends Component {
     let territoryDeltaMap = null
     let territoryDiffAvailable = false
     let territoryDiffSourceType = null
-    let territoryMode = state.territoryEnabled
+    let territoryMode = state.territoryEnabled || state.territoryCompareEnabled
+    let territoryCompareActive =
+      state.territoryCompareEnabled && editWorkspaceActive
     let activeAnalysis = editWorkspaceActive
       ? editAnalysis
       : state.analysisTreePosition === state.treePosition
@@ -529,9 +533,11 @@ class App extends Component {
 
     if (territoryMode) {
       let engineSyncer = inferredState.analyzingEngineSyncer
-      territoryOwnership = editWorkspaceActive
-        ? editWs[editActiveKeys.ownershipKey]
-        : sabaki.getCurrentOwnership(engineSyncer)
+      territoryOwnership = territoryCompareActive
+        ? editWs.referenceOwnership
+        : editWorkspaceActive
+          ? editWs[editActiveKeys.ownershipKey]
+          : sabaki.getCurrentOwnership(engineSyncer)
 
       if (['scoring', 'estimator'].includes(state.mode)) {
         overlayUnavailableReason = t(
@@ -542,8 +548,11 @@ class App extends Component {
       } else if (
         editWorkspaceActive &&
         editWs.analysisPending &&
-        territoryOwnership == null
+        (territoryOwnership == null ||
+          (territoryCompareActive && editWs.currentOwnership == null))
       ) {
+        overlayUnavailableReason = t('Waiting for ownership data...')
+      } else if (territoryCompareActive && editWs.currentOwnership == null) {
         overlayUnavailableReason = t('Waiting for ownership data...')
       } else if (territoryOwnership == null) {
         overlayUnavailableReason =
@@ -555,14 +564,13 @@ class App extends Component {
       }
 
       if (
-        state.territoryCompareEnabled &&
-        editWorkspaceActive &&
-        editPreviewOwnership != null &&
-        territoryOwnership != null
+        territoryCompareActive &&
+        editWs.referenceOwnership != null &&
+        editWs.currentOwnership != null
       ) {
         territoryDeltaMap = helper.getOwnershipDelta(
-          editPreviewOwnership,
-          territoryOwnership,
+          editWs.referenceOwnership,
+          editWs.currentOwnership,
         )
         territoryDiffAvailable = territoryDeltaMap != null
         territoryDiffSourceType = territoryDiffAvailable ? 'workspace' : null
@@ -572,8 +580,8 @@ class App extends Component {
     let territoryStatusText = !territoryMode
       ? null
       : editWorkspaceActive
-        ? state.territoryCompareEnabled
-          ? t('Reference vs Current Territory')
+        ? territoryCompareActive
+          ? t('Current vs Reference Territory')
           : editActiveTab === 'reference'
             ? t('Reference Territory')
             : t('Current Territory')
@@ -612,6 +620,7 @@ class App extends Component {
       editPreviewOwnership,
       activeAnalysis,
       territoryMode,
+      territoryCompareActive,
       scoreBoard,
       areaMap,
       territoryOwnership,
@@ -620,7 +629,11 @@ class App extends Component {
       territoryDiffAvailable,
       territoryDiffSourceType,
       territoryStatusText,
-      comparisonOwnership: editWorkspaceActive ? editPreviewOwnership : null,
+      comparisonOwnership: editWorkspaceActive
+        ? territoryCompareActive
+          ? editWs.currentOwnership
+          : editPreviewOwnership
+        : null,
       overlayStatusProps: this.state.overlayStatusProps,
       onOverlayStatusChange: this.handleOverlayStatusChange,
       inspectorSummary,
@@ -676,9 +689,7 @@ class App extends Component {
         : h(TripleSplitContainer, {
             id: 'mainlayout',
 
-            beginSideSize: effectiveLeftSidebar
-              ? state.leftSidebarWidth
-              : 0,
+            beginSideSize: effectiveLeftSidebar ? state.leftSidebarWidth : 0,
             endSideSize: effectiveSidebar ? state.sidebarWidth : 0,
 
             beginSideContent: h(LeftSidebar, state),

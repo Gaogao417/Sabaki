@@ -64,7 +64,10 @@ class EditBar extends Component {
     )
   }
 
-  renderActionButton(title, {icon, selected = false, disabled = false, onClick}) {
+  renderActionButton(
+    title,
+    {icon, selected = false, disabled = false, onClick},
+  ) {
     return h(
       'li',
       {class: classNames({selected, disabled})},
@@ -83,7 +86,18 @@ class EditBar extends Component {
     )
   }
 
-  render({mode, selectedTool, editWorkspace, territoryEnabled, territoryCompareEnabled, territoryCompareAvailable, editWorkspaceActive, areaSelectMode, analysisAreaVertices}, {stoneTool}) {
+  render(
+    {
+      mode,
+      selectedTool,
+      editWorkspace,
+      territoryEnabled,
+      territoryCompareEnabled,
+      areaSelectMode,
+      analysisAreaVertices,
+    },
+    {stoneTool},
+  ) {
     if (mode !== 'analysis') return null
 
     let isSelected = ([, id]) =>
@@ -137,14 +151,11 @@ class EditBar extends Component {
             selected: territoryEnabled,
             onClick: () => sabaki.toggleTerritoryEnabled(),
           }),
-          territoryEnabled &&
-            editWorkspaceActive &&
-            this.renderActionButton(t('Territory Compare'), {
-              icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
-              selected: territoryCompareEnabled,
-              disabled: !territoryCompareAvailable,
-              onClick: () => sabaki.toggleTerritoryCompareEnabled(),
-            }),
+          this.renderActionButton(t('Territory Compare'), {
+            icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
+            selected: territoryCompareEnabled,
+            onClick: () => sabaki.toggleTerritoryCompareEnabled(),
+          }),
         ),
       ),
       editWorkspace?.analysisPending &&

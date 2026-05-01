@@ -113,7 +113,7 @@ export default class WorkbenchShell extends Component {
           h(BoardToolbar, {
             mode,
             editWorkspaceActive,
-            territoryEnabled: props.territoryMode,
+            territoryEnabled: props.territoryEnabled,
             territoryCompareEnabled: props.territoryCompareEnabled,
             territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
             currentPlayer,
@@ -138,11 +138,7 @@ export default class WorkbenchShell extends Component {
           },
 
           mode !== 'play' &&
-            h(
-              'div',
-              {class: 'workbench-shell__left'},
-              h(LeftSidebar, props),
-            ),
+            h('div', {class: 'workbench-shell__left'}, h(LeftSidebar, props)),
 
           h(
             'div',
@@ -151,11 +147,7 @@ export default class WorkbenchShell extends Component {
           ),
 
           mode !== 'play' &&
-            h(
-              'div',
-              {class: 'workbench-shell__right'},
-              h(Sidebar, props),
-            ),
+            h('div', {class: 'workbench-shell__right'}, h(Sidebar, props)),
         ),
 
         h(
@@ -174,7 +166,7 @@ export default class WorkbenchShell extends Component {
               selectedTool,
               onToolButtonClick: this.handleToolButtonClick,
               editWorkspace: editWs,
-              territoryEnabled: props.territoryMode,
+              territoryEnabled: props.territoryEnabled,
               territoryCompareEnabled: props.territoryCompareEnabled,
               territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
               editWorkspaceActive,
