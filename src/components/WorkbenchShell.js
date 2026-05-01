@@ -87,11 +87,15 @@ export default class WorkbenchShell extends Component {
       props.attachedEngineSyncers.find((syncer) => syncer.id === id),
     )
 
+    let connectedEngines = engineSyncers.filter((s) => s != null).length
+    let engineStatusText =
+      connectedEngines === 0 ? '未连接引擎' : `${connectedEngines} 个引擎已连接`
+
     let workspaceSummary =
       mode === 'analysis'
         ? `当前第 ${gameTree.getLevel(treePosition)} 手 | 关键点 0 · 题目 0`
         : mode === 'play'
-          ? `当前第 ${gameTree.getLevel(treePosition)} 手 | 未连接引擎`
+          ? `当前第 ${gameTree.getLevel(treePosition)} 手 | ${engineStatusText}`
           : mode === 'recall'
             ? `当前进度 ${sabaki.state.recallMoveIndex}/${sabaki.state.recallExpectedMoves.length} | 等待输入下一手`
             : ''

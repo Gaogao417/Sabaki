@@ -207,6 +207,7 @@ export default class BoardToolbar extends Component {
           label: '引擎管理',
           onClick: () => sabaki.openDrawer('enginemanagement'),
         }),
+        this.renderEngineStatusButton(),
         h(WorkbenchButton, {
           variant: 'danger',
           icon: './node_modules/@primer/octicons/build/svg/stop.svg',
@@ -229,11 +230,7 @@ export default class BoardToolbar extends Component {
           label: '引擎管理',
           onClick: () => sabaki.openDrawer('enginemanagement'),
         }),
-        h(WorkbenchButton, {
-          icon: './node_modules/@primer/octicons/build/svg/list-unordered.svg',
-          label: '',
-          onClick: () => sabaki.resetAnalysisWorkspace(),
-        }),
+        this.renderEngineStatusButton(),
         h(WorkbenchButton, {
           variant: 'danger',
           icon: './node_modules/@primer/octicons/build/svg/stop.svg',
@@ -244,6 +241,40 @@ export default class BoardToolbar extends Component {
     }
 
     return null
+  }
+
+  renderEngineStatusButton() {
+    let {engineSyncers, onEnginePanelToggle, enginePanelOpen} = this.props
+    let syncers = engineSyncers.filter((s) => s != null)
+    let connected = syncers.length
+    let busy = syncers.some((s) => s.busy)
+    let statusLabel =
+      connected === 0
+        ? '引擎: 未连接'
+        : busy
+          ? '引擎: 思考中'
+          : `引擎: ${connected} 个已连接`
+
+    return h(
+      'button',
+      {
+        type: 'button',
+        class: classNames('workbench-button', 'workbench-button--secondary', {
+          'engine-connected': connected > 0,
+          'engine-busy': busy,
+          'engine-sidebar-open': enginePanelOpen,
+        }),
+        onClick: onEnginePanelToggle,
+      },
+      busy && h(TextSpinner),
+      h('img', {
+        src: './node_modules/@primer/octicons/build/svg/server.svg',
+        width: 14,
+        height: 14,
+        alt: '',
+      }),
+      h('span', {}, statusLabel),
+    )
   }
 
   render(
