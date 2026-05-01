@@ -17,6 +17,7 @@ import * as fileformats from './fileformats/index.js'
 import * as gametree from './gametree.js'
 import * as gobantransformer from './gobantransformer.js'
 import * as gtplogger from './gtplogger.js'
+import * as applogger from './applogger.js'
 import * as helper from './helper.js'
 import {getAnalysisPreviewCacheKey} from './overlays/analysisPreview.js'
 import {
@@ -164,6 +165,7 @@ class Sabaki extends EventEmitter {
     }
 
     this.events = new EventEmitter()
+    applogger.init()
     // App info will be set via IPC - use defaults initially
     this.appName = 'Sabaki'
     this.version = ''
@@ -433,11 +435,13 @@ class Sabaki extends EventEmitter {
       () => this.scheduleEditWorkspaceAnalysis(),
     )
     this.events.emit('modeChange')
+    applogger.log('info', 'game', 'analysis.workspace_reset', 'Analysis workspace reset')
   }
 
   setMode(mode) {
     if (this.state.mode === mode) return
 
+    let oldMode = this.state.mode
     let stateChange = {mode}
 
     // Clean up edit workspace when leaving analysis mode
@@ -491,6 +495,8 @@ class Sabaki extends EventEmitter {
     this.setState(stateChange)
     this.events.emit('modeChange')
 
+    applogger.log('info', 'user', 'mode.changed', 'Mode changed', {from: oldMode, to: mode}, {mode})
+
     if (mode === 'analysis') {
       this.scheduleEditWorkspaceAnalysis()
     } else if (
@@ -515,55 +521,22 @@ class Sabaki extends EventEmitter {
   async startRecallSession(gameId, options = {}) {
     let game = await window.sabaki.db.getGame(gameId)
     if (!game) {
-      console.warn('[startRecallSession] game not found for gameId:', gameId)
+      applogger.log('warn', 'system', 'system.recall_game_not_found', 'Recall: game not found', {gameId})
       return
     }
 
-    console.log(
-      '[startRecallSession] gameId:',
-      gameId,
-      'sgf length:',
-      game.sgf?.length,
-      'sgf preview:',
-      game.sgf?.slice(0, 100),
-    )
-
     let trees = fileformats.sgf.parse(game.sgf)
-    console.log(
-      '[startRecallSession] parsed trees count:',
-      trees?.length,
-      'trees type:',
-      typeof trees,
-      'isArray:',
-      Array.isArray(trees),
-    )
     if (!trees || trees.length === 0) {
-      console.warn(
-        '[startRecallSession] no trees returned from sgf.parse, trees:',
-        trees,
-      )
+      applogger.log('warn', 'system', 'system.sgf_parse_failed', 'Recall: no trees from SGF parse', {gameId})
       return
     }
     let tree = trees[0]
-    console.log(
-      '[startRecallSession] tree type:',
-      tree?.constructor?.name,
-      'has root:',
-      !!tree?.root,
-      'root:',
-      tree?.root,
-      'root.id:',
-      tree?.root?.id,
-    )
 
     // Extract the move sequence from the game tree
     let moves = []
     let nodeId = tree.root.id
     if (nodeId == null) {
-      console.error(
-        '[startRecallSession] tree.root.id is null/undefined! root:',
-        JSON.stringify(tree?.root)?.slice(0, 500),
-      )
+      applogger.log('error', 'system', 'system.sgf_parse_failed', 'tree.root.id is null', {gameId})
     }
     let innerTree = tree
     while (true) {
@@ -736,19 +709,13 @@ class Sabaki extends EventEmitter {
   async saveCurrentGame() {
     let sgfStr = this.getSGF()
     let tree = this.state.gameTrees[this.state.gameIndex]
-    console.log(
-      '[saveCurrentGame] tree.root.id:',
-      tree.root.id,
-      'sgf length:',
-      sgfStr?.length,
-      'sgf preview:',
-      sgfStr?.slice(0, 150),
-    )
     let root = tree.get(tree.root.id)
     let result = root.data.RE?.[0] || null
-    console.log('[saveCurrentGame] result:', result, 'root.id:', root?.id)
     let game = {sgf: sgfStr, source: 'play', result}
     let saved = await window.sabaki.db.saveGame(game)
+    if (saved) {
+      applogger.log('info', 'game', 'game.saved', 'Game saved', {gameId: saved.id})
+    }
     return saved
   }
 
@@ -1509,6 +1476,7 @@ class Sabaki extends EventEmitter {
         },
       })
       this.scheduleEditWorkspaceAnalysis(tab)
+      applogger.log('debug', 'game', 'analysis.stone_toggled', 'Stone toggled', {sign, vertex, tab})
     } else if (tool === 'eraser') {
       let nextSnapshot = cloneSnapshot(snapshot)
       nextSnapshot.signMap[vy][vx] = 0
@@ -1623,6 +1591,7 @@ class Sabaki extends EventEmitter {
       },
     })
     this.scheduleEditWorkspaceAnalysis()
+    applogger.log('debug', 'user', 'analysis.reference_captured', 'Reference captured', {sourceTab, targetTab})
   }
 
   toggleEditTab(tab) {
@@ -1771,6 +1740,7 @@ class Sabaki extends EventEmitter {
           analysisPending: false,
         },
       })
+      applogger.log('info', 'engine', 'analysis.completed', 'Analysis completed', {targetTab})
     }
   }
 
@@ -2322,6 +2292,7 @@ class Sabaki extends EventEmitter {
       return
     }
     this.checkoutHistory(this.historyPointer - 1)
+    applogger.log('debug', 'user', 'user.undo', 'Undo')
   }
 
   redo() {
@@ -2329,6 +2300,7 @@ class Sabaki extends EventEmitter {
       return
     }
     this.checkoutHistory(this.historyPointer + 1)
+    applogger.log('debug', 'user', 'user.redo', 'Redo')
   }
 
   // File Management
@@ -2446,10 +2418,19 @@ class Sabaki extends EventEmitter {
       .set('game.default_komi', isNaN(komi) ? 0 : +komi)
       .set('game.default_handicap', isNaN(handicap) ? 0 : +handicap)
 
+    applogger.log('info', 'game', 'game.configuring', 'Configuring new game', {
+      black: black.type, white: white.type, boardSize, komi, handicap, rules,
+    })
+
     let blackSyncer =
       black.type === 'engine' ? this.getOrAttachEngine(black.engineIndex) : null
     let whiteSyncer =
       white.type === 'engine' ? this.getOrAttachEngine(white.engineIndex) : null
+
+    applogger.log('info', 'game', 'game.engines_resolved', 'Engines resolved', {
+      blackSyncer: blackSyncer ? {id: blackSyncer.id, name: blackSyncer.engine.name, commands: blackSyncer.commands.length} : null,
+      whiteSyncer: whiteSyncer ? {id: whiteSyncer.id, name: whiteSyncer.engine.name, commands: whiteSyncer.commands.length} : null,
+    })
 
     let emptyTree = gametree.setGameInfo(this.getEmptyGameTree(), {
       blackName: blackSyncer?.engine.name || null,
@@ -2472,15 +2453,30 @@ class Sabaki extends EventEmitter {
     })
 
     if (blackSyncer != null || whiteSyncer != null) {
-      await Promise.all(
+      applogger.log('info', 'engine', 'engine.waiting', 'Waiting for engines to be ready', {
+        engines: [blackSyncer, whiteSyncer].filter(s => s != null).map(s => ({name: s.engine.name, commands: s.commands.length})),
+      })
+
+      let results = await Promise.all(
         [blackSyncer, whiteSyncer]
           .filter((syncer) => syncer != null)
           .map((syncer) => this.waitForEngineCommands(syncer, {timeout: 5000})),
       )
+
+      applogger.log('info', 'engine', 'engine.ready_results', 'Engine readiness results', {
+        results,
+        engines: [blackSyncer, whiteSyncer].filter(s => s != null).map(s => ({name: s.engine.name, commands: s.commands.length, busy: s.busy, suspended: s._suspended})),
+      })
     }
 
     let treePosition = this.state.treePosition
     let nextPlayer = this.getPlayer(treePosition)
+
+    applogger.log('info', 'game', 'game.starting', 'Starting game play', {
+      nextPlayer: nextPlayer > 0 ? 'black' : 'white',
+      treePosition,
+      engineGame: blackSyncer != null && whiteSyncer != null,
+    })
 
     if (blackSyncer != null && whiteSyncer != null) {
       this.startEngineGame(treePosition)
@@ -2491,6 +2487,11 @@ class Sabaki extends EventEmitter {
     }
 
     sound.playNewGame()
+    applogger.log('info', 'game', 'game.started', 'New game started', {
+      black: blackSyncer?.engine.name || 'Human',
+      white: whiteSyncer?.engine.name || 'Human',
+      boardSize,
+    })
   }
 
   async newFile({
@@ -2648,6 +2649,11 @@ class Sabaki extends EventEmitter {
     this.setBusy(false)
     this.window.setProgressBar(-1)
     this.events.emit('fileLoad')
+
+    applogger.log('info', 'game', 'file.loaded', 'File loaded', {
+      filename: this.state.representedFilename,
+      count: gameTrees.length,
+    })
 
     if (gameTrees.length > 1) {
       await helper.wait(setting.get('gamechooser.show_delay'))
@@ -3216,8 +3222,10 @@ class Sabaki extends EventEmitter {
     if (!pass) {
       sound.playPachi()
       if (capturing || suicide) sound.playCapture()
+      applogger.log('debug', 'game', 'game.move', 'Stone placed', {color, vertex: sgf.stringifyVertex(vertex)})
     } else {
       sound.playPass()
+      applogger.log('debug', 'game', 'game.pass', 'Pass', {color})
     }
 
     // Enter scoring mode after two consecutive passes
@@ -3231,6 +3239,7 @@ class Sabaki extends EventEmitter {
 
       if (prevPass) {
         enterScoring = true
+        applogger.log('info', 'game', 'game.double_pass', 'Double pass detected, entering scoring')
         this.setMode('scoring')
       }
     }
@@ -3258,28 +3267,11 @@ class Sabaki extends EventEmitter {
     let color = player > 0 ? 'W' : 'B'
     let tree = gameTrees[gameIndex]
 
-    console.log(
-      '[makeResign] player:',
-      player,
-      'color:',
-      color,
-      'tree.root.id:',
-      tree.root.id,
-      'treePosition:',
-      treePosition,
-    )
+    applogger.log('info', 'game', 'game.resign', `${color} resigned`, {color, player})
 
     let newTree = tree.mutate((draft) => {
       draft.updateProperty(draft.root.id, 'RE', [`${color}+Resign`])
     })
-
-    console.log(
-      '[makeResign] newTree.root.id:',
-      newTree.root.id,
-      'newTree RE:',
-      newTree.root.data.RE,
-      'NOTE: newTree is created but NOT applied to state!',
-    )
 
     this.makeMainVariation(treePosition)
     this.makeMove([-1, -1], {player, generateEngineMove: false})
@@ -3287,7 +3279,6 @@ class Sabaki extends EventEmitter {
     this.events.emit('resign', {player})
 
     let saved = await this.saveCurrentGame()
-    console.log('[makeResign] saveCurrentGame result:', saved)
     if (saved?.id) {
       this.startRecallSession(saved.id)
     }
@@ -3852,10 +3843,12 @@ class Sabaki extends EventEmitter {
       // Handle engine path errors
       if (syncer.pathError) {
         dialog.showMessageBox(syncer.pathError, 'error')
+        applogger.log('error', 'engine', 'engine.start_failed', 'Engine path error', {name: engine.name, error: syncer.pathError})
         continue
       }
 
       syncer.on('error', (err) => {
+        applogger.log('error', 'engine', 'engine.start_failed', 'Engine start failed', {name: engine.name, error: err})
         let message
         if (err.code === 'ENOENT') {
           message = t(
@@ -4002,6 +3995,7 @@ class Sabaki extends EventEmitter {
       syncer.controller.start()
 
       attaching.push(syncer)
+      applogger.log('info', 'engine', 'engine.attached', 'Engine attached', {name: engine.name, syncerId: syncer.id})
     }
 
     this.setState(({attachedEngineSyncers}) => ({
@@ -4020,6 +4014,8 @@ class Sabaki extends EventEmitter {
       detachEngineSyncers.map(async (syncer) => {
         await this.stopEngineGame()
         await syncer.stop()
+
+        applogger.log('info', 'engine', 'engine.detached', 'Engine detached', {name: syncer.engine.name, syncerId: syncer.id})
 
         let unset = (syncerId) => (syncerId === syncer.id ? null : syncerId)
 
@@ -4060,6 +4056,7 @@ class Sabaki extends EventEmitter {
         await syncer.sync(tree, treePosition)
         return true
       } catch (err) {
+        applogger.log('warn', 'engine', 'engine.sync_failed', 'Engine sync failed', {name: syncer.engine.name, error: err.message})
         await dialog.showMessageBox(err.message, 'error')
       }
     }
@@ -4074,7 +4071,12 @@ class Sabaki extends EventEmitter {
     let syncer = this.state.attachedEngineSyncers.find(
       (syncer) => syncer.id === syncerId,
     )
-    if (syncer == null) return
+    if (syncer == null) {
+      applogger.log('warn', 'engine', 'generateMove.no_syncer', 'No syncer found for move generation', {syncerId, color})
+      return
+    }
+
+    applogger.log('info', 'engine', 'generateMove.start', 'Generating engine move', {name: syncer.engine.name, color, commands: syncer.commands.length})
 
     let synced = await this.syncEngine(syncerId, treePosition)
     if (!synced) return
@@ -4137,6 +4139,7 @@ class Sabaki extends EventEmitter {
     coord = coord.toLowerCase().trim()
 
     if (coord === 'resign') {
+      applogger.log('info', 'engine', 'engine.resign', 'Engine resigned', {name: syncer.engine.name})
       await dialog.showMessageBox(
         t((p) => `${p.engine} has resigned.`, {
           engine: syncer.engine.name,
@@ -4148,6 +4151,11 @@ class Sabaki extends EventEmitter {
     let vertex = ['resign', 'pass'].includes(coord)
       ? [-1, -1]
       : board.parseVertex(coord)
+
+    if (coord !== 'resign') {
+      applogger.log('info', 'engine', 'engine.move', 'Engine generated move', {name: syncer.engine.name, coord})
+    }
+
     let currentTree = this.inferredState.gameTree
     let currentTreePosition = this.state.treePosition
     let positionMoved =
