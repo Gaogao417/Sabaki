@@ -214,6 +214,13 @@ export default class MainView extends Component {
     sabaki.clickVertex(evt.vertex, evt)
   }
 
+  async handlePlayVariationMoves({sign, moves}) {
+    for (let i = 0; i < moves.length; i++) {
+      let player = i % 2 === 0 ? sign : -sign
+      await sabaki.makeMove(moves[i], {player, generateEngineMove: false})
+    }
+  }
+
   handleGobanLineDraw(evt) {
     let {v1, v2} = evt.line
     let {mode, editWorkspaceActive, selectedTool} = this.props
@@ -414,6 +421,7 @@ export default class MainView extends Component {
 
       onAreaSelect: this.handleGobanAreaSelect,
       onAreaSelectPreview: this.handleGobanAreaSelectPreview,
+      onPlayVariationMoves: this.handlePlayVariationMoves,
       areaSelectMode: this.props.areaSelectMode,
     }
 

@@ -49,7 +49,21 @@ export default class Goban extends Component {
     }
   }
 
+  handlePlayVariationKeyDown = (evt) => {
+    if (evt.key !== 'Enter') return
+    if (this.state.variationMoves == null) return
+
+    let {onPlayVariationMoves = helper.noop} = this.props
+    evt.preventDefault()
+    onPlayVariationMoves({
+      sign: this.state.variationSign,
+      moves: this.state.variationMoves,
+    })
+  }
+
   componentDidMount() {
+    document.addEventListener('keydown', this.handlePlayVariationKeyDown)
+
     document.addEventListener('mouseup', () => {
       this.mouseDown = false
       this.dragCandidate = false
@@ -102,6 +116,7 @@ export default class Goban extends Component {
 
   componentWillUnmount() {
     clearTimeout(this.centerId)
+    document.removeEventListener('keydown', this.handlePlayVariationKeyDown)
     window.removeEventListener('resize', this.handleWindowResize)
 
     if (this.resizeObserver != null) {
