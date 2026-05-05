@@ -1,5 +1,3 @@
-import {classifyOwnershipPoint} from './territory.js'
-
 function createMetricTotals() {
   return {
     sum: 0,
@@ -9,8 +7,8 @@ function createMetricTotals() {
 
 function createDeltaStats() {
   return {
-    strengthened: createMetricTotals(),
-    weakened: createMetricTotals(),
+    black: createMetricTotals(),
+    white: createMetricTotals(),
   }
 }
 
@@ -28,17 +26,14 @@ function serializeMetric(metric) {
 
 function serializeDeltaStats(stats) {
   return {
-    strengthened: serializeMetric(stats.strengthened),
-    weakened: serializeMetric(stats.weakened),
+    black: serializeMetric(stats.black),
+    white: serializeMetric(stats.white),
   }
 }
 
-function getCompareTerritoryDeltaDirection(owner, delta) {
-  if (owner === 0 || delta == null || !Number.isFinite(delta) || delta === 0) {
-    return null
-  }
-
-  return Math.sign(delta) === owner ? 'strengthened' : 'weakened'
+function getDeltaColor(delta) {
+  if (delta == null || !Number.isFinite(delta) || delta === 0) return null
+  return delta > 0 ? 'black' : 'white'
 }
 
 export function buildOwnershipDeltaSummary(deltaMap) {
@@ -70,12 +65,8 @@ export function buildOwnershipDeltaSummary(deltaMap) {
   }
 }
 
-export function buildCompareTerritoryMarkerMap(
-  ownership,
-  deltaMap,
-  comparisonOwnership = null,
-) {
-  if (!Array.isArray(ownership)) return []
+export function buildCompareTerritoryMarkerMap(deltaMap) {
+  if (!Array.isArray(deltaMap)) return []
 
   let getMarkerSizeLevel = (delta) => {
     let absDelta = Math.abs(delta)
@@ -84,31 +75,20 @@ export function buildCompareTerritoryMarkerMap(
     return absDelta >= 0.15 ? 1 : 0
   }
 
-  return ownership.map((row, y) =>
-    row.map((value, x) => {
-      let point = classifyOwnershipPoint(value)
-      let fallbackPoint =
-        comparisonOwnership == null
-          ? point
-          : classifyOwnershipPoint(comparisonOwnership?.[y]?.[x] ?? 0)
-      let ownerPoint = point.owner !== 0 ? point : fallbackPoint
-      let delta = deltaMap?.[y]?.[x] ?? 0
-      let deltaDirection = getCompareTerritoryDeltaDirection(
-        ownerPoint.owner,
-        delta,
-      )
+  return deltaMap.map((row) =>
+    row.map((value) => {
+      let delta = Number(value)
+      let color = getDeltaColor(delta)
       let sizeLevel = getMarkerSizeLevel(delta)
 
-      if (deltaDirection != null && sizeLevel > 0) {
+      if (color != null && sizeLevel > 0) {
         return {
           type: 'point',
-          label: `@territory-delta-${deltaDirection}-${sizeLevel}`,
+          label: `@territory-delta-${color}-${sizeLevel}`,
         }
       }
 
-      return point.owner === 0
-        ? {type: 'point', label: '@territory-neutral'}
-        : null
+      return null
     }),
   )
 }
@@ -122,9 +102,9 @@ export function summarizeCompareTerritoryRegion(region, deltaMap) {
 
   for (let [x, y] of region.vertices) {
     let delta = deltaMap?.[y]?.[x] ?? 0
-    let direction = getCompareTerritoryDeltaDirection(region.sign, delta)
-    if (direction == null) continue
-    addDeltaMetric(stats[direction], delta)
+    let color = getDeltaColor(delta)
+    if (color == null) continue
+    addDeltaMetric(stats[color], delta)
   }
 
   return serializeDeltaStats(stats)

@@ -80,25 +80,21 @@ describe('territory', () => {
   })
 
   it('builds territory diff markers and summaries', () => {
-    let ownership = [
-      [0.95, -0.9, 0.02],
-      [0.5, -0.55, 0],
-    ]
     let deltaMap = [
       [0.4, 0.3, 0],
       [-0.2, 0.5, -0.4],
     ]
 
-    assert.deepEqual(buildCompareTerritoryMarkerMap(ownership, deltaMap), [
+    assert.deepEqual(buildCompareTerritoryMarkerMap(deltaMap), [
       [
-        {type: 'point', label: '@territory-delta-strengthened-2'},
-        {type: 'point', label: '@territory-delta-weakened-1'},
-        {type: 'point', label: '@territory-neutral'},
+        {type: 'point', label: '@territory-delta-black-2'},
+        {type: 'point', label: '@territory-delta-black-1'},
+        null,
       ],
       [
-        {type: 'point', label: '@territory-delta-weakened-1'},
-        {type: 'point', label: '@territory-delta-weakened-2'},
-        {type: 'point', label: '@territory-neutral'},
+        {type: 'point', label: '@territory-delta-white-1'},
+        {type: 'point', label: '@territory-delta-black-2'},
+        {type: 'point', label: '@territory-delta-white-2'},
       ],
     ])
 
@@ -121,8 +117,8 @@ describe('territory', () => {
     ]
 
     assert.deepEqual(summarizeCompareTerritoryRegion(blackRegion, deltaMap), {
-      strengthened: {sum: 0.55, intersections: 2},
-      weakened: {sum: 0.2, intersections: 1},
+      black: {sum: 0.55, intersections: 2},
+      white: {sum: 0.2, intersections: 1},
     })
   })
 })

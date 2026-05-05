@@ -80,12 +80,12 @@ export default function OverlayStatusBar({
           'div',
           {class: 'overlay-status-line'},
           h(LabelValue, {
-            label: t('Gain'),
-            value: formatMetric(hoveredRegionDeltaSummary.strengthened),
+            label: t('Black'),
+            value: formatMetric(hoveredRegionDeltaSummary.black),
           }),
           h(LabelValue, {
-            label: t('Loss'),
-            value: formatMetric(hoveredRegionDeltaSummary.weakened),
+            label: t('White'),
+            value: formatMetric(hoveredRegionDeltaSummary.white),
           }),
         ),
       hoveredDelta != null &&

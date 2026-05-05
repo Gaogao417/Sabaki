@@ -6,13 +6,11 @@ import {
 } from '../../modules/overlays/territoryDiff.js'
 
 export function getTerritoryDiffLayer({
-  ownership,
-  comparisonOwnership = null,
   deltaMap,
   hoveredVertex,
   hoveredRegion,
 }) {
-  if (ownership == null || deltaMap == null) {
+  if (deltaMap == null) {
     return {
       markerMap: null,
       deltaSummary: null,
@@ -22,11 +20,7 @@ export function getTerritoryDiffLayer({
   }
 
   return {
-    markerMap: buildCompareTerritoryMarkerMap(
-      ownership,
-      deltaMap,
-      comparisonOwnership,
-    ),
+    markerMap: buildCompareTerritoryMarkerMap(deltaMap),
     deltaSummary: buildOwnershipDeltaSummary(deltaMap),
     hoveredDelta: getDeltaAtVertex(deltaMap, hoveredVertex),
     hoveredRegionDeltaSummary: summarizeCompareTerritoryRegion(

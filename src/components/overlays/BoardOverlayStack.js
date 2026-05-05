@@ -103,8 +103,6 @@ export default class BoardOverlayStack extends Component {
     let territoryDiffLayer =
       unavailableReason == null && territoryMode
         ? getTerritoryDiffLayer({
-            ownership: baselineOwnership,
-            comparisonOwnership,
             deltaMap: activeDeltaMap,
             hoveredVertex,
             hoveredRegion: territoryPaintLayer.hoveredRegion,
