@@ -164,9 +164,7 @@ test.describe('Renderer Integration Tests', () => {
     test('engine management is a single engine form', async ({page}) => {
       await page.evaluate(() => window.__sabaki.setMode('play'))
 
-      await page
-        .locator('.mode-actions button', {hasText: '引擎管理'})
-        .click()
+      await page.locator('.mode-actions button', {hasText: '引擎管理'}).click()
 
       await expect(page.locator('#engine-management.show')).toBeVisible()
       await expect(page.locator('#engine-management')).toContainText(
@@ -175,6 +173,9 @@ test.describe('Renderer Integration Tests', () => {
       await expect(page.locator('#engine-management')).toContainText('基础信息')
       await expect(page.locator('#engine-management')).toContainText(
         'KataGo 计算量',
+      )
+      await expect(page.locator('#engine-management')).toContainText(
+        'HumanSL / 人类视角配置',
       )
       await expect(
         page.locator('#engine-management input[name="visits"]'),
@@ -187,13 +188,13 @@ test.describe('Renderer Integration Tests', () => {
       ).toHaveValue('15')
       await expect(
         page.locator('#engine-management input[name="candidates"]'),
-      ).toHaveValue('40')
+      ).toHaveValue('5')
       await expect(
         page.locator('#engine-management input[name="temperature"]'),
       ).toHaveValue('1')
-      await expect(page.locator('#engine-management .engines-list')).toHaveCount(
-        0,
-      )
+      await expect(
+        page.locator('#engine-management .engines-list'),
+      ).toHaveCount(0)
       await expect(page.locator('#engine-management')).not.toContainText('Add')
     })
 
@@ -204,7 +205,9 @@ test.describe('Renderer Integration Tests', () => {
 
       await expect(page.locator('.workbench-shell__left')).toHaveCount(0)
       await expect(page.locator('.workbench-shell__right')).toHaveCount(0)
-      await expect(page.locator('.workbench-shell__main--board-focused')).toBeVisible()
+      await expect(
+        page.locator('.workbench-shell__main--board-focused'),
+      ).toBeVisible()
     })
 
     test('recall left rail stays task focused', async ({page}) => {
@@ -362,10 +365,11 @@ test.describe('Renderer Integration Tests', () => {
       await loadSgfAndWait(page, sgfPath)
 
       await page.evaluate(() => {
+        window.__sabaki.setMode('analysis')
         window.__sabaki.setState({
           showSidebar: true,
           showGameGraph: true,
-          showCommentBox: true,
+          showCommentBox: false,
           sidebarWidth: 320,
         })
       })
@@ -455,12 +459,13 @@ test.describe('Renderer Integration Tests', () => {
         () => window.__sabaki.state.analysisAreaVertices == null,
       )
 
-      const start = await page.locator('.shudan-vertex').nth(20).boundingBox()
-      const end = await page.locator('.shudan-vertex').nth(42).boundingBox()
+      const boardVertices = page.locator('main.board-stage .shudan-vertex')
+      const start = await boardVertices.nth(20).boundingBox()
+      const end = await boardVertices.nth(42).boundingBox()
       expect(start).not.toBeNull()
       expect(end).not.toBeNull()
-      const startVertex = page.locator('.shudan-vertex').nth(20)
-      const endVertex = page.locator('.shudan-vertex').nth(42)
+      const startVertex = boardVertices.nth(20)
+      const endVertex = boardVertices.nth(42)
 
       await startVertex.dispatchEvent('mousedown', {
         button: 0,
@@ -511,7 +516,7 @@ test.describe('Renderer Integration Tests', () => {
       await page.evaluate(async () => {
         await window.__sabaki.newFile({suppressAskForSave: true})
         window.__sabaki.setMode('analysis')
-        window.__sabaki.setState({selectedTool: 'line'})
+        window.__sabaki.setState({selectedTool: 'line', areaSelectMode: true})
       })
       await page.waitForFunction(
         () =>
@@ -519,30 +524,28 @@ test.describe('Renderer Integration Tests', () => {
           window.__sabaki.state.editWorkspace != null,
       )
 
-      const start = await page.locator('.shudan-vertex').nth(30).boundingBox()
-      const end = await page.locator('.shudan-vertex').nth(52).boundingBox()
+      const boardVertices = page.locator('main.board-stage .shudan-vertex')
+      const start = await boardVertices.nth(30).boundingBox()
+      const end = await boardVertices.nth(52).boundingBox()
       expect(start).not.toBeNull()
       expect(end).not.toBeNull()
-      const startVertex = page.locator('.shudan-vertex').nth(30)
-      const endVertex = page.locator('.shudan-vertex').nth(52)
+      const startVertex = boardVertices.nth(30)
+      const endVertex = boardVertices.nth(52)
 
       await startVertex.dispatchEvent('mousedown', {
         button: 0,
         buttons: 1,
-        ctrlKey: true,
         clientX: start.x + start.width / 2,
         clientY: start.y + start.height / 2,
       })
       await endVertex.dispatchEvent('mousemove', {
         button: 0,
         buttons: 1,
-        ctrlKey: true,
         clientX: end.x + end.width / 2,
         clientY: end.y + end.height / 2,
       })
       await endVertex.dispatchEvent('mouseup', {
         button: 0,
-        ctrlKey: true,
         clientX: end.x + end.width / 2,
         clientY: end.y + end.height / 2,
       })

@@ -55,12 +55,44 @@ function formatWinrate(value, sign) {
   return `${Math.round(displayed * 10) / 10}%`
 }
 
-function AnalysisSummaryCard({analysis, boardHeight}) {
+function formatPolicy(value) {
+  if (value == null) return '-'
+
+  let displayed = value <= 1 ? value * 100 : value
+  return `${Math.round(displayed)}%`
+}
+
+function sameVertex(a, b) {
+  return a != null && b != null && a[0] === b[0] && a[1] === b[1]
+}
+
+function AnalysisSummaryCard({
+  analysis,
+  boardHeight,
+  humanSLProfile,
+  showAISuggestions,
+  showHumanPreference,
+  selectedAnalysisVertex,
+}) {
   let hasAnalysis =
     analysis != null &&
     Array.isArray(analysis.variations) &&
     analysis.variations.length > 0
-  let candidates = hasAnalysis ? analysis.variations.slice(0, 3) : []
+  let candidates = hasAnalysis
+    ? analysis.variations
+        .slice()
+        .sort((a, b) => {
+          if (showHumanPreference) {
+            return (b.humanPolicy ?? -1) - (a.humanPolicy ?? -1)
+          }
+          return (a.aiRank ?? 0) - (b.aiRank ?? 0)
+        })
+        .slice(0, 5)
+    : []
+  let totalVisits = candidates.reduce(
+    (sum, item) => sum + (item.visits || 0),
+    0,
+  )
 
   return h(
     'section',
@@ -69,6 +101,11 @@ function AnalysisSummaryCard({analysis, boardHeight}) {
       'div',
       {class: 'card-header'},
       h('strong', {class: 'card-title'}, 'AI 分析'),
+      h(
+        'span',
+        {class: 'human-profile-pill'},
+        humanSLProfile || 'Human rank_1d',
+      ),
     ),
     h(
       'div',
@@ -107,28 +144,83 @@ function AnalysisSummaryCard({analysis, boardHeight}) {
         ),
       candidates.length > 0 &&
         h(
-          'ol',
-          {class: 'candidate-move-list'},
-          candidates.map((variation, index) =>
+          'div',
+          {class: 'recommendation-table-wrap'},
+          h(
+            'div',
+            {class: 'recommendation-table-head'},
+            h('strong', {}, '推荐选点'),
+            h('span', {}, `计算量: ${totalVisits}`),
             h(
-              'li',
-              {key: index},
+              'label',
+              {class: 'recommendation-toggle'},
+              h('input', {
+                type: 'checkbox',
+                checked: !!showAISuggestions,
+                onChange: () => sabaki.toggleShowAISuggestions(),
+              }),
+              '在棋盘上显示推荐点',
+            ),
+          ),
+          h(
+            'table',
+            {class: 'recommendation-table'},
+            h(
+              'thead',
+              {},
               h(
-                'strong',
+                'tr',
                 {},
-                formatOptionalVertex(variation.vertex, boardHeight),
+                h('th', {}, '位置'),
+                h('th', {}, '人类偏好'),
+                h('th', {}, '计算量'),
+                h('th', {}, '胜率'),
+                h('th', {}, '领先(目)'),
               ),
-              h(
-                'span',
-                {},
-                `${formatWinrate(variation.winrate, analysis.sign)} / ${formatSignedNumber(
-                  analysis.sign < 0 && variation.scoreLead != null
-                    ? -variation.scoreLead
-                    : variation.scoreLead,
-                )}`,
+            ),
+            h(
+              'tbody',
+              {},
+              candidates.map((variation, index) =>
+                h(
+                  'tr',
+                  {
+                    key: index,
+                    class: sameVertex(selectedAnalysisVertex, variation.vertex)
+                      ? 'selected'
+                      : '',
+                    onClick: () =>
+                      sabaki.setSelectedAnalysisVertex(variation.vertex),
+                  },
+                  h(
+                    'td',
+                    {},
+                    h('span', {class: 'candidate-radio'}),
+                    formatOptionalVertex(variation.vertex, boardHeight),
+                  ),
+                  h('td', {}, formatPolicy(variation.humanPolicy)),
+                  h('td', {}, `${variation.visits ?? '-'}`),
+                  h('td', {}, formatWinrate(variation.winrate, analysis.sign)),
+                  h(
+                    'td',
+                    {},
+                    formatSignedNumber(
+                      analysis.sign < 0 && variation.scoreLead != null
+                        ? -variation.scoreLead
+                        : variation.scoreLead,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
+        ),
+      !hasAnalysis &&
+        h(
+          'div',
+          {class: 'recommendation-table-wrap recommendation-table-wrap--empty'},
+          h('strong', {}, '推荐选点'),
+          h('span', {}, '启动引擎分析后显示候选点和 HumanSL 偏好。'),
         ),
     ),
   )
@@ -233,6 +325,10 @@ export default class Sidebar extends Component {
       editWorkspaceActive,
       editPreviewBoard,
       activeAnalysis,
+      humanSLProfile,
+      showAISuggestions,
+      showHumanPreference,
+      selectedAnalysisVertex,
       inspectorSummary,
       overlayStatusProps,
       recallMoveIndex,
@@ -288,6 +384,10 @@ export default class Sidebar extends Component {
           h(AnalysisSummaryCard, {
             analysis: activeAnalysis,
             boardHeight: inspectorSummary?.boardHeight ?? 19,
+            humanSLProfile,
+            showAISuggestions,
+            showHumanPreference,
+            selectedAnalysisVertex,
           }),
 
         showWinrateGraph &&
@@ -602,6 +702,10 @@ export default class Sidebar extends Component {
           h(AnalysisSummaryCard, {
             analysis: activeAnalysis,
             boardHeight: inspectorSummary?.boardHeight ?? 19,
+            humanSLProfile,
+            showAISuggestions,
+            showHumanPreference,
+            selectedAnalysisVertex,
           }),
 
         ['play', 'recall', 'analysis'].includes(mode) &&

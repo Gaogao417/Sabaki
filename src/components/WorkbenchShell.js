@@ -173,6 +173,8 @@ export default class WorkbenchShell extends Component {
               territoryEnabled: props.territoryEnabled,
               territoryCompareEnabled: props.territoryCompareEnabled,
               territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
+              showAISuggestions: props.showAISuggestions,
+              showHumanPreference: props.showHumanPreference,
               editWorkspaceActive,
               areaSelectMode: props.areaSelectMode,
               analysisAreaVertices: props.analysisAreaVertices,

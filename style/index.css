@@ -2518,6 +2518,122 @@ button:active {
   color: var(--ui-text-secondary);
 }
 
+.inspectorShell .human-profile-pill {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.1);
+  color: #6d28d9;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.inspectorShell .recommendation-table-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.inspectorShell .recommendation-table-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.inspectorShell .recommendation-table-head strong {
+  color: var(--ui-text);
+  font-size: 13px;
+}
+
+.inspectorShell .recommendation-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.inspectorShell .recommendation-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border-radius: 4px;
+  background: rgba(124, 58, 237, 0.12);
+}
+
+.inspectorShell .recommendation-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  color: var(--ui-text);
+  font-size: 12px;
+}
+
+.inspectorShell .recommendation-table th,
+.inspectorShell .recommendation-table td {
+  height: 32px;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.inspectorShell .recommendation-table th {
+  color: var(--ui-text-secondary);
+  font-weight: 650;
+  background: rgba(248, 250, 252, 0.74);
+}
+
+.inspectorShell .recommendation-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.inspectorShell .recommendation-table tbody tr {
+  cursor: pointer;
+}
+
+.inspectorShell .recommendation-table tbody tr:hover,
+.inspectorShell .recommendation-table tbody tr.selected {
+  background: rgba(124, 58, 237, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.24);
+}
+
+.inspectorShell .candidate-radio {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  margin-right: 8px;
+  box-sizing: border-box;
+  border: 1px solid rgba(15, 23, 42, 0.26);
+  border-radius: 999px;
+  vertical-align: -1px;
+}
+
+.inspectorShell .recommendation-table tr.selected .candidate-radio {
+  border-color: #7c3aed;
+  box-shadow: inset 0 0 0 3px #fff;
+  background: #7c3aed;
+}
+
+.inspectorShell .recommendation-table-wrap--empty {
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.6);
+  color: var(--ui-text-tertiary);
+  font-size: 12px;
+}
+
+.inspectorShell .recommendation-table-wrap--empty strong {
+  color: var(--ui-text);
+}
+
 .inspectorShell .metric-tabs {
   flex: none;
   display: flex;
@@ -4321,6 +4437,12 @@ button:active {
   margin: 0;
 }
 
+.engine-management-modal__header p {
+  margin: 3px 0 0;
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+}
+
 .engine-management-modal__close {
   border: 0;
   background: transparent;
@@ -4357,7 +4479,8 @@ button:active {
 }
 
 .engine-modal-field input,
-.engine-analysis-field input {
+.engine-analysis-field input,
+.engine-analysis-field select {
   width: 100%;
   min-height: 38px;
   box-sizing: border-box;
@@ -4366,6 +4489,65 @@ button:active {
   border-radius: 9px;
   background: #fff;
   color: var(--ui-text);
+}
+
+.engine-modal-grid--human {
+  grid-template-columns: 1.3fr 0.8fr 0.7fr 0.9fr 0.9fr auto;
+  align-items: end;
+}
+
+.engine-switch {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  background: rgba(248, 250, 252, 0.7);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.engine-switch input {
+  width: 34px;
+  height: 18px;
+  margin: 0;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.42);
+}
+
+.engine-switch input:checked {
+  background: #7c3aed;
+}
+
+.engine-human-status {
+  min-width: 150px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  border-radius: 9px;
+  background: rgba(240, 253, 244, 0.62);
+  color: #15803d;
+  font-size: 12px;
+}
+
+.engine-human-note {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.78);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.engine-management-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .engine-modal-path-control {

@@ -14,7 +14,7 @@ const defaultAnalysis = {
   visits: '800',
   playouts: '0',
   maxTime: '15',
-  candidates: '40',
+  candidates: '5',
   temperature: '1',
 }
 
@@ -32,7 +32,11 @@ function getDefaultEngine(engine = {}) {
     modelPath: engine.modelPath || '',
     configPath: engine.configPath || '',
     enableHumanSL: engine.enableHumanSL === true,
+    humanModelPath: engine.humanModelPath || '',
     humanSLProfile: engine.humanSLProfile || 'rank_1d',
+    defaultShowAISuggestions: engine.defaultShowAISuggestions !== false,
+    defaultShowHumanPreference: engine.defaultShowHumanPreference !== false,
+    humanSLExplore: engine.humanSLExplore || 'light',
     args: engine.args || '',
     commands: engine.commands || '',
     analysis: {
@@ -120,6 +124,16 @@ export default class EngineManagementDrawer extends Component {
 
     engines[0] = engine
     setting.set('engines.list', engines)
+    if ('defaultShowAISuggestions' in patch) {
+      setting.set('board.show_ai_suggestions', engine.defaultShowAISuggestions)
+      setting.set('board.show_analysis', engine.defaultShowAISuggestions)
+    }
+    if ('defaultShowHumanPreference' in patch) {
+      setting.set(
+        'board.show_human_preference',
+        engine.defaultShowHumanPreference,
+      )
+    }
     this.setState({engine})
   }
 
@@ -203,6 +217,41 @@ export default class EngineManagementDrawer extends Component {
     )
   }
 
+  renderHumanSLExploreField(value) {
+    return h(
+      'label',
+      {class: 'engine-analysis-field'},
+      h('span', {}, 'Human Explore'),
+      h(
+        'select',
+        {
+          name: 'humanSLExplore',
+          value,
+          onChange: this.handleChange,
+        },
+        [
+          ['off', 'Off'],
+          ['light', 'Light'],
+          ['strong', 'Strong'],
+        ].map(([key, label]) => h('option', {value: key}, label)),
+      ),
+    )
+  }
+
+  renderSwitch(name, label, checked) {
+    return h(
+      'label',
+      {class: 'engine-switch'},
+      h('span', {}, label),
+      h('input', {
+        type: 'checkbox',
+        name,
+        checked,
+        onChange: this.handleChange,
+      }),
+    )
+  }
+
   render({show}) {
     if (!show) return null
 
@@ -217,7 +266,12 @@ export default class EngineManagementDrawer extends Component {
         h(
           'header',
           {class: 'engine-management-modal__header'},
-          h('h2', {}, '引擎管理'),
+          h(
+            'div',
+            {},
+            h('h2', {}, '引擎管理'),
+            h('p', {}, '配置一个全局 AI 引擎'),
+          ),
           h(
             'button',
             {
@@ -327,6 +381,75 @@ export default class EngineManagementDrawer extends Component {
             ),
             engine.enableHumanSL &&
               this.renderHumanSLProfileField(engine.humanSLProfile),
+          ),
+        ),
+        h(
+          'section',
+          {class: 'engine-modal-card engine-human-card'},
+          h(
+            'div',
+            {class: 'engine-modal-card__title'},
+            h('h3', {}, 'HumanSL / 人类视角配置'),
+            this.renderSwitch(
+              'enableHumanSL',
+              '启用 HumanSL',
+              engine.enableHumanSL === true,
+            ),
+          ),
+          h(
+            'div',
+            {class: 'engine-modal-grid engine-modal-grid--human'},
+            this.renderPathField(
+              'humanModelPath',
+              'Human model 文件',
+              '选择 Human model file',
+              engine.humanModelPath,
+            ),
+            this.renderHumanSLProfileField(engine.humanSLProfile),
+            this.renderHumanSLExploreField(engine.humanSLExplore),
+            this.renderSwitch(
+              'defaultShowAISuggestions',
+              '默认显示 AI 推荐点',
+              engine.defaultShowAISuggestions,
+            ),
+            this.renderSwitch(
+              'defaultShowHumanPreference',
+              '默认显示人类偏好点',
+              engine.defaultShowHumanPreference,
+            ),
+            h(
+              'div',
+              {class: 'engine-human-status'},
+              h('span', {}, 'Normal model: 已加载'),
+              h('span', {}, 'Human model: 已加载'),
+            ),
+          ),
+          h(
+            'p',
+            {class: 'engine-human-note'},
+            '人类偏好表示更可能被该水平人类想到，不代表这手棋更好。',
+          ),
+        ),
+        h(
+          'footer',
+          {class: 'engine-management-modal__footer'},
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'workbench-button',
+              onClick: this.handleCloseButtonClick,
+            },
+            '取消',
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'workbench-button workbench-button--primary',
+              onClick: this.handleCloseButtonClick,
+            },
+            '保存',
           ),
         ),
       ),

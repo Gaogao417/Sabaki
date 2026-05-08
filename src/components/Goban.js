@@ -178,12 +178,14 @@ export default class Goban extends Component {
   }
 
   getAreaOperation(evt) {
+    let primaryButton = evt.button === 0 || evt.buttons === 1
+
     if (evt.altKey && evt.button === 2) return 'clearAll'
-    if (evt.altKey && evt.button === 0) return 'removeRect'
-    if (evt.button === 0 && this.props.areaSelectMode) return 'add'
+    if (evt.altKey && primaryButton) return 'removeRect'
+    if (primaryButton && this.props.areaSelectMode) return 'add'
     if (
       (helper.isMac ? evt.metaKey : evt.ctrlKey || evt.metaKey) &&
-      evt.button === 0
+      primaryButton
     )
       return 'add'
     return null
@@ -309,6 +311,16 @@ export default class Goban extends Component {
       return
     }
 
+    if (
+      areaOperation != null &&
+      this.mouseDown &&
+      !this.areaSelecting &&
+      this.startVertex != null
+    ) {
+      this.areaDragOperation = areaOperation
+      this.areaSelecting = true
+    }
+
     if (!areaEvent) {
       onVertexMouseMove(moveEvent)
     }
@@ -341,7 +353,7 @@ export default class Goban extends Component {
       this.areaSelecting &&
       evt.mouseDown &&
       this.startVertex != null &&
-      evt.button === 0
+      (evt.button === 0 || evt.buttons === 1)
     ) {
       this.areaDragOperation = areaOperation || this.areaDragOperation
       this.areaDragging =
@@ -353,7 +365,11 @@ export default class Goban extends Component {
           operation: this.areaDragOperation,
         })
       }
-    } else if (!!drawLineMode && evt.mouseDown && evt.button === 0) {
+    } else if (
+      !!drawLineMode &&
+      evt.mouseDown &&
+      (evt.button === 0 || evt.buttons === 1)
+    ) {
       let temporaryLine = {v1: evt.startVertex, v2: evt.vertex}
 
       if (!helper.equals(temporaryLine, this.state.temporaryLine)) {

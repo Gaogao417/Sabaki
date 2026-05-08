@@ -304,10 +304,12 @@ export default class MainView extends Component {
       blockedGuesses,
 
       highlightVertices,
+      selectedAnalysisVertex,
       analysisAreaRects,
       analysisAreaVertices,
       analysisType,
       showAnalysis,
+      showHumanPreference,
       showCoordinates,
       showMoveColorization,
       showMoveNumbers,
@@ -352,6 +354,24 @@ export default class MainView extends Component {
       }
     }
 
+    if (showHumanPreference && activeAnalysis?.variations != null) {
+      let preferenceMap = markerMap || board.markers.map((row) => [...row])
+      activeAnalysis.variations
+        .filter((variation) => variation.humanPolicy != null)
+        .slice()
+        .sort((a, b) => b.humanPolicy - a.humanPolicy)
+        .slice(0, 5)
+        .forEach((variation, index) => {
+          let [x, y] = variation.vertex || []
+          if (preferenceMap[y] == null || x == null) return
+          preferenceMap[y][x] = {
+            type: 'label',
+            label: `${index + 1}`,
+          }
+        })
+      markerMap = preferenceMap
+    }
+
     if (analysisAreaVertices != null) {
       paintMap = board.signMap.map((row) => row.map(() => 0))
       let vertexSet = new Set(
@@ -371,7 +391,14 @@ export default class MainView extends Component {
       treePosition,
       board,
       highlightVertices:
-        findVertex && mode === 'find' ? [findVertex] : highlightVertices,
+        findVertex && mode === 'find'
+          ? [findVertex]
+          : [
+              ...(highlightVertices || []),
+              ...(selectedAnalysisVertex != null
+                ? [selectedAnalysisVertex]
+                : []),
+            ],
       analysisType,
       analysis: showAnalysis ? activeAnalysis : null,
       paintMap,
@@ -382,7 +409,8 @@ export default class MainView extends Component {
       dimmedStones,
       overlayGhostStoneMap,
 
-      crosshair: gobanCrosshair || areaModifierActive || this.props.areaSelectMode,
+      crosshair:
+        gobanCrosshair || areaModifierActive || this.props.areaSelectMode,
       showCoordinates,
       showMoveColorization,
       showMoveNumbers:

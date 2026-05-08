@@ -88,6 +88,8 @@ class Sabaki extends EventEmitter {
       analysisType: null,
       coordinatesType: null,
       showAnalysis: null,
+      showAISuggestions: null,
+      showHumanPreference: null,
       showCoordinates: null,
       showMoveColorization: null,
       showMoveNumbers: null,
@@ -123,6 +125,7 @@ class Sabaki extends EventEmitter {
       analysis: null,
       quickAnalysisId: null,
       quickAnalysisSyncerId: null,
+      selectedAnalysisVertex: null,
       humanSLAvailable: false,
       humanSLModelLoaded: false,
       humanSLProfile: 'rank_1d',
@@ -378,6 +381,8 @@ class Sabaki extends EventEmitter {
       'app.zoom_factor': 'zoomFactor',
       'board.analysis_type': 'analysisType',
       'board.show_analysis': 'showAnalysis',
+      'board.show_ai_suggestions': 'showAISuggestions',
+      'board.show_human_preference': 'showHumanPreference',
       'view.show_menubar': 'showMenuBar',
       'view.show_coordinates': 'showCoordinates',
       'view.show_move_colorization': 'showMoveColorization',
@@ -2519,11 +2524,13 @@ class Sabaki extends EventEmitter {
       if (engine.configPath) parts.push('-config', `"${engine.configPath}"`)
       let humanSLModelPath = null
       if (engine.enableHumanSL === true) {
-        humanSLModelPath = join(
-          window.sabaki.setting.userDataDirectory,
-          'models',
-          humanSLModelFilename,
-        )
+        humanSLModelPath =
+          engine.humanModelPath ||
+          join(
+            window.sabaki.setting.userDataDirectory,
+            'models',
+            humanSLModelFilename,
+          )
         parts.push('-human-model', `"${humanSLModelPath}"`)
       }
 
@@ -4996,6 +5003,26 @@ class Sabaki extends EventEmitter {
 
   toggleAreaSelectMode() {
     this.setState({areaSelectMode: !this.state.areaSelectMode})
+  }
+
+  toggleShowAISuggestions() {
+    let value = !this.state.showAISuggestions
+    setting.set('board.show_ai_suggestions', value)
+    setting.set('board.show_analysis', value)
+    this.setState({
+      showAISuggestions: value,
+      showAnalysis: value,
+    })
+  }
+
+  toggleShowHumanPreference() {
+    let value = !this.state.showHumanPreference
+    setting.set('board.show_human_preference', value)
+    this.setState({showHumanPreference: value})
+  }
+
+  setSelectedAnalysisVertex(vertex) {
+    this.setState({selectedAnalysisVertex: vertex})
   }
 
   setPlayer(treePosition, sign) {

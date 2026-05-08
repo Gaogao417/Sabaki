@@ -2,14 +2,16 @@
 set -euo pipefail
 
 # KataGo + Sabaki Setup Script
-# Downloads KataGo engine, neural network model, and configures Sabaki.
-# Supports: macOS (arm64/x86_64), Linux (x86_64), Windows (Git Bash/MSYS2)
+# Downloads or reuses KataGo, writes a small GTP config, and configures Sabaki.
+# Supports: macOS, Linux, Windows Git Bash/MSYS2, and WSL configuring Windows Sabaki.
 
 KATAGO_VERSION="v1.16.4"
 KATAGO_VERSION_NUM="1.16.4"
-MODEL_NAME="kata1-b18c384nbt-s9996604416-d4316597426"
-MODEL_URL="https://media.katagotraining.org/uploaded/networks/models/kata1/${MODEL_NAME}.bin.gz"
+MODEL_NAME="${KATAGO_MODEL_NAME:-kata1-b18c384nbt-s9996604416-d4316597426}"
+MODEL_URL="${KATAGO_MODEL_URL:-https://media.katagotraining.org/uploaded/networks/models/kata1/${MODEL_NAME}.bin.gz}"
 GITHUB_BASE="https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}"
+HUMANSL_MODEL_NAME="b18c384nbt-humanv0.bin.gz"
+HUMANSL_MODEL_URL="${HUMANSL_MODEL_URL:-https://github.com/lightvector/KataGo/releases/download/v1.15.0/${HUMANSL_MODEL_NAME}}"
 
 # ── Colors ───────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -24,6 +26,10 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 # ── Detect platform ──────────────────────────────────────────────────
 OS="$(uname -s)"
 ARCH="$(uname -m)"
+IS_WSL=0
+if [ "$OS" = "Linux" ] && grep -qi microsoft /proc/version 2>/dev/null; then
+  IS_WSL=1
+fi
 
 case "$OS" in
   Darwin)
@@ -32,7 +38,24 @@ case "$OS" in
     ;;
   Linux)
     PLATFORM="linux"
-    SABAKI_SETTINGS="$HOME/.config/Sabaki/settings.json"
+    if [ "$IS_WSL" = "1" ]; then
+      PLATFORM="wsl-windows"
+      WIN_USER="$(cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r' || true)"
+      if [ -n "$WIN_USER" ] && [ -d "/mnt/c/Users/${WIN_USER}/AppData/Roaming" ]; then
+        WIN_APPDATA_UNIX="/mnt/c/Users/${WIN_USER}/AppData/Roaming"
+      else
+        EXISTING_SETTINGS="$(compgen -G '/mnt/c/Users/*/AppData/Roaming/Sabaki/settings.json' | head -1 || true)"
+        if [ -n "$EXISTING_SETTINGS" ]; then
+          WIN_APPDATA_UNIX="$(dirname "$(dirname "$EXISTING_SETTINGS")")"
+        else
+          WIN_APPDATA_UNIX="$(compgen -G '/mnt/c/Users/*/AppData/Roaming' | head -1 || true)"
+        fi
+      fi
+      [ -n "$WIN_APPDATA_UNIX" ] || error "Could not locate Windows AppData/Roaming from WSL."
+      SABAKI_SETTINGS="$WIN_APPDATA_UNIX/Sabaki/settings.json"
+    else
+      SABAKI_SETTINGS="$HOME/.config/Sabaki/settings.json"
+    fi
     ;;
   MINGW*|MSYS*|CYGWIN*)
     PLATFORM="windows"
@@ -45,6 +68,37 @@ esac
 
 info "Detected: $PLATFORM ($ARCH)"
 
+to_unix_path() {
+  local p="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -u "$p"
+  elif [[ "$p" =~ ^([A-Za-z]):\\(.*)$ ]]; then
+    local drive="${BASH_REMATCH[1],,}"
+    local rest="${BASH_REMATCH[2]//\\//}"
+    echo "/mnt/$drive/$rest"
+  else
+    echo "$p"
+  fi
+}
+
+to_windows_path() {
+  local p="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$p"
+  elif command -v wslpath >/dev/null 2>&1; then
+    wslpath -w "$p"
+  else
+    echo "$p"
+  fi
+}
+
+json_escape() {
+  python3 - "$1" <<'PY'
+import json, sys
+print(json.dumps(sys.argv[1], ensure_ascii=False)[1:-1])
+PY
+}
+
 # ── Data directory ───────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -55,6 +109,19 @@ info "Data directory: $DATA_DIR"
 
 # ── Step 1: KataGo engine ────────────────────────────────────────────
 KATAGO_BIN=""
+
+WINDOWS_KATAGO_CANDIDATES=(
+  "D:\\KataGo\\engine\\v1.16.4-cuda12.8-cudnn9.8.0\\katago.exe"
+  "D:\\KataGo\\katago.exe"
+  "C:\\KataGo\\katago.exe"
+)
+
+WINDOWS_MODEL_CANDIDATES=(
+  "D:\\KataGo\\models\\kata1-zhizi-b28c512nbt-muonfd2.bin.gz"
+  "D:\\KataGo\\models\\${MODEL_NAME}.bin.gz"
+  "D:\\KataGo\\${MODEL_NAME}.bin.gz"
+  "C:\\KataGo\\models\\${MODEL_NAME}.bin.gz"
+)
 
 if [ "$PLATFORM" = "macos" ]; then
   # macOS: prefer homebrew, fallback to checking PATH
@@ -97,9 +164,20 @@ elif [ "$PLATFORM" = "linux" ]; then
     info "KataGo installed: $KATAGO_BIN"
   fi
 
-elif [ "$PLATFORM" = "windows" ]; then
+elif [ "$PLATFORM" = "windows" ] || [ "$PLATFORM" = "wsl-windows" ]; then
+  for candidate in "${WINDOWS_KATAGO_CANDIDATES[@]}"; do
+    candidate_unix="$(to_unix_path "$candidate")"
+    if [ -f "$candidate_unix" ]; then
+      KATAGO_BIN="$candidate_unix"
+      info "Found existing Windows KataGo: $candidate"
+      break
+    fi
+  done
+
   KATAGO_EXE="$DATA_DIR/katago.exe"
-  if [ -x "$KATAGO_EXE" ] || [ -f "$KATAGO_EXE" ]; then
+  if [ -n "$KATAGO_BIN" ]; then
+    :
+  elif [ -x "$KATAGO_EXE" ] || [ -f "$KATAGO_EXE" ]; then
     KATAGO_BIN="$KATAGO_EXE"
     info "Found existing KataGo: $KATAGO_BIN"
   else
@@ -124,7 +202,22 @@ elif [ "$PLATFORM" = "windows" ]; then
 fi
 
 # ── Step 2: Download model ───────────────────────────────────────────
-MODEL_PATH="$DATA_DIR/${MODEL_NAME}.bin.gz"
+MODEL_PATH=""
+
+if [ "$PLATFORM" = "windows" ] || [ "$PLATFORM" = "wsl-windows" ]; then
+  for candidate in "${WINDOWS_MODEL_CANDIDATES[@]}"; do
+    candidate_unix="$(to_unix_path "$candidate")"
+    if [ -f "$candidate_unix" ]; then
+      MODEL_PATH="$candidate_unix"
+      info "Found existing Windows model: $candidate"
+      break
+    fi
+  done
+fi
+
+if [ -z "$MODEL_PATH" ]; then
+  MODEL_PATH="$DATA_DIR/${MODEL_NAME}.bin.gz"
+fi
 
 if [ -f "$MODEL_PATH" ]; then
   info "Model already exists: $MODEL_PATH"
@@ -146,62 +239,124 @@ EOF
 info "Config written: $CONFIG_PATH"
 
 # ── Step 4: Update Sabaki settings ───────────────────────────────────
-# Use forward slashes for JSON compatibility
-MODEL_PATH_JSON="${MODEL_PATH//\\//}"
-CONFIG_PATH_JSON="${CONFIG_PATH//\\//}"
-KATAGO_BIN_JSON="${KATAGO_BIN//\\//}"
+if [ "$PLATFORM" = "windows" ] || [ "$PLATFORM" = "wsl-windows" ]; then
+  MODEL_PATH_FOR_APP="$(to_windows_path "$MODEL_PATH")"
+  CONFIG_PATH_FOR_APP="$(to_windows_path "$CONFIG_PATH")"
+  KATAGO_BIN_FOR_APP="$(to_windows_path "$KATAGO_BIN")"
+  HUMANSL_MODEL_FOR_APP="$(to_windows_path "$(dirname "$SABAKI_SETTINGS")/models/$HUMANSL_MODEL_NAME")"
+else
+  MODEL_PATH_FOR_APP="$MODEL_PATH"
+  CONFIG_PATH_FOR_APP="$CONFIG_PATH"
+  KATAGO_BIN_FOR_APP="$KATAGO_BIN"
+  HUMANSL_MODEL_FOR_APP="$(dirname "$SABAKI_SETTINGS")/models/$HUMANSL_MODEL_NAME"
+fi
 
-ENGINE_NAME="KataGo b18c384"
+# ── Step 4: Ensure HumanSL model before enabling the engine ───────────
+HUMANSL_MODEL_UNIX="$(to_unix_path "$HUMANSL_MODEL_FOR_APP")"
+mkdir -p "$(dirname "$HUMANSL_MODEL_UNIX")"
 
-if [ -f "$SABAKI_SETTINGS" ]; then
-  # Read existing settings, update engines.list
-  SETTINGS=$(python3 -c "
+if [ ! -f "$HUMANSL_MODEL_UNIX" ]; then
+  info "HumanSL model missing; downloading before enabling engine..."
+  info "HumanSL URL: $HUMANSL_MODEL_URL"
+  TEMP_HUMANSL="${HUMANSL_MODEL_UNIX}.download"
+  rm -f "$TEMP_HUMANSL"
+  curl -fL --retry 3 --retry-delay 2 -o "$TEMP_HUMANSL" "$HUMANSL_MODEL_URL"
+  mv "$TEMP_HUMANSL" "$HUMANSL_MODEL_UNIX"
+  info "HumanSL model downloaded: $HUMANSL_MODEL_UNIX"
+else
+  info "HumanSL model already exists: $HUMANSL_MODEL_UNIX"
+fi
+
+HUMANSL_ENABLED=true
+HUMANSL_ENABLED_PY=True
+HUMANSL_MODEL_JSON="$(json_escape "$HUMANSL_MODEL_FOR_APP")"
+
+# ── Step 5: Smoke-test the engine binary ──────────────────────────────
+if "$KATAGO_BIN" version >/tmp/katago-version.out 2>/tmp/katago-version.err; then
+  info "KataGo binary smoke test passed: $(head -1 /tmp/katago-version.out)"
+else
+  cat /tmp/katago-version.err >&2 || true
+  error "KataGo binary did not run."
+fi
+rm -f /tmp/katago-version.out /tmp/katago-version.err
+
+MODEL_PATH_JSON="$(json_escape "$MODEL_PATH_FOR_APP")"
+CONFIG_PATH_JSON="$(json_escape "$CONFIG_PATH_FOR_APP")"
+KATAGO_BIN_JSON="$(json_escape "$KATAGO_BIN_FOR_APP")"
+ARGS_JSON="$(json_escape "gtp -model \"$MODEL_PATH_FOR_APP\" -config \"$CONFIG_PATH_FOR_APP\"")"
+
+ENGINE_NAME="KataGo local"
+
+mkdir -p "$(dirname "$SABAKI_SETTINGS")"
+if [ ! -f "$SABAKI_SETTINGS" ]; then
+  echo '{}' > "$SABAKI_SETTINGS"
+fi
+
+SETTINGS=$(python3 - "$SABAKI_SETTINGS" <<PY
 import json, sys
 
-with open(sys.argv[1], 'r') as f:
-    settings = json.load(f)
+settings_path = sys.argv[1]
+with open(settings_path, 'r', encoding='utf-8') as f:
+    try:
+        settings = json.load(f)
+    except Exception:
+        settings = {}
 
-# Check if engine already exists
-engines = settings.get('engines.list', [])
-for e in engines:
-    if '$KATAGO_BIN_JSON' in e.get('path', ''):
-        print('EXISTS')
-        sys.exit(0)
-
-# Add new engine at index 0
-new_engine = {
-    'name': '$ENGINE_NAME',
-    'path': '$KATAGO_BIN_JSON',
-    'args': 'gtp -model \"$MODEL_PATH_JSON\" -config \"$CONFIG_PATH_JSON\"'
+engine = {
+    "id": "primary-engine",
+    "enabled": True,
+    "kind": "katago",
+    "name": "$ENGINE_NAME",
+    "path": "$KATAGO_BIN_JSON",
+    "modelPath": "$MODEL_PATH_JSON",
+    "configPath": "$CONFIG_PATH_JSON",
+    "enableHumanSL": $HUMANSL_ENABLED_PY,
+    "humanModelPath": "$HUMANSL_MODEL_JSON",
+    "humanSLProfile": "rank_1d",
+    "defaultShowAISuggestions": True,
+    "defaultShowHumanPreference": True,
+    "humanSLExplore": "light",
+    "args": "$ARGS_JSON",
+    "commands": "",
+    "analysis": {
+        "visits": "800",
+        "playouts": "0",
+        "maxTime": "15",
+        "candidates": "5",
+        "temperature": "1",
+    },
 }
-engines.insert(0, new_engine)
-settings['engines.list'] = engines
 
-with open(sys.argv[1], 'w') as f:
+engines = settings.get("engines.list", [])
+if not isinstance(engines, list):
+    engines = []
+
+replaced = False
+for i, existing in enumerate(engines):
+    if existing.get("id") == "primary-engine" or existing.get("kind") == "katago":
+        engines[i] = engine
+        replaced = True
+        break
+if not replaced:
+    engines.insert(0, engine)
+
+settings["engines.list"] = engines
+settings["board.show_analysis"] = True
+settings["board.show_ai_suggestions"] = True
+settings["board.show_human_preference"] = True
+
+with open(settings_path, 'w', encoding='utf-8') as f:
     json.dump(settings, f, indent=2, ensure_ascii=False)
+    f.write("\\n")
 
-print('UPDATED')
-" "$SABAKI_SETTINGS" 2>/dev/null)
+print("UPDATED")
+PY
+)
 
-  if [ "$SETTINGS" = "EXISTS" ]; then
-    info "Engine already configured in Sabaki."
-  elif [ "$SETTINGS" = "UPDATED" ]; then
-    info "Sabaki settings updated: $SABAKI_SETTINGS"
-  else
-    warn "Could not update Sabaki settings automatically."
-    echo ""
-    echo "Add this engine manually in Sabaki Preferences:"
-    echo "  Name: $ENGINE_NAME"
-    echo "  Path: $KATAGO_BIN"
-    echo "  Args: gtp -model $MODEL_PATH -config $CONFIG_PATH"
-  fi
+if [ "$SETTINGS" = "UPDATED" ]; then
+  info "Sabaki settings updated: $SABAKI_SETTINGS"
 else
-  warn "Sabaki settings not found at: $SABAKI_SETTINGS"
-  echo ""
-  echo "Add this engine manually in Sabaki Preferences:"
-  echo "  Name: $ENGINE_NAME"
-  echo "  Path: $KATAGO_BIN"
-  echo "  Args: gtp -model $MODEL_PATH -config $CONFIG_PATH"
+  error "Could not update Sabaki settings."
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────
@@ -211,5 +366,6 @@ echo ""
 echo "  Engine:   $KATAGO_BIN"
 echo "  Model:    $MODEL_PATH"
 echo "  Config:   $CONFIG_PATH"
+echo "  HumanSL:  $([ "$HUMANSL_ENABLED" = true ] && echo "$HUMANSL_MODEL_FOR_APP" || echo 'disabled (model missing)')"
 echo ""
 echo "Restart Sabaki to use the engine."

@@ -55,6 +55,8 @@ let defaults = {
   'board.analysis_type': 'winrate',
   'board.overlay_mode': 'off',
   'board.show_analysis': true,
+  'board.show_ai_suggestions': true,
+  'board.show_human_preference': true,
   'board.variation_replay_mode': 'move_by_move',
   'board.variation_replay_interval': 500,
   'cleanmarkup.annotations': false,
