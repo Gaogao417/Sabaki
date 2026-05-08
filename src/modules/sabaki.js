@@ -1477,6 +1477,43 @@ class Sabaki extends EventEmitter {
       })
       this.scheduleEditWorkspaceAnalysis(tab)
       applogger.log('debug', 'game', 'analysis.stone_toggled', 'Stone toggled', {sign, vertex, tab})
+    } else if (tool === 'play') {
+      let sign = snapshot.nextPlayer
+      let current = snapshot.signMap[vy]?.[vx] ?? 0
+      if (current !== 0) return
+
+      let nextSnapshot = cloneSnapshot(snapshot)
+      nextSnapshot.signMap[vy][vx] = sign
+
+      // Auto-capture: remove opponent groups with no liberties
+      let tempBoard = boardFromSnapshot(snapshot)
+      let resultBoard = tempBoard.makeMove(sign, [vx, vy])
+
+      for (let y = 0; y < resultBoard.height; y++) {
+        for (let x = 0; x < resultBoard.width; x++) {
+          if (
+            tempBoard.get([x, y]) === -sign &&
+            resultBoard.get([x, y]) === 0
+          ) {
+            nextSnapshot.signMap[y][x] = 0
+          }
+        }
+      }
+
+      // Switch player for next move
+      nextSnapshot.nextPlayer = -sign
+
+      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      this.setState({
+        editWorkspace: {
+          ...ws,
+          [snapshotKey]: nextSnapshot,
+          [analysisKey]: null,
+          [ownershipKey]: null,
+        },
+      })
+      this.scheduleEditWorkspaceAnalysis(tab)
+      applogger.log('debug', 'game', 'analysis.play_move', 'Play move in analysis', {sign, vertex, tab})
     } else if (tool === 'eraser') {
       let nextSnapshot = cloneSnapshot(snapshot)
       nextSnapshot.signMap[vy][vx] = 0

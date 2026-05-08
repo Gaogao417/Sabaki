@@ -118,6 +118,7 @@ class EditBar extends Component {
           {},
           [
             [t('Stone'), `stone_${stoneTool}`],
+            [t('Play'), 'play'],
             [t('Cross'), 'cross'],
             [t('Triangle'), 'triangle'],
             [t('Square'), 'square'],
