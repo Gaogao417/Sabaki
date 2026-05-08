@@ -3990,6 +3990,25 @@ class Sabaki extends EventEmitter {
 
   // Engine Management
 
+  addEngineLogEntry(engineName, response) {
+    let maxLength = setting.get('console.max_history_count')
+
+    this.setState(({consoleLog}) => {
+      let newLog = consoleLog.slice(
+        Math.max(consoleLog.length - maxLength + 1, 0),
+      )
+
+      newLog.push({
+        name: engineName,
+        command: null,
+        response: {...response, internal: response.internal !== false},
+        waiting: false,
+      })
+
+      return {consoleLog: newLog}
+    })
+  }
+
   handleCommandSent({syncer, command, subscribe, getResponse}) {
     let t = i18n.context('sabaki.engine')
     let entry = {name: syncer.engine.name, command, waiting: true}
@@ -4076,6 +4095,13 @@ class Sabaki extends EventEmitter {
           'Engine path error',
           {name: engine.name, error: syncer.pathError},
         )
+
+        this.addEngineLogEntry(engine.name, {
+          internal: false,
+          error: true,
+          content: syncer.pathError,
+        })
+
         continue
       }
 
@@ -4100,6 +4126,12 @@ class Sabaki extends EventEmitter {
           message = t('Failed to start engine: ') + err.message
         }
         dialog.showMessageBox(message, 'error')
+
+        this.addEngineLogEntry(engine.name, {
+          internal: false,
+          error: true,
+          content: message,
+        })
       })
 
       syncer.on('analysis-update', () => {
@@ -4232,6 +4264,11 @@ class Sabaki extends EventEmitter {
           message: 'Engine Started',
           engine: engine.name,
         })
+
+        this.addEngineLogEntry(engine.name, {
+          internal: true,
+          content: 'Engine Started',
+        })
       })
 
       syncer.controller.on('stopped', () => {
@@ -4239,6 +4276,11 @@ class Sabaki extends EventEmitter {
           type: 'meta',
           message: 'Engine Stopped',
           engine: engine.name,
+        })
+
+        this.addEngineLogEntry(engine.name, {
+          internal: true,
+          content: 'Engine Stopped',
         })
       })
 
