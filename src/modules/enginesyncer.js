@@ -205,7 +205,13 @@ function parseVertex(coord, size) {
   return [x, y]
 }
 
-function parseAnalysis(line, board, sign = 1) {
+function parseFloatValue(value) {
+  if (value == null) return null
+  let parsed = +value
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function parseAnalysis(line, board, sign = 1) {
   let tokens = line.trim().split(/\s+/)
   let ownership = null
   let ownershipIndex = tokens.indexOf('ownership')
@@ -255,13 +261,28 @@ function parseAnalysis(line, board, sign = 1) {
       return keys.reduce((acc, x, i) => ((acc[x] = values[i]), acc), {})
     })
     .filter(({move}) => move.match(/^[A-Za-z]\d+$/))
-    .map(({move, visits, winrate, scoreLead, pv}) => ({
+    .map(({move, visits, winrate, scoreLead, policy, humanPolicy, pv}) => ({
       vertex: board.parseVertex(move),
       visits: +visits,
       winrate: winrate.includes('.') ? +winrate * 100 : +winrate / 100,
       scoreLead: scoreLead != null ? +scoreLead : null,
+      aiPolicy: parseFloatValue(policy),
+      humanPolicy: parseFloatValue(humanPolicy),
       moves: pv.map((x) => board.parseVertex(x)),
     }))
+
+  variations = variations.map((variation, index) => ({
+    ...variation,
+    aiRank: index + 1,
+  }))
+
+  variations
+    .filter((variation) => variation.humanPolicy != null)
+    .slice()
+    .sort((a, b) => b.humanPolicy - a.humanPolicy)
+    .forEach((variation, index) => {
+      variation.humanRank = index + 1
+    })
 
   return {variations, ownership}
 }
@@ -275,12 +296,20 @@ export default class EngineSyncer extends EventEmitter {
     this._busy = false
     this._suspended = true
     this._analysis = null
+    this._humanSL = {
+      available: false,
+      modelLoaded: false,
+      currentProfile: engine.humanSLProfile || 'rank_1d',
+      pendingProfile: null,
+      lastError: null,
+    }
     this.pathError = null
 
     this.id = uuid()
     this.engine = engine
     this.commands = []
     this.treePosition = null
+    this.startToken = null
 
     let executable = resolveEngineExecutable(enginePath)
     let parsedArgs = parseEngineArgs(args || '')
@@ -316,7 +345,20 @@ export default class EngineSyncer extends EventEmitter {
                   this.controller.sendCommand(Command.fromString(command)),
                 )
             : []),
-        ]).catch(noop)
+        ])
+          .then(async () => {
+            await this.detectHumanSL()
+
+            if (
+              this.humanSL.modelLoaded &&
+              this.engine.humanSLProfile != null
+            ) {
+              await this.setHumanSLProfile(this.engine.humanSLProfile).catch(
+                noop,
+              )
+            }
+          })
+          .catch(noop)
       })
 
       this.controller.on('stopped', () => {
@@ -436,13 +478,117 @@ export default class EngineSyncer extends EventEmitter {
     }
   }
 
-  start() {
+  get humanSL() {
+    return this._humanSL
+  }
+
+  setHumanSLState(patch) {
+    this._humanSL = {
+      ...this._humanSL,
+      ...patch,
+    }
+    this.emit('human-sl-update')
+  }
+
+  async detectHumanSL() {
+    if (
+      this.controller == null ||
+      this.controller.process == null ||
+      !this.commands.includes('kata-get-models')
+    ) {
+      this.setHumanSLState({
+        available: false,
+        modelLoaded: false,
+        lastError: null,
+      })
+      return false
+    }
+
+    try {
+      let response = await this.controller.sendCommand({
+        name: 'kata-get-models',
+      })
+      let modelLoaded = /human/i.test(response.content || '')
+      this.setHumanSLState({
+        available: modelLoaded,
+        modelLoaded,
+        lastError: null,
+      })
+      return modelLoaded
+    } catch (err) {
+      this.setHumanSLState({
+        available: false,
+        modelLoaded: false,
+        lastError: err.message,
+      })
+      return false
+    }
+  }
+
+  async setHumanSLProfile(profile) {
+    if (
+      !this.humanSL.modelLoaded ||
+      !this.commands.includes('kata-set-param')
+    ) {
+      let message = t('HumanSL model is not loaded.')
+      this.setHumanSLState({lastError: message})
+      throw new Error(message)
+    }
+
+    let previousProfile = this.humanSL.currentProfile
+    this.setHumanSLState({pendingProfile: profile, lastError: null})
+
+    try {
+      await this.queueCommand({
+        name: 'kata-set-param',
+        args: ['humanSLProfile', profile],
+      })
+      this.setHumanSLState({
+        currentProfile: profile,
+        pendingProfile: null,
+        lastError: null,
+      })
+    } catch (err) {
+      this.setHumanSLState({
+        currentProfile: previousProfile,
+        pendingProfile: null,
+        lastError: err.message,
+      })
+      throw err
+    }
+  }
+
+  async start() {
     if (this.pathError != null) {
       this.emit('error', new Error(this.pathError))
       return
     }
 
-    this.controller.start()
+    let startToken = {}
+    this.startToken = startToken
+
+    try {
+      if (this.engine.enableHumanSL === true) {
+        let result = await window.sabaki.humansl.ensureModel()
+        if (!result.available) {
+          throw new Error(
+            result.error || t('HumanSL model could not be prepared.'),
+          )
+        }
+      }
+
+      if (this.startToken !== startToken) return
+
+      this.controller.start()
+    } catch (err) {
+      this.setHumanSLState({
+        available: false,
+        modelLoaded: false,
+        lastError: err.message,
+      })
+      this.emit('error', err)
+      return
+    }
 
     // Propagate spawn errors (ENOENT, EACCES, etc.)
     if (this.controller.process) {
@@ -453,6 +599,7 @@ export default class EngineSyncer extends EventEmitter {
   }
 
   async stop() {
+    this.startToken = null
     await this.controller.stop(quitTimeout)
   }
 

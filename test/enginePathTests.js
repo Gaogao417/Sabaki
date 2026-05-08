@@ -11,6 +11,8 @@ global.window = {
 
 let resolveEngineExecutable
 let parseEngineArgs
+let parseAnalysis
+let newBoard
 
 function existsFrom(paths) {
   let existing = new Set(paths)
@@ -21,9 +23,12 @@ function existsFrom(paths) {
 describe('engine path handling', () => {
   before(async () => {
     let module = await import('../src/modules/enginesyncer.js')
+    let boardModule = await import('@sabaki/go-board')
 
     resolveEngineExecutable = module.resolveEngineExecutable
     parseEngineArgs = module.parseEngineArgs
+    parseAnalysis = module.parseAnalysis
+    newBoard = boardModule.default.fromDimensions
   })
 
   describe('resolveEngineExecutable', () => {
@@ -140,6 +145,25 @@ describe('engine path handling', () => {
 
       assert.equal(result.args, undefined)
       assert.match(result.error, /Invalid engine arguments/)
+    })
+  })
+
+  describe('parseAnalysis', () => {
+    it('keeps KataGo policy and humanPolicy separate', () => {
+      let board = newBoard(19, 19)
+      let result = parseAnalysis(
+        'info move D4 visits 12 winrate 5200 scoreLead 1.5 policy 0.031 humanPolicy 0.124 pv D4 Q16 info move Q16 visits 8 winrate 0.51 scoreLead 0.8 policy 0.2 humanPolicy 0.04 pv Q16 D4',
+        board,
+        1,
+      )
+
+      assert.equal(result.variations.length, 2)
+      assert.equal(result.variations[0].aiPolicy, 0.031)
+      assert.equal(result.variations[0].humanPolicy, 0.124)
+      assert.equal(result.variations[0].aiRank, 1)
+      assert.equal(result.variations[0].humanRank, 1)
+      assert.equal(result.variations[1].aiRank, 2)
+      assert.equal(result.variations[1].humanRank, 2)
     })
   })
 })

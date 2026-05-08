@@ -8,7 +8,9 @@ const {
   BrowserWindow,
   Menu,
 } = require('electron')
-const {resolve} = require('path')
+const fs = require('fs')
+const https = require('https')
+const {resolve, join} = require('path')
 const i18n = require('./i18n')
 const setting = require('./setting')
 const updater = require('./updater')
@@ -16,6 +18,75 @@ const db = require('./modules/db')
 
 let windows = []
 let openfile = null
+
+const humanSLModelFilename = 'b18c384nbt-humanv0.bin.gz'
+const humanSLModelUrl =
+  'https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz'
+
+function getHumanSLModelPath() {
+  return join(setting.userDataDirectory, 'models', humanSLModelFilename)
+}
+
+function downloadFile(url, destination, redirectCount = 0) {
+  return new Promise((resolvePromise, reject) => {
+    if (redirectCount > 5) {
+      reject(new Error('Too many redirects while downloading HumanSL model.'))
+      return
+    }
+
+    let request = https.get(url, (response) => {
+      if (
+        response.statusCode >= 300 &&
+        response.statusCode < 400 &&
+        response.headers.location
+      ) {
+        response.resume()
+        downloadFile(response.headers.location, destination, redirectCount + 1)
+          .then(resolvePromise)
+          .catch(reject)
+        return
+      }
+
+      if (response.statusCode !== 200) {
+        response.resume()
+        reject(
+          new Error(
+            `HumanSL model download failed with HTTP ${response.statusCode}.`,
+          ),
+        )
+        return
+      }
+
+      let file = fs.createWriteStream(destination)
+      response.pipe(file)
+      file.on('finish', () => file.close(resolvePromise))
+      file.on('error', reject)
+    })
+
+    request.on('error', reject)
+  })
+}
+
+async function ensureHumanSLModel() {
+  let modelPath = getHumanSLModelPath()
+  if (fs.existsSync(modelPath)) {
+    return {available: true, path: modelPath, downloaded: false}
+  }
+
+  fs.mkdirSync(join(setting.userDataDirectory, 'models'), {recursive: true})
+
+  let tempPath = `${modelPath}.download`
+  if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+
+  try {
+    await downloadFile(humanSLModelUrl, tempPath)
+    fs.renameSync(tempPath, modelPath)
+    return {available: true, path: modelPath, downloaded: true}
+  } catch (err) {
+    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+    return {available: false, path: modelPath, error: err.message}
+  }
+}
 
 const settingsKeys = [
   'app.lang',
@@ -211,7 +282,7 @@ function buildMenu(props = {}) {
           ({
             newWindow,
             checkForUpdates: () => checkForUpdates({showFailDialogs: true}),
-          }[key]())
+          })[key]()
 
         delete item.clickMain
       }
@@ -412,6 +483,21 @@ function setupIpcHandlers() {
   ipcMain.handle('clipboard:readText', () => clipboard.readText())
   ipcMain.handle('clipboard:writeText', (_, t) => clipboard.writeText(t))
 
+  // HumanSL model management
+  ipcMain.handle('humansl:getModelInfo', () => {
+    let modelPath = getHumanSLModelPath()
+    return {
+      filename: humanSLModelFilename,
+      path: modelPath,
+      url: humanSLModelUrl,
+      available: fs.existsSync(modelPath),
+    }
+  })
+
+  ipcMain.handle('humansl:ensureModel', async () => {
+    return await ensureHumanSLModel()
+  })
+
   // Settings - for renderer access
   ipcMain.handle('setting:set', (e, key, value) => {
     setting.set(key, value)
@@ -442,22 +528,69 @@ function setupIpcHandlers() {
   })
   // Database (training system)
   let dbReady = false
-  const dbInit = db.init(setting.userDataDirectory).then(() => { dbReady = true })
+  const dbInit = db.init(setting.userDataDirectory).then(() => {
+    dbReady = true
+  })
 
-  ipcMain.handle('db:saveGame', async (_, game) => { await dbInit; return db.saveGame(game) })
-  ipcMain.handle('db:getGame', async (_, id) => { await dbInit; return db.getGame(id) })
-  ipcMain.handle('db:getRecentGames', async (_, limit) => { await dbInit; return db.getRecentGames(limit) })
-  ipcMain.handle('db:saveRecallSession', async (_, session) => { await dbInit; return db.saveRecallSession(session) })
-  ipcMain.handle('db:saveRecallAttempts', async (_, attempts) => { await dbInit; return db.saveRecallAttempts(attempts) })
-  ipcMain.handle('db:saveProblem', async (_, problem) => { await dbInit; return db.saveProblem(problem) })
-  ipcMain.handle('db:getProblem', async (_, id) => { await dbInit; return db.getProblem(id) })
-  ipcMain.handle('db:getProblemsByStatus', async (_, status, limit) => { await dbInit; return db.getProblemsByStatus(status, limit) })
-  ipcMain.handle('db:saveProblemAttempt', async (_, attempt) => { await dbInit; return db.saveProblemAttempt(attempt) })
-  ipcMain.handle('db:saveBadMove', async (_, badMove) => { await dbInit; return db.saveBadMove(badMove) })
-  ipcMain.handle('db:updateBadMoveGeneratedProblem', async (_, badMoveId, problemId) => { await dbInit; return db.updateBadMoveGeneratedProblem(badMoveId, problemId) })
-  ipcMain.handle('db:getDueReviews', async (_) => { await dbInit; return db.getDueReviews() })
-  ipcMain.handle('db:upsertReviewSchedule', async (_, item) => { await dbInit; return db.upsertReviewSchedule(item) })
-  ipcMain.handle('db:getDashboardSummary', async (_) => { await dbInit; return db.getDashboardSummary() })
+  ipcMain.handle('db:saveGame', async (_, game) => {
+    await dbInit
+    return db.saveGame(game)
+  })
+  ipcMain.handle('db:getGame', async (_, id) => {
+    await dbInit
+    return db.getGame(id)
+  })
+  ipcMain.handle('db:getRecentGames', async (_, limit) => {
+    await dbInit
+    return db.getRecentGames(limit)
+  })
+  ipcMain.handle('db:saveRecallSession', async (_, session) => {
+    await dbInit
+    return db.saveRecallSession(session)
+  })
+  ipcMain.handle('db:saveRecallAttempts', async (_, attempts) => {
+    await dbInit
+    return db.saveRecallAttempts(attempts)
+  })
+  ipcMain.handle('db:saveProblem', async (_, problem) => {
+    await dbInit
+    return db.saveProblem(problem)
+  })
+  ipcMain.handle('db:getProblem', async (_, id) => {
+    await dbInit
+    return db.getProblem(id)
+  })
+  ipcMain.handle('db:getProblemsByStatus', async (_, status, limit) => {
+    await dbInit
+    return db.getProblemsByStatus(status, limit)
+  })
+  ipcMain.handle('db:saveProblemAttempt', async (_, attempt) => {
+    await dbInit
+    return db.saveProblemAttempt(attempt)
+  })
+  ipcMain.handle('db:saveBadMove', async (_, badMove) => {
+    await dbInit
+    return db.saveBadMove(badMove)
+  })
+  ipcMain.handle(
+    'db:updateBadMoveGeneratedProblem',
+    async (_, badMoveId, problemId) => {
+      await dbInit
+      return db.updateBadMoveGeneratedProblem(badMoveId, problemId)
+    },
+  )
+  ipcMain.handle('db:getDueReviews', async (_) => {
+    await dbInit
+    return db.getDueReviews()
+  })
+  ipcMain.handle('db:upsertReviewSchedule', async (_, item) => {
+    await dbInit
+    return db.upsertReviewSchedule(item)
+  })
+  ipcMain.handle('db:getDashboardSummary', async (_) => {
+    await dbInit
+    return db.getDashboardSummary()
+  })
 
   ipcMain.on('setting:getPathsSync', (e) => {
     try {

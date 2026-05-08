@@ -31,12 +31,20 @@ function getDefaultEngine(engine = {}) {
     path: engine.path || '',
     modelPath: engine.modelPath || '',
     configPath: engine.configPath || '',
+    enableHumanSL: engine.enableHumanSL === true,
+    humanSLProfile: engine.humanSLProfile || 'rank_1d',
     args: engine.args || '',
     commands: engine.commands || '',
     analysis: {
       visits: valueOrDefault(engine.analysis?.visits, defaultAnalysis.visits),
-      playouts: valueOrDefault(engine.analysis?.playouts, defaultAnalysis.playouts),
-      maxTime: valueOrDefault(engine.analysis?.maxTime, defaultAnalysis.maxTime),
+      playouts: valueOrDefault(
+        engine.analysis?.playouts,
+        defaultAnalysis.playouts,
+      ),
+      maxTime: valueOrDefault(
+        engine.analysis?.maxTime,
+        defaultAnalysis.maxTime,
+      ),
       candidates: valueOrDefault(
         engine.analysis?.candidates,
         defaultAnalysis.candidates,
@@ -176,6 +184,25 @@ export default class EngineManagementDrawer extends Component {
     )
   }
 
+  renderHumanSLProfileField(value) {
+    return h(
+      'label',
+      {class: 'engine-analysis-field'},
+      h('span', {}, 'HumanSL Profile'),
+      h(
+        'select',
+        {
+          name: 'humanSLProfile',
+          value,
+          onChange: this.handleChange,
+        },
+        ['rank_5k', 'rank_1d', 'rank_3d', 'rank_5d', 'rank_9d'].map((profile) =>
+          h('option', {value: profile}, profile),
+        ),
+      ),
+    )
+  }
+
   render({show}) {
     if (!show) return null
 
@@ -237,13 +264,30 @@ export default class EngineManagementDrawer extends Component {
               'KataGo config file',
               engine.configPath,
             ),
-            this.renderTextField('args', '启动参数', '额外启动参数', engine.args, true),
+            this.renderTextField(
+              'args',
+              '启动参数',
+              '额外启动参数',
+              engine.args,
+              true,
+            ),
             this.renderTextField(
               'commands',
               '初始命令',
               '用 ; 分隔',
               engine.commands,
               true,
+            ),
+            h(
+              'label',
+              {class: 'engine-enabled'},
+              h('input', {
+                type: 'checkbox',
+                name: 'enableHumanSL',
+                checked: engine.enableHumanSL === true,
+                onChange: this.handleChange,
+              }),
+              ' 启用 HumanSL 人类模型',
             ),
           ),
         ),
@@ -254,8 +298,16 @@ export default class EngineManagementDrawer extends Component {
           h(
             'div',
             {class: 'engine-analysis-grid'},
-            this.renderAnalysisField('visits', 'visits', engine.analysis.visits),
-            this.renderAnalysisField('playouts', 'playouts', engine.analysis.playouts),
+            this.renderAnalysisField(
+              'visits',
+              'visits',
+              engine.analysis.visits,
+            ),
+            this.renderAnalysisField(
+              'playouts',
+              'playouts',
+              engine.analysis.playouts,
+            ),
             this.renderAnalysisField(
               'maxTime',
               '思考时间(s)',
@@ -273,6 +325,8 @@ export default class EngineManagementDrawer extends Component {
               engine.analysis.temperature,
               0.1,
             ),
+            engine.enableHumanSL &&
+              this.renderHumanSLProfileField(engine.humanSLProfile),
           ),
         ),
       ),
