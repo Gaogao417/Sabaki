@@ -6,6 +6,7 @@ import SplitContainer from './helpers/SplitContainer.js'
 import GtpConsole from './sidebars/GtpConsole.js'
 import {EnginePeerList} from './sidebars/PeerList.js'
 import MiniGoban from './MiniGoban.js'
+import WinrateGraph from './sidebars/WinrateGraph.js'
 
 const setting = {
   get: (key) => window.sabaki.setting.get(key),
@@ -272,34 +273,19 @@ export default class LeftSidebar extends Component {
           ),
         ),
       mode === 'analysis' &&
-        h(
-          Panel,
-          {title: '关键点筛选'},
-          h(
-            'div',
-            {class: 'workbench-filter-row'},
-            h('button', {class: 'filter-chip active'}, '全部'),
-            h('button', {class: 'filter-chip'}, '关键点'),
-            h('button', {class: 'filter-chip'}, '失误'),
-            h('button', {class: 'filter-chip'}, '备注'),
+        h(WinrateGraph, {
+          lastPlayer: this.props.lastPlayer,
+          width: Math.max(
+            Math.ceil((gameTree.getHeight() - 1) / 50) * 50,
+            1,
           ),
-          h(
-            'p',
-            {class: 'workbench-muted'},
-            '使用右侧变化树和评论区整理当前局面的复盘线索。',
-          ),
-        ),
-      mode === 'analysis' &&
-        h(
-          Panel,
-          {title: '复盘笔记'},
-          h('textarea', {
-            class: 'review-note-pad',
-            value: reviewNote,
-            placeholder: '记录这一手的想法',
-            onInput: this.handleReviewNoteInput,
-          }),
-        ),
+          data: this.props.winrateData,
+          scoreLeadData: this.props.scoreLeadData,
+          currentIndex: gameTree.getLevel(treePosition),
+          onCurrentIndexChange: ({index}) => {
+            sabaki.goToMoveNumber(index)
+          },
+        }),
       mode === 'analysis' &&
         h(
           Panel,

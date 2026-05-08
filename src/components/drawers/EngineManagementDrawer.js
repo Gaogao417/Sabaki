@@ -252,7 +252,7 @@ export default class EngineManagementDrawer extends Component {
     )
   }
 
-  render({show}) {
+  render({show, humanSLModelLoaded, humanSLError}) {
     if (!show) return null
 
     let {engine} = this.state
@@ -420,8 +420,7 @@ export default class EngineManagementDrawer extends Component {
             h(
               'div',
               {class: 'engine-human-status'},
-              h('span', {}, 'Normal model: 已加载'),
-              h('span', {}, 'Human model: 已加载'),
+              h('span', {}, `Human model: ${humanSLModelLoaded ? '已加载' : humanSLError || '未加载'}`),
             ),
           ),
           h(

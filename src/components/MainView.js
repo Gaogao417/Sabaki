@@ -357,9 +357,9 @@ export default class MainView extends Component {
     if (showHumanPreference && activeAnalysis?.variations != null) {
       let preferenceMap = markerMap || board.markers.map((row) => [...row])
       activeAnalysis.variations
-        .filter((variation) => variation.humanPolicy != null)
+        .filter((variation) => variation.humanPrior != null)
         .slice()
-        .sort((a, b) => b.humanPolicy - a.humanPolicy)
+        .sort((a, b) => b.humanPrior - a.humanPrior)
         .slice(0, 5)
         .forEach((variation, index) => {
           let [x, y] = variation.vertex || []

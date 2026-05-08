@@ -83,7 +83,7 @@ function AnalysisSummaryCard({
         .slice()
         .sort((a, b) => {
           if (showHumanPreference) {
-            return (b.humanPolicy ?? -1) - (a.humanPolicy ?? -1)
+            return (b.humanPrior ?? -1) - (a.humanPrior ?? -1)
           }
           return (a.aiRank ?? 0) - (b.aiRank ?? 0)
         })
@@ -189,8 +189,10 @@ function AnalysisSummaryCard({
                     class: sameVertex(selectedAnalysisVertex, variation.vertex)
                       ? 'selected'
                       : '',
-                    onClick: () =>
-                      sabaki.setSelectedAnalysisVertex(variation.vertex),
+                    onClick: () => {
+                      sabaki.setSelectedAnalysisVertex(variation.vertex)
+                      sabaki.playAnalysisVariation(analysis.sign, variation.moves)
+                    },
                   },
                   h(
                     'td',
@@ -198,7 +200,7 @@ function AnalysisSummaryCard({
                     h('span', {class: 'candidate-radio'}),
                     formatOptionalVertex(variation.vertex, boardHeight),
                   ),
-                  h('td', {}, formatPolicy(variation.humanPolicy)),
+                  h('td', {}, formatPolicy(variation.humanPrior)),
                   h('td', {}, `${variation.visits ?? '-'}`),
                   h('td', {}, formatWinrate(variation.winrate, analysis.sign)),
                   h(
@@ -361,8 +363,8 @@ export default class Sidebar extends Component {
       winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
     showWinrateGraph =
       showWinrateGraph &&
-      mode !== 'analysis' &&
-      (inspectorSidebar || hasAnalysisData)
+      !inspectorSidebar &&
+      hasAnalysisData
 
     if (inspectorSidebar) {
       let recallLastAttempt =
@@ -708,7 +710,7 @@ export default class Sidebar extends Component {
             selectedAnalysisVertex,
           }),
 
-        ['play', 'recall', 'analysis'].includes(mode) &&
+        ['play', 'recall'].includes(mode) &&
           h(
             'section',
             {class: 'sidebar-card game-tree-card'},
@@ -925,6 +927,6 @@ Sidebar.getDerivedStateFromProps = function ({
     winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
 
   return {
-    showWinrateGraph: showWinrateGraph && (inspectorSidebar || hasAnalysisData),
+    showWinrateGraph: showWinrateGraph && !inspectorSidebar && hasAnalysisData,
   }
 }

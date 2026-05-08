@@ -197,7 +197,7 @@ export function parseEngineArgs(args) {
 
 function parseVertex(coord, size) {
   if (coord == null || coord === 'resign') return null
-  if (coord === 'pass') return [-1, -1]
+  if (coord.toLowerCase() === 'pass') return [-1, -1]
 
   let x = alpha.indexOf(coord[0].toUpperCase())
   let y = size - +coord.slice(1)
@@ -261,15 +261,26 @@ export function parseAnalysis(line, board, sign = 1) {
       return keys.reduce((acc, x, i) => ((acc[x] = values[i]), acc), {})
     })
     .filter(({move}) => move.match(/^[A-Za-z]\d+$/))
-    .map(({move, visits, winrate, scoreLead, policy, humanPolicy, pv}) => ({
-      vertex: board.parseVertex(move),
-      visits: +visits,
-      winrate: winrate.includes('.') ? +winrate * 100 : +winrate / 100,
-      scoreLead: scoreLead != null ? +scoreLead : null,
-      aiPolicy: parseFloatValue(policy),
-      humanPolicy: parseFloatValue(humanPolicy),
-      moves: pv.map((x) => board.parseVertex(x)),
-    }))
+    .map(
+      ({
+        move,
+        visits,
+        winrate,
+        scoreLead,
+        policy,
+        humanPrior,
+        humanPolicy,
+        pv,
+      }) => ({
+        vertex: board.parseVertex(move),
+        visits: +visits,
+        winrate: winrate.includes('.') ? +winrate * 100 : +winrate / 100,
+        scoreLead: scoreLead != null ? +scoreLead : null,
+        aiPolicy: parseFloatValue(policy),
+        humanPrior: parseFloatValue(humanPrior ?? humanPolicy),
+        moves: pv.map((x) => board.parseVertex(x)),
+      }),
+    )
 
   variations = variations.map((variation, index) => ({
     ...variation,
@@ -277,9 +288,9 @@ export function parseAnalysis(line, board, sign = 1) {
   }))
 
   variations
-    .filter((variation) => variation.humanPolicy != null)
+    .filter((variation) => variation.humanPrior != null)
     .slice()
-    .sort((a, b) => b.humanPolicy - a.humanPolicy)
+    .sort((a, b) => b.humanPrior - a.humanPrior)
     .forEach((variation, index) => {
       variation.humanRank = index + 1
     })
@@ -569,11 +580,21 @@ export default class EngineSyncer extends EventEmitter {
 
     try {
       if (this.engine.enableHumanSL === true) {
-        let result = await window.sabaki.humansl.ensureModel()
-        if (!result.available) {
-          throw new Error(
-            result.error || t('HumanSL model could not be prepared.'),
-          )
+        if (this.engine.humanModelPath) {
+          if (!existsSync(this.engine.humanModelPath)) {
+            throw new Error(
+              t((p) => `HumanSL model not found: ${p.path}`, {
+                path: this.engine.humanModelPath,
+              }),
+            )
+          }
+        } else {
+          let result = await window.sabaki.humansl.ensureModel()
+          if (!result.available) {
+            throw new Error(
+              result.error || t('HumanSL model could not be prepared.'),
+            )
+          }
         }
       }
 

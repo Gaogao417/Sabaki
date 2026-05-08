@@ -89,6 +89,9 @@ export default class DrawerManager extends Component {
     engines,
     graphGridSize,
     preferencesTab,
+
+    humanSLModelLoaded,
+    humanSLError,
   }) {
     return h(
       'section',
@@ -113,6 +116,8 @@ export default class DrawerManager extends Component {
       h(EngineManagementDrawer, {
         show: openDrawer === 'enginemanagement',
         engines,
+        humanSLModelLoaded,
+        humanSLError,
       }),
 
       h(NewGameDialog, {

@@ -2522,9 +2522,8 @@ class Sabaki extends EventEmitter {
       let parts = ['gtp']
       if (engine.modelPath) parts.push('-model', `"${engine.modelPath}"`)
       if (engine.configPath) parts.push('-config', `"${engine.configPath}"`)
-      let humanSLModelPath = null
       if (engine.enableHumanSL === true) {
-        humanSLModelPath =
+        let humanSLModelPath =
           engine.humanModelPath ||
           join(
             window.sabaki.setting.userDataDirectory,
@@ -2534,16 +2533,7 @@ class Sabaki extends EventEmitter {
         parts.push('-human-model', `"${humanSLModelPath}"`)
       }
 
-      if (args.trim() === '') {
-        args = parts.join(' ')
-      } else if (!/\bgtp\b/.test(args)) {
-        args = `${parts.join(' ')} ${args}`.trim()
-      } else if (
-        engine.enableHumanSL === true &&
-        !/\s-human-model(\s|$)/.test(args)
-      ) {
-        args = `${args} -human-model "${humanSLModelPath}"`.trim()
-      }
+      args = `${parts.join(' ')} ${args}`.trim()
     }
 
     return {
@@ -3456,14 +3446,19 @@ class Sabaki extends EventEmitter {
         node.data[prevColor] != null && node.data[prevColor][0] === ''
 
       if (prevPass) {
-        enterScoring = true
+        enterScoring = false
         applogger.log(
           'info',
           'game',
           'game.double_pass',
-          'Double pass detected, entering scoring',
+          'Double pass detected, saving and entering recall',
         )
-        this.setMode('scoring')
+        this.stopEngineGame()
+        let saved = await this.saveCurrentGame()
+        if (saved?.id) {
+          this.startRecallSession(saved.id)
+        }
+        return
       }
     }
 
@@ -4525,7 +4520,13 @@ class Sabaki extends EventEmitter {
         parentNode.data[otherColor] != null &&
         parentNode.data[otherColor][0] === ''
       if (prevPass) {
-        this.setMode('scoring')
+        syncer.treePosition = newTreePosition
+        this.stopEngineGame()
+        let saved = await this.saveCurrentGame()
+        if (saved?.id) {
+          this.startRecallSession(saved.id)
+        }
+        return {tree: newTree, treePosition: newTreePosition, resign, pass}
       }
     }
 
@@ -4591,7 +4592,12 @@ class Sabaki extends EventEmitter {
       }
 
       if (consecutivePasses >= 2) {
-        break
+        this.stopEngineGame(gameId)
+        let saved = await this.saveCurrentGame()
+        if (saved?.id) {
+          this.startRecallSession(saved.id)
+        }
+        return
       }
 
       treePosition = move.treePosition
@@ -5047,7 +5053,7 @@ class Sabaki extends EventEmitter {
     this.setState({areaSelectMode: !this.state.areaSelectMode})
   }
 
-  toggleShowAISuggestions() {
+  async toggleShowAISuggestions() {
     let value = !this.state.showAISuggestions
     setting.set('board.show_ai_suggestions', value)
     setting.set('board.show_analysis', value)
@@ -5055,16 +5061,48 @@ class Sabaki extends EventEmitter {
       showAISuggestions: value,
       showAnalysis: value,
     })
+
+    if (value) {
+      await this.ensureAnalysisReady()
+    }
   }
 
-  toggleShowHumanPreference() {
+  async toggleShowHumanPreference() {
     let value = !this.state.showHumanPreference
     setting.set('board.show_human_preference', value)
     this.setState({showHumanPreference: value})
+
+    if (value) {
+      await this.ensureAnalysisReady()
+    }
   }
 
   setSelectedAnalysisVertex(vertex) {
     this.setState({selectedAnalysisVertex: vertex})
+  }
+
+  playAnalysisVariation(sign, moves) {
+    if (!moves || moves.length === 0) return
+
+    let {treePosition} = this.state
+    let tree = this.inferredState.gameTree
+    let [color, opponent] = sign > 0 ? ['B', 'W'] : ['W', 'B']
+
+    let newTree = tree.mutate((draft) => {
+      let parentId = treePosition
+      let variationData = moves.map((vertex, i) => ({
+        [i % 2 === 0 ? color : opponent]: [sgf.stringifyVertex(vertex)],
+      }))
+
+      for (let data of variationData) {
+        parentId = draft.appendNode(parentId, data)
+      }
+    })
+
+    let newNode = newTree.get(treePosition).children[0]
+    if (newNode != null) {
+      this.setCurrentTreePosition(newTree, newNode.id)
+    }
   }
 
   setPlayer(treePosition, sign) {
