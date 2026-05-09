@@ -358,29 +358,6 @@ export default class MainView extends Component {
     let baseMarkerMap =
       editWorkspaceActive && editMarkerMap != null ? editMarkerMap : markerMap
 
-    // Human preference ghost stones (stone-sized circles)
-    if (showHumanPreference && activeAnalysis?.humanPolicyMap != null) {
-      overlayGhostStoneMap = board.signMap.map((row) => row.map(() => null))
-      let policy = activeAnalysis.humanPolicyMap
-      let width = board.width
-
-      policy
-        .map((val, i) => ({
-          vertex: [i % width, Math.floor(i / width)],
-          humanPrior: val,
-        }))
-        .filter((v) => v.humanPrior != null && v.humanPrior > 0)
-        .sort((a, b) => b.humanPrior - a.humanPrior)
-        .slice(0, 5)
-        .forEach(({vertex: [x, y]}) => {
-          if (overlayGhostStoneMap[y] == null || x == null) return
-          overlayGhostStoneMap[y][x] = {
-            sign: currentPlayer,
-            type: 'interesting',
-          }
-        })
-    }
-
     if (analysisAreaVertices != null) {
       paintMap = board.signMap.map((row) => row.map(() => 0))
       let vertexSet = new Set(
@@ -410,6 +387,7 @@ export default class MainView extends Component {
             ],
       analysisType,
       analysis: showAnalysis ? activeAnalysis : null,
+      showHumanPreference,
       paintMap,
       markerMap: baseMarkerMap,
       dimmedStones,

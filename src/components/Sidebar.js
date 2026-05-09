@@ -88,6 +88,10 @@ function AnalysisSummaryCard({
       byVertex.set(v.vertex.join(','), {...v})
     }
 
+    let maxVisits = analysis.variations.length
+      ? Math.max(...analysis.variations.map((x) => x.visits))
+      : 0
+
     if (analysis.humanPolicyMap != null) {
       let policy = analysis.humanPolicyMap
       let width = boardWidth ?? boardHeight ?? 19
@@ -105,9 +109,9 @@ function AnalysisSummaryCard({
         if (!byVertex.has(key)) {
           byVertex.set(key, {
             vertex: h.vertex,
-            visits: 0,
-            winrate: null,
-            scoreLead: null,
+            visits: maxVisits,
+            winrate: analysis.winrate,
+            scoreLead: analysis.scoreLead,
             aiPolicy: null,
             humanPrior: h.humanPrior,
             moves: [],

@@ -464,6 +464,7 @@ export default class Goban extends Component {
       markerMap: customMarkerMap = null,
       analysis,
       analysisType,
+      showHumanPreference = false,
       highlightVertices = [],
       dimmedStones = [],
       overlayGhostStoneMap = null,
@@ -731,6 +732,67 @@ export default class Goban extends Component {
                     ? i18n.formatNumber(visits)
                     : i18n.formatNumber(Math.round(visits / 100) / 10) + 'k',
                 ].join('\n'),
+        }
+      }
+
+      // Mark top human prior moves with humanPrior flag (only affects border)
+      if (showHumanPreference && analysis.humanPolicyMap != null) {
+        let policy = analysis.humanPolicyMap
+        let width = board.width
+
+        let topHuman = policy
+          .map((val, i) => ({
+            vertex: [i % width, Math.floor(i / width)],
+            humanPrior: val,
+          }))
+          .filter((v) => v.humanPrior != null && v.humanPrior > 0)
+          .sort((a, b) => b.humanPrior - a.humanPrior)
+          .slice(0, 5)
+
+        let maxVisits = analysis.variations.length
+          ? Math.max(...analysis.variations.map((x) => x.visits))
+          : 0
+
+        for (let {
+          vertex: [x, y],
+        } of topHuman) {
+          if (heatMap[y] == null) continue
+          if (board.signMap[y][x] !== 0) continue
+
+          if (heatMap[y][x] != null) {
+            heatMap[y][x].humanPrior = true
+          } else {
+            // Not in AI variations — use max visits to match AI display format
+            let visits = maxVisits
+            let winrate = analysis.winrate ?? 50
+            let scoreLead = analysis.scoreLead ?? 0
+            let strength =
+              maxVisitsWin > 0
+                ? Math.round((visits * winrate * 8) / maxVisitsWin) + 1
+                : 9
+            strength = Math.max(1, Math.min(9, strength))
+
+            winrate =
+              strength <= 3
+                ? Math.floor(winrate)
+                : Math.floor(winrate * 10) / 10
+
+            heatMap[y][x] = {
+              strength,
+              humanPrior: true,
+              text: [
+                analysisType === 'winrate'
+                  ? i18n.formatNumber(winrate) +
+                    (Math.floor(winrate) === winrate ? '%' : '')
+                  : analysisType === 'scoreLead'
+                    ? (scoreLead >= 0 ? '+' : '') + i18n.formatNumber(scoreLead)
+                    : '–',
+                visits < 1000
+                  ? i18n.formatNumber(visits)
+                  : i18n.formatNumber(Math.round(visits / 100) / 10) + 'k',
+              ].join('\n'),
+            }
+          }
         }
       }
     }

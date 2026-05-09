@@ -1602,8 +1602,61 @@ button:active {
   font-weight: bold;
 }
 
+/* Heatmap base — only reset positioning, keep opacity:0 for inactive vertices */
 .shudan-vertex .shudan-heat {
+  margin: 0;
+  transform: translate(-50%, -50%);
   transition: none;
+}
+
+/* Active heatmap circles — uniform size, white border, color-only differentiation */
+.shudan-vertex[class*="shudan-heat_"] .shudan-heat:not(.shudan-heat) {
+  /* This selector won't match — use individual levels below */
+}
+
+.shudan-vertex.shudan-heat_1 .shudan-heat,
+.shudan-vertex.shudan-heat_2 .shudan-heat,
+.shudan-vertex.shudan-heat_3 .shudan-heat,
+.shudan-vertex.shudan-heat_4 .shudan-heat,
+.shudan-vertex.shudan-heat_5 .shudan-heat,
+.shudan-vertex.shudan-heat_6 .shudan-heat,
+.shudan-vertex.shudan-heat_7 .shudan-heat,
+.shudan-vertex.shudan-heat_8 .shudan-heat,
+.shudan-vertex.shudan-heat_9 .shudan-heat {
+  width: .9em;
+  height: .9em;
+  opacity: .9;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Best moves — Apple green */
+.shudan-vertex.shudan-heat_9 .shudan-heat,
+.shudan-vertex.shudan-heat_8 .shudan-heat {
+  background: #30D158;
+}
+
+/* Good moves — Apple blue */
+.shudan-vertex.shudan-heat_7 .shudan-heat,
+.shudan-vertex.shudan-heat_6 .shudan-heat,
+.shudan-vertex.shudan-heat_5 .shudan-heat {
+  background: #0A84FF;
+}
+
+/* Decent moves — Apple purple */
+.shudan-vertex.shudan-heat_4 .shudan-heat,
+.shudan-vertex.shudan-heat_3 .shudan-heat {
+  background: #BF5AF2;
+}
+
+/* Weak moves — Apple orange */
+.shudan-vertex.shudan-heat_2 .shudan-heat,
+.shudan-vertex.shudan-heat_1 .shudan-heat {
+  background: #FF9F0A;
+}
+
+/* Human prior — gold border, same background/strength as AI */
+.shudan-vertex[class*="shudan-heat_"].shudan-heat_humanprior .shudan-heat {
+  box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.7) !important;
 }
 
 /**
