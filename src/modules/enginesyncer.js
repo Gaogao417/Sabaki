@@ -211,7 +211,28 @@ function parseFloatValue(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export function parseAnalysis(line, board, sign = 1) {
+export function parseRawHumanPolicy(content, width, height) {
+  let tokens = content.trim().split(/\s+/)
+  let policyIndex = tokens.indexOf('policy')
+  if (policyIndex < 0) return null
+
+  let values = tokens
+    .slice(policyIndex + 1, policyIndex + 1 + width * height)
+    .map((t) => parseFloatValue(t) ?? 0)
+
+  return values.length === width * height ? values : null
+}
+
+function getPolicyValue(policy, vertex, width) {
+  if (policy == null || vertex == null) return null
+
+  let [x, y] = vertex
+  if (x < 0 || y < 0) return null
+
+  return parseFloatValue(policy[y * width + x])
+}
+
+export function parseAnalysis(line, board, sign = 1, rawHumanPolicy = null) {
   let tokens = line.trim().split(/\s+/)
   let ownership = null
   let ownershipIndex = tokens.indexOf('ownership')
@@ -271,15 +292,22 @@ export function parseAnalysis(line, board, sign = 1) {
         humanPrior,
         humanPolicy,
         pv,
-      }) => ({
-        vertex: board.parseVertex(move),
-        visits: +visits,
-        winrate: winrate.includes('.') ? +winrate * 100 : +winrate / 100,
-        scoreLead: scoreLead != null ? +scoreLead : null,
-        aiPolicy: parseFloatValue(policy),
-        humanPrior: parseFloatValue(humanPrior ?? humanPolicy),
-        moves: pv.map((x) => board.parseVertex(x)),
-      }),
+      }) => {
+        let vertex = board.parseVertex(move)
+        let parsedHumanPrior =
+          parseFloatValue(humanPrior ?? humanPolicy) ??
+          getPolicyValue(rawHumanPolicy, vertex, board.width)
+
+        return {
+          vertex,
+          visits: +visits,
+          winrate: winrate.includes('.') ? +winrate * 100 : +winrate / 100,
+          scoreLead: scoreLead != null ? +scoreLead : null,
+          aiPolicy: parseFloatValue(policy),
+          humanPrior: parsedHumanPrior,
+          moves: pv.map((x) => board.parseVertex(x)),
+        }
+      },
     )
 
   variations = variations.map((variation, index) => ({
@@ -321,6 +349,7 @@ export default class EngineSyncer extends EventEmitter {
     this.commands = []
     this.treePosition = null
     this.startToken = null
+    this.rawHumanPolicy = null
 
     let executable = resolveEngineExecutable(enginePath)
     let parsedArgs = parseEngineArgs(args || '')
@@ -336,17 +365,62 @@ export default class EngineSyncer extends EventEmitter {
       this.stateTracker = new ControllerStateTracker(this.controller)
 
       this.controller.on('started', () => {
+        console.log('=== Engine Controller Started ===')
+        console.log('Syncer ID:', this.id)
+        console.log('Engine Path:', this.engine.path)
+        console.log('Engine Args:', this.engine.args)
+        console.log('Initial Commands:', commands)
+        console.log('===============================================')
+
         this.treePosition = null
         this.analysis = null
 
         Promise.all([
-          this.controller.sendCommand({name: 'name'}),
-          this.controller.sendCommand({name: 'version'}),
-          this.controller.sendCommand({name: 'protocol_version'}),
+          this.controller
+            .sendCommand({name: 'name'})
+            .then((response) => {
+              console.log('Engine Name Response:', response)
+              return response
+            })
+            .catch((err) => {
+              console.log('Engine Name Error:', err)
+              throw err
+            }),
+          this.controller
+            .sendCommand({name: 'version'})
+            .then((response) => {
+              console.log('Engine Version Response:', response)
+              return response
+            })
+            .catch((err) => {
+              console.log('Engine Version Error:', err)
+              throw err
+            }),
+          this.controller
+            .sendCommand({name: 'protocol_version'})
+            .then((response) => {
+              console.log('Protocol Version Response:', response)
+              return response
+            })
+            .catch((err) => {
+              console.log('Protocol Version Error:', err)
+              throw err
+            }),
           this.controller
             .sendCommand({name: 'list_commands'})
             .then((response) => {
+              console.log('List Commands Response:', response)
+              console.log('Response Content:', response.content)
+              console.log('Response Error:', response.error)
               this.commands = response.content.split('\n')
+              console.log('Parsed Commands:', this.commands)
+              console.log('Commands Count:', this.commands.length)
+              console.log('===============================================')
+            })
+            .catch((err) => {
+              console.log('List Commands Error:', err)
+              console.log('===============================================')
+              throw err
             }),
           ...(commands != null && commands.trim() !== ''
             ? commands
@@ -358,6 +432,11 @@ export default class EngineSyncer extends EventEmitter {
             : []),
         ])
           .then(async () => {
+            console.log('=== All Initial Commands Completed ===')
+            console.log('Final Commands List:', this.commands)
+            console.log('Commands Length:', this.commands.length)
+            console.log('===============================================')
+
             await this.detectHumanSL()
 
             if (
@@ -369,7 +448,12 @@ export default class EngineSyncer extends EventEmitter {
               )
             }
           })
-          .catch(noop)
+          .catch((err) => {
+            console.log('=== Initial Commands Failed ===')
+            console.log('Error:', err)
+            console.log('===============================================')
+            noop()
+          })
       })
 
       this.controller.on('stopped', () => {
@@ -394,7 +478,21 @@ export default class EngineSyncer extends EventEmitter {
               // Parse analysis info
 
               if (line.startsWith('info ')) {
-                let {variations, ownership} = parseAnalysis(line, board, sign)
+                let {variations, ownership} = parseAnalysis(
+                  line,
+                  board,
+                  sign,
+                  this.rawHumanPolicy,
+                )
+
+                let hasHumanPrior = variations.some((v) => v.humanPrior != null)
+                console.log(
+                  'Analysis parsed: rawHumanPolicy=',
+                  this.rawHumanPolicy != null ? 'populated' : 'NULL',
+                  'variations with humanPrior:',
+                  hasHumanPrior,
+                  `of ${variations.length}`,
+                )
 
                 let bestVariation = variations.reduce(
                   (best, variation) =>
@@ -411,6 +509,7 @@ export default class EngineSyncer extends EventEmitter {
                   winrate: bestVariation == null ? null : bestVariation.winrate,
                   scoreLead:
                     bestVariation == null ? null : bestVariation.scoreLead,
+                  humanPolicyMap: this.rawHumanPolicy,
                 }
               } else if (line.startsWith('play ')) {
                 sign = -sign
@@ -554,6 +653,7 @@ export default class EngineSyncer extends EventEmitter {
         name: 'kata-set-param',
         args: ['humanSLProfile', profile],
       })
+      this.rawHumanPolicy = null
       this.setHumanSLState({
         currentProfile: profile,
         pendingProfile: null,
@@ -569,8 +669,113 @@ export default class EngineSyncer extends EventEmitter {
     }
   }
 
+  async updateRawHumanPolicy() {
+    console.log('=== updateRawHumanPolicy Called ===')
+    console.log('modelLoaded:', this.humanSL.modelLoaded)
+    console.log(
+      'has kata-raw-human-nn:',
+      this.commands.includes('kata-raw-human-nn'),
+    )
+
+    this.rawHumanPolicy = null
+
+    if (
+      !this.humanSL.modelLoaded ||
+      !this.commands.includes('kata-raw-human-nn')
+    ) {
+      console.log('SKIPPED: conditions not met')
+      console.log('===============================================')
+      return null
+    }
+
+    let boardsize = this.stateTracker.state.boardsize || [19, 19]
+    console.log('Board size:', boardsize)
+
+    try {
+      let response = await this.queueCommand({
+        name: 'kata-raw-human-nn',
+        args: ['0'],
+      })
+
+      console.log('kata-raw-human-nn response error:', response.error)
+
+      // Debug: show full token analysis
+      let tokens = response.content.trim().split(/\s+/)
+      let policyIndex = tokens.indexOf('policy')
+      console.log('Total tokens:', tokens.length, 'policyIndex:', policyIndex)
+      if (policyIndex >= 0) {
+        let afterPolicy = tokens.slice(
+          policyIndex + 1,
+          policyIndex + 1 + boardsize[0] * boardsize[1],
+        )
+        console.log(
+          'Tokens after policy (count):',
+          afterPolicy.length,
+          'expected:',
+          boardsize[0] * boardsize[1],
+        )
+        // Show first non-parseable token, if any
+        let nonParseable = afterPolicy.findIndex(
+          (t) => parseFloatValue(t) == null,
+        )
+        if (nonParseable >= 0) {
+          console.log(
+            'First non-parseable token at index',
+            nonParseable,
+            ':',
+            JSON.stringify(afterPolicy[nonParseable]),
+          )
+          console.log(
+            'Surrounding tokens:',
+            afterPolicy.slice(Math.max(0, nonParseable - 2), nonParseable + 3),
+          )
+        }
+        // Show what comes after the 361 values
+        let after361 = tokens.slice(
+          policyIndex + 1 + boardsize[0] * boardsize[1],
+          policyIndex + 1 + boardsize[0] * boardsize[1] + 5,
+        )
+        console.log('Tokens immediately after 361 values:', after361)
+      }
+
+      if (response.error) {
+        throw new Error(response.content)
+      }
+
+      this.rawHumanPolicy = parseRawHumanPolicy(
+        response.content,
+        boardsize[0],
+        boardsize[1],
+      )
+      console.log(
+        'parseRawHumanPolicy result:',
+        this.rawHumanPolicy != null
+          ? `array of ${this.rawHumanPolicy.length} values`
+          : 'null',
+      )
+      this.setHumanSLState({lastError: null})
+    } catch (err) {
+      console.log('updateRawHumanPolicy ERROR:', err.message)
+      this.setHumanSLState({lastError: err.message})
+    }
+
+    console.log(
+      'Final rawHumanPolicy:',
+      this.rawHumanPolicy != null ? 'populated' : 'NULL',
+    )
+    console.log('===============================================')
+    return this.rawHumanPolicy
+  }
+
   async start() {
+    console.log('=== EngineSyncer.start() Called ===')
+    console.log('Syncer ID:', this.id)
+    console.log('Engine Path:', this.engine.path)
+    console.log('Path Error:', this.pathError)
+    console.log('===============================================')
+
     if (this.pathError != null) {
+      console.log('Path error, emitting error')
       this.emit('error', new Error(this.pathError))
       return
     }
@@ -579,8 +784,14 @@ export default class EngineSyncer extends EventEmitter {
     this.startToken = startToken
 
     try {
+      console.log('Checking HumanSL requirements...')
       if (this.engine.enableHumanSL === true) {
+        console.log('HumanSL is enabled')
         if (this.engine.humanModelPath) {
+          console.log(
+            'Using custom HumanSL model path:',
+            this.engine.humanModelPath,
+          )
           if (!existsSync(this.engine.humanModelPath)) {
             throw new Error(
               t((p) => `HumanSL model not found: ${p.path}`, {
@@ -589,19 +800,33 @@ export default class EngineSyncer extends EventEmitter {
             )
           }
         } else {
+          console.log('Ensuring default HumanSL model...')
           let result = await window.sabaki.humansl.ensureModel()
+          console.log('HumanSL model ensure result:', result)
           if (!result.available) {
             throw new Error(
               result.error || t('HumanSL model could not be prepared.'),
             )
           }
         }
+      } else {
+        console.log('HumanSL is disabled')
       }
 
-      if (this.startToken !== startToken) return
+      if (this.startToken !== startToken) {
+        console.log('Start token mismatch, aborting')
+        return
+      }
 
+      console.log('Starting controller...')
+      console.log('Controller:', this.controller)
+      console.log('Controller.process before start:', this.controller.process)
       this.controller.start()
+      console.log('Controller.start() called')
+      console.log('Controller.process after start:', this.controller.process)
+      console.log('===============================================')
     } catch (err) {
+      console.log('Error starting engine:', err)
       this.setHumanSLState({
         available: false,
         modelLoaded: false,
@@ -613,7 +838,9 @@ export default class EngineSyncer extends EventEmitter {
 
     // Propagate spawn errors (ENOENT, EACCES, etc.)
     if (this.controller.process) {
+      console.log('Setting up process error handler')
       this.controller.process.on('error', (err) => {
+        console.log('Process error:', err)
         this.emit('error', err)
       })
     }

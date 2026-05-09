@@ -603,6 +603,7 @@ class App extends Component {
             inspectorBoard.getCaptures(sign),
           ),
           boardHeight: inspectorBoard.height,
+          boardWidth: inspectorBoard.width,
         }
       : null
 

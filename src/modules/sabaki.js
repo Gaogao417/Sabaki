@@ -1325,21 +1325,31 @@ class Sabaki extends EventEmitter {
   async ensureAnalysisReady({requireOwnership = false} = {}) {
     let syncer = this.inferredState.analyzingEngineSyncer
 
+    console.log('=== Ensuring Analysis Ready ===')
+    console.log('Require Ownership:', requireOwnership)
+    console.log('Current Analyzing Syncer:', syncer?.id)
+
     if (
       syncer != null &&
       (!requireOwnership || this.engineSupportsOwnership(syncer))
     ) {
+      console.log('Using existing analyzing engine')
+      console.log('===============================================')
       return syncer
     }
 
     let syncerId = this.getAnalysisSyncerId({requireOwnership})
+    console.log('Analysis Syncer ID from config:', syncerId)
 
     if (syncerId == null) {
+      console.log('No syncer ID found, attaching default engine...')
       syncer = await this.attachDefaultAnalysisEngine({requireOwnership})
       syncerId = syncer?.id ?? null
     }
 
     if (syncerId == null) {
+      console.log('Failed to get or attach engine')
+      console.log('===============================================')
       await dialog.showMessageBox(
         i18n.t(
           'sabaki.engine',
@@ -1352,6 +1362,18 @@ class Sabaki extends EventEmitter {
       return null
     }
 
+    console.log('Starting analysis with syncer ID:', syncerId)
+    console.log('===============================================')
+    applogger.log(
+      'info',
+      'engine',
+      'ensure.ready',
+      'Engine ready for analysis',
+      {
+        syncerId,
+        requireOwnership,
+      },
+    )
     await this.startAnalysis(syncerId)
     return (
       this.state.attachedEngineSyncers.find((x) => x.id === syncerId) || null
@@ -1365,30 +1387,69 @@ class Sabaki extends EventEmitter {
         (engine) => engine != null && engine.path != null && engine.path !== '',
       )
 
+    console.log('=== Attaching Default Analysis Engine ===')
+    console.log('Require Ownership:', requireOwnership)
+    console.log('Configured Engines:', engines.length)
+
     // Auto-detect engines if none configured (transient — not persisted)
     if (engines.length === 0) {
       let detected = detectEngines()
+      console.log('Auto-detected Engines:', detected.length)
       if (detected.length > 0) {
+        console.log('Detected Engine Details:', detected)
         engines = detected
       }
     }
 
-    for (let engine of engines) {
+    for (let i = 0; i < engines.length; i++) {
+      let engine = this.normalizeEngineConfig(engines[i], i)
+      console.log('Attempting to attach engine:', engine)
       let [syncer] = this.attachEngines([engine])
       if (syncer == null) continue
 
       let ready = await this.waitForEngineCommands(syncer)
+      console.log('Engine Ready:', ready)
+      console.log('Engine Commands:', syncer.commands)
+      console.log('Analyze Command:', this.getAnalyzeCommand(syncer))
+      console.log('Supports Ownership:', this.engineSupportsOwnership(syncer))
+
       if (
         ready &&
         this.getAnalyzeCommand(syncer) != null &&
         (!requireOwnership || this.engineSupportsOwnership(syncer))
       ) {
+        console.log('Successfully attached engine:', engine.path)
+        console.log('===============================================')
+        applogger.log(
+          'info',
+          'engine',
+          'attach.success',
+          'Engine attached successfully',
+          {
+            enginePath: engine.path,
+            requireOwnership,
+            commands: syncer.commands,
+            analyzeCommand: this.getAnalyzeCommand(syncer),
+          },
+        )
         return syncer
       }
 
       await this.detachEngines([syncer.id])
     }
 
+    console.log('Failed to attach any suitable engine')
+    console.log('===============================================')
+    applogger.log(
+      'warn',
+      'engine',
+      'attach.failed',
+      'Failed to attach engine',
+      {
+        requireOwnership,
+        enginesCount: engines.length,
+      },
+    )
     return null
   }
 
@@ -1396,18 +1457,37 @@ class Sabaki extends EventEmitter {
     if (syncer == null) return Promise.resolve(false)
     if (syncer.commands.length > 0) return Promise.resolve(true)
 
+    console.log('=== Waiting for Engine Commands ===')
+    console.log('Syncer ID:', syncer.id)
+    console.log('Current Commands:', syncer.commands)
+    console.log('Current Commands Length:', syncer.commands.length)
+    console.log('Timeout:', timeout)
+    console.log('===============================================')
+
     if (syncer.engine.enableHumanSL === true) {
       timeout = Math.max(timeout, 300000)
+      console.log('Extended timeout for HumanSL to:', timeout)
     }
 
     return new Promise((resolve) => {
       let done = false
       let intervalId = null
       let timeoutId = null
+      let startTime = Date.now()
+      let checkCount = 0
 
       let finish = (ready) => {
         if (done) return
         done = true
+
+        let elapsed = Date.now() - startTime
+        console.log('=== Engine Commands Wait Finished ===')
+        console.log('Ready:', ready)
+        console.log('Final Commands:', syncer.commands)
+        console.log('Final Commands Length:', syncer.commands.length)
+        console.log('Elapsed Time:', elapsed, 'ms')
+        console.log('Check Count:', checkCount)
+        console.log('===============================================')
 
         clearInterval(intervalId)
         clearTimeout(timeoutId)
@@ -1418,20 +1498,37 @@ class Sabaki extends EventEmitter {
       }
 
       let check = () => {
+        checkCount++
+        if (checkCount % 100 === 0) {
+          console.log(
+            'Still waiting... Check count:',
+            checkCount,
+            'Commands:',
+            syncer.commands.length,
+          )
+        }
+
         if (syncer.commands.length > 0) {
           finish(true)
         }
       }
 
       let handleStopped = () => {
+        console.log('Engine stopped while waiting for commands')
         finish(false)
       }
 
       intervalId = setInterval(check, 50)
-      timeoutId = setTimeout(() => finish(syncer.commands.length > 0), timeout)
+      timeoutId = setTimeout(() => {
+        console.log('Timeout reached while waiting for commands')
+        finish(syncer.commands.length > 0)
+      }, timeout)
+
       syncer.on('suspended-changed', check)
       syncer.controller.on('response-received', check)
       syncer.controller.on('stopped', handleStopped)
+
+      console.log('Starting wait for commands...')
       check()
     })
   }
@@ -1893,11 +1990,8 @@ class Sabaki extends EventEmitter {
   getAnalyzeCommand(syncer) {
     if (syncer == null) return null
 
-    return (
-      setting
-        .get('engines.analyze_commands')
-        .find((command) => syncer.commands.includes(command)) || null
-    )
+    let analyzeCommands = setting.get('engines.analyze_commands')
+    return analyzeCommands.find((cmd) => syncer.commands.includes(cmd)) || null
   }
 
   engineSupportsOwnership(syncer) {
@@ -1966,54 +2060,93 @@ class Sabaki extends EventEmitter {
       return
     }
 
+    console.log('=== Configuring KataGo Analysis ===')
+    console.log('Syncer ID:', syncer.id)
+    console.log('Engine Analysis Config:', syncer.engine.analysis)
+
     try {
       let analysis = syncer.engine.analysis || {}
       let maxVisits = +(
         analysis.visits || setting.get('board.analysis_max_visits')
       )
+      console.log('Max Visits:', maxVisits)
       if (Number.isFinite(maxVisits) && maxVisits > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
           args: ['maxVisits', Math.round(maxVisits).toString()],
         })
+        console.log('Set maxVisits:', Math.round(maxVisits))
       }
 
       let maxPlayouts = +analysis.playouts
+      console.log('Max Playouts:', maxPlayouts)
       if (Number.isFinite(maxPlayouts) && maxPlayouts > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
           args: ['maxPlayouts', Math.round(maxPlayouts).toString()],
         })
+        console.log('Set maxPlayouts:', Math.round(maxPlayouts))
       }
 
       let maxTime = +(
         analysis.maxTime || setting.get('board.analysis_max_time')
       )
+      console.log('Max Time:', maxTime)
       if (Number.isFinite(maxTime) && maxTime > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
           args: ['maxTime', maxTime.toString()],
         })
+        console.log('Set maxTime:', maxTime)
       }
 
       let temperature = +analysis.temperature
+      console.log('Temperature:', temperature)
       if (Number.isFinite(temperature) && temperature > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
           args: ['rootPolicyTemperature', temperature.toString()],
         })
+        console.log('Set rootPolicyTemperature:', temperature)
       }
 
       if (syncer.commands.includes('kata-set-rules')) {
         let rules = gametree.getRootProperty(this.inferredState.gameTree, 'RU')
+        console.log('Rules:', rules)
         if (rules) {
           await syncer.queueCommand({
             name: 'kata-set-rules',
             args: [rules],
           })
+          console.log('Set rules:', rules)
         }
       }
-    } catch (err) {}
+      console.log('===============================================')
+      applogger.log(
+        'info',
+        'engine',
+        'kata.configured',
+        'KataGo analysis configured',
+        {
+          maxVisits:
+            Number.isFinite(maxVisits) && maxVisits > 0
+              ? Math.round(maxVisits)
+              : null,
+          maxPlayouts:
+            Number.isFinite(maxPlayouts) && maxPlayouts > 0
+              ? Math.round(maxPlayouts)
+              : null,
+          maxTime: Number.isFinite(maxTime) && maxTime > 0 ? maxTime : null,
+          temperature:
+            Number.isFinite(temperature) && temperature > 0
+              ? temperature
+              : null,
+        },
+      )
+    } catch (err) {
+      console.log('Error configuring KataGo analysis:', err)
+      console.log('===============================================')
+    }
   }
 
   getAnalysisVisitLimit(syncer = null) {
@@ -2031,6 +2164,78 @@ class Sabaki extends EventEmitter {
       syncer?.engine.analysis?.maxTime || setting.get('board.analysis_max_time')
     )
     return Number.isFinite(maxTime) && maxTime > 0 ? maxTime : null
+  }
+
+  getGenmoveAnalyzeCommand(syncer) {
+    if (syncer == null) return null
+    let commands = setting.get('engines.gemove_analyze_commands')
+    return commands.find((cmd) => syncer.commands.includes(cmd)) || null
+  }
+
+  buildAnalyzeArgs(
+    syncer,
+    analyzePlayer,
+    {analysisAreaVertices = null, gameBoard = null} = {},
+  ) {
+    let commandName = this.getAnalyzeCommand(syncer)
+    if (commandName == null) return null
+
+    let args = [
+      analyzePlayer > 0 ? 'B' : 'W',
+      setting.get('board.analysis_interval').toString(),
+    ]
+
+    if (commandName.includes('kata')) {
+      args.push('ownership', 'true')
+
+      let candidates = +syncer.engine.analysis?.candidates
+      if (Number.isFinite(candidates) && candidates > 0) {
+        args.push('maxmoves', Math.round(candidates).toString())
+      }
+    }
+
+    if (
+      commandName.includes('kata') &&
+      analysisAreaVertices?.length > 0 &&
+      gameBoard != null
+    ) {
+      let vertexStr = analysisAreaVertices
+        .map((v) => gameBoard.stringifyVertex(v))
+        .join(',')
+      args.push('allow', 'b', vertexStr, '999', 'allow', 'w', vertexStr, '999')
+    }
+
+    return args
+  }
+
+  buildGenmoveAnalyzeArgs(syncer, color) {
+    let commandName = this.getGenmoveAnalyzeCommand(syncer)
+    if (commandName == null) return {commandName: 'genmove', args: null}
+
+    let args = [color, setting.get('board.analysis_interval').toString()]
+
+    if (commandName.includes('kata')) {
+      let candidates = +syncer.engine.analysis?.candidates
+      if (Number.isFinite(candidates) && candidates > 0) {
+        args.push('maxmoves', Math.round(candidates).toString())
+      }
+    }
+
+    return {commandName, args}
+  }
+
+  async prepareHumanSL(syncer) {
+    if (syncer.humanSL?.modelLoaded) {
+      await syncer.updateRawHumanPolicy().catch(() => {})
+    }
+  }
+
+  async prepareAnalysis(syncer, commandName) {
+    if (commandName.includes('kata')) {
+      await this.configureKataAnalysis(syncer)
+    }
+
+    await this.prepareHumanSL(syncer)
   }
 
   async runBoardAnalysis({
@@ -2056,29 +2261,13 @@ class Sabaki extends EventEmitter {
     let commandName = this.getAnalyzeCommand(syncer)
     if (commandName == null) return null
 
-    let args = [
-      analyzePlayer > 0 ? 'B' : 'W',
-      setting.get('board.analysis_interval').toString(),
-    ]
-    if (commandName.includes('kata')) {
-      args.push('ownership', 'true')
-
-      let candidates = +syncer.engine.analysis?.candidates
-      if (Number.isFinite(candidates) && candidates > 0) {
-        args.push('maxmoves', Math.round(candidates).toString())
-      }
-    }
-
-    if (
-      commandName.includes('kata') &&
-      this.state.analysisAreaVertices?.length > 0
-    ) {
-      let gameBoard = gametree.getBoard(tree, treePosition)
-      let vertexStr = this.state.analysisAreaVertices
-        .map((v) => gameBoard.stringifyVertex(v))
-        .join(',')
-      args.push('allow', 'b', vertexStr, '999', 'allow', 'w', vertexStr, '999')
-    }
+    let args = this.buildAnalyzeArgs(syncer, analyzePlayer, {
+      analysisAreaVertices: this.state.analysisAreaVertices,
+      gameBoard:
+        this.state.analysisAreaVertices?.length > 0
+          ? gametree.getBoard(tree, treePosition)
+          : null,
+    })
 
     let requestId =
       requestGroup === 'analysis'
@@ -2106,9 +2295,7 @@ class Sabaki extends EventEmitter {
         return null
       }
 
-      if (commandName.includes('kata')) {
-        await this.configureKataAnalysis(syncer)
-      }
+      await this.prepareAnalysis(syncer, commandName)
 
       let analysis = await new Promise((resolve) => {
         let settled = false
@@ -2161,6 +2348,40 @@ class Sabaki extends EventEmitter {
         }
 
         try {
+          console.log('=== Territory Tool Engine Start Parameters ===')
+          console.log('Command Name:', commandName)
+          console.log('Command Args:', args)
+          console.log('Engine Config:', syncer.engine)
+          console.log('Visit Limit:', visitLimit)
+          console.log('Max Time:', maxTime)
+          console.log('Request Group:', requestGroup)
+          console.log('Tree Position:', treePosition)
+          console.log(
+            'Analyze Player:',
+            analyzePlayer > 0 ? 'Black (B)' : 'White (W)',
+          )
+          console.log(
+            'Analysis Area Vertices:',
+            this.state.analysisAreaVertices,
+          )
+          console.log('===============================================')
+          applogger.log(
+            'info',
+            'engine',
+            'analysis.start',
+            'Engine analysis started',
+            {
+              commandName,
+              args,
+              enginePath: syncer.engine.path,
+              visitLimit,
+              maxTime,
+              requestGroup,
+              treePosition,
+              analyzePlayer: analyzePlayer > 0 ? 'B' : 'W',
+              analysisAreaVertices: this.state.analysisAreaVertices,
+            },
+          )
           syncer.queueCommand({name: commandName, args})
         } catch (err) {
           finish(null)
@@ -4059,6 +4280,11 @@ class Sabaki extends EventEmitter {
   }
 
   attachEngines(engines) {
+    console.log('=== Attaching Engines ===')
+    console.log('Engines to attach:', engines.length)
+    console.log('Engine details:', engines)
+    console.log('===============================================')
+
     let attaching = []
     let getEngineName = (name) => {
       let counter = 1
@@ -4078,10 +4304,20 @@ class Sabaki extends EventEmitter {
     for (let engine of engines) {
       engine = {...engine, name: getEngineName(engine.name)}
 
+      console.log('Creating EngineSyncer for:', engine.name)
+      console.log('Engine path:', engine.path)
+      console.log('Engine args:', engine.args)
+      console.log('Engine commands:', engine.commands)
+
       let syncer = new EngineSyncer(engine)
+
+      console.log('EngineSyncer created with ID:', syncer.id)
+      console.log('Syncer pathError:', syncer.pathError)
+      console.log('Syncer suspended:', syncer.suspended)
 
       // Handle engine path errors
       if (syncer.pathError) {
+        console.log('Engine path error:', syncer.pathError)
         dialog.showMessageBox(syncer.pathError, 'error')
         applogger.log(
           'error',
@@ -4267,6 +4503,11 @@ class Sabaki extends EventEmitter {
       })
 
       syncer.controller.on('stopped', () => {
+        console.log('=== Engine Controller Stopped ===')
+        console.log('Engine:', engine.name)
+        console.log('Syncer ID:', syncer.id)
+        console.log('===============================================')
+
         gtplogger.write({
           type: 'meta',
           message: 'Engine Stopped',
@@ -4279,7 +4520,10 @@ class Sabaki extends EventEmitter {
         })
       })
 
+      console.log('Starting engine:', engine.name)
       syncer.start()
+      console.log('Engine start() called for:', engine.name)
+      console.log('===============================================')
 
       attaching.push(syncer)
       applogger.log('info', 'engine', 'engine.attached', 'Engine attached', {
@@ -4287,6 +4531,14 @@ class Sabaki extends EventEmitter {
         syncerId: syncer.id,
       })
     }
+
+    console.log('=== All Engines Attached ===')
+    console.log('Attached engines count:', attaching.length)
+    console.log(
+      'Attached engine IDs:',
+      attaching.map((s) => s.id),
+    )
+    console.log('===============================================')
 
     this.setState(({attachedEngineSyncers}) => ({
       attachedEngineSyncers: [...attachedEngineSyncers, ...attaching],
@@ -4344,11 +4596,31 @@ class Sabaki extends EventEmitter {
       (syncer) => syncer.id === syncerId,
     )
 
+    console.log('=== Syncing Engine ===')
+    console.log('Syncer ID:', syncerId)
+    console.log('Tree Position:', treePosition)
+    console.log('Syncer Found:', syncer != null)
+
     if (syncer != null) {
       try {
+        console.log('Starting engine sync...')
         await syncer.sync(tree, treePosition)
+        console.log('Engine sync completed successfully')
+        console.log('===============================================')
+        applogger.log(
+          'info',
+          'engine',
+          'sync.success',
+          'Engine synced successfully',
+          {
+            syncerId,
+            treePosition,
+          },
+        )
         return true
       } catch (err) {
+        console.log('Engine sync failed:', err.message)
+        console.log('===============================================')
         applogger.log(
           'warn',
           'engine',
@@ -4360,6 +4632,8 @@ class Sabaki extends EventEmitter {
       }
     }
 
+    console.log('Sync failed: syncer not found')
+    console.log('===============================================')
     return false
   }
 
@@ -4395,17 +4669,10 @@ class Sabaki extends EventEmitter {
     let {gameTree: tree, board} = this.inferredState
     let coord
     try {
-      let commandName =
-        setting
-          .get('engines.gemove_analyze_commands')
-          .find((x) => syncer.commands.includes(x)) || 'genmove'
+      let genmoveResult = this.buildGenmoveAnalyzeArgs(syncer, color)
+      let commandName = genmoveResult.commandName
 
-      if (
-        commandName.includes('kata') ||
-        syncer.commands.includes('kata-set-param')
-      ) {
-        await this.configureKataAnalysis(syncer)
-      }
+      await this.prepareAnalysis(syncer, commandName)
 
       if (commandName === 'genmove') {
         let response = await syncer.queueCommand({
@@ -4417,16 +4684,7 @@ class Sabaki extends EventEmitter {
 
         coord = response.content
       } else {
-        let interval = setting.get('board.analysis_interval').toString()
-        let args = [color, interval]
-        let candidates = +syncer.engine.analysis?.candidates
-        if (
-          commandName.includes('kata') &&
-          Number.isFinite(candidates) &&
-          candidates > 0
-        ) {
-          args.push('maxmoves', Math.round(candidates).toString())
-        }
+        let args = genmoveResult.args
 
         coord = await new Promise(async (resolve) => {
           await syncer.queueCommand({name: commandName, args}, ({line}) => {
@@ -4834,12 +5092,10 @@ class Sabaki extends EventEmitter {
         let synced = await this.syncEngine(syncer.id, node.id, {tree})
         if (!synced || this.state.quickAnalysisId !== analysisId) break
 
+        await this.prepareHumanSL(syncer)
+
         let sign = this.getPlayer(node.id)
-        let args = [
-          sign > 0 ? 'B' : 'W',
-          setting.get('board.analysis_interval').toString(),
-        ]
-        if (commandName.includes('kata')) args.push('ownership', 'true')
+        let args = this.buildAnalyzeArgs(syncer, sign)
 
         // Must await: ensures command is queued before listener checks
         await syncer.queueCommand({name: commandName, args})
@@ -5733,10 +5989,10 @@ class Sabaki extends EventEmitter {
 
     helper.popupMenu(
       [
-        ...engines.map((engine) => ({
+        ...engines.map((engine, i) => ({
           label: engine.name || t('(Unnamed Engine)'),
           click: () => {
-            this.attachEngines([engine])
+            this.attachEngines([this.normalizeEngineConfig(engine, i)])
           },
         })),
         engines.length > 0 && {type: 'separator'},

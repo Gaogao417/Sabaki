@@ -69,6 +69,7 @@ function sameVertex(a, b) {
 function AnalysisSummaryCard({
   analysis,
   boardHeight,
+  boardWidth,
   humanSLProfile,
   showAISuggestions,
   showHumanPreference,
@@ -78,17 +79,46 @@ function AnalysisSummaryCard({
     analysis != null &&
     Array.isArray(analysis.variations) &&
     analysis.variations.length > 0
-  let candidates = hasAnalysis
-    ? analysis.variations
-        .slice()
-        .sort((a, b) => {
-          if (showHumanPreference) {
-            return (b.humanPrior ?? -1) - (a.humanPrior ?? -1)
-          }
-          return (a.aiRank ?? 0) - (b.aiRank ?? 0)
-        })
+
+  let candidates = []
+
+  if (hasAnalysis) {
+    let byVertex = new Map()
+    for (let v of analysis.variations) {
+      byVertex.set(v.vertex.join(','), {...v})
+    }
+
+    if (analysis.humanPolicyMap != null) {
+      let policy = analysis.humanPolicyMap
+      let width = boardWidth ?? boardHeight ?? 19
+      let indexed = policy
+        .map((val, i) => ({
+          vertex: [i % width, Math.floor(i / width)],
+          humanPrior: val,
+        }))
+        .filter((v) => v.humanPrior != null && v.humanPrior > 0)
+        .sort((a, b) => b.humanPrior - a.humanPrior)
         .slice(0, 5)
-    : []
+
+      for (let h of indexed) {
+        let key = h.vertex.join(',')
+        if (!byVertex.has(key)) {
+          byVertex.set(key, {
+            vertex: h.vertex,
+            visits: 0,
+            winrate: null,
+            scoreLead: null,
+            aiPolicy: null,
+            humanPrior: h.humanPrior,
+            moves: [],
+          })
+        }
+      }
+    }
+
+    candidates = [...byVertex.values()]
+    candidates.sort((a, b) => (a.aiRank ?? Infinity) - (b.aiRank ?? Infinity))
+  }
   let totalVisits = candidates.reduce(
     (sum, item) => sum + (item.visits || 0),
     0,
@@ -191,7 +221,10 @@ function AnalysisSummaryCard({
                       : '',
                     onClick: () => {
                       sabaki.setSelectedAnalysisVertex(variation.vertex)
-                      sabaki.playAnalysisVariation(analysis.sign, variation.moves)
+                      sabaki.playAnalysisVariation(
+                        analysis.sign,
+                        variation.moves,
+                      )
                     },
                   },
                   h(
@@ -361,10 +394,7 @@ export default class Sidebar extends Component {
     let inspectorSidebar = editWorkspaceActive || workbenchSidebar
     let hasAnalysisData =
       winrateData.some((x) => x != null) || scoreLeadData.some((x) => x != null)
-    showWinrateGraph =
-      showWinrateGraph &&
-      !inspectorSidebar &&
-      hasAnalysisData
+    showWinrateGraph = showWinrateGraph && !inspectorSidebar && hasAnalysisData
 
     if (inspectorSidebar) {
       let recallLastAttempt =
@@ -386,6 +416,10 @@ export default class Sidebar extends Component {
           h(AnalysisSummaryCard, {
             analysis: activeAnalysis,
             boardHeight: inspectorSummary?.boardHeight ?? 19,
+            boardWidth:
+              inspectorSummary?.boardWidth ??
+              inspectorSummary?.boardHeight ??
+              19,
             humanSLProfile,
             showAISuggestions,
             showHumanPreference,
@@ -704,6 +738,10 @@ export default class Sidebar extends Component {
           h(AnalysisSummaryCard, {
             analysis: activeAnalysis,
             boardHeight: inspectorSummary?.boardHeight ?? 19,
+            boardWidth:
+              inspectorSummary?.boardWidth ??
+              inspectorSummary?.boardHeight ??
+              19,
             humanSLProfile,
             showAISuggestions,
             showHumanPreference,

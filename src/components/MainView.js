@@ -354,22 +354,31 @@ export default class MainView extends Component {
       }
     }
 
-    if (showHumanPreference && activeAnalysis?.variations != null) {
-      let preferenceMap = markerMap || board.markers.map((row) => [...row])
-      activeAnalysis.variations
-        .filter((variation) => variation.humanPrior != null)
-        .slice()
+    // Determine base markerMap (edit workspace markers take priority)
+    let baseMarkerMap =
+      editWorkspaceActive && editMarkerMap != null ? editMarkerMap : markerMap
+
+    // Human preference ghost stones (stone-sized circles)
+    if (showHumanPreference && activeAnalysis?.humanPolicyMap != null) {
+      overlayGhostStoneMap = board.signMap.map((row) => row.map(() => null))
+      let policy = activeAnalysis.humanPolicyMap
+      let width = board.width
+
+      policy
+        .map((val, i) => ({
+          vertex: [i % width, Math.floor(i / width)],
+          humanPrior: val,
+        }))
+        .filter((v) => v.humanPrior != null && v.humanPrior > 0)
         .sort((a, b) => b.humanPrior - a.humanPrior)
         .slice(0, 5)
-        .forEach((variation, index) => {
-          let [x, y] = variation.vertex || []
-          if (preferenceMap[y] == null || x == null) return
-          preferenceMap[y][x] = {
-            type: 'label',
-            label: `${index + 1}`,
+        .forEach(({vertex: [x, y]}) => {
+          if (overlayGhostStoneMap[y] == null || x == null) return
+          overlayGhostStoneMap[y][x] = {
+            sign: currentPlayer,
+            type: 'interesting',
           }
         })
-      markerMap = preferenceMap
     }
 
     if (analysisAreaVertices != null) {
@@ -402,10 +411,7 @@ export default class MainView extends Component {
       analysisType,
       analysis: showAnalysis ? activeAnalysis : null,
       paintMap,
-      markerMap:
-        editWorkspaceActive && editMarkerMap != null
-          ? editMarkerMap
-          : markerMap,
+      markerMap: baseMarkerMap,
       dimmedStones,
       overlayGhostStoneMap,
 
