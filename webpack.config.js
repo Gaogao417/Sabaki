@@ -15,7 +15,18 @@ module.exports = (env, argv) => ({
     __dirname: false,
   },
 
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        exclude: /node_modules/,
+        use: path.resolve(__dirname, 'ci/esbuildTsLoader.js'),
+      },
+    ],
+  },
+
   resolve: {
+    extensions: ['.js', '.ts', '.tsx'],
     alias: {
       react: 'preact/compat',
       'react-dom/test-utils': 'preact/test-utils',
