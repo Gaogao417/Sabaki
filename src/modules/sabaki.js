@@ -21,6 +21,16 @@ import * as applogger from './applogger.js'
 import * as helper from './helper.js'
 import {getAnalysisPreviewCacheKey} from './overlays/analysisPreview.js'
 import {
+  MUTATION_CONTRACTS,
+  SCRATCH_ROLES,
+  WORKSPACE_KINDS,
+  createGameTreePositionSource,
+  createScratchPositionFromSnapshot,
+  createScratchPositionSource,
+  getMutationContractFromState,
+  getPositionSourceFromState,
+} from './position-contracts.ts'
+import {
   boardFromSnapshot,
   cloneSnapshot,
   createSnapshotFromBoard,
@@ -414,13 +424,35 @@ class Sabaki extends EventEmitter {
 
   // User Interface
 
-  createAnalysisWorkspace() {
+  createScratchSnapshotFromCurrentPosition(role = SCRATCH_ROLES.CURRENT) {
     let tree = this.state.gameTrees[this.state.gameIndex]
     let board = gametree.getBoard(tree, this.state.treePosition)
     let currentPlayer = this.getPlayer(this.state.treePosition)
     let snapshot = createSnapshotFromBoard(board, currentPlayer)
+    let komi = +gametree.getRootProperty(tree, 'KM', 0)
+    let rules = gametree.getRootProperty(tree, 'RU', null)
 
+    return createScratchPositionFromSnapshot(snapshot, {
+      id: uuid(),
+      role,
+      komi: Number.isFinite(komi) ? komi : null,
+      rules: typeof rules === 'string' ? rules : null,
+      source: {
+        type: 'game-tree-node',
+        id: this.state.treePosition,
+      },
+    })
+  }
+
+  createAnalysisWorkspace() {
+    let snapshot = this.createScratchSnapshotFromCurrentPosition()
     return {
+      workspaceKind: WORKSPACE_KINDS.SCRATCH_ANALYSIS,
+      mutationContract: MUTATION_CONTRACTS.SCRATCH_EDIT,
+      positionSource: createScratchPositionSource(
+        snapshot.id,
+        SCRATCH_ROLES.CURRENT,
+      ),
       currentSnapshot: snapshot,
       referenceSnapshot: null,
       activeTab: 'current',
@@ -1263,13 +1295,22 @@ class Sabaki extends EventEmitter {
       let snapshot = state.editWorkspace[snapshotKey]
       if (snapshot == null) return null
 
-      let context = snapshotToGameTree(snapshot)
+      let context = snapshotToGameTree(
+        snapshot,
+        [],
+        this.inferredState.gameTree,
+      )
       if (context == null) return null
 
       let {tree, treePosition} = context
       return {
         source: 'analysis',
         tab: activeTab,
+        positionSource: createScratchPositionSource(
+          snapshot.id,
+          snapshot.role ?? activeTab,
+        ),
+        mutationContract: MUTATION_CONTRACTS.SCRATCH_EDIT,
         tree,
         treePosition,
         analyzePlayer: snapshot.nextPlayer,
@@ -1282,6 +1323,8 @@ class Sabaki extends EventEmitter {
     return {
       source: 'play',
       tab: null,
+      positionSource: createGameTreePositionSource(state.treePosition),
+      mutationContract: getMutationContractFromState(state),
       tree: inferredState.gameTree,
       treePosition: state.treePosition,
       analyzePlayer: this.getPlayer(state.treePosition),
@@ -1291,6 +1334,14 @@ class Sabaki extends EventEmitter {
           : null,
       ownership: this.getCurrentOwnership(inferredState.analyzingEngineSyncer),
     }
+  }
+
+  getActivePositionSource(tab = null) {
+    return getPositionSourceFromState(this.state, tab)
+  }
+
+  getActiveMutationContract() {
+    return getMutationContractFromState(this.state)
   }
 
   refreshActiveBoardAnalysis() {
@@ -1305,14 +1356,15 @@ class Sabaki extends EventEmitter {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
-    let tree = this.state.gameTrees[this.state.gameIndex]
-    let board = gametree.getBoard(tree, this.state.treePosition)
-    let currentPlayer = this.getPlayer(this.state.treePosition)
-    let snapshot = createSnapshotFromBoard(board, currentPlayer)
+    let snapshot = this.createScratchSnapshotFromCurrentPosition()
 
     this.setState({
       editWorkspace: {
         ...ws,
+        positionSource: createScratchPositionSource(
+          snapshot.id,
+          SCRATCH_ROLES.CURRENT,
+        ),
         currentSnapshot: snapshot,
         currentAnalysis: null,
         currentOwnership: null,
@@ -1474,12 +1526,9 @@ class Sabaki extends EventEmitter {
     })
   }
 
-  // Edit Workspace Methods
+  // Scratch Edit Contract
 
-  clickEditWorkspaceVertex(
-    vertex,
-    {button = 0, ctrlKey = false, x = 0, y = 0} = {},
-  ) {
+  scratchEdit(vertex, {button = 0, ctrlKey = false, x = 0, y = 0} = {}) {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
@@ -1556,6 +1605,10 @@ class Sabaki extends EventEmitter {
       this.setState({
         editWorkspace: {
           ...ws,
+          positionSource: createScratchPositionSource(
+            nextSnapshot.id,
+            nextSnapshot.role ?? tab,
+          ),
           [snapshotKey]: nextSnapshot,
           [analysisKey]: null,
           [ownershipKey]: null,
@@ -1599,6 +1652,10 @@ class Sabaki extends EventEmitter {
       this.setState({
         editWorkspace: {
           ...ws,
+          positionSource: createScratchPositionSource(
+            nextSnapshot.id,
+            nextSnapshot.role ?? tab,
+          ),
           [snapshotKey]: nextSnapshot,
           [analysisKey]: null,
           [ownershipKey]: null,
@@ -1619,6 +1676,10 @@ class Sabaki extends EventEmitter {
       this.setState({
         editWorkspace: {
           ...ws,
+          positionSource: createScratchPositionSource(
+            nextSnapshot.id,
+            nextSnapshot.role ?? tab,
+          ),
           [snapshotKey]: nextSnapshot,
           [analysisKey]: null,
           [ownershipKey]: null,
@@ -1692,6 +1753,10 @@ class Sabaki extends EventEmitter {
     }
   }
 
+  clickEditWorkspaceVertex(vertex, options = {}) {
+    return this.scratchEdit(vertex, options)
+  }
+
   captureEditReference() {
     let ws = this.state.editWorkspace
     if (ws == null) return
@@ -1712,11 +1777,26 @@ class Sabaki extends EventEmitter {
     } = this.getEditWorkspaceTabKeys(targetTab)
     let sourceSnapshot = ws[sourceSnapshotKey]
     if (sourceSnapshot == null) return
+    let targetRole =
+      targetTab === 'reference'
+        ? SCRATCH_ROLES.REFERENCE
+        : SCRATCH_ROLES.CURRENT
+    let targetSnapshot = createScratchPositionFromSnapshot(sourceSnapshot, {
+      id: uuid(),
+      role: targetRole,
+      source: sourceSnapshot.source ?? {
+        type: 'manual',
+      },
+    })
 
     this.setState({
       editWorkspace: {
         ...ws,
-        [targetSnapshotKey]: cloneSnapshot(sourceSnapshot),
+        positionSource: createScratchPositionSource(
+          targetSnapshot.id,
+          targetRole,
+        ),
+        [targetSnapshotKey]: targetSnapshot,
         [targetAnalysisKey]: null,
         [targetOwnershipKey]: null,
         [targetMarkerKey]: sourceSnapshot.signMap.map((row) =>
@@ -1741,8 +1821,22 @@ class Sabaki extends EventEmitter {
     if (tab !== 'current' && tab !== 'reference') return
     if (tab === 'reference' && ws.referenceSnapshot == null) return
 
+    let {snapshotKey} = this.getEditWorkspaceTabKeys(tab)
+    let snapshot = ws[snapshotKey]
+
     this.setState({
-      editWorkspace: {...ws, activeTab: tab},
+      editWorkspace: {
+        ...ws,
+        activeTab: tab,
+        ...(snapshot?.id == null
+          ? null
+          : {
+              positionSource: createScratchPositionSource(
+                snapshot.id,
+                snapshot.role ?? tab,
+              ),
+            }),
+      },
     })
 
     let {analysisKey} = this.getEditWorkspaceTabKeys(tab)
@@ -1773,6 +1867,10 @@ class Sabaki extends EventEmitter {
     this.setState({
       editWorkspace: {
         ...ws,
+        positionSource: createScratchPositionSource(
+          nextSnapshot.id,
+          nextSnapshot.role ?? ws.activeTab,
+        ),
         [key]: nextSnapshot,
         [analysisKey]: null,
         [ownershipKey]: null,
@@ -1815,7 +1913,11 @@ class Sabaki extends EventEmitter {
 
     let analyzeTab = async (snapshot, analysisKey, ownershipKey) => {
       if (snapshot == null) return null
-      let {tree, treePosition} = snapshotToGameTree(snapshot)
+      let {tree, treePosition} = snapshotToGameTree(
+        snapshot,
+        [],
+        this.inferredState.gameTree,
+      )
       return await this.runBoardAnalysis({
         syncer,
         tree,
@@ -1920,6 +2022,10 @@ class Sabaki extends EventEmitter {
     this.setState({
       editWorkspace: {
         ...ws,
+        positionSource: createScratchPositionSource(
+          nextSnapshot.id,
+          nextSnapshot.role ?? ws.activeTab,
+        ),
         [key]: nextSnapshot,
         [analysisKey]: null,
         [ownershipKey]: null,
@@ -3216,6 +3322,18 @@ class Sabaki extends EventEmitter {
 
   // Playing
 
+  playMove(vertex, options = {}) {
+    return this.makeMove(vertex, options)
+  }
+
+  variationMove(vertex, options = {}) {
+    return this.makeMove(vertex, {...options, generateEngineMove: false})
+  }
+
+  recallAnswer(vertex) {
+    return this.handleRecallMove(vertex)
+  }
+
   clickVertex(
     vertex,
     {button = 0, ctrlKey = false, metaKey = false, x = 0, y = 0} = {},
@@ -3237,7 +3355,7 @@ class Sabaki extends EventEmitter {
     if (['play', 'autoplay'].includes(this.state.mode)) {
       if (button === 0 && !(helper.isMac && ctrlKey)) {
         if (board.get(vertex) === 0) {
-          this.makeMove(vertex, {
+          this.playMove(vertex, {
             generateEngineMove: this.state.engineGameOngoing == null,
           })
         } else if (
@@ -3301,7 +3419,7 @@ class Sabaki extends EventEmitter {
       }
     } else if (this.state.mode === 'analysis') {
       if (this.state.editWorkspace != null) {
-        this.clickEditWorkspaceVertex(vertex, {button, ctrlKey, x, y})
+        this.scratchEdit(vertex, {button, ctrlKey, x, y})
         return
       }
 
@@ -3403,7 +3521,7 @@ class Sabaki extends EventEmitter {
 
       let board = gametree.getBoard(tree, treePosition)
       if (board.get(vertex) === 0) {
-        this.handleRecallMove(vertex)
+        this.recallAnswer(vertex)
       }
     } else if (this.state.mode === 'problem' || this.state.mode === 'review') {
       if (button !== 0) return

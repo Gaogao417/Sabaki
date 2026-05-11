@@ -10,6 +10,7 @@ view older versions of the documentation, you can browse by tag on GitHub.
 ## Current Design Specs
 
 - [Workbench UI/UX Spec](design/workbench-ui-ux-spec.md)
+- [Position Source and Mutation Contract](design/position-source-mutation-contract.md)
 - [Workbench Reference Pictures](design/workbench-ref-pics/README.md)
 
 ## Historical Design Reports

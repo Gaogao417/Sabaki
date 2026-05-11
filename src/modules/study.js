@@ -10,12 +10,22 @@ export const STUDY_KEYPOINTS_PROP = 'SBKP'
 export function cloneSnapshot(snapshot) {
   if (snapshot == null) return null
 
-  return {
+  let result = {
     width: snapshot.width,
     height: snapshot.height,
     nextPlayer: snapshot.nextPlayer,
     signMap: helper.cloneMatrix(snapshot.signMap),
   }
+
+  for (let key of ['id', 'role', 'komi', 'rules']) {
+    if (snapshot[key] != null) result[key] = snapshot[key]
+  }
+
+  if (snapshot.source != null) {
+    result.source = {...snapshot.source}
+  }
+
+  return result
 }
 
 export function createSnapshotFromBoard(board, nextPlayer = 1) {
@@ -63,7 +73,7 @@ export function deserializeSnapshot(raw) {
       return null
     }
 
-    return {
+    let result = {
       width,
       height,
       nextPlayer: parsed.nextPlayer === -1 ? -1 : 1,
@@ -74,6 +84,34 @@ export function deserializeSnapshot(raw) {
         }),
       ),
     }
+
+    if (typeof parsed.id === 'string' && parsed.id !== '') {
+      result.id = parsed.id
+    }
+
+    if (['current', 'reference', 'problem-attempt'].includes(parsed.role)) {
+      result.role = parsed.role
+    }
+
+    if (Number.isFinite(+parsed.komi)) {
+      result.komi = +parsed.komi
+    }
+
+    if (typeof parsed.rules === 'string' && parsed.rules !== '') {
+      result.rules = parsed.rules
+    }
+
+    if (
+      parsed.source != null &&
+      ['game-tree-node', 'manual', 'problem'].includes(parsed.source.type)
+    ) {
+      result.source = {
+        type: parsed.source.type,
+        ...(typeof parsed.source.id === 'string' ? {id: parsed.source.id} : {}),
+      }
+    }
+
+    return result
   } catch (err) {
     return null
   }
@@ -172,7 +210,7 @@ export function snapshotMatchesBoard(snapshot, board, nextPlayer) {
   return helper.equals(snapshot.signMap, board.signMap)
 }
 
-export function snapshotToGameTree(snapshot, moves = []) {
+export function snapshotToGameTree(snapshot, moves = [], sourceTree = null) {
   if (snapshot == null) return null
 
   let tree = gametree.new()
@@ -184,11 +222,19 @@ export function snapshotToGameTree(snapshot, moves = []) {
 
   tree = tree.mutate((draft) => {
     draft.updateProperty(draft.root.id, 'SZ', [size])
-    draft.updateProperty(
-      draft.root.id,
-      'PL',
-      [snapshot.nextPlayer > 0 ? 'B' : 'W'],
-    )
+    draft.updateProperty(draft.root.id, 'PL', [
+      snapshot.nextPlayer > 0 ? 'B' : 'W',
+    ])
+
+    // Copy rules and komi from source tree so engine analysis uses the same rules
+    if (sourceTree != null) {
+      for (let prop of ['RU', 'KM']) {
+        let value = gametree.getRootProperty(sourceTree, prop)
+        if (value != null) {
+          draft.updateProperty(draft.root.id, prop, [value.toString()])
+        }
+      }
+    }
 
     for (let y = 0; y < snapshot.height; y++) {
       for (let x = 0; x < snapshot.width; x++) {
