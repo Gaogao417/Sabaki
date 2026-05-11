@@ -21,12 +21,13 @@ import * as applogger from './applogger.js'
 import * as helper from './helper.js'
 import {getAnalysisPreviewCacheKey} from './overlays/analysisPreview.js'
 import {
-  MUTATION_CONTRACTS,
+  INTERACTION_CONTRACTS,
   SCRATCH_ROLES,
   WORKSPACE_KINDS,
   createGameTreePositionSource,
   createScratchPositionFromSnapshot,
   createScratchPositionSource,
+  getInteractionContractFromState,
   getMutationContractFromState,
   getPositionSourceFromState,
 } from './position-contracts.ts'
@@ -448,7 +449,7 @@ class Sabaki extends EventEmitter {
     let snapshot = this.createScratchSnapshotFromCurrentPosition()
     return {
       workspaceKind: WORKSPACE_KINDS.SCRATCH_ANALYSIS,
-      mutationContract: MUTATION_CONTRACTS.SCRATCH_EDIT,
+      interactionContract: INTERACTION_CONTRACTS.SCRATCH_EDIT,
       positionSource: createScratchPositionSource(
         snapshot.id,
         SCRATCH_ROLES.CURRENT,
@@ -1310,7 +1311,7 @@ class Sabaki extends EventEmitter {
           snapshot.id,
           snapshot.role ?? activeTab,
         ),
-        mutationContract: MUTATION_CONTRACTS.SCRATCH_EDIT,
+        interactionContract: INTERACTION_CONTRACTS.SCRATCH_EDIT,
         tree,
         treePosition,
         analyzePlayer: snapshot.nextPlayer,
@@ -1324,7 +1325,7 @@ class Sabaki extends EventEmitter {
       source: 'play',
       tab: null,
       positionSource: createGameTreePositionSource(state.treePosition),
-      mutationContract: getMutationContractFromState(state),
+      interactionContract: getInteractionContractFromState(state),
       tree: inferredState.gameTree,
       treePosition: state.treePosition,
       analyzePlayer: this.getPlayer(state.treePosition),
@@ -1342,6 +1343,10 @@ class Sabaki extends EventEmitter {
 
   getActiveMutationContract() {
     return getMutationContractFromState(this.state)
+  }
+
+  getActiveInteractionContract() {
+    return getInteractionContractFromState(this.state)
   }
 
   refreshActiveBoardAnalysis() {

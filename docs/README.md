@@ -5,13 +5,14 @@ view older versions of the documentation, you can browse by tag on GitHub.
 
 ## Product Blueprint
 
-- [Gabaki / Sabaki Training System PRD](product/gabaki-training-prd.md)
+- [Gabaki / Sabaki Training System PRD](product/sabaki-training-prd.md)
 
 ## Current Design Specs
 
+- [Workbench Architecture Overview](design/workbench-architecture-overview.md)
 - [Workbench UI/UX Spec](design/workbench-ui-ux-spec.md)
 - [Position Source and Mutation Contract](design/position-source-mutation-contract.md)
-- [Workbench Reference Pictures](design/workbench-ref-pics/README.md)
+- [Workbench Reference Pictures](design/workbench-ref-pics/)
 
 ## Historical Design Reports
 
