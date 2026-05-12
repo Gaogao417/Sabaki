@@ -39,3 +39,20 @@ export type {
   OverlayLayerSource,
   OverlayRenderMode,
 } from './overlayLayers.ts'
+
+// Phase 3: board interaction resolver (shadow mode)
+export {BOARD_INTENTS, RESOLVE_STATUSES} from '../board-interactions/intents.ts'
+export type {
+  BoardInteractionResult,
+  BoardIntent,
+  ResolveStatus,
+} from '../board-interactions/intents.ts'
+
+export {resolveBoardInteraction} from '../board-interactions/resolveBoardInteraction.ts'
+export type {
+  BoardEvent,
+  PointState,
+  ResolverInput,
+} from '../board-interactions/resolveBoardInteraction.ts'
+
+export {createBoardInteractionContext} from '../board-interactions/createBoardInteractionContext.ts'
