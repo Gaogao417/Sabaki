@@ -1,3 +1,4 @@
+import sgf from '@sabaki/sgf'
 import * as gametree from '../gametree.js'
 import {appendMoveNode, detectKo, detectPrevPass} from './gameTreeWrites.js'
 import * as dialog from '../dialog.js'
@@ -17,19 +18,27 @@ import i18n from '../../i18n.js'
  * @param {object} sabaki
  * @param {{
  *   getSetting?: (key: string) => any,
+ *   setSetting?: (key: string, value: any) => void,
  *   clearBoardCache?: () => void,
  *   closeDrawer?: () => void,
+ *   setMode?: (mode: string) => void,
  *   getTerritoryCompareAvailable?: (state: object) => boolean,
  *   syncEditWorkspaceToCurrentPosition?: () => void,
  *   scheduleEditWorkspaceAnalysis?: () => void,
  *   scheduleLiveAnalysis?: (treePosition: string) => void,
+ *   showMessageBox?: (message: string, type: string, buttons: string[], defaultId?: number) => Promise<number>,
+ *   boardFromSnapshot?: (snapshot: object) => object,
  * }} [deps]
  */
 export function createDocumentStore(sabaki, deps = {}) {
-  let {getSetting} = deps
+  let {getSetting, showMessageBox} = deps
   let resolveSetting = getSetting ?? ((key) => {
     let w = typeof window !== 'undefined' ? window : {}
     return w.sabaki?.setting?.get(key)
+  })
+  let setSetting = deps.setSetting ?? ((key, value) => {
+    let w = typeof window !== 'undefined' ? window : {}
+    w.sabaki?.setting?.set(key, value)
   })
 
   function getCurrent() {
@@ -162,6 +171,7 @@ export function createDocumentStore(sabaki, deps = {}) {
   }
 
   let autoscrollId = null
+  let copyVariationData = null
 
   return {
     getCurrent,
@@ -508,6 +518,496 @@ export function createDocumentStore(sabaki, deps = {}) {
     stopAutoscrolling() {
       clearTimeout(autoscrollId)
       autoscrollId = null
+    },
+
+    // Phase 12A continuation: game tree mutation methods migrated from sabaki.js
+
+    getGameInfo() {
+      return gametree.getGameInfo(getCurrent().tree)
+    },
+
+    getPlayer(treePosition) {
+      let {data} = getCurrent().tree.get(treePosition)
+
+      return data.PL != null
+        ? data.PL[0] === 'W'
+          ? -1
+          : 1
+        : data.B != null || (data.HA != null && +data.HA[0] >= 1)
+          ? -1
+          : 1
+    },
+
+    getComment(treePosition) {
+      let {data} = getCurrent().tree.get(treePosition)
+
+      return {
+        title: data.N != null ? data.N[0].trim() : null,
+        comment: data.C != null ? data.C[0] : null,
+        hotspot: data.HO != null,
+        moveAnnotation:
+          data.BM != null
+            ? 'BM'
+            : data.TE != null
+              ? 'TE'
+              : data.DO != null
+                ? 'DO'
+                : data.IT != null
+                  ? 'IT'
+                  : null,
+        positionAnnotation:
+          data.UC != null
+            ? 'UC'
+            : data.GW != null
+              ? 'GW'
+              : data.DM != null
+                ? 'DM'
+                : data.GB != null
+                  ? 'GB'
+                  : null,
+      }
+    },
+
+    setGameInfo(data) {
+      let {tree} = getCurrent()
+      let newTree = gametree.setGameInfo(tree, data)
+
+      if (data.size) {
+        setSetting('game.default_board_size', data.size.join(':'))
+      }
+
+      if (data.komi && data.komi.toString() !== '') {
+        setSetting('game.default_komi', isNaN(data.komi) ? 0 : +data.komi)
+      }
+
+      if (data.handicap && data.handicap.toString() !== '') {
+        setSetting('game.default_handicap', isNaN(data.handicap) ? 0 : +data.handicap)
+      }
+
+      setCurrentTreePosition(newTree, sabaki.state.treePosition)
+    },
+
+    setPlayer(treePosition, sign) {
+      let {tree} = getCurrent()
+      let newTree = tree.mutate((draft) => {
+        let node = draft.get(treePosition)
+        let intendedSign =
+          node.data.B != null || (node.data.HA != null && +node.data.HA[0] >= 1)
+            ? -1
+            : +(node.data.W != null)
+
+        if (intendedSign === sign || sign === 0) {
+          draft.removeProperty(treePosition, 'PL')
+        } else {
+          draft.updateProperty(treePosition, 'PL', [sign > 0 ? 'B' : 'W'])
+        }
+      })
+
+      setCurrentTreePosition(newTree, treePosition)
+    },
+
+    setComment(treePosition, data) {
+      let {tree} = getCurrent()
+      let newTree = tree.mutate((draft) => {
+        for (let [key, prop] of [
+          ['title', 'N'],
+          ['comment', 'C'],
+        ]) {
+          if (key in data) {
+            if (data[key] && data[key] !== '') {
+              draft.updateProperty(treePosition, prop, [data[key]])
+            } else {
+              draft.removeProperty(treePosition, prop)
+            }
+          }
+        }
+
+        if ('hotspot' in data) {
+          if (data.hotspot) {
+            draft.updateProperty(treePosition, 'HO', ['1'])
+          } else {
+            draft.removeProperty(treePosition, 'HO')
+          }
+        }
+
+        let clearProperties = (properties) =>
+          properties.forEach((p) => draft.removeProperty(treePosition, p))
+
+        if ('moveAnnotation' in data) {
+          let moveProps = {BM: '1', DO: '', IT: '', TE: '1'}
+          clearProperties(Object.keys(moveProps))
+
+          if (data.moveAnnotation != null) {
+            draft.updateProperty(treePosition, data.moveAnnotation, [
+              moveProps[data.moveAnnotation],
+            ])
+          }
+        }
+
+        if ('positionAnnotation' in data) {
+          let positionProps = {UC: '1', GW: '1', GB: '1', DM: '1'}
+          clearProperties(Object.keys(positionProps))
+
+          if (data.positionAnnotation != null) {
+            draft.updateProperty(treePosition, data.positionAnnotation, [
+              positionProps[data.positionAnnotation],
+            ])
+          }
+        }
+      })
+
+      setCurrentTreePosition(newTree, treePosition)
+    },
+
+    playAnalysisVariation(sign, moves) {
+      if (!moves || moves.length === 0) return
+
+      let {treePosition} = sabaki.state
+      let {tree} = getCurrent()
+      let [color, opponent] = sign > 0 ? ['B', 'W'] : ['W', 'B']
+
+      let newTree = tree.mutate((draft) => {
+        let parentId = treePosition
+        let variationData = moves.map((vertex, i) => ({
+          [i % 2 === 0 ? color : opponent]: [sgf.stringifyVertex(vertex)],
+        }))
+
+        for (let data of variationData) {
+          parentId = draft.appendNode(parentId, data)
+        }
+      })
+
+      let newNode = newTree.get(treePosition).children[0]
+      if (newNode != null) {
+        setCurrentTreePosition(newTree, newNode.id)
+      }
+    },
+
+    copyVariation(treePosition) {
+      let {tree} = getCurrent()
+      let node = tree.get(treePosition)
+      let copy = {
+        id: node.id,
+        data: Object.assign({}, node.data),
+        parentId: null,
+        children: node.children,
+      }
+
+      let stripProperties = resolveSetting('edit.copy_variation_strip_props')
+
+      for (let prop of stripProperties) {
+        delete copy.data[prop]
+      }
+
+      copyVariationData = copy
+    },
+
+    cutVariation(treePosition) {
+      this.copyVariation(treePosition)
+      this.removeNode(treePosition, {suppressConfirmation: true})
+    },
+
+    pasteVariation(treePosition) {
+      if (copyVariationData == null) return
+
+      ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+      ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      let newPosition
+      let copied = copyVariationData
+      let {tree} = getCurrent()
+      let newTree = tree.mutate((draft) => {
+        let inner = (id, children) => {
+          let childIds = []
+
+          for (let child of children) {
+            let childId = draft.appendNode(id, child.data)
+            childIds.push(childId)
+
+            inner(childId, child.children)
+          }
+
+          return childIds
+        }
+
+        newPosition = inner(treePosition, [copied])[0]
+      })
+
+      setCurrentTreePosition(newTree, newPosition)
+    },
+
+    flattenVariation(treePosition) {
+      ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+      ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      let {gameTrees} = sabaki.state
+      let {tree} = getCurrent()
+      let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
+      if (gameIndex < 0) return
+
+      let board = gametree.getBoard(tree, treePosition)
+      let playerSign = this.getPlayer(treePosition)
+      let inherit = resolveSetting('edit.flatten_inherit_root_props')
+
+      let newTree = tree.mutate((draft) => {
+        draft.makeRoot(treePosition)
+
+        for (let prop of ['AB', 'AW', 'AE', 'B', 'W']) {
+          draft.removeProperty(treePosition, prop)
+        }
+
+        for (let prop of inherit) {
+          draft.updateProperty(treePosition, prop, tree.root.data[prop])
+        }
+
+        for (let x = 0; x < board.width; x++) {
+          for (let y = 0; y < board.height; y++) {
+            let sign = board.get([x, y])
+            if (sign == 0) continue
+
+            draft.addToProperty(
+              treePosition,
+              sign > 0 ? 'AB' : 'AW',
+              sgf.stringifyVertex([x, y]),
+            )
+          }
+        }
+      })
+
+      sabaki.setState({
+        gameTrees: gameTrees.map((t, i) => (i === gameIndex ? newTree : t)),
+      })
+      setCurrentTreePosition(newTree, newTree.root.id)
+      this.setPlayer(treePosition, playerSign)
+    },
+
+    snapshotAsNewGame() {
+      ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+
+      let board
+      let playerSign
+      if (sabaki.state.mode === 'analysis' && sabaki.state.editWorkspace != null) {
+        let snapshot = sabaki.state.editWorkspace.currentSnapshot
+        board = (deps.boardFromSnapshot ?? ((s) => null))(snapshot)
+        playerSign = snapshot.nextPlayer
+      } else {
+        let {tree} = getCurrent()
+        let treePosition = sabaki.state.treePosition
+        board = gametree.getBoard(tree, treePosition)
+        playerSign = this.getPlayer(treePosition)
+      }
+
+      ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      let {gameTrees, gameCurrents} = sabaki.state
+      let {tree} = getCurrent()
+      let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
+      if (gameIndex < 0) return
+
+      let inherit = resolveSetting('edit.flatten_inherit_root_props')
+
+      let newTree = gametree.new().mutate((draft) => {
+        let size =
+          board.width === board.height
+            ? board.width.toString()
+            : [board.width, board.height].join(':')
+        draft.updateProperty(draft.root.id, 'SZ', [size])
+        draft.updateProperty(draft.root.id, 'PL', [playerSign > 0 ? 'B' : 'W'])
+
+        for (let x = 0; x < board.width; x++) {
+          for (let y = 0; y < board.height; y++) {
+            let sign = board.get([x, y])
+            if (sign === 0) continue
+
+            draft.addToProperty(
+              draft.root.id,
+              sign > 0 ? 'AB' : 'AW',
+              sgf.stringifyVertex([x, y]),
+            )
+          }
+        }
+
+        for (let prop of inherit) {
+          if (tree.root.data[prop] != null) {
+            draft.updateProperty(draft.root.id, prop, tree.root.data[prop])
+          }
+        }
+      })
+
+      let newGameIndex = gameIndex + 1
+      let newGameTrees = [...gameTrees]
+      newGameTrees.splice(newGameIndex, 0, newTree)
+      let newGameCurrents = [...gameCurrents]
+      newGameCurrents.splice(newGameIndex, 0, {})
+
+      sabaki.setState({
+        gameTrees: newGameTrees,
+        gameCurrents: newGameCurrents,
+      })
+
+      setCurrentTreePosition(newTree, newTree.root.id)
+    },
+
+    makeMainVariation(treePosition) {
+      ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+      ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      let {gameCurrents, gameTrees} = sabaki.state
+      let {tree} = getCurrent()
+      let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
+      if (gameIndex < 0) return
+
+      let newTree = tree.mutate((draft) => {
+        let id = treePosition
+
+        while (id != null) {
+          draft.shiftNode(id, 'main')
+          id = draft.get(id).parentId
+        }
+      })
+
+      gameCurrents[gameIndex] = {}
+      sabaki.setState({gameCurrents})
+      setCurrentTreePosition(newTree, treePosition)
+    },
+
+    shiftVariation(treePosition, step) {
+      ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+      ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      let shiftNode = null
+      let {tree} = getCurrent()
+
+      for (let node of tree.listNodesVertically(treePosition, -1, {})) {
+        let parent = tree.get(node.parentId)
+
+        if (parent.children.length >= 2) {
+          shiftNode = node
+          break
+        }
+      }
+
+      if (shiftNode == null) return
+
+      let newTree = tree.mutate((draft) => {
+        draft.shiftNode(shiftNode.id, step >= 0 ? 'right' : 'left')
+      })
+
+      setCurrentTreePosition(newTree, treePosition)
+    },
+
+    async removeNode(treePosition, {suppressConfirmation = false} = {}) {
+      let t = i18n.context('sabaki.node')
+      let {tree} = getCurrent()
+      let node = tree.get(treePosition)
+      let noParent = node.parentId == null
+
+      if (
+        suppressConfirmation !== true &&
+        resolveSetting('edit.show_removenode_warning')
+      ) {
+        let answer = await (showMessageBox ?? dialog.showMessageBox)(
+          t('Do you really want to remove this node?'),
+          'warning',
+          [t('Remove Node'), t('Cancel')],
+          1,
+        )
+        if (answer === 1) return
+      }
+
+      ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+      ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      let newTree = tree.mutate((draft) => {
+        if (!noParent) {
+          draft.removeNode(treePosition)
+        } else {
+          for (let child of node.children) {
+            draft.removeNode(child.id)
+          }
+
+          for (let prop of ['AB', 'AW', 'AE', 'B', 'W']) {
+            draft.removeProperty(node.id, prop)
+          }
+        }
+      })
+
+      sabaki.setState(({gameCurrents, gameIndex}) => {
+        if (!noParent) {
+          if (gameCurrents[gameIndex][node.parentId] === node.id) {
+            delete gameCurrents[gameIndex][node.parentId]
+          }
+        } else {
+          delete gameCurrents[gameIndex][node.id]
+        }
+
+        return {gameCurrents}
+      })
+
+      setCurrentTreePosition(newTree, noParent ? node.id : node.parentId)
+    },
+
+    async removeOtherVariations(
+      treePosition,
+      {suppressConfirmation = false} = {},
+    ) {
+      let t = i18n.context('sabaki.node')
+
+      if (
+        suppressConfirmation !== true &&
+        resolveSetting('edit.show_removeothervariations_warning')
+      ) {
+        let answer = await (showMessageBox ?? dialog.showMessageBox)(
+          t('Do you really want to remove all other variations?'),
+          'warning',
+          [t('Remove Variations'), t('Cancel')],
+          1,
+        )
+        if (answer === 1) return
+      }
+
+      ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+      ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      let {gameCurrents, gameTrees} = sabaki.state
+      let {tree} = getCurrent()
+      let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
+      if (gameIndex < 0) return
+
+      let newTree = tree.mutate((draft) => {
+        for (let node of tree.listNodesVertically(
+          treePosition,
+          1,
+          gameCurrents[gameIndex],
+        )) {
+          if (node.children.length <= 1) continue
+
+          let next = tree.navigate(node.id, 1, gameCurrents[gameIndex])
+
+          for (let child of node.children) {
+            if (child.id === next.id) continue
+            draft.removeNode(child.id)
+          }
+        }
+
+        let prevId = treePosition
+
+        for (let node of tree.listNodesVertically(treePosition, -1, {})) {
+          if (node.id !== prevId && node.children.length > 1) {
+            gameCurrents[gameIndex][node.id] = prevId
+
+            for (let child of node.children) {
+              if (child.id === prevId) continue
+              draft.removeNode(child.id)
+            }
+          }
+
+          prevId = node.id
+        }
+      })
+
+      sabaki.setState({gameCurrents})
+      setCurrentTreePosition(newTree, treePosition)
     },
   }
 }

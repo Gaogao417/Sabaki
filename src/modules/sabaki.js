@@ -571,7 +571,7 @@ class Sabaki extends EventEmitter {
       this.state.territoryCompareEnabled &&
       !this.getTerritoryCompareAvailable()
     ) {
-      this.setState({territoryCompareEnabled: false})
+      this.toggleTerritoryCompareEnabled()
     }
   }
 
@@ -1251,7 +1251,9 @@ class Sabaki extends EventEmitter {
     if (this._playServices == null) {
       let documentStore = createDocumentStore(this, {
         getSetting: (key) => setting.get(key),
+        setSetting: (key, value) => setting.set(key, value),
         closeDrawer: () => this.closeDrawer(),
+        setMode: (mode) => this.setMode(mode),
         getTerritoryCompareAvailable: (state) =>
           this.getTerritoryCompareAvailable(state),
         syncEditWorkspaceToCurrentPosition: () =>
@@ -1260,6 +1262,9 @@ class Sabaki extends EventEmitter {
           this.scheduleEditWorkspaceAnalysis(),
         scheduleLiveAnalysis: (treePosition) =>
           this.scheduleLiveAnalysis(treePosition),
+        showMessageBox: (message, type, buttons, defaultId) =>
+          dialog.showMessageBox(message, type, buttons, defaultId),
+        boardFromSnapshot: (snapshot) => boardFromSnapshot(snapshot),
       })
 
       // Phase 12C: analysisService created before engineService.
@@ -1882,24 +1887,12 @@ class Sabaki extends EventEmitter {
     return this.getPlayServices().analysisService.getAnalysisSyncerId({requireOwnership})
   }
 
-  async setTerritoryEnabled(territoryEnabled) {
-    return await this.getOverlayStore().setTerritoryEnabled(territoryEnabled)
-  }
-
   async toggleTerritoryEnabled() {
     return await this.getOverlayStore().toggleTerritoryEnabled()
   }
 
-  async setTerritoryCompareEnabled(territoryCompareEnabled) {
-    return await this.getOverlayStore().setTerritoryCompareEnabled(territoryCompareEnabled)
-  }
-
   async toggleTerritoryCompareEnabled() {
     return await this.getOverlayStore().toggleTerritoryCompareEnabled()
-  }
-
-  async setOverlayMode(overlayMode) {
-    return await this.getOverlayStore().setOverlayMode(overlayMode)
   }
 
   getOwnershipForTreePosition(syncer, treePosition) {
@@ -3384,40 +3377,15 @@ class Sabaki extends EventEmitter {
   // Node Actions
 
   getGameInfo() {
-    return gametree.getGameInfo(this.inferredState.gameTree)
+    return this.getPlayServices().documentStore.getGameInfo()
   }
 
   setGameInfo(data) {
-    let newTree = gametree.setGameInfo(this.inferredState.gameTree, data)
-
-    if (data.size) {
-      setting.set('game.default_board_size', data.size.join(':'))
-    }
-
-    if (data.komi && data.komi.toString() !== '') {
-      setting.set('game.default_komi', isNaN(data.komi) ? 0 : +data.komi)
-    }
-
-    if (data.handicap && data.handicap.toString() !== '') {
-      setting.set(
-        'game.default_handicap',
-        isNaN(data.handicap) ? 0 : +data.handicap,
-      )
-    }
-
-    this.setCurrentTreePosition(newTree, this.state.treePosition)
+    return this.getPlayServices().documentStore.setGameInfo(data)
   }
 
   getPlayer(treePosition) {
-    let {data} = this.inferredState.gameTree.get(treePosition)
-
-    return data.PL != null
-      ? data.PL[0] === 'W'
-        ? -1
-        : 1
-      : data.B != null || (data.HA != null && +data.HA[0] >= 1)
-        ? -1
-        : 1
+    return this.getPlayServices().documentStore.getPlayer(treePosition)
   }
 
   setAnalysisArea(vertices) {
@@ -3482,459 +3450,55 @@ class Sabaki extends EventEmitter {
   }
 
   playAnalysisVariation(sign, moves) {
-    if (!moves || moves.length === 0) return
-
-    let {treePosition} = this.state
-    let tree = this.inferredState.gameTree
-    let [color, opponent] = sign > 0 ? ['B', 'W'] : ['W', 'B']
-
-    let newTree = tree.mutate((draft) => {
-      let parentId = treePosition
-      let variationData = moves.map((vertex, i) => ({
-        [i % 2 === 0 ? color : opponent]: [sgf.stringifyVertex(vertex)],
-      }))
-
-      for (let data of variationData) {
-        parentId = draft.appendNode(parentId, data)
-      }
-    })
-
-    let newNode = newTree.get(treePosition).children[0]
-    if (newNode != null) {
-      this.setCurrentTreePosition(newTree, newNode.id)
-    }
+    return this.getPlayServices().documentStore.playAnalysisVariation(sign, moves)
   }
 
   setPlayer(treePosition, sign) {
-    let newTree = this.inferredState.gameTree.mutate((draft) => {
-      let node = draft.get(treePosition)
-      let intendedSign =
-        node.data.B != null || (node.data.HA != null && +node.data.HA[0] >= 1)
-          ? -1
-          : +(node.data.W != null)
-
-      if (intendedSign === sign || sign === 0) {
-        draft.removeProperty(treePosition, 'PL')
-      } else {
-        draft.updateProperty(treePosition, 'PL', [sign > 0 ? 'B' : 'W'])
-      }
-    })
-
-    this.setCurrentTreePosition(newTree, treePosition)
+    return this.getPlayServices().documentStore.setPlayer(treePosition, sign)
   }
 
   getComment(treePosition) {
-    let {data} = this.inferredState.gameTree.get(treePosition)
-
-    return {
-      title: data.N != null ? data.N[0].trim() : null,
-      comment: data.C != null ? data.C[0] : null,
-      hotspot: data.HO != null,
-      moveAnnotation:
-        data.BM != null
-          ? 'BM'
-          : data.TE != null
-            ? 'TE'
-            : data.DO != null
-              ? 'DO'
-              : data.IT != null
-                ? 'IT'
-                : null,
-      positionAnnotation:
-        data.UC != null
-          ? 'UC'
-          : data.GW != null
-            ? 'GW'
-            : data.DM != null
-              ? 'DM'
-              : data.GB != null
-                ? 'GB'
-                : null,
-    }
+    return this.getPlayServices().documentStore.getComment(treePosition)
   }
 
   setComment(treePosition, data) {
-    let newTree = this.inferredState.gameTree.mutate((draft) => {
-      for (let [key, prop] of [
-        ['title', 'N'],
-        ['comment', 'C'],
-      ]) {
-        if (key in data) {
-          if (data[key] && data[key] !== '') {
-            draft.updateProperty(treePosition, prop, [data[key]])
-          } else {
-            draft.removeProperty(treePosition, prop)
-          }
-        }
-      }
-
-      if ('hotspot' in data) {
-        if (data.hotspot) {
-          draft.updateProperty(treePosition, 'HO', ['1'])
-        } else {
-          draft.removeProperty(treePosition, 'HO')
-        }
-      }
-
-      let clearProperties = (properties) =>
-        properties.forEach((p) => draft.removeProperty(treePosition, p))
-
-      if ('moveAnnotation' in data) {
-        let moveProps = {BM: '1', DO: '', IT: '', TE: '1'}
-        clearProperties(Object.keys(moveProps))
-
-        if (data.moveAnnotation != null) {
-          draft.updateProperty(treePosition, data.moveAnnotation, [
-            moveProps[data.moveAnnotation],
-          ])
-        }
-      }
-
-      if ('positionAnnotation' in data) {
-        let positionProps = {UC: '1', GW: '1', GB: '1', DM: '1'}
-        clearProperties(Object.keys(positionProps))
-
-        if (data.positionAnnotation != null) {
-          draft.updateProperty(treePosition, data.positionAnnotation, [
-            positionProps[data.positionAnnotation],
-          ])
-        }
-      }
-    })
-
-    this.setCurrentTreePosition(newTree, treePosition)
+    return this.getPlayServices().documentStore.setComment(treePosition, data)
   }
 
   copyVariation(treePosition) {
-    let node = this.inferredState.gameTree.get(treePosition)
-    let copy = {
-      id: node.id,
-      data: Object.assign({}, node.data),
-      parentId: null,
-      children: node.children,
-    }
-
-    let stripProperties = setting.get('edit.copy_variation_strip_props')
-
-    for (let prop of stripProperties) {
-      delete copy.data[prop]
-    }
-
-    this.copyVariationData = copy
+    return this.getPlayServices().documentStore.copyVariation(treePosition)
   }
 
   cutVariation(treePosition) {
-    this.copyVariation(treePosition)
-    this.removeNode(treePosition, {suppressConfirmation: true})
+    return this.getPlayServices().documentStore.cutVariation(treePosition)
   }
 
   pasteVariation(treePosition) {
-    if (this.copyVariationData == null) return
-
-    this.closeDrawer()
-    this.setMode('play')
-
-    let newPosition
-    let copied = this.copyVariationData
-    let newTree = this.inferredState.gameTree.mutate((draft) => {
-      let inner = (id, children) => {
-        let childIds = []
-
-        for (let child of children) {
-          let childId = draft.appendNode(id, child.data)
-          childIds.push(childId)
-
-          inner(childId, child.children)
-        }
-
-        return childIds
-      }
-
-      newPosition = inner(treePosition, [copied])[0]
-    })
-
-    this.setCurrentTreePosition(newTree, newPosition)
+    return this.getPlayServices().documentStore.pasteVariation(treePosition)
   }
 
   flattenVariation(treePosition) {
-    this.closeDrawer()
-    this.setMode('play')
-
-    let {gameTrees} = this.state
-    let {gameTree: tree} = this.inferredState
-    let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
-    if (gameIndex < 0) return
-
-    let board = gametree.getBoard(tree, treePosition)
-    let playerSign = this.getPlayer(treePosition)
-    let inherit = setting.get('edit.flatten_inherit_root_props')
-
-    let newTree = tree.mutate((draft) => {
-      draft.makeRoot(treePosition)
-
-      for (let prop of ['AB', 'AW', 'AE', 'B', 'W']) {
-        draft.removeProperty(treePosition, prop)
-      }
-
-      for (let prop of inherit) {
-        draft.updateProperty(treePosition, prop, tree.root.data[prop])
-      }
-
-      for (let x = 0; x < board.width; x++) {
-        for (let y = 0; y < board.height; y++) {
-          let sign = board.get([x, y])
-          if (sign == 0) continue
-
-          draft.addToProperty(
-            treePosition,
-            sign > 0 ? 'AB' : 'AW',
-            sgf.stringifyVertex([x, y]),
-          )
-        }
-      }
-    })
-
-    this.setState({
-      gameTrees: gameTrees.map((t, i) => (i === gameIndex ? newTree : t)),
-    })
-    this.setCurrentTreePosition(newTree, newTree.root.id)
-    this.setPlayer(treePosition, playerSign)
+    return this.getPlayServices().documentStore.flattenVariation(treePosition)
   }
 
   snapshotAsNewGame() {
-    this.closeDrawer()
-
-    // Capture board before switching mode (edit workspace is destroyed on mode change)
-    let board
-    let playerSign
-    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
-      let snapshot = this.state.editWorkspace.currentSnapshot
-      board = boardFromSnapshot(snapshot)
-      playerSign = snapshot.nextPlayer
-    } else {
-      let {gameTree: tree} = this.inferredState
-      let treePosition = this.state.treePosition
-      board = gametree.getBoard(tree, treePosition)
-      playerSign = this.getPlayer(treePosition)
-    }
-
-    this.setMode('play')
-
-    let {gameTrees, gameCurrents} = this.state
-    let {gameTree: tree} = this.inferredState
-    let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
-    if (gameIndex < 0) return
-
-    let inherit = setting.get('edit.flatten_inherit_root_props')
-
-    let newTree = gametree.new().mutate((draft) => {
-      let size =
-        board.width === board.height
-          ? board.width.toString()
-          : [board.width, board.height].join(':')
-      draft.updateProperty(draft.root.id, 'SZ', [size])
-      draft.updateProperty(draft.root.id, 'PL', [playerSign > 0 ? 'B' : 'W'])
-
-      for (let x = 0; x < board.width; x++) {
-        for (let y = 0; y < board.height; y++) {
-          let sign = board.get([x, y])
-          if (sign === 0) continue
-
-          draft.addToProperty(
-            draft.root.id,
-            sign > 0 ? 'AB' : 'AW',
-            sgf.stringifyVertex([x, y]),
-          )
-        }
-      }
-
-      for (let prop of inherit) {
-        if (tree.root.data[prop] != null) {
-          draft.updateProperty(draft.root.id, prop, tree.root.data[prop])
-        }
-      }
-    })
-
-    let newGameIndex = gameIndex + 1
-    let newGameTrees = [...gameTrees]
-    newGameTrees.splice(newGameIndex, 0, newTree)
-    let newGameCurrents = [...gameCurrents]
-    newGameCurrents.splice(newGameIndex, 0, {})
-
-    this.setState({
-      gameTrees: newGameTrees,
-      gameCurrents: newGameCurrents,
-    })
-
-    this.setCurrentTreePosition(newTree, newTree.root.id)
+    return this.getPlayServices().documentStore.snapshotAsNewGame()
   }
 
   makeMainVariation(treePosition) {
-    this.closeDrawer()
-    this.setMode('play')
-
-    let {gameCurrents, gameTrees} = this.state
-    let {gameTree: tree} = this.inferredState
-    let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
-    if (gameIndex < 0) return
-
-    let newTree = tree.mutate((draft) => {
-      let id = treePosition
-
-      while (id != null) {
-        draft.shiftNode(id, 'main')
-        id = draft.get(id).parentId
-      }
-    })
-
-    gameCurrents[gameIndex] = {}
-    this.setState({gameCurrents})
-    this.setCurrentTreePosition(newTree, treePosition)
+    return this.getPlayServices().documentStore.makeMainVariation(treePosition)
   }
 
   shiftVariation(treePosition, step) {
-    this.closeDrawer()
-    this.setMode('play')
-
-    let shiftNode = null
-    let {gameTree: tree} = this.inferredState
-
-    for (let node of tree.listNodesVertically(treePosition, -1, {})) {
-      let parent = tree.get(node.parentId)
-
-      if (parent.children.length >= 2) {
-        shiftNode = node
-        break
-      }
-    }
-
-    if (shiftNode == null) return
-
-    let newTree = tree.mutate((draft) => {
-      draft.shiftNode(shiftNode.id, step >= 0 ? 'right' : 'left')
-    })
-
-    this.setCurrentTreePosition(newTree, treePosition)
+    return this.getPlayServices().documentStore.shiftVariation(treePosition, step)
   }
 
-  async removeNode(treePosition, {suppressConfirmation = false} = {}) {
-    let t = i18n.context('sabaki.node')
-    let {gameTree: tree} = this.inferredState
-    let node = tree.get(treePosition)
-    let noParent = node.parentId == null
-
-    if (
-      suppressConfirmation !== true &&
-      setting.get('edit.show_removenode_warning')
-    ) {
-      let answer = await dialog.showMessageBox(
-        t('Do you really want to remove this node?'),
-        'warning',
-        [t('Remove Node'), t('Cancel')],
-        1,
-      )
-      if (answer === 1) return
-    }
-
-    this.closeDrawer()
-    this.setMode('play')
-
-    // Remove node
-
-    let newTree = tree.mutate((draft) => {
-      if (!noParent) {
-        draft.removeNode(treePosition)
-      } else {
-        for (let child of node.children) {
-          draft.removeNode(child.id)
-        }
-
-        for (let prop of ['AB', 'AW', 'AE', 'B', 'W']) {
-          draft.removeProperty(node.id, prop)
-        }
-      }
-    })
-
-    this.setState(({gameCurrents, gameIndex}) => {
-      if (!noParent) {
-        if (gameCurrents[gameIndex][node.parentId] === node.id) {
-          delete gameCurrents[gameIndex][node.parentId]
-        }
-      } else {
-        delete gameCurrents[gameIndex][node.id]
-      }
-
-      return {gameCurrents}
-    })
-
-    this.setCurrentTreePosition(newTree, noParent ? node.id : node.parentId)
+  async removeNode(treePosition, opts) {
+    return this.getPlayServices().documentStore.removeNode(treePosition, opts)
   }
 
-  async removeOtherVariations(
-    treePosition,
-    {suppressConfirmation = false} = {},
-  ) {
-    let t = i18n.context('sabaki.node')
-
-    if (
-      suppressConfirmation !== true &&
-      setting.get('edit.show_removeothervariations_warning')
-    ) {
-      let answer = await dialog.showMessageBox(
-        t('Do you really want to remove all other variations?'),
-        'warning',
-        [t('Remove Variations'), t('Cancel')],
-        1,
-      )
-      if (answer === 1) return
-    }
-
-    this.closeDrawer()
-    this.setMode('play')
-
-    let {gameCurrents, gameTrees} = this.state
-    let {gameTree: tree} = this.inferredState
-    let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
-    if (gameIndex < 0) return
-
-    let newTree = tree.mutate((draft) => {
-      // Remove all subsequent variations
-
-      for (let node of tree.listNodesVertically(
-        treePosition,
-        1,
-        gameCurrents[gameIndex],
-      )) {
-        if (node.children.length <= 1) continue
-
-        let next = tree.navigate(node.id, 1, gameCurrents[gameIndex])
-
-        for (let child of node.children) {
-          if (child.id === next.id) continue
-          draft.removeNode(child.id)
-        }
-      }
-
-      // Remove all precedent variations
-
-      let prevId = treePosition
-
-      for (let node of tree.listNodesVertically(treePosition, -1, {})) {
-        if (node.id !== prevId && node.children.length > 1) {
-          gameCurrents[gameIndex][node.id] = prevId
-
-          for (let child of node.children) {
-            if (child.id === prevId) continue
-            draft.removeNode(child.id)
-          }
-        }
-
-        prevId = node.id
-      }
-    })
-
-    this.setState({gameCurrents})
-    this.setCurrentTreePosition(newTree, treePosition)
+  async removeOtherVariations(treePosition, opts) {
+    return this.getPlayServices().documentStore.removeOtherVariations(treePosition, opts)
   }
 
   // Menus
