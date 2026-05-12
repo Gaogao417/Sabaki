@@ -52,7 +52,14 @@ import {
   SCRATCH_ANALYSIS_SOURCE,
   createScratchAnalysisContext,
   getScratchAnalysisCacheKey,
-} from './workbench/analysis/index.js'
+  scheduleScratchAnalysis,
+  refreshScratchAnalysis,
+} from './analysis/scratchAnalysis.js'
+import {getBoardAnalysisContext as buildBoardAnalysisContext} from './analysis/boardAnalysisContext.js'
+import {
+  analyzeGameTreePosition,
+  scheduleGameTreeAnalysis,
+} from './analysis/gameTreeAnalysis.js'
 import * as sound from './sound.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
@@ -1149,54 +1156,15 @@ class Sabaki extends EventEmitter {
   }
 
   getBoardAnalysisContext({state = this.state, tab = null} = {}) {
-    if (state.mode === 'analysis' && state.editWorkspace != null) {
-      let activeTab = tab ?? state.editWorkspace.activeTab
-      let {snapshotKey, analysisKey, ownershipKey} =
-        this.getEditWorkspaceTabKeys(activeTab)
-      let snapshot = state.editWorkspace[snapshotKey]
-      if (snapshot == null) return null
-
-      let context = snapshotToGameTree(
-        snapshot,
-        [],
-        this.inferredState.gameTree,
-      )
-      if (context == null) return null
-
-      let {tree, treePosition} = context
-      return {
-        source: SCRATCH_ANALYSIS_SOURCE,
-        tab: activeTab,
-        positionSource: createScratchPositionSource(
-          snapshot.id,
-          snapshot.role ?? activeTab,
-        ),
-        mutationContract: MUTATION_CONTRACTS.SCRATCH_EDIT,
-        tree,
-        treePosition,
-        analyzePlayer: snapshot.nextPlayer,
-        analysis: state.editWorkspace[analysisKey],
-        ownership: state.editWorkspace[ownershipKey],
-      }
-    }
-
-    let inferredState = this.getInferredState(state)
-    // Legacy analysis fallback: this may still serve unmigrated modes. Use
-    // getActivePositionSource() for canonical Phase 1 source/contract mapping.
-    return {
-      source: 'play',
-      tab: null,
-      positionSource: createGameTreePositionSource(state.treePosition),
-      mutationContract: getMutationContractFromState(state),
-      tree: inferredState.gameTree,
-      treePosition: state.treePosition,
-      analyzePlayer: this.getPlayer(state.treePosition),
-      analysis:
-        state.analysisTreePosition === state.treePosition
-          ? state.analysis
-          : null,
-      ownership: this.getCurrentOwnership(inferredState.analyzingEngineSyncer),
-    }
+    return buildBoardAnalysisContext({
+      state,
+      inferredState: this.getInferredState(state),
+      tab,
+      getEditWorkspaceTabKeys: this.getEditWorkspaceTabKeys.bind(this),
+      getCurrentOwnership: () =>
+        this.getCurrentOwnership(this.inferredState.analyzingEngineSyncer),
+      getPlayer: this.getPlayer.bind(this),
+    })
   }
 
   getActivePositionSource(tab = null) {
@@ -1894,134 +1862,49 @@ class Sabaki extends EventEmitter {
   }
 
   scheduleEditWorkspaceAnalysis(targetTab = null) {
-    clearTimeout(this.editAnalysisId)
-    this.editAnalysisId = setTimeout(() => {
-      this.refreshEditWorkspaceAnalysis(targetTab)
-    }, 200)
+    if (!this._scratchTimerRef) {
+      this._scratchTimerRef = {id: null}
+    }
+    scheduleScratchAnalysis(
+      {
+        refreshFn: (tab) => this.refreshEditWorkspaceAnalysis(tab),
+        delayMs: 200,
+        timerRef: this._scratchTimerRef,
+      },
+      targetTab,
+    )
   }
 
   async refreshEditWorkspaceAnalysis(targetTab = null) {
-    let generation = (this.editAnalysisGeneration =
-      (this.editAnalysisGeneration || 0) + 1)
-    let ws = this.state.editWorkspace
-    if (ws == null) return
-
-    let syncer = this.inferredState.analyzingEngineSyncer
-    if (syncer == null || !this.engineSupportsOwnership(syncer)) {
-      this.setState({
-        editWorkspace: {
-          ...ws,
-          currentAnalysis: null,
-          currentOwnership: null,
-          referenceAnalysis: null,
-          referenceOwnership: null,
-          analysisPending: false,
-        },
-      })
-      return
+    if (!this._scratchGenerationRef) {
+      this._scratchGenerationRef = {value: 0}
     }
+    // Keep this.editAnalysisGeneration in sync so that snapshot invalidations
+    // from other sabaki methods (stone placement, eraser, tab switch, …)
+    // still cancel in-flight analysis.
+    this._scratchGenerationRef.value = this.editAnalysisGeneration || 0
 
-    this.setState({
-      editWorkspace: {...ws, analysisPending: true},
-    })
+    let result = await refreshScratchAnalysis(
+      {
+        getState: () => this.state,
+        setState: (patch) => this.setState(patch),
+        getSyncer: () => this.inferredState.analyzingEngineSyncer,
+        engineSupportsOwnership: (s) => this.engineSupportsOwnership(s),
+        getCachedScratchOwnership: (syncerId, snapshot) =>
+          this.getCachedScratchOwnership(syncerId, snapshot),
+        cacheScratchOwnership: (syncerId, snapshot, ownership) =>
+          this.cacheScratchOwnership(syncerId, snapshot, ownership),
+        runBoardAnalysis: (opts) => this.runBoardAnalysis(opts),
+        getSourceTree: () => this.inferredState.gameTree,
+        generationRef: this._scratchGenerationRef,
+        logger: applogger,
+      },
+      targetTab,
+    )
 
-    let analyzeTab = async (snapshot, analysisKey, ownershipKey, tab) => {
-      if (snapshot == null) return null
-
-      let cached = this.getCachedScratchOwnership(syncer.id, snapshot)
-      if (cached != null) {
-        return {ownership: cached}
-      }
-
-      let ctx = createScratchAnalysisContext(snapshot, {
-        tab,
-        sourceTree: this.inferredState.gameTree,
-        syncerId: syncer.id,
-      })
-      if (ctx == null) return null
-      let result = await this.runBoardAnalysis({
-        syncer,
-        tree: ctx.tree,
-        treePosition: ctx.treePosition,
-        analyzePlayer: ctx.analyzePlayer,
-        requestGroup: 'scratch-analysis',
-        analysisSource: SCRATCH_ANALYSIS_SOURCE,
-        skipOwnershipCache: true,
-        onAnalysisUpdate: (analysis) => {
-          if (this.editAnalysisGeneration !== generation) return
-          let current = this.state.editWorkspace
-          if (current != null) {
-            this.setState({
-              editWorkspace: {
-                ...current,
-                [analysisKey]: analysis,
-                [ownershipKey]: analysis?.ownership ?? null,
-              },
-            })
-          }
-        },
-      })
-
-      if (result?.ownership != null) {
-        this.cacheScratchOwnership(syncer.id, snapshot, result.ownership)
-      }
-
-      return result
-    }
-
-    let analyzeCurrent = targetTab == null || targetTab === 'current'
-    let analyzeReference = targetTab == null || targetTab === 'reference'
-
-    let currentAnalysis = analyzeCurrent
-      ? await analyzeTab(
-          ws.currentSnapshot,
-          'currentAnalysis',
-          'currentOwnership',
-          'current',
-        )
-      : ws.currentAnalysis
-
-    let referenceAnalysis = analyzeReference
-      ? await analyzeTab(
-          ws.referenceSnapshot,
-          'referenceAnalysis',
-          'referenceOwnership',
-          'reference',
-        )
-      : ws.referenceAnalysis
-
-    if (this.editAnalysisGeneration !== generation) {
-      let pendingWs = this.state.editWorkspace
-      if (pendingWs != null) {
-        this.setState({
-          editWorkspace: {...pendingWs, analysisPending: false},
-        })
-      }
-      return
-    }
-
-    let finalWs = this.state.editWorkspace
-    if (finalWs != null) {
-      this.setState({
-        editWorkspace: {
-          ...finalWs,
-          currentAnalysis: currentAnalysis ?? finalWs.currentAnalysis,
-          currentOwnership:
-            currentAnalysis?.ownership ?? finalWs.currentOwnership,
-          referenceAnalysis: referenceAnalysis ?? finalWs.referenceAnalysis,
-          referenceOwnership:
-            referenceAnalysis?.ownership ?? finalWs.referenceOwnership,
-          analysisPending: false,
-        },
-      })
-      applogger.log(
-        'info',
-        'engine',
-        'analysis.completed',
-        'Analysis completed',
-        {targetTab},
-      )
-    }
+    // Sync generation back so next invalidation picks up the right counter
+    this.editAnalysisGeneration = this._scratchGenerationRef.value
+    return result
   }
 
   handleEditDragEnd({source, target}) {
@@ -4957,40 +4840,31 @@ class Sabaki extends EventEmitter {
   }
 
   async analyzeMove(treePosition) {
-    let sign = this.getPlayer(treePosition)
-    let syncer = this.inferredState.analyzingEngineSyncer
-    if (syncer == null || syncer.suspended) return
-
-    await this.runBoardAnalysis({
-      syncer,
-      tree: this.inferredState.gameTree,
+    return analyzeGameTreePosition(
+      {
+        getSyncer: () => this.inferredState.analyzingEngineSyncer,
+        getGameTree: () => this.inferredState.gameTree,
+        getPlayer: (tp) => this.getPlayer(tp),
+        runBoardAnalysis: (opts) => this.runBoardAnalysis(opts),
+      },
       treePosition,
-      analyzePlayer: sign,
-      requestGroup: 'analysis',
-    })
+    )
   }
 
   scheduleLiveAnalysis(treePosition) {
-    let syncer = this.inferredState.analyzingEngineSyncer
-    if (syncer == null || syncer.suspended) return
-
-    if (
-      this.state.engineGameOngoing != null &&
-      [this.state.blackEngineSyncerId, this.state.whiteEngineSyncerId].includes(
-        this.state.analyzingEngineSyncerId,
-      )
-    ) {
-      return
+    if (!this._gameTreeTimerRef) {
+      this._gameTreeTimerRef = {id: null}
     }
-
-    if (this.state.mode === 'analysis' && this.state.editWorkspace != null)
-      return
-
-    clearTimeout(this.continuousAnalysisId)
-
-    this.continuousAnalysisId = setTimeout(() => {
-      this.analyzeMove(treePosition)
-    }, setting.get('game.navigation_analysis_delay'))
+    scheduleGameTreeAnalysis(
+      {
+        getSyncer: () => this.inferredState.analyzingEngineSyncer,
+        getState: () => this.state,
+        analyzeFn: (tp) => this.analyzeMove(tp),
+        getDelay: () => setting.get('game.navigation_analysis_delay'),
+        timerRef: this._gameTreeTimerRef,
+      },
+      treePosition,
+    )
   }
 
   async startAnalysis(syncerId) {

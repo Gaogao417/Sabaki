@@ -9,7 +9,7 @@ import {
   SCRATCH_ANALYSIS_SOURCE,
   createScratchAnalysisContext,
   getScratchAnalysisCacheKey,
-} from '../src/modules/workbench/analysis/index.js'
+} from '../src/modules/analysis/scratchAnalysis.js'
 
 function makeSnapshot(width = 9, height = 9, nextPlayer = 1, extras = {}) {
   let board = newBoard(width, height)
@@ -314,6 +314,16 @@ describe('scratchAnalysis', () => {
       // Different syncer should not hit the same cache entry
       let otherKey = getScratchAnalysisCacheKey('syncer-2', snapshot)
       assert.strictEqual(cache[otherKey], undefined)
+    })
+  })
+
+  describe('compat re-export shim', () => {
+    it('workbench/analysis/index.js re-exports from top-level analysis module', () => {
+      // Dynamic import to verify the shim works
+      let shimExports = require('../src/modules/workbench/analysis/index.js')
+      assert.strictEqual(shimExports.SCRATCH_ANALYSIS_SOURCE, 'scratch-analysis')
+      assert.ok(typeof shimExports.createScratchAnalysisContext === 'function')
+      assert.ok(typeof shimExports.getScratchAnalysisCacheKey === 'function')
     })
   })
 })
