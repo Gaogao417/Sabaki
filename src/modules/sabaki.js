@@ -42,6 +42,7 @@ import {createDocumentStore} from './document/documentStore.js'
 import {createEngineService} from './engine/engineService.js'
 import {createAnalysisService} from './analysis/analysisService.ts'
 import {createTrainingStore} from './training/trainingStore.js'
+import {createOverlayStore} from './overlays/overlayStore.ts'
 import {
   boardFromSnapshot,
   cloneSnapshot,
@@ -1141,10 +1142,7 @@ class Sabaki extends EventEmitter {
   }
 
   getTerritoryCompareAvailable(state = this.state) {
-    return (
-      state.mode === 'analysis' &&
-      state.editWorkspace?.referenceSnapshot != null
-    )
+    return this.getOverlayStore().getTerritoryCompareAvailable(state)
   }
 
   getBoardAnalysisContext({state = this.state, tab = null} = {}) {
@@ -1368,6 +1366,7 @@ class Sabaki extends EventEmitter {
 
   _playServices = null
   _trainingStore = null
+  _overlayStore = null
 
   getTrainingStore() {
     if (this._trainingStore == null) {
@@ -1378,6 +1377,20 @@ class Sabaki extends EventEmitter {
       })
     }
     return this._trainingStore
+  }
+
+  getOverlayStore() {
+    if (this._overlayStore == null) {
+      this._overlayStore = createOverlayStore(this, {
+        ensureAnalysisReady: (opts) => this.ensureAnalysisReady(opts),
+        analyzeMove: (tp) => this.analyzeMove(tp),
+        scheduleEditWorkspaceAnalysis: (tab) =>
+          this.scheduleEditWorkspaceAnalysis(tab),
+        captureEditReference: () => this.captureEditReference(),
+        hideInfoOverlay: () => this.hideInfoOverlay(),
+      })
+    }
+    return this._overlayStore
   }
 
   getPlayServices() {
@@ -2434,109 +2447,23 @@ class Sabaki extends EventEmitter {
   }
 
   async setTerritoryEnabled(territoryEnabled) {
-    console.log('[territory.set]', {
-      territoryEnabled,
-      currentState: this.state.territoryEnabled,
-      mode: this.state.mode,
-    })
-
-    if (territoryEnabled === this.state.territoryEnabled) return true
-
-    if (!territoryEnabled) {
-      this.hideInfoOverlay()
-      this.setState({
-        territoryEnabled: false,
-      })
-      return true
-    }
-
-    this.hideInfoOverlay()
-    this.setState({territoryEnabled: true})
-
-    let syncer = await this.ensureAnalysisReady({requireOwnership: true})
-    if (syncer == null) {
-      console.log('[territory.no_syncer]', 'ensureAnalysisReady returned null')
-      this.setState({
-        territoryEnabled: false,
-        territoryCompareEnabled: false,
-      })
-      return false
-    }
-
-    console.log('[territory.syncer_ready]', {
-      mode: this.state.mode,
-      analysisTreePosition: this.state.analysisTreePosition,
-      treePosition: this.state.treePosition,
-      currentOwnership: this.getCurrentOwnership(syncer) != null,
-    })
-
-    if (
-      this.state.mode !== 'analysis' &&
-      (this.state.analysisTreePosition !== this.state.treePosition ||
-        this.getCurrentOwnership(syncer) == null)
-    ) {
-      console.log('[territory.analyze_move]', {treePosition: this.state.treePosition})
-      this.analyzeMove(this.state.treePosition)
-    } else if (this.state.mode === 'analysis') {
-      console.log('[territory.schedule_edit]')
-      this.scheduleEditWorkspaceAnalysis()
-    }
-
-    return true
+    return await this.getOverlayStore().setTerritoryEnabled(territoryEnabled)
   }
 
   async toggleTerritoryEnabled() {
-    return await this.setTerritoryEnabled(!this.state.territoryEnabled)
+    return await this.getOverlayStore().toggleTerritoryEnabled()
   }
 
   async setTerritoryCompareEnabled(territoryCompareEnabled) {
-    if (territoryCompareEnabled === this.state.territoryCompareEnabled)
-      return true
-
-    if (!territoryCompareEnabled) {
-      this.setState({territoryCompareEnabled: false})
-      return true
-    }
-
-    if (this.state.mode !== 'analysis') return false
-    if (this.state.editWorkspace == null) return false
-
-    if (this.state.editWorkspace.referenceSnapshot == null) {
-      this.captureEditReference()
-    }
-
-    this.hideInfoOverlay()
-    let syncer = await this.ensureAnalysisReady({requireOwnership: true})
-    if (syncer == null) {
-      this.setState({territoryCompareEnabled: false})
-      return false
-    }
-
-    if (!this.getTerritoryCompareAvailable()) {
-      return false
-    }
-
-    this.scheduleEditWorkspaceAnalysis()
-    this.setState({territoryCompareEnabled: true})
-    return true
+    return await this.getOverlayStore().setTerritoryCompareEnabled(territoryCompareEnabled)
   }
 
   async toggleTerritoryCompareEnabled() {
-    return await this.setTerritoryCompareEnabled(
-      !this.state.territoryCompareEnabled,
-    )
+    return await this.getOverlayStore().toggleTerritoryCompareEnabled()
   }
 
   async setOverlayMode(overlayMode) {
-    if (overlayMode === 'territory') {
-      return await this.setTerritoryEnabled(true)
-    }
-
-    if (overlayMode === 'off') {
-      return await this.setTerritoryEnabled(false)
-    }
-
-    return false
+    return await this.getOverlayStore().setOverlayMode(overlayMode)
   }
 
   getOwnershipForTreePosition(syncer, treePosition) {
