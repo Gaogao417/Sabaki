@@ -242,8 +242,21 @@ place-stone、erase、drag-stone、mark-point、draw-line。这样才能替换�
 - `variationInteractionExecutor`: 只处理从 game-tree position 出发的变化写入或未来临时变化。
 - `legacyInteractionExecutor`: 暂时包住 scoring、estimator、find、guess、autoplay 和原生 SGF
   edit 等未迁移路径。
-- `sabaki.js`: 迁移后保留状态所有者和服务协调职责，负责调用 resolver、选择 executor、
-  提供必要服务和提交 executor 返回的 effects。
+- `sabaki.js`: 迁移期暂时保留协调入口，负责调用 resolver、选择 executor、
+  提供必要服务和提交 executor 返回的 effects；目标是逐步把 state ownership 下沉到领域模块。
+
+#### Sabaki Boundary Target
+
+`sabaki.js` 当前可以继续作为过渡协调者，但它的长期职责应该收敛为 app-level coordinator /
+legacy facade：
+
+- app lifecycle、settings、window 和 top-level command facade。
+- workbench、document、analysis、engine、training、overlay 等模块的装配入口。
+- legacy compatibility：承接未迁移路径，隔离旧 mode 分支，保持旧行为可用。
+
+它不应继续作为 analysis、engine、document、training、overlay 的长期业务 owner。新的
+workbench 行为默认写入对应领域模块；如果迁移期必须从 `sabaki.js` 进入，也应只把它当成
+facade，把状态写入、cache、request lifecycle 和 write-back 规则留在领域模块里。
 
 拆分时应优先迁移一个小闭环，例如 analysis workspace 下的
 `stone_1`、`stone_-1`、`eraser` 和 `play` 四个 intent。这个闭环能从
@@ -340,9 +353,37 @@ src/modules/workbench/
 - `overlays/resolveOverlayInput.js`: 从 source、analysis、ownership、reference 派生 overlay input。
 - `overlays/composeWorkbenchOverlays.js`: workbench overlay 组合入口，内部复用现有 overlay modules。
 
+### State Ownership Target
+
+长期 state ownership 应按领域拆开，而不是继续堆回 `sabaki.js`：
+
+- `documentStore`: 拥有 `gameTrees`、`treePosition`、history 和 SGF 写入。
+- `workbenchStore`: 拥有 workspace kind、`editWorkspace`、selected tools 和 working positions。
+- `analysisService`: 拥有 scratch / game-tree / variation analysis request lifecycle、
+  ownership cache 和 write-back boundary。
+- `engineService`: 拥有 engine attach、detach、sync、analyze 和 genmove。
+- `trainingStore`: 拥有 recall / problem / review session、attempt 和 progress。
+- `overlayStore`: 拥有 territory / compare / heatmap visibility 与 overlay input。
+- `uiStore`: 拥有 drawers、sidebars、layout 和 status overlays。
+
+迁移期可以保留 `sabaki.js` 对这些模块的 facade 调用，但新增状态切片应优先进入上述 owner。
+如果某个切片暂时仍在 `sabaki.state`，对应 phase 需要记录迁出目标，避免后续重构把 analysis、
+engine、training 或 overlay 状态重新塞回主文件。
+
 ### 5. Analysis
 
 Analysis 必须分成两类：
+
+Analysis 是 executor / service effect，不是棋盘输入 intent。`BoardInteractionIntent`
+只表达用户输入意图，例如落子、摆子、擦除、拖动、提交答案或打开菜单；它不应该出现
+`start-analysis`、`refresh-analysis`、`run-engine-analysis` 这类把执行副作用塞回 intent
+枚举的项。某个 intent 被 executor 接受后，executor 可以调用 `analysisService` 或具体
+analysis module 触发分析，但分析调度和结果写回不属于 resolver。
+
+Scratch analysis 的运行时调度应从 `sabaki.js` 迁到 `analysis/scratchAnalysis.js`。
+`sabaki.js` 在迁移期只传入依赖，例如当前 working position、engine facade、settings 和
+提交结果的回调；request lifecycle、cache key、ownership cache、取消/重启策略以及写回边界
+由 scratch analysis service 拥有。
 
 #### Edit Analysis
 
@@ -533,8 +574,9 @@ PositionSource
 - Apply this only to the migrated edit-analysis intents from Phase 4.
 - Keep play, recall, scoring, estimator, find, guess, autoplay, problem, review, and
   native SGF edit on legacy paths.
-- Keep `sabaki.js` as state owner and service coordinator, but stop adding new
-  edit-analysis behavior directly to `clickVertex()`.
+- Keep `sabaki.js` as the transition coordinator / legacy facade, but move
+  edit-analysis state ownership into workbench and analysis modules instead of adding
+  new behavior directly to `clickVertex()`.
 - Add regression coverage proving old play/recall/legacy behavior is unchanged.
 
 ### Phase 6: Stabilize Scratch Analysis
@@ -542,6 +584,10 @@ PositionSource
 - Ensure edit analysis runs from the working position, including ownership and analysis
   result write-back, without dirtying the current SGF tree.
 - Clarify the temporary game-tree conversion used for engine analysis and its cache keys.
+- Extract the core of `refreshEditWorkspaceAnalysis()` into a scratch analysis service:
+  `sabaki.js` passes dependencies and commits returned results, while
+  `analysis/scratchAnalysis.js` owns scheduling, cache keys, ownership cache, and write-back
+  boundaries.
 - Keep the product UI allowed to show one "Analysis" entry, but internally treat this path
   as `scratch-analysis`.
 
@@ -577,6 +623,8 @@ PositionSource
   `analysis/gameTreeAnalysis.js`.
 - Make every analysis request state whether it analyzes a working position, the current
   game-tree position, or a variation position.
+- Split analysis state, cache, and write-back ownership into `analysisService` and the
+  concrete analysis modules; this phase is not only about extracting context helpers.
 - Build and verify scratch analysis first, then clean up game-tree analysis, and only
   then expand variation analysis.
 
@@ -598,6 +646,9 @@ PositionSource
   after source, contract, resolver, and executor boundaries are stable.
 - Workspace selects defaults; mutation contracts and intent executors enforce behavior.
 - New features should target workspace plus contract, not raw `mode`.
+- After workspace presets are stable, continue migrating remaining `sabaki.js` state slices
+  into `documentStore`, `workbenchStore`, `analysisService`, `engineService`,
+  `trainingStore`, `overlayStore`, and `uiStore`.
 - Hide legacy entrances before deleting code.
 - Delete legacy branches only after migrated workspaces no longer depend on them and
   tests or telemetry confirm the branch is unused.
@@ -619,7 +670,8 @@ These questions should be answered before large code movement:
 
 - `src/modules/position-contracts.ts`: shared contract types and helpers.
 - `src/modules/study.js`: snapshot helpers and working-position board conversion.
-- `src/modules/sabaki.js`: current state owner, legacy mode switch, edit workspace, interaction dispatch.
+- `src/modules/sabaki.js`: current legacy state host and transition facade; still contains
+  legacy mode switch, edit workspace, and interaction dispatch until state slices migrate.
 - `src/components/overlays/BoardOverlayStack.js`: current overlay composition entry point.
 - `src/components/MainView.js`: current bridge from state to Goban props.
 - `src/components/WorkbenchShell.js`: current workspace shell and layout coordinator.
