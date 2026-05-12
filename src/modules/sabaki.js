@@ -29,7 +29,7 @@ import {
   createScratchPositionSource,
   getMutationContractFromState,
   getPositionSourceFromState,
-} from './position-contracts.ts'
+} from './workbench/contracts/index.ts'
 import {
   boardFromSnapshot,
   cloneSnapshot,
