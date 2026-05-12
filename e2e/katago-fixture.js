@@ -4,10 +4,25 @@ const path = require('path')
 const repoRoot = path.resolve(__dirname, '..')
 const katagoDataDir = path.resolve(repoRoot, 'katago_data')
 const katagoConfigPath = path.resolve(katagoDataDir, 'gtp.cfg')
-const katagoModelPath = path.resolve(
-  katagoDataDir,
-  'kata1-b18c384nbt-s9996604416-d4316597426.bin.gz',
-)
+
+const preferredModel = 'kata1-b18c384nbt-s9996604416-d4316597426.bin.gz'
+
+function findModelPath() {
+  if (fs.existsSync(path.resolve(katagoDataDir, preferredModel))) {
+    return path.resolve(katagoDataDir, preferredModel)
+  }
+
+  // Fall back to any .bin.gz model in katago_data
+  try {
+    const files = fs.readdirSync(katagoDataDir)
+    const model = files.find((f) => f.endsWith('.bin.gz'))
+    if (model) return path.resolve(katagoDataDir, model)
+  } catch {}
+
+  return null
+}
+
+const katagoModelPath = findModelPath()
 
 function findExecutable(name) {
   let pathExts =

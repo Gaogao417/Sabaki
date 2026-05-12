@@ -19,5 +19,10 @@ module.exports = defineConfig({
       testMatch: /workbench-baseline\.spec\.js/,
       dependencies: [],
     },
+    {
+      name: 'analysis-overlay',
+      testMatch: /analysis-overlay-baseline\.spec\.js/,
+      dependencies: [],
+    },
   ],
 })
