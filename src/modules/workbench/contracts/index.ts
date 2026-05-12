@@ -33,12 +33,14 @@ export type {ScratchEditExecutionContext, WorkspaceKind} from './workspaceDefaul
 
 export {
   OVERLAY_LAYER_SOURCES,
+  OVERLAY_LAYERS,
   OVERLAY_RENDER_MODES,
 } from './overlayLayers.ts'
 export type {
   OverlayLayer,
   OverlayLayerSource,
   OverlayRenderMode,
+  OverlayVisualChannel,
 } from './overlayLayers.ts'
 
 // Phase 3: board interaction resolver (shadow mode)

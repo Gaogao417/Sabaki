@@ -2,6 +2,7 @@ import {h, Component} from 'preact'
 import sabaki from '../modules/sabaki.js'
 
 import SplitContainer from './helpers/SplitContainer.js'
+import {translateUnavailableReason} from './overlays/reasonText.js'
 import WinrateGraph from './sidebars/WinrateGraph.js'
 import Slider from './sidebars/Slider.js'
 import GameGraph from './sidebars/GameGraph.js'
@@ -604,7 +605,7 @@ export default class Sidebar extends Component {
                 ? h(
                     'div',
                     {class: 'inspector-section inspector-warning'},
-                    h('span', {}, overlayStatusProps.unavailableReason),
+                    h('span', {}, translateUnavailableReason(overlayStatusProps.unavailableReason)),
                   )
                 : overlayStatusProps != null &&
                     overlayStatusProps.hoveredRegion != null

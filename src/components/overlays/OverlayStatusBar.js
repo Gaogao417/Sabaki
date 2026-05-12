@@ -1,6 +1,7 @@
 import {h} from 'preact'
 
 import i18n from '../../i18n.js'
+import {translateUnavailableReason} from './reasonText.js'
 
 const t = i18n.context('OverlayStatusBar')
 
@@ -32,6 +33,7 @@ function LabelValue({label, value}) {
 export default function OverlayStatusBar({
   territoryMode,
   unavailableReason = null,
+  hoverPending = false,
   territorySummary = null,
   hoveredRegion = null,
   deltaSummary = null,
@@ -42,14 +44,18 @@ export default function OverlayStatusBar({
 }) {
   if (!territoryMode) return null
 
-  if (unavailableReason != null) {
+  let displayReason = hoverPending
+    ? translateUnavailableReason('hover-pending')
+    : translateUnavailableReason(unavailableReason)
+
+  if (displayReason != null) {
     return h(
       'section',
       {class: 'overlay-status-bar overlay-status-warning'},
       h(
         'div',
         {class: 'overlay-status-line'},
-        h('strong', {}, unavailableReason),
+        h('strong', {}, displayReason),
       ),
     )
   }

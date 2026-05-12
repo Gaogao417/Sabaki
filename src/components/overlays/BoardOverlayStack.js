@@ -3,9 +3,8 @@ import {h, Component, Fragment} from 'preact'
 import Goban from '../Goban.js'
 
 import * as helper from '../../modules/helper.js'
-import {composeMarkerMaps} from '../../modules/overlays/compose.js'
-import {getTerritoryPaintLayer} from './TerritoryPaintLayer.js'
-import {getTerritoryDiffLayer} from './TerritoryDiffLayer.js'
+import {resolveOverlayInput} from '../../modules/overlays/resolveOverlayInput.ts'
+import {composeWorkbenchOverlays} from '../../modules/overlays/composeWorkbenchOverlays.ts'
 
 export default class BoardOverlayStack extends Component {
   componentDidMount() {
@@ -61,15 +60,25 @@ export default class BoardOverlayStack extends Component {
   render(
     {
       territoryMode,
-      baselineOwnership,
-      unavailableReason,
+      appMode,
+      editWorkspaceActive,
+      territoryCompareActive,
+      editActiveTab,
+      analysisPending,
+      engineSyncerAvailable,
+      activeAnalysis,
+      analysisTreePositionMatches,
+      gameTreeOwnership,
+      editCurrentOwnership,
+      editReferenceOwnership,
+      editWorkspaceCurrentOwnership,
+      editWorkspaceReferenceOwnership,
+      editPreviewOwnership,
+      keyPointSummary,
       gobanProps,
       analysis,
-      lastMoveDeltaMap,
-      lastMoveDiffAvailable,
-      diffSourceType = null,
-      keyPointSummary = null,
-      comparisonOwnership = null,
+      showHeatmap,
+      showHumanPreference,
     },
     {
       hoveredVertex = null,
@@ -78,85 +87,44 @@ export default class BoardOverlayStack extends Component {
       hoverPending = false,
     },
   ) {
-    let territoryPaintLayer =
-      unavailableReason == null && territoryMode
-        ? getTerritoryPaintLayer(baselineOwnership, hoveredVertex)
-        : {
-            paintMap: gobanProps.paintMap,
-            markerMap: null,
-            territorySummary: null,
-            hoveredRegion: null,
-          }
+    let resolved = resolveOverlayInput({
+      territoryMode,
+      appMode: appMode ?? 'analysis',
+      editWorkspaceActive: editWorkspaceActive ?? false,
+      territoryCompareActive: territoryCompareActive ?? false,
+      editActiveTab: editActiveTab ?? null,
+      analysisPending: analysisPending ?? false,
+      engineSyncerAvailable: engineSyncerAvailable ?? false,
+      activeAnalysis: activeAnalysis ?? null,
+      analysisTreePositionMatches: analysisTreePositionMatches ?? false,
+      gameTreeOwnership,
+      editCurrentOwnership: editCurrentOwnership ?? null,
+      editReferenceOwnership: editReferenceOwnership ?? null,
+      editWorkspaceCurrentOwnership: editWorkspaceCurrentOwnership ?? null,
+      editWorkspaceReferenceOwnership: editWorkspaceReferenceOwnership ?? null,
+      editPreviewOwnership: editPreviewOwnership ?? null,
+      keyPointSummary: keyPointSummary ?? null,
+      hoveredVertex,
+      hoverOwnership,
+      hoverPending,
+      basePaintMap: gobanProps.paintMap,
+      baseMarkerMap: gobanProps.markerMap,
+      heatmapActive: showHeatmap ?? false,
+      humanPreferenceActive: showHumanPreference ?? false,
+    })
 
-    let hoverDeltaMap =
-      baselineOwnership != null && hoverOwnership != null
-        ? helper.getOwnershipDelta(baselineOwnership, hoverOwnership)
-        : null
-    let activeDeltaMap = hoverDeltaMap ?? lastMoveDeltaMap
-    let activeDiffSourceType =
-      hoverDeltaMap != null
-        ? 'hover'
-        : lastMoveDiffAvailable && lastMoveDeltaMap != null
-          ? diffSourceType
-          : null
-
-    let territoryDiffLayer =
-      unavailableReason == null && territoryMode
-        ? getTerritoryDiffLayer({
-            deltaMap: activeDeltaMap,
-            hoveredVertex,
-            hoveredRegion: territoryPaintLayer.hoveredRegion,
-          })
-        : {
-            markerMap: null,
-            deltaSummary: null,
-            hoveredDelta: null,
-            hoveredRegionDeltaSummary: null,
-          }
-
-    this.statusProps = territoryMode
-      ? {
-          territoryMode,
-          unavailableReason:
-            hoverPending && unavailableReason == null
-              ? 'Loading territory diff preview...'
-              : unavailableReason,
-          territorySummary: territoryPaintLayer.territorySummary,
-          hoveredRegion: territoryPaintLayer.hoveredRegion,
-          hoveredVertex,
-          deltaSummary: territoryDiffLayer.deltaSummary,
-          hoveredDelta: territoryDiffLayer.hoveredDelta,
-          hoveredRegionDeltaSummary:
-            territoryDiffLayer.hoveredRegionDeltaSummary,
-          diffSourceType: activeDiffSourceType,
-          keyPointSummary,
-        }
-      : null
+    let composition = composeWorkbenchOverlays(resolved)
+    this.statusProps = composition.statusProps
 
     return h(
       Fragment,
       null,
       h(Goban, {
         ...gobanProps,
-        className: territoryMode ? 'territory-mode' : gobanProps.className,
+        className: composition.className || gobanProps.className,
         analysis,
-        paintMap:
-          territoryMode &&
-          unavailableReason == null &&
-          territoryPaintLayer.paintMap != null
-            ? territoryPaintLayer.paintMap.map((row, y) =>
-                row.map((value, x) => {
-                  let areaValue = gobanProps.paintMap?.[y]?.[x] ?? 0
-                  if (areaValue >= 0) return value
-                  return value === 0 ? areaValue : value * 0.55
-                }),
-              )
-            : gobanProps.paintMap,
-        markerMap: composeMarkerMaps(
-          gobanProps.markerMap,
-          territoryPaintLayer.markerMap,
-          territoryDiffLayer.markerMap,
-        ),
+        paintMap: composition.paintMap,
+        markerMap: composition.markerMap,
         highlightVertices: gobanProps.highlightVertices,
         onVertexMouseMove: ({vertex, ...evt}) => {
           gobanProps.onVertexMouseMove?.({vertex, ...evt})

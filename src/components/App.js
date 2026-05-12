@@ -498,11 +498,6 @@ class App extends Component {
     let editPreviewOwnership =
       editPreviewKeys == null ? null : editWs[editPreviewKeys.ownershipKey]
     let scoreBoard, areaMap
-    let territoryOwnership = null
-    let overlayUnavailableReason = null
-    let territoryDeltaMap = null
-    let territoryDiffAvailable = false
-    let territoryDiffSourceType = null
     let territoryMode = state.territoryEnabled || state.territoryCompareEnabled
     let territoryCompareActive =
       state.territoryCompareEnabled && editWorkspaceActive
@@ -531,51 +526,9 @@ class App extends Component {
           : influence.areaMap(scoreBoard.signMap)
     }
 
-    if (territoryMode) {
-      let engineSyncer = inferredState.analyzingEngineSyncer
-      territoryOwnership = territoryCompareActive
-        ? editWs.referenceOwnership
-        : editWorkspaceActive
-          ? editWs[editActiveKeys.ownershipKey]
-          : sabaki.getCurrentOwnership(engineSyncer)
-
-      if (['scoring', 'estimator'].includes(state.mode)) {
-        overlayUnavailableReason = t(
-          'Territory overlay is unavailable while scoring or estimating.',
-        )
-      } else if (engineSyncer == null) {
-        overlayUnavailableReason = t('Start engine analysis first.')
-      } else if (
-        editWorkspaceActive &&
-        editWs.analysisPending &&
-        (territoryOwnership == null ||
-          (territoryCompareActive && editWs.currentOwnership == null))
-      ) {
-        overlayUnavailableReason = t('Waiting for ownership data...')
-      } else if (territoryCompareActive && editWs.currentOwnership == null) {
-        overlayUnavailableReason = t('Waiting for ownership data...')
-      } else if (territoryOwnership == null) {
-        overlayUnavailableReason =
-          state.analysisTreePosition !== state.treePosition ||
-          activeAnalysis == null ||
-          activeAnalysis.ownership == null
-            ? t('Waiting for ownership data from the analysis engine...')
-            : t('The current analysis engine does not provide ownership data.')
-      }
-
-      if (
-        territoryCompareActive &&
-        editWs.referenceOwnership != null &&
-        editWs.currentOwnership != null
-      ) {
-        territoryDeltaMap = helper.getOwnershipDelta(
-          editWs.referenceOwnership,
-          editWs.currentOwnership,
-        )
-        territoryDiffAvailable = territoryDeltaMap != null
-        territoryDiffSourceType = territoryDiffAvailable ? 'workspace' : null
-      }
-    }
+    // Raw overlay facts — derivation now lives in resolveOverlayInput
+    let engineSyncer = inferredState.analyzingEngineSyncer
+    let gameTreeOwnership = sabaki.getCurrentOwnership(engineSyncer)
 
     let territoryStatusText = !territoryMode
       ? null
@@ -624,17 +577,17 @@ class App extends Component {
       territoryCompareActive,
       scoreBoard,
       areaMap,
-      territoryOwnership,
-      overlayUnavailableReason,
-      territoryDeltaMap,
-      territoryDiffAvailable,
-      territoryDiffSourceType,
       territoryStatusText,
-      comparisonOwnership: editWorkspaceActive
-        ? territoryCompareActive
-          ? editWs.currentOwnership
-          : editPreviewOwnership
-        : null,
+      // Raw overlay facts for resolveOverlayInput
+      appMode: state.mode,
+      engineSyncerAvailable: engineSyncer != null,
+      analysisPending: editWs?.analysisPending ?? false,
+      analysisTreePositionMatches: state.analysisTreePosition === state.treePosition,
+      gameTreeOwnership,
+      editCurrentOwnership: editActiveKeys != null ? editWs[editActiveKeys.ownershipKey] : null,
+      editReferenceOwnership: editWs?.referenceOwnership ?? null,
+      editWorkspaceCurrentOwnership: editWs?.currentOwnership ?? null,
+      editWorkspaceReferenceOwnership: editWs?.referenceOwnership ?? null,
       overlayStatusProps: this.state.overlayStatusProps,
       onOverlayStatusChange: this.handleOverlayStatusChange,
       inspectorSummary,
