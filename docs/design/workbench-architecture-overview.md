@@ -460,67 +460,143 @@ PositionSource
 ### Phase 0: Baseline and Freeze Legacy Direction
 
 - Treat the current mixed `mode` dispatch as the legacy baseline to be migrated.
-- Document that scoring, estimator, find, guess, autoplay, and SGF edit are legacy.
+- Document that scoring, estimator, find, guess, autoplay, and native SGF edit are legacy.
 - Keep old behavior compatible where practical.
 - Stop adding new workbench behavior to legacy mode branches.
+- Require every new workbench behavior to state its `PositionSource`,
+  `MutationContract`, and `BoardInteractionIntent`.
 
 ### Phase 1: Stabilize Contracts
 
-- Keep `src/modules/position-contracts.ts` as the shared contract module.
+- Keep `src/modules/position-contracts.ts` as the shared contract module for now.
+- If `src/modules/workbench/contracts/` is introduced, re-export or wrap the existing
+  helpers first instead of moving imports across the codebase in one large patch.
 - Ensure `sabaki.js` can expose the active `PositionSource` and `MutationContract`.
-- Ensure current `editWorkspace.currentSnapshot` and `referenceSnapshot` are valid working positions.
-- Add tests for workspace-to-contract mapping.
+- Map the current workspace or mode to the default source and contract:
+  `play -> game-tree + playMove`,
+  `recall -> game-tree/problem-attempt + recallAnswer`,
+  `analysis/edit -> scratch/current + scratchEdit`,
+  `variation-analysis -> game-tree + variationMove`,
+  and unmigrated modes to legacy or null.
+- Add tests for workspace-to-contract and state-to-source mapping.
+- Do not change board-click behavior in this phase.
 
-### Phase 2: Introduce Board Interaction Resolver
+### Phase 2: Promote Working Position Helpers
+
+- Introduce `src/modules/workbench/working-position/` as a wrapper around the existing
+  snapshot shape used by `editWorkspace.currentSnapshot` and `referenceSnapshot`.
+- Keep `signMap` as the primary board data shape so the helpers remain compatible with
+  `study.js`, `boardFromSnapshot`, `snapshotToGameTree`, engine analysis, and overlays.
+- Add focused helpers for create, clone, snapshot-to-board, board-to-snapshot,
+  place black, place white, erase, and set next player.
+- Keep marker, line, drag, reference snapshot, and save-problem helpers for later phases.
+- Add tests proving working positions can be mutated and rendered without touching the
+  current SGF tree.
+
+### Phase 3: Introduce Board Interaction Resolver in Shadow Mode
 
 - Create the initial `src/modules/workbench/board-interactions/` files:
-  `intents.ts`, `resolveBoardInteraction.ts`, `createBoardInteractionContext.js`,
-  `executeBoardInteraction.js`, and `executors/scratchEditInteractionExecutor.js`.
-- Add a pure resolver that receives state, board event, selected tool, and board cell state.
-- Return `BoardInteractionIntent`, `PositionSource`, and `MutationContract`.
-- Keep the resolver side-effect free: no state writes, no menus, no analysis refresh.
-- Route the resolver result to a narrow executor module instead of introducing a new central
-  `switch (contract)` implementation.
-- Cover play, edit analysis, and recall first.
-- Keep problem, review, guess, scoring, estimator, and find behind explicit legacy or deferred intents.
-- Add matrix tests for mode/workspace, tool, mouse button, occupied/empty point, and expected contract.
+  `intents.ts`, `resolveBoardInteraction.ts`, and `createBoardInteractionContext.js`.
+- Add a pure resolver that receives a compact state/workspace summary, board event,
+  selected tool, point state, active `PositionSource`, and active `MutationContract`.
+- Return `BoardInteractionIntent`, `PositionSource`, `MutationContract`, and, when needed,
+  an explicit legacy or deferred reason.
+- Keep the resolver side-effect free: no state writes, no menus, no analysis refresh,
+  and no dependency on a global interaction state.
+- Do not route live behavior through the resolver yet. Use tests, and optionally
+  debug-only observation, to compare what the resolver would do.
+- Add matrix tests for workspace or mode, tool, mouse button, modifiers, empty/occupied
+  point state, expected intent, source, and contract.
 
-### Phase 3: Promote Edit Board
+### Phase 4: Build the First Scratch Edit Executor
 
-- Treat analysis workspace as edit analysis by default.
-- Ensure add stone, remove stone, drag stone, set next player, and save problem all write only working position.
-- Ensure edit analysis can run through engine without dirtying current SGF tree.
-- Keep the old `editWorkspace` name internally until the behavior is stable.
+- Add `executeBoardInteraction.js` only as a thin router and create
+  `executors/scratchEditInteractionExecutor.js`.
+- Migrate only the smallest edit-analysis loop first:
+  `stone_1`, `stone_-1`, `eraser`, and `play` as next-player placement if the current
+  tool semantics require it.
+- The scratch edit executor may write working positions and trigger scratch analysis.
+- It must not write game tree nodes, SGF properties, real move history, variation state,
+  or recall session state.
+- Verify edit-analysis placement/removal works, the displayed board comes from the
+  working position, and the current SGF tree is unchanged.
 
-### Phase 4: Redirect Board Interaction Paths
+### Phase 5: Redirect Only the Edit-Analysis Click Loop
 
-- Replace the core `clickVertex` play / edit / recall branches with resolver dispatch.
-- Move migrated behavior into `playInteractionExecutor`, `scratchEditInteractionExecutor`, and
-  `recallInteractionExecutor`; keep `sabaki.js` as orchestrator rather than the owner of each branch.
-- Keep legacy modes behind a legacy fallback.
-- Prevent edit actions from calling game-tree mutation helpers.
-- Prevent recall actions from calling play move helpers.
-- Keep old helper names only as compatibility wrappers where useful.
+- Change `sabaki.clickVertex()` narrowly:
+  `createBoardInteractionContext() -> resolveBoardInteraction() ->
+  executeBoardInteraction() -> scratchEditInteractionExecutor()`.
+- Apply this only to the migrated edit-analysis intents from Phase 4.
+- Keep play, recall, scoring, estimator, find, guess, autoplay, problem, review, and
+  native SGF edit on legacy paths.
+- Keep `sabaki.js` as state owner and service coordinator, but stop adding new
+  edit-analysis behavior directly to `clickVertex()`.
+- Add regression coverage proving old play/recall/legacy behavior is unchanged.
 
-### Phase 5: Clarify Analysis Workspaces
+### Phase 6: Stabilize Scratch Analysis
 
-- Product UI may still show one "Analysis" entry initially.
-- Internally distinguish `scratch-analysis` and `variation-analysis`.
-- Build edit analysis first.
-- Add variation analysis only after game-tree write semantics are explicit.
+- Ensure edit analysis runs from the working position, including ownership and analysis
+  result write-back, without dirtying the current SGF tree.
+- Clarify the temporary game-tree conversion used for engine analysis and its cache keys.
+- Keep the product UI allowed to show one "Analysis" entry, but internally treat this path
+  as `scratch-analysis`.
 
-### Phase 6: Overlay Composition Contract
+### Phase 7: Extend Edit Analysis
 
-- Keep the current overlay rendering path.
-- Add layer priority, opacity, render mode, and hit-test semantics.
-- Verify territory, territory compare, heatmap, and human preference do not fight for the same visual channel without rules.
+- Extend `working-position/` and `scratchEditInteractionExecutor` in this order:
+  drag stone, marker tools, line/arrow tools, set next player, reference snapshot,
+  and save as problem.
+- Keep these writes scoped to working position or edit workspace state.
+- Add tests at each step so marker/line/reference behavior does not leak into game-tree
+  mutation helpers.
 
-### Phase 7: Workspace Composition and Legacy Deletion
+### Phase 8: Migrate Play Interaction
 
-- Move layout defaults, controls, and overlay defaults into workspace-level presets.
+- Add `executors/playInteractionExecutor.js` for real game play.
+- Move real move placement, game-tree mutation, history, current-player updates, engine
+  move generation, and play-analysis refresh behind the play executor.
+- Reuse low-level board calculation helpers only when appropriate; do not reuse
+  scratch edit write paths.
+- Verify play mode writes the game tree while edit analysis writes only working positions.
+
+### Phase 9: Migrate Recall and Training Interaction
+
+- Add `executors/recallInteractionExecutor.js`.
+- Treat board clicks as answer submissions, not game moves.
+- Write correct, wrong, hint, skip, attempt, session, and progress state through recall
+  boundaries only.
+- Prevent recall from calling play move helpers or mutating the current SGF tree.
+
+### Phase 10: Split Analysis Contexts
+
+- Introduce `analysis/boardAnalysisContext.js`, `analysis/scratchAnalysis.js`, and
+  `analysis/gameTreeAnalysis.js`.
+- Make every analysis request state whether it analyzes a working position, the current
+  game-tree position, or a variation position.
+- Build and verify scratch analysis first, then clean up game-tree analysis, and only
+  then expand variation analysis.
+
+### Phase 11: Add Overlay Input Contracts
+
+- Keep the current `BoardOverlayStack`, `paintMap`, `markerMap`, and marker composition
+  implementation path.
+- Add `overlays/overlayLayers.ts`, `resolveOverlayInput.js`, and
+  `composeWorkbenchOverlays.js` as an input-normalization layer.
+- Derive overlay input from `PositionSource`, board, analysis result, ownership,
+  reference/current snapshots, and hover semantics.
+- Verify territory, territory compare, heatmap, and human preference have explicit
+  `paint`, `marker`, `tooltip`, or `sidebar` roles and do not compete for the same
+  primary visual channel without priority rules.
+
+### Phase 12: Workspace Presets and Legacy Deletion
+
+- Move layout defaults, controls, and overlay defaults into workspace-level presets only
+  after source, contract, resolver, and executor boundaries are stable.
 - Workspace selects defaults; mutation contracts and intent executors enforce behavior.
-- New features should target workspace + contract, not raw `mode`.
-- Remove or hide legacy branches once no migrated workspace depends on them.
+- New features should target workspace plus contract, not raw `mode`.
+- Hide legacy entrances before deleting code.
+- Delete legacy branches only after migrated workspaces no longer depend on them and
+  tests or telemetry confirm the branch is unused.
 
 ## Open Research Questions
 
