@@ -14,7 +14,7 @@ import type {
   AnalysisTarget,
   EngineAnalysis,
   EngineSyncerLike,
-  GameTreeLike,
+  GameTree,
   OwnershipGrid,
   RunBoardAnalysis,
   ScratchAnalysisTab,
@@ -70,9 +70,9 @@ function narrowSyncer(raw: unknown): EngineSyncerLike | null {
   }
 }
 
-function narrowGameTree(raw: unknown): GameTreeLike | null {
+function narrowGameTree(raw: unknown): GameTree | null {
   if (raw == null || typeof raw !== 'object') return null
-  return raw as GameTreeLike
+  return raw as GameTree
 }
 
 function narrowAnalysis(raw: unknown): EngineAnalysis | null {

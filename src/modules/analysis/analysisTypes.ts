@@ -1,3 +1,5 @@
+import type GameTree from '@sabaki/immutable-gametree'
+import type {GameTreeDraft, TreeNode, TreeId} from '@sabaki/immutable-gametree'
 import type {MutationContract} from '../workbench/contracts/mutationContracts.ts'
 import type {
   GameTreePositionSource,
@@ -19,6 +21,16 @@ export type ScratchAnalysisTab = Extract<ScratchRole, 'current' | 'reference'>
 
 export type OwnershipGrid = number[][]
 export type HumanPolicyMap = number[]
+
+// ---------------------------------------------------------------------------
+// Re-exports from @sabaki/immutable-gametree declaration
+// ---------------------------------------------------------------------------
+
+export type {GameTree, GameTreeDraft, TreeNode, TreeId}
+export type {TreePosition} from '../workbench/contracts/positionSource.ts'
+
+/** SGF property map — aliases TreeNode['data'] for convenience. */
+export type SgfProperties = TreeNode['data']
 
 // ---------------------------------------------------------------------------
 // Engine analysis result
@@ -46,33 +58,11 @@ export type EngineAnalysis = {
 }
 
 // ---------------------------------------------------------------------------
-// Game-tree structural types (minimum API surface)
+// Structural helpers for snapshot→GameTree conversion
 // ---------------------------------------------------------------------------
 
-export type SgfProperties = Record<string, string[]>
-
-export type GameTreeNodeLike = {
-  id: TreePosition
-  parentId?: TreePosition | null
-  children?: GameTreeNodeLike[]
-  data: SgfProperties
-}
-
-export type GameTreeLike = {
-  root: GameTreeNodeLike
-  get(id: TreePosition): GameTreeNodeLike | null
-  mutate(fn: (draft: GameTreeDraftLike) => void): GameTreeLike
-}
-
-export type GameTreeDraftLike = GameTreeLike & {
-  updateProperty(id: TreePosition, key: string, value: string[]): void
-  removeProperty(id: TreePosition, key: string): void
-  addToProperty(id: TreePosition, key: string, value: string): void
-  appendNode(id: TreePosition, data: SgfProperties): TreePosition
-}
-
 export type SnapshotToGameTreeResult = {
-  tree: GameTreeLike
+  tree: GameTree
   treePosition: TreePosition
 }
 
@@ -111,7 +101,7 @@ export type AnalysisTarget =
 // ---------------------------------------------------------------------------
 
 export type AnalysisContextBase = {
-  tree: GameTreeLike
+  tree: GameTree
   treePosition: TreePosition
   analyzePlayer: PlayerSign
 }
@@ -157,7 +147,7 @@ export type EngineSyncerLike = {
 
 export type RunBoardAnalysisOptions = {
   syncer: EngineSyncerLike
-  tree: GameTreeLike
+  tree: GameTree
   treePosition: TreePosition
   analyzePlayer: PlayerSign
   requestGroup: 'analysis' | 'scratch-analysis' | 'aux'

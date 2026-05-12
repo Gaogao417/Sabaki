@@ -11,6 +11,7 @@ import {
   getPositionSourceFromState,
   getWorkspaceKindFromState,
 } from '../contracts/workspaceDefaults.ts'
+import type {ScratchRole} from '../contracts/positionSource.ts'
 
 type BoardLike = {
   width: number
@@ -25,8 +26,8 @@ type StateLike = {
   treePosition?: string
   editWorkspace?: {
     activeTab?: string
-    currentSnapshot?: {id?: string; role?: string} | null
-    referenceSnapshot?: {id?: string; role?: string} | null
+    currentSnapshot?: {id?: string; role?: ScratchRole} | null
+    referenceSnapshot?: {id?: string; role?: ScratchRole} | null
     currentMarkerMap?: (null | {type: string; label?: string})[][] | null
     referenceMarkerMap?: (null | {type: string; label?: string})[][] | null
     currentLines?: {v1: number[]; v2: number[]; type: string}[] | null

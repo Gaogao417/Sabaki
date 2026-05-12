@@ -4,21 +4,22 @@ import type {
   AnalysisContext,
   AnalysisTarget,
   EngineAnalysis,
-  GameTreeLike,
+  GameTree,
   GameTreeAnalysisContext,
   OwnershipGrid,
   PlayerSign,
   ScratchAnalysisContext,
+  TreePosition,
   VariationAnalysisContext,
 } from './analysisTypes.ts'
 import {MUTATION_CONTRACTS} from '../workbench/contracts/mutationContracts.ts'
 
 type ScratchDeps = {
-  sourceTree: GameTreeLike | null
+  sourceTree: GameTree | null
 }
 
 type GameTreeDeps = {
-  gameTree: GameTreeLike
+  gameTree: GameTree
   getPlayer: (tp: string) => PlayerSign
   analysis: EngineAnalysis | null
   ownership: OwnershipGrid | null
@@ -26,7 +27,7 @@ type GameTreeDeps = {
 }
 
 type VariationDeps = {
-  gameTree: GameTreeLike
+  gameTree: GameTree
   getPlayer: (tp: string) => PlayerSign
   analysis: EngineAnalysis | null
   ownership: OwnershipGrid | null
@@ -36,14 +37,14 @@ function buildScratchContext(
   target: Extract<AnalysisTarget, {kind: 'scratch'}>,
   deps: ScratchDeps,
 ): ScratchAnalysisContext | null {
-  let result = snapshotToGameTree(target.snapshot, [], deps.sourceTree)
+  let result = snapshotToGameTree(target.snapshot, [], deps.sourceTree as any)
   if (result == null) return null
 
   return {
     kind: 'scratch',
     tab: target.tab,
     tree: result.tree,
-    treePosition: result.treePosition,
+    treePosition: String(result.treePosition),
     analyzePlayer: target.snapshot.nextPlayer,
     positionSource: target.positionSource,
     mutationContract: MUTATION_CONTRACTS.SCRATCH_EDIT,
@@ -85,7 +86,7 @@ function buildVariationContext(
 }
 
 export type BoardAnalysisContextDeps = ScratchDeps & {
-  gameTree?: GameTreeLike
+  gameTree?: GameTree
   getPlayer?: (tp: string) => PlayerSign
   analysis?: EngineAnalysis | null
   ownership?: OwnershipGrid | null

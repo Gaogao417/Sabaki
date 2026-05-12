@@ -1,6 +1,6 @@
 import type {
   EngineSyncerLike,
-  GameTreeLike,
+  GameTree,
   PlayerSign,
   RunBoardAnalysis,
 } from './analysisTypes.ts'
@@ -10,7 +10,7 @@ let gameTreeTimer: ReturnType<typeof setTimeout> | null = null
 
 type GameTreeAnalysisDeps = {
   getSyncer: () => EngineSyncerLike | null
-  getGameTree: () => GameTreeLike
+  getGameTree: () => GameTree
   getPlayer: (treePosition: string) => PlayerSign
   runBoardAnalysis: RunBoardAnalysis
 }

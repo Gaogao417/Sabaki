@@ -4,7 +4,6 @@ export {getBoardAnalysisContext} from './boardAnalysisContext.ts'
 export type {BoardAnalysisContextDeps} from './boardAnalysisContext.ts'
 
 export {
-  SCRATCH_ANALYSIS_REQUEST_GROUP,
   createScratchAnalysisContext,
   scheduleScratchAnalysis,
   refreshScratchAnalysis,
@@ -19,6 +18,11 @@ export {
   scheduleGameTreeAnalysis,
 } from './gameTreeAnalysis.ts'
 
+export {
+  SCRATCH_ANALYSIS_REQUEST_GROUP,
+  SCRATCH_ANALYSIS_REQUEST_GROUP as SCRATCH_ANALYSIS_SOURCE,
+} from './analysisTypes.ts'
+
 export type {
   AnalysisContext,
   AnalysisContextBase,
@@ -28,11 +32,10 @@ export type {
   EngineAnalysis,
   EngineAnalysisVariation,
   EngineSyncerLike,
+  GameTree,
   GameTreeAnalysisContext,
   GameTreeAnalysisTarget,
-  GameTreeDraftLike,
-  GameTreeLike,
-  GameTreeNodeLike,
+  GameTreeDraft,
   HumanPolicyMap,
   OwnershipGrid,
   PlayerSign,
@@ -43,10 +46,9 @@ export type {
   ScratchAnalysisTarget,
   SgfProperties,
   SnapshotToGameTreeResult,
+  TreeNode,
+  TreeId,
   VariationAnalysisContext,
   VariationAnalysisTarget,
   Vertex,
 } from './analysisTypes.ts'
-
-// Legacy constant kept for backward compat — use SCRATCH_ANALYSIS_REQUEST_GROUP
-export {SCRATCH_ANALYSIS_REQUEST_GROUP as SCRATCH_ANALYSIS_SOURCE} from './analysisTypes.ts'

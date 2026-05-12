@@ -4,7 +4,7 @@ import type {
   EditWorkspaceAnalysisState,
   EngineAnalysis,
   EngineSyncerLike,
-  GameTreeLike,
+  GameTree,
   OwnershipGrid,
   RunBoardAnalysis,
   ScratchAnalysisTab,
@@ -68,13 +68,13 @@ export function createScratchAnalysisContext(
   snapshot: ScratchPosition | null,
   options: {
     tab: ScratchAnalysisTab
-    sourceTree: GameTreeLike | null
+    sourceTree: GameTree | null
     syncerId: string
   },
 ) {
   if (snapshot == null) return null
 
-  let result = snapshotToGameTree(snapshot, [], options.sourceTree)
+  let result = snapshotToGameTree(snapshot, [], options.sourceTree as any)
   if (result == null) return null
 
   let {tree, treePosition} = result
@@ -82,7 +82,7 @@ export function createScratchAnalysisContext(
     source: SCRATCH_ANALYSIS_REQUEST_GROUP,
     tab: options.tab,
     tree,
-    treePosition,
+    treePosition: String(treePosition),
     analyzePlayer: snapshot.nextPlayer,
     syncerId: options.syncerId,
   }
@@ -98,7 +98,7 @@ export type ScratchAnalysisDeps = {
   getSyncer: () => EngineSyncerLike | null
   engineSupportsOwnership: (syncer: EngineSyncerLike) => boolean
   runBoardAnalysis: RunBoardAnalysis
-  getSourceTree: () => GameTreeLike | null
+  getSourceTree: () => GameTree | null
   logger?: {log: (...args: unknown[]) => void}
 }
 
@@ -178,7 +178,7 @@ export async function refreshScratchAnalysis(
 
     let result = await deps.runBoardAnalysis({
       syncer,
-      tree: ctx.tree as GameTreeLike,
+      tree: ctx.tree as GameTree,
       treePosition: ctx.treePosition,
       analyzePlayer: ctx.analyzePlayer,
       requestGroup: SCRATCH_ANALYSIS_REQUEST_GROUP,
