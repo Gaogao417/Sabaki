@@ -41,6 +41,7 @@ import {
 import {createDocumentStore} from './document/documentStore.js'
 import {createEngineService} from './engine/engineService.js'
 import {createAnalysisService} from './analysis/analysisService.js'
+import {createTrainingStore} from './training/trainingStore.js'
 import {
   boardFromSnapshot,
   cloneSnapshot,
@@ -593,143 +594,11 @@ class Sabaki extends EventEmitter {
   // Recall Mode
 
   async startRecallSession(gameId, options = {}) {
-    let game = await window.sabaki.db.getGame(gameId)
-    if (!game) {
-      applogger.log(
-        'warn',
-        'system',
-        'system.recall_game_not_found',
-        'Recall: game not found',
-        {gameId},
-      )
-      return
-    }
-
-    let trees = fileformats.sgf.parse(game.sgf)
-    if (!trees || trees.length === 0) {
-      applogger.log(
-        'warn',
-        'system',
-        'system.sgf_parse_failed',
-        'Recall: no trees from SGF parse',
-        {gameId},
-      )
-      return
-    }
-    let tree = trees[0]
-
-    // Extract the move sequence from the game tree
-    let moves = []
-    let nodeId = tree.root.id
-    if (nodeId == null) {
-      applogger.log(
-        'error',
-        'system',
-        'system.sgf_parse_failed',
-        'tree.root.id is null',
-        {gameId},
-      )
-    }
-    let innerTree = tree
-    while (true) {
-      let node = innerTree.get(nodeId)
-      if (!node) break
-      let sign = 0
-      let vertex = null
-      if (node.data.B && node.data.B[0] != null) {
-        sign = 1
-        vertex = node.data.B[0] === '' ? 'pass' : node.data.B[0]
-      } else if (node.data.W && node.data.W[0] != null) {
-        sign = -1
-        vertex = node.data.W[0] === '' ? 'pass' : node.data.W[0]
-      }
-      if (vertex != null) {
-        moves.push({sign, vertex: vertex === 'pass' ? null : vertex})
-      }
-      let children = node.children
-      if (children.length === 0) break
-      nodeId = children[0].id
-    }
-
-    let session = {
-      gameId,
-      mode: options.mode || 'full_game',
-      startMove: options.startMove || 0,
-    }
-    session = await window.sabaki.db.saveRecallSession(session)
-
-    this.setState({
-      recallSession: session,
-      recallMoveIndex: 0,
-      recallExpectedMoves: moves,
-      recallUserAttempts: [],
-      recallShowHint: false,
-      recallCompleted: false,
-    })
-
-    // Load the game tree and navigate to the start
-    if (trees && trees.length > 0) {
-      await this.loadGameTrees(trees, {suppressAskForSave: true})
-    }
-
-    this.setMode('recall')
+    return this.getTrainingStore().startRecallSession(gameId, options)
   }
 
   handleRecallMove(vertex) {
-    let {
-      recallSession,
-      recallMoveIndex,
-      recallExpectedMoves,
-      recallUserAttempts,
-    } = this.state
-    if (!recallSession || this.state.recallCompleted) return
-
-    let expected = recallExpectedMoves[recallMoveIndex]
-    if (!expected) return
-
-    // Navigate tree forward to get the board
-    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let board = gametree.getBoard(tree, treePosition)
-
-    // Handle passes
-    if (expected.vertex === null) {
-      recallUserAttempts.push({
-        moveNumber: recallMoveIndex,
-        expectedMove: 'pass',
-        userMove: 'pass',
-        isCorrect: true,
-        hintLevelUsed: 0,
-      })
-      this.recallNavigateNext()
-      this.setState({recallMoveIndex: recallMoveIndex + 1, recallUserAttempts})
-      this.checkRecallComplete()
-      return
-    }
-
-    let expectedCoord = sgf.parseVertex(expected.vertex)
-    let isCorrect = helper.vertexEquals(vertex, expectedCoord)
-
-    recallUserAttempts.push({
-      moveNumber: recallMoveIndex,
-      expectedMove: expected.vertex,
-      userMove: sgf.stringifyVertex(vertex),
-      isCorrect,
-      hintLevelUsed: this.state.recallShowHint ? 1 : 0,
-    })
-
-    if (isCorrect) {
-      this.recallNavigateNext()
-      this.setState({
-        recallMoveIndex: recallMoveIndex + 1,
-        recallUserAttempts,
-        recallShowHint: false,
-      })
-      this.checkRecallComplete()
-    } else {
-      sound.playError()
-      this.setState({recallUserAttempts})
-    }
+    this.getTrainingStore().submitRecallAnswer(vertex)
   }
 
   recallNavigateNext() {
@@ -750,52 +619,15 @@ class Sabaki extends EventEmitter {
   }
 
   async endRecallSession() {
-    let {recallSession, recallUserAttempts} = this.state
-    if (!recallSession) return
-
-    let completedSession = {
-      ...recallSession,
-      completedAt: new Date().toISOString(),
-    }
-    await window.sabaki.db.saveRecallSession(completedSession)
-
-    if (recallUserAttempts.length > 0) {
-      await window.sabaki.db.saveRecallAttempts(
-        recallUserAttempts.map((a) => ({
-          ...a,
-          sessionId: recallSession.id,
-        })),
-      )
-    }
-
-    this.setMode('analysis')
+    return this.getTrainingStore().endRecallSession()
   }
 
   skipRecallMove() {
-    let {recallMoveIndex, recallExpectedMoves, recallUserAttempts} = this.state
-    let expected = recallExpectedMoves[recallMoveIndex]
-    if (!expected) return
-
-    recallUserAttempts.push({
-      moveNumber: recallMoveIndex,
-      expectedMove: expected.vertex || 'pass',
-      userMove: 'skip',
-      isCorrect: false,
-      hintLevelUsed: 0,
-    })
-
-    this.recallNavigateNext()
-
-    this.setState({
-      recallMoveIndex: recallMoveIndex + 1,
-      recallUserAttempts,
-      recallShowHint: false,
-    })
-    this.checkRecallComplete()
+    this.getTrainingStore().skipRecallMove()
   }
 
   showRecallHint() {
-    this.setState({recallShowHint: true})
+    this.getTrainingStore().showRecallHint()
   }
 
   async saveCurrentGame() {
@@ -1561,6 +1393,18 @@ class Sabaki extends EventEmitter {
   // Phase 8: Play Interaction Services
 
   _playServices = null
+  _trainingStore = null
+
+  getTrainingStore() {
+    if (this._trainingStore == null) {
+      this._trainingStore = createTrainingStore(this, {
+        applogger,
+        playErrorSound: () => sound.playError(),
+        db: window.sabaki.db,
+      })
+    }
+    return this._trainingStore
+  }
 
   getPlayServices() {
     if (this._playServices == null) {
@@ -3730,9 +3574,30 @@ class Sabaki extends EventEmitter {
         this.findMove(1, {vertex, text: this.state.findText})
       }
     } else if (this.state.mode === 'recall') {
-      if (button !== 0) return
+      // Phase 9: resolver + executor routing for recall
+      let recallCtx = createBoardInteractionContext({
+        state: this.state,
+        board,
+        vertex,
+        event: {button, ctrlKey, metaKey},
+        isMac: helper.isMac,
+      })
 
-      let board = gametree.getBoard(tree, treePosition)
+      if (recallCtx != null) {
+        let recallResult = resolveBoardInteraction(recallCtx)
+
+        if (
+          recallResult.status === RESOLVE_STATUSES.RESOLVED &&
+          recallResult.intent === 'submit-recall-answer' &&
+          recallResult.mutationContract === 'recallAnswer'
+        ) {
+          this.getTrainingStore().submitRecallAnswer(vertex)
+          return
+        }
+      }
+
+      // noop/deferred: fall through to legacy recall handling
+      if (button !== 0) return
       if (board.get(vertex) === 0) {
         this.recallAnswer(vertex)
       }

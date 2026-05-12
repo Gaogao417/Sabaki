@@ -1,5 +1,6 @@
 import {RESOLVE_STATUSES} from './intents.ts'
 import {executeScratchEdit} from './executors/scratchEditInteractionExecutor.js'
+import {executeRecallInteraction} from './executors/recallInteractionExecutor.js'
 
 /**
  * Thin router: given a resolved BoardInteractionResult and an edit workspace
@@ -7,10 +8,11 @@ import {executeScratchEdit} from './executors/scratchEditInteractionExecutor.js'
  *
  * Phase 4 handles mutationContract === scratchEdit.
  * Phase 8 adds mutationContract === playMove via executePlayInteractionAsync.
+ * Phase 9 adds mutationContract === recallAnswer via executeRecallInteraction.
  *
  * @param {import('./intents.ts').BoardInteractionResult} result
  * @param {import('../contracts/workspaceDefaults.ts').ScratchEditExecutionContext} context
- * @param {{invalidateEditAnalysis?: () => void, scheduleEditWorkspaceAnalysis?: (tab: string) => void}} [deps]
+ * @param {{invalidateEditAnalysis?: () => void, scheduleEditWorkspaceAnalysis?: (tab: string) => void, trainingStore?: {submitRecallAnswer: function}}} [deps]
  * @returns {{
  *   handled: boolean,
  *   changed: boolean,
@@ -22,6 +24,10 @@ import {executeScratchEdit} from './executors/scratchEditInteractionExecutor.js'
  *   lineFirstVertex?: {type: string, vertex: number[]} | null,
  *   newTab?: string,
  *   capturedSnapshot?: object,
+ *   isCorrect?: boolean,
+ *   completed?: boolean,
+ *   recallMoveIndex?: number,
+ *   attempt?: object,
  * }}
  */
 export function executeBoardInteraction(result, context, deps) {
@@ -35,6 +41,10 @@ export function executeBoardInteraction(result, context, deps) {
 
   if (result.mutationContract === 'scratchEdit') {
     return executeScratchEdit(result, context, deps)
+  }
+
+  if (result.mutationContract === 'recallAnswer') {
+    return executeRecallInteraction(result, context, deps)
   }
 
   // playMove is handled by the async router (executeBoardInteractionAsync),
