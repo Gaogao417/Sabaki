@@ -1,4 +1,5 @@
 export {createAnalysisService} from './analysisService.ts'
+export type {AnalysisServiceDeps} from './analysisService.ts'
 
 export {getBoardAnalysisContext} from './boardAnalysisContext.ts'
 export type {BoardAnalysisContextDeps} from './boardAnalysisContext.ts'
@@ -17,6 +18,28 @@ export {
   analyzeGameTreePosition,
   scheduleGameTreeAnalysis,
 } from './gameTreeAnalysis.ts'
+
+export {
+  createAnalysisCache,
+  getOwnershipCacheKey,
+  cacheOwnership,
+  getCachedOwnership,
+  cachePreviewOwnership,
+  getCachedPreviewOwnership,
+  getCurrentOwnership,
+  getOwnershipForTreePosition,
+} from './analysisCache.ts'
+
+export {
+  createAnalysisLifecycle,
+  runBoardAnalysis,
+  runOwnershipAnalysis,
+  ensureAnalysisReady,
+  attachDefaultAnalysisEngine,
+  getAnalysisSyncerId,
+  refreshActiveBoardAnalysis,
+} from './analysisLifecycle.ts'
+export type {AnalysisLifecycleDeps, RunBoardAnalysisOptions, RunOwnershipAnalysisOptions} from './analysisLifecycle.ts'
 
 export {
   SCRATCH_ANALYSIS_REQUEST_GROUP,
@@ -40,7 +63,6 @@ export type {
   OwnershipGrid,
   PlayerSign,
   RunBoardAnalysis,
-  RunBoardAnalysisOptions,
   ScratchAnalysisContext,
   ScratchAnalysisTab,
   ScratchAnalysisTarget,

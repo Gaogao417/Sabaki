@@ -31,10 +31,20 @@ import {
   analyzeGameTreePosition,
   scheduleGameTreeAnalysis,
 } from './gameTreeAnalysis.ts'
+import {
+  createAnalysisCache,
+  getCurrentOwnership as getCurrentOwnershipFromCache,
+  getOwnershipForTreePosition as getOwnershipForTreePositionFromCache,
+} from './analysisCache.ts'
+import {
+  createAnalysisLifecycle,
+  type AnalysisLifecycleDeps,
+  type RunBoardAnalysisOptions,
+  type RunOwnershipAnalysisOptions,
+} from './analysisLifecycle.ts'
 
 // ---------------------------------------------------------------------------
 // Sabaki adapter boundary — `unknown` is allowed HERE ONLY.
-// These types describe what sabaki.js actually passes us.
 // ---------------------------------------------------------------------------
 
 type SabakiLike = {
@@ -47,13 +57,25 @@ type SabakiLike = {
     analysisKey: string
     ownershipKey: string
   }
-  getCurrentOwnership: (syncer: unknown) => unknown
   engineSupportsOwnership: (syncer: unknown) => boolean
-  runBoardAnalysis: (opts: Record<string, unknown>) => Promise<unknown>
   refreshEditWorkspaceAnalysis?: (targetTab: string | null) => Promise<unknown>
   analyzeMove?: (treePosition: string) => Promise<unknown>
   applogger?: {log: (...args: unknown[]) => void}
   setting?: {get: (key: string) => unknown}
+}
+
+// Phase 12C: additional deps for analysis ownership.
+export type AnalysisServiceDeps = {
+  engineService?: any
+  showInfoOverlay?: (text: string) => void
+  hideInfoOverlay?: () => void
+  detectEngines?: () => any[]
+  waitForEngineCommands?: (syncer: any, opts?: {timeout?: number}) => Promise<boolean>
+  showMessageBox?: (message: string, type: string) => Promise<void>
+  applogger?: any
+  getSetting?: (key: string) => any
+  scheduleEditWorkspaceAnalysis?: (tab?: string | null) => void
+  i18n?: {t: (key: string, fallback: string) => string}
 }
 
 // ---------------------------------------------------------------------------
@@ -64,9 +86,6 @@ function narrowSyncer(raw: unknown): EngineSyncerLike | null {
   if (raw == null || typeof raw !== 'object') return null
   let obj = raw as Record<string, unknown>
   if (typeof obj.id !== 'string') return null
-  // Return the original object — runBoardAnalysis needs the full syncer
-  // (commands, engine, removeListener, sendAbort, treePosition, analysis, etc.)
-  // Stripping to {id, suspended} breaks the GTP command pipeline.
   return raw as EngineSyncerLike
 }
 
@@ -146,8 +165,114 @@ function buildAnalysisTargetFromState(
 // Analysis service facade
 // ---------------------------------------------------------------------------
 
-export function createAnalysisService(sabaki: SabakiLike) {
-  return {
+export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisServiceDeps = {}) {
+  let cache = createAnalysisCache()
+
+  // Lazy engine service resolver — breaks circular creation ordering.
+  // engineService is set after both services are created in getPlayServices().
+  let _engineService: any = serviceDeps.engineService ?? null
+  function resolveEngineService(): any {
+    if (_engineService != null) return _engineService
+    return _engineService
+  }
+
+  function setEngineService(es: any) {
+    _engineService = es
+  }
+
+  // Forward declaration — assigned after the return object is built.
+  // The closure captures `facade` by reference, so it resolves correctly
+  // at call time even though it's null during construction.
+  let facade: any = null
+
+  // Build lifecycle deps lazily — engineService may not be available yet at
+  // construction time, but will be by the time any method is called.
+  function getLifecycleDeps(): AnalysisLifecycleDeps {
+    let es = resolveEngineService()
+    return {
+      getState: () => sabaki.state as Record<string, any>,
+      getInferredState: () => ({
+        analyzingEngineSyncer: narrowSyncer(sabaki.inferredState.analyzingEngineSyncer),
+        gameTree: narrowGameTree(sabaki.inferredState.gameTree),
+      }),
+      setState: (patch) => sabaki.setState(patch),
+      engineService: es,
+      cache,
+      analyzeMove: (tp) => facade.analyzeGameTreePosition(tp),
+      scheduleEditWorkspaceAnalysis: (tab) => facade.scheduleScratchAnalysis(tab ?? null),
+      showInfoOverlay: serviceDeps.showInfoOverlay ?? ((_text: string) => {}),
+      hideInfoOverlay: serviceDeps.hideInfoOverlay ?? (() => {}),
+      detectEngines: serviceDeps.detectEngines ?? (() => []),
+      waitForEngineCommands: serviceDeps.waitForEngineCommands ?? (() => Promise.resolve(false)),
+      getSetting: serviceDeps.getSetting ?? ((key) => (sabaki as any).setting?.get?.(key)),
+      showMessageBox: serviceDeps.showMessageBox ?? (() => Promise.resolve()),
+      applogger: serviceDeps.applogger ?? sabaki.applogger ?? {log: () => {}},
+      i18n: serviceDeps.i18n ?? {t: (_key: string, fallback: string) => fallback},
+    }
+  }
+
+  // The lifecycle instance — uses a Proxy so each property access resolves
+  // lazily through getLifecycleDeps(). This handles late-bound engineService.
+  let lifecycle = createAnalysisLifecycle(new Proxy({} as AnalysisLifecycleDeps, {
+    get(_target, prop: string) {
+      let deps = getLifecycleDeps()
+      return (deps as any)[prop]
+    },
+  }))
+
+  // Build a RunBoardAnalysis function that calls the internal lifecycle directly.
+  // This replaces the old sabaki.runBoardAnalysis callback.
+  function runBoardAnalysisInternal(opts: Record<string, unknown>): Promise<unknown> {
+    return lifecycle.runBoardAnalysis(opts as any) as Promise<unknown>
+  }
+
+  let service = {
+    // Engine service late-binding
+    setEngineService,
+
+    // Cache accessors (delegated to analysisCache)
+    cacheOwnership: cache.cacheOwnership,
+    getCachedOwnership: cache.getCachedOwnership,
+    cachePreviewOwnership: cache.cachePreviewOwnership,
+    getCachedPreviewOwnership: cache.getCachedPreviewOwnership,
+    getCurrentOwnership(syncer: unknown): OwnershipGrid | null {
+      return getCurrentOwnershipFromCache(
+        narrowSyncer(syncer),
+        sabaki.state as any,
+        narrowGameTree(sabaki.inferredState.gameTree),
+      )
+    },
+    getOwnershipForTreePosition(syncer: unknown, treePosition: string): OwnershipGrid | null {
+      return getOwnershipForTreePositionFromCache(
+        narrowSyncer(syncer),
+        treePosition,
+        sabaki.state as any,
+        narrowGameTree(sabaki.inferredState.gameTree),
+      )
+    },
+
+    // Lifecycle methods (Phase 12C)
+    runBoardAnalysis(opts: RunBoardAnalysisOptions) {
+      return lifecycle.runBoardAnalysis(opts)
+    },
+    runOwnershipAnalysis(opts: RunOwnershipAnalysisOptions) {
+      return lifecycle.runOwnershipAnalysis(opts)
+    },
+    getAnalysisSyncerId(opts?: {requireOwnership?: boolean}) {
+      return lifecycle.getAnalysisSyncerId(opts)
+    },
+    attachDefaultAnalysisEngine(opts?: {requireOwnership?: boolean}) {
+      return lifecycle.attachDefaultAnalysisEngine(opts)
+    },
+    ensureAnalysisReady(opts?: {requireOwnership?: boolean}) {
+      return lifecycle.ensureAnalysisReady(opts)
+    },
+    refreshActiveBoardAnalysis() {
+      return lifecycle.refreshActiveBoardAnalysis()
+    },
+
+    // ── Existing methods (unchanged logic, but runBoardAnalysis now internal) ──
+
     buildAnalysisTarget(
       state?: Record<string, unknown>,
       tab?: string | null,
@@ -181,7 +306,11 @@ export function createAnalysisService(sabaki: SabakiLike) {
           state.analysisTreePosition === state.treePosition
             ? narrowAnalysis(state.analysis)
             : null,
-        ownership: narrowOwnership(sabaki.getCurrentOwnership(syncer)),
+        ownership: narrowOwnership(cache.getCurrentOwnership(
+          syncer,
+          state as any,
+          gameTree,
+        )),
         treePosition: state.treePosition as TreePosition | undefined,
         mutationContract: getMutationContractFromState(
           state as Parameters<typeof getMutationContractFromState>[0],
@@ -200,14 +329,13 @@ export function createAnalysisService(sabaki: SabakiLike) {
     async refreshScratchAnalysis(tab: string | null = null): Promise<void> {
       let syncer = narrowSyncer(sabaki.inferredState.analyzingEngineSyncer)
       let gameTree = narrowGameTree(sabaki.inferredState.gameTree)
-      let runFn = narrowRunBoardAnalysis((opts) => sabaki.runBoardAnalysis(opts))
 
       let deps: ScratchAnalysisDeps = {
         getState: () => sabaki.state as ScratchAnalysisDeps['getState'] extends () => infer R ? R : never,
         setState: (patch: Record<string, unknown>) => sabaki.setState(patch),
         getSyncer: () => syncer,
         engineSupportsOwnership: (s: EngineSyncerLike) => sabaki.engineSupportsOwnership(s),
-        runBoardAnalysis: runFn,
+        runBoardAnalysis: narrowRunBoardAnalysis(runBoardAnalysisInternal),
         getSourceTree: () => gameTree,
         logger: sabaki.applogger,
       }
@@ -226,7 +354,7 @@ export function createAnalysisService(sabaki: SabakiLike) {
           getSyncer: () => syncer,
           getGameTree: () => gameTree,
           getPlayer: (tp) => sabaki.getPlayer(tp) as 1 | -1,
-          runBoardAnalysis: narrowRunBoardAnalysis((opts) => sabaki.runBoardAnalysis(opts)),
+          runBoardAnalysis: narrowRunBoardAnalysis(runBoardAnalysisInternal),
         },
         treePosition,
       )
@@ -246,7 +374,7 @@ export function createAnalysisService(sabaki: SabakiLike) {
             mode: sabaki.state.mode as string | undefined,
             editWorkspace: sabaki.state.editWorkspace,
           }),
-          analyzeFn: (tp) => sabaki.analyzeMove?.(tp) ?? Promise.resolve(),
+          analyzeFn: (tp) => facade.analyzeGameTreePosition(tp),
           getDelay: () =>
             (sabaki.setting?.get?.('game.navigation_analysis_delay') ?? 300) as number,
         },
@@ -274,4 +402,7 @@ export function createAnalysisService(sabaki: SabakiLike) {
       return getCachedScratchOwnership(syncerId, snapshot)
     },
   }
+
+  facade = service
+  return service
 }

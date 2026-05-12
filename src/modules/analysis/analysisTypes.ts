@@ -143,6 +143,15 @@ export type AnalysisContext =
 export type EngineSyncerLike = {
   id: string
   suspended?: boolean
+  _suspended?: boolean
+  commands: string[]
+  treePosition: string
+  analysis: EngineAnalysis | null
+  engine: {path: string; enableHumanSL?: boolean; analysis?: Record<string, unknown>}
+  on(event: string, handler: (...args: any[]) => void): void
+  removeListener(event: string, handler: (...args: any[]) => void): void
+  queueCommand(command: {name: string; args: string[] | null}): void
+  sendAbort(): void
 }
 
 export type RunBoardAnalysisOptions = {

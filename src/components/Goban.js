@@ -396,7 +396,7 @@ export default class Goban extends Component {
 
     onVertexMouseEnter(Object.assign(evt, {vertex}))
 
-    if (analysis == null) return
+    if (analysis == null || analysis.variations == null) return
 
     let {sign, variations} = analysis
     let variation = variations.find((x) =>
@@ -696,7 +696,7 @@ export default class Goban extends Component {
 
     let heatMap = []
 
-    if (drawHeatMap && analysis != null) {
+    if (drawHeatMap && analysis?.variations?.length > 0) {
       let maxVisitsWin = Math.max(
         ...analysis.variations.map((x) => x.visits * x.winrate),
       )
