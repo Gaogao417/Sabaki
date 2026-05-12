@@ -263,95 +263,162 @@ facade，把状态写入、cache、request lifecycle 和 write-back 规则留在
 `clickVertex()` 移到 resolver + scratch edit executor 后，再扩展 marker、line、drag 和
 reference 相关 intent。
 
-建议文件夹规划：
+建议目标文件夹规划：
 
 ```txt
-src/modules/workbench/
-  contracts/
-    positionSource.ts
-    mutationContracts.ts
-    workspaceDefaults.ts
-    index.ts
+src/modules/
+  position-contracts.ts        # migration compatibility entry; may re-export workbench contracts
 
-  board-interactions/
-    intents.ts
-    resolveBoardInteraction.ts
-    createBoardInteractionContext.js
-    executeBoardInteraction.js
+  workbench/
+    contracts/
+      positionSource.ts
+      mutationContracts.ts
+      workspaceDefaults.ts
+      index.ts
 
-    executors/
-      playInteractionExecutor.js
-      scratchEditInteractionExecutor.js
-      recallInteractionExecutor.js
-      variationInteractionExecutor.js
-      legacyInteractionExecutor.js
+    board-interactions/
+      intents.ts
+      resolveBoardInteraction.ts
+      createBoardInteractionContext.js
+      executeBoardInteraction.js
 
-  working-position/
-    workingPosition.js
-    workingPositionBoard.js
-    workingPositionMarkers.js
-    workingPositionLines.js
+      executors/
+        playInteractionExecutor.js
+        scratchEditInteractionExecutor.js
+        recallInteractionExecutor.js
+        variationInteractionExecutor.js
+        legacyInteractionExecutor.js
+
+    working-position/
+      workingPosition.js
+      workingPositionBoard.js
+      workingPositionMarkers.js
+      workingPositionLines.js
+
+    presets/
+      workspacePresets.ts
+
+    stores/
+      workbenchStore.ts
+
+  document/
+    documentStore.ts
+    gameTreeWrites.js
+    sgfWriteback.js
 
   analysis/
+    analysisService.js
     boardAnalysisContext.js
     scratchAnalysis.js
     gameTreeAnalysis.js
+    analysisCache.js
+
+  engine/
+    engineService.js
+
+  training/
+    trainingStore.ts
+    recallSession.js
+    problemSession.js
+    reviewSession.js
 
   overlays/
+    overlayStore.ts
     overlayLayers.ts
     resolveOverlayInput.js
     composeWorkbenchOverlays.js
+
+  ui/
+    uiStore.ts
 ```
 
 文件夹职责：
 
-- `contracts/`: 只放纯定义和纯映射，不碰 UI、不写 state。现有
-  `src/modules/position-contracts.ts` 可以先保留并从这里 re-export，或在迁移稳定后拆入
-  `positionSource.ts`、`mutationContracts.ts` 和 `workspaceDefaults.ts`。
-- `board-interactions/`: 拆 `sabaki.clickVertex()` 的主入口。resolver 解释原始输入，
+- `workbench/`: 工作台任务层，只拥有 workspace default、棋盘输入解释、executor 路由、
+  working position helper 和 workbench 自己的 UI/task 状态。它不是 analysis、engine、
+  training 或 overlay 的父包。
+- `workbench/contracts/`: 只放纯定义和纯映射，不碰 UI、不写 state。现有
+  `src/modules/position-contracts.ts` 可以先保留为兼容入口，并从这里 re-export，或在迁移稳定后
+  拆入 `positionSource.ts`、`mutationContracts.ts` 和 `workspaceDefaults.ts`。
+- `workbench/board-interactions/`: 拆 `sabaki.clickVertex()` 的主入口。resolver 解释原始输入，
   `executeBoardInteraction.js` 做很薄的 executor 路由，具体写入放进 `executors/`。
-- `working-position/`: 收纳 `editWorkspace.currentSnapshot` /
+- `workbench/working-position/`: 收纳 `editWorkspace.currentSnapshot` /
   `editWorkspace.referenceSnapshot` 相关操作，包括 clone/create、snapshot 与 board 互转、
   摆子提子、marker map 和 line/arrow 操作。
+- `workbench/presets/`: 收纳 workspace-level 默认组合，例如默认 source、contract、
+  overlay preset 和工具栏 preset；它只选择默认值，不拥有底层写权限。
+- `workbench/stores/`: 收纳 `workbenchStore`，拥有 workspace kind、`editWorkspace`、
+  selected tools 和 working positions。
+- `document/`: 拥有 game tree、tree position、history 和 SGF 写入边界。play executor
+  写真实棋谱时调用这里，而不是直接改 `sabaki.state.gameTrees`。
 - `analysis/`: 回答“当前分析对象是什么”。`boardAnalysisContext.js` 是现有
   `getBoardAnalysisContext()` 的归宿；`scratchAnalysis.js` 负责 working position 转临时
   game tree 并调 engine；`gameTreeAnalysis.js` 负责当前 game tree / variation analysis。
-- `overlays/`: 不替换现有 `src/modules/overlays` 和 `BoardOverlayStack`，先作为 workbench
-  的 overlay 输入整理层。它从 `PositionSource + analysis + ownership` 派生 overlay 输入，
+  迁移期如果已有 `src/modules/workbench/analysis/`，它只能作为临时 shim，目标位置是
+  `src/modules/analysis/`。
+- `engine/`: 包住 engine attach、detach、sync、analyze 和 genmove。现有
+  `enginesyncer.js` 可以先被这里包装，不要求一次性搬文件。
+- `training/`: 拥有 recall / problem / review session、attempt 和 progress。recall executor
+  写这里，而不是复用 play move 或 scratch edit 写路径。
+- `overlays/`: 沿用现有 `src/modules/overlays` 作为 overlay 领域模块，不放在
+  `workbench/` 下面。它从 `PositionSource + analysis + ownership` 派生 overlay 输入，
   内部仍可调用现有 overlay helper。
+- `ui/`: 放 drawers、sidebars、layout、status overlays 等非领域 UI 状态；它不拥有棋局、
+  analysis、engine 或训练状态。
 
 具体文件职责：
 
-- `contracts/positionSource.ts`: 定义 `PositionSource`，创建 `game-tree` 和 `scratch`
+- `workbench/contracts/positionSource.ts`: 定义 `PositionSource`，创建 `game-tree` 和 `scratch`
   source，提供从当前 state 派生 active source 的纯 helper。
-- `contracts/mutationContracts.ts`: 定义 `playMove`、`scratchEdit`、`recallAnswer`、
+- `workbench/contracts/mutationContracts.ts`: 定义 `playMove`、`scratchEdit`、`recallAnswer`、
   `variationMove` 以及 contract 判断 helper。
-- `contracts/workspaceDefaults.ts`: 保留 `mode/workspace -> default source/contract` 的兼容映射。
-- `board-interactions/intents.ts`: 定义 `play-stone`、`place-black-stone`、
+- `workbench/contracts/workspaceDefaults.ts`: 保留 `mode/workspace -> default source/contract`
+  的兼容映射。
+- `workbench/board-interactions/intents.ts`: 定义 `play-stone`、`place-black-stone`、
   `place-white-stone`、`erase-stone`、`drag-stone`、`mark-point`、`draw-line`、
   `submit-recall-answer`、`open-variation-menu`、`legacy-*` 等 intent。
-- `board-interactions/resolveBoardInteraction.ts`: 纯 resolver。输入 state 摘要、棋盘事件、
+- `workbench/board-interactions/resolveBoardInteraction.ts`: 纯 resolver。输入 state 摘要、棋盘事件、
   当前工具和棋盘点状态；输出 intent、position source、mutation contract。
-- `board-interactions/createBoardInteractionContext.js`: 从 `sabaki.state`、`inferredState`、
-  `gameTree` 和 `board` 组装 executor 需要的上下文。
-- `board-interactions/executeBoardInteraction.js`: 只根据 resolver 结果选择 executor，不承载业务分支。
-- `executors/playInteractionExecutor.js`: 正式落子、game-tree 写入、对局 analysis / engine move。
-- `executors/scratchEditInteractionExecutor.js`: 摆棋、擦除、拖动、marker、line、next player、
-  reference snapshot 和 scratch analysis。
-- `executors/recallInteractionExecutor.js`: 答案提交、正确/错误/提示/跳过、session / attempt 进度。
-- `executors/variationInteractionExecutor.js`: 棋谱内试变化，未来可切到临时 variation。
-- `executors/legacyInteractionExecutor.js`: scoring、estimator、find、guess、autoplay、原生 SGF
+- `workbench/board-interactions/createBoardInteractionContext.js`: 从 `sabaki.state`、`inferredState`、
+  `documentStore`、`workbenchStore` 和 board snapshot 组装 executor 需要的上下文。
+- `workbench/board-interactions/executeBoardInteraction.js`: 只根据 resolver 结果选择 executor，
+  不承载业务分支。
+- `workbench/board-interactions/executors/playInteractionExecutor.js`: 正式落子、game-tree 写入、
+  对局 analysis / engine move；真实写入委托给 `documentStore` 和 `analysisService`。
+- `workbench/board-interactions/executors/scratchEditInteractionExecutor.js`: 摆棋、擦除、拖动、
+  marker、line、next player、reference snapshot 和 scratch analysis；working position 写入委托给
+  `workbenchStore`，分析委托给 `analysisService`。
+- `workbench/board-interactions/executors/recallInteractionExecutor.js`: 答案提交、正确/错误/提示/
+  跳过、session / attempt 进度；写入委托给 `trainingStore`。
+- `workbench/board-interactions/executors/variationInteractionExecutor.js`: 棋谱内试变化，
+  未来可切到临时 variation；写入边界由 `documentStore` 或未来 variation owner 决定。
+- `workbench/board-interactions/executors/legacyInteractionExecutor.js`: scoring、estimator、
+  find、guess、autoplay、原生 SGF
   edit 的兼容包裹层，不承接新的 workbench 行为。
-- `working-position/workingPosition.js`: working position 的 create/clone/metadata helper。
-- `working-position/workingPositionBoard.js`: working position 与 board 的互转、落子、提子、擦除。
-- `working-position/workingPositionMarkers.js`: marker map 的添加、删除、toggle、label/number 操作。
-- `working-position/workingPositionLines.js`: line/arrow 的创建、删除和序列化。
+- `workbench/working-position/workingPosition.js`: working position 的 create/clone/metadata helper。
+- `workbench/working-position/workingPositionBoard.js`: working position 与 board 的互转、落子、
+  提子、擦除。
+- `workbench/working-position/workingPositionMarkers.js`: marker map 的添加、删除、toggle、
+  label/number 操作。
+- `workbench/working-position/workingPositionLines.js`: line/arrow 的创建、删除和序列化。
+- `workbench/stores/workbenchStore.ts`: workspace kind、`editWorkspace`、selected tools、
+  current/reference working positions 的唯一 owner。
+- `document/documentStore.ts`: `gameTrees`、`treePosition`、history 和 SGF write-back 的唯一 owner。
+- `document/gameTreeWrites.js`: play move、undo/redo、variation write 等 game-tree mutation helper。
+- `document/sgfWriteback.js`: 从 document state 写回 SGF properties / file payload 的边界。
+- `analysis/analysisService.js`: 统一 analysis request lifecycle、取消/重启、cache lookup、
+  ownership cache 和结果提交。
 - `analysis/boardAnalysisContext.js`: 从 active source 生成 engine 可分析的 tree/context。
 - `analysis/scratchAnalysis.js`: working position analysis 的调度、结果写回和 ownership 缓存。
 - `analysis/gameTreeAnalysis.js`: 当前 game tree 和 variation analysis 的调度入口。
+- `engine/engineService.js`: engine attach/detach/sync/analyze/genmove 的 facade，内部可包装
+  现有 engine helper。
+- `training/trainingStore.ts`: recall/problem/review session、attempt 和 progress 的唯一 owner。
+- `overlays/overlayStore.ts`: territory/compare/heatmap visibility 与 overlay input state。
 - `overlays/overlayLayers.ts`: overlay layer contract 和 layer id/source/render mode 常量。
 - `overlays/resolveOverlayInput.js`: 从 source、analysis、ownership、reference 派生 overlay input。
 - `overlays/composeWorkbenchOverlays.js`: workbench overlay 组合入口，内部复用现有 overlay modules。
+- `ui/uiStore.ts`: drawers、sidebars、layout、status overlays 等 UI-only state。
 
 ### State Ownership Target
 
@@ -380,7 +447,7 @@ Analysis 是 executor / service effect，不是棋盘输入 intent。`BoardInter
 枚举的项。某个 intent 被 executor 接受后，executor 可以调用 `analysisService` 或具体
 analysis module 触发分析，但分析调度和结果写回不属于 resolver。
 
-Scratch analysis 的运行时调度应从 `sabaki.js` 迁到 `analysis/scratchAnalysis.js`。
+Scratch analysis 的运行时调度应从 `sabaki.js` 迁到 `src/modules/analysis/scratchAnalysis.js`。
 `sabaki.js` 在迁移期只传入依赖，例如当前 working position、engine facade、settings 和
 提交结果的回调；request lifecycle、cache key、ownership cache、取消/重启策略以及写回边界
 由 scratch analysis service 拥有。
@@ -560,7 +627,8 @@ PositionSource
 - Migrate only the smallest edit-analysis loop first:
   `stone_1`, `stone_-1`, `eraser`, and `play` as next-player placement if the current
   tool semantics require it.
-- The scratch edit executor may write working positions and trigger scratch analysis.
+- The scratch edit executor may update working positions through `workbenchStore` and
+  trigger scratch analysis through `analysisService`.
 - It must not write game tree nodes, SGF properties, real move history, variation state,
   or recall session state.
 - Verify edit-analysis placement/removal works, the displayed board comes from the
@@ -586,14 +654,16 @@ PositionSource
 - Clarify the temporary game-tree conversion used for engine analysis and its cache keys.
 - Extract the core of `refreshEditWorkspaceAnalysis()` into a scratch analysis service:
   `sabaki.js` passes dependencies and commits returned results, while
-  `analysis/scratchAnalysis.js` owns scheduling, cache keys, ownership cache, and write-back
-  boundaries.
+  `src/modules/analysis/scratchAnalysis.js` owns scheduling, cache keys, ownership cache,
+  and write-back boundaries. A temporary `src/modules/workbench/analysis/` shim may exist
+  during migration, but it should not become the final owner.
 - Keep the product UI allowed to show one "Analysis" entry, but internally treat this path
   as `scratch-analysis`.
 
 ### Phase 7: Extend Edit Analysis
 
-- Extend `working-position/` and `scratchEditInteractionExecutor` in this order:
+- Extend `src/modules/workbench/working-position/` and `scratchEditInteractionExecutor`
+  in this order:
   drag stone, marker tools, line/arrow tools, set next player, reference snapshot,
   and save as problem.
 - Keep these writes scoped to working position or edit workspace state.
@@ -602,25 +672,31 @@ PositionSource
 
 ### Phase 8: Migrate Play Interaction
 
-- Add `executors/playInteractionExecutor.js` for real game play.
+- Add `src/modules/workbench/board-interactions/executors/playInteractionExecutor.js`
+  for real game play.
 - Move real move placement, game-tree mutation, history, current-player updates, engine
-  move generation, and play-analysis refresh behind the play executor.
+  move generation, and play-analysis refresh behind the play executor, with durable
+  writes delegated to `documentStore`, engine effects to `engineService`, and analysis
+  refresh to `analysisService`.
 - Reuse low-level board calculation helpers only when appropriate; do not reuse
   scratch edit write paths.
 - Verify play mode writes the game tree while edit analysis writes only working positions.
 
 ### Phase 9: Migrate Recall and Training Interaction
 
-- Add `executors/recallInteractionExecutor.js`.
+- Add `src/modules/workbench/board-interactions/executors/recallInteractionExecutor.js`.
 - Treat board clicks as answer submissions, not game moves.
-- Write correct, wrong, hint, skip, attempt, session, and progress state through recall
-  boundaries only.
+- Write correct, wrong, hint, skip, attempt, session, and progress state through
+  `trainingStore` boundaries only.
 - Prevent recall from calling play move helpers or mutating the current SGF tree.
 
 ### Phase 10: Split Analysis Contexts
 
-- Introduce `analysis/boardAnalysisContext.js`, `analysis/scratchAnalysis.js`, and
-  `analysis/gameTreeAnalysis.js`.
+- Introduce `src/modules/analysis/boardAnalysisContext.js`,
+  `src/modules/analysis/scratchAnalysis.js`, and
+  `src/modules/analysis/gameTreeAnalysis.js`. If any of these started under
+  `src/modules/workbench/analysis/`, move them behind top-level analysis exports or leave
+  only compatibility re-exports there.
 - Make every analysis request state whether it analyzes a working position, the current
   game-tree position, or a variation position.
 - Split analysis state, cache, and write-back ownership into `analysisService` and the
@@ -632,8 +708,8 @@ PositionSource
 
 - Keep the current `BoardOverlayStack`, `paintMap`, `markerMap`, and marker composition
   implementation path.
-- Add `overlays/overlayLayers.ts`, `resolveOverlayInput.js`, and
-  `composeWorkbenchOverlays.js` as an input-normalization layer.
+- Add `src/modules/overlays/overlayLayers.ts`, `src/modules/overlays/resolveOverlayInput.js`,
+  and `src/modules/overlays/composeWorkbenchOverlays.js` as an input-normalization layer.
 - Derive overlay input from `PositionSource`, board, analysis result, ownership,
   reference/current snapshots, and hover semantics.
 - Verify territory, territory compare, heatmap, and human preference have explicit
