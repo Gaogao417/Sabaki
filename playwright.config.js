@@ -14,5 +14,10 @@ module.exports = defineConfig({
       dependencies: ['smoke'],
     },
     {name: 'engine', testMatch: /engine\.spec\.js/, dependencies: ['smoke']},
+    {
+      name: 'workbench-baseline',
+      testMatch: /workbench-baseline\.spec\.js/,
+      dependencies: [],
+    },
   ],
 })

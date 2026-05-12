@@ -45,8 +45,8 @@ Phase 0 优先补 Playwright characterization tests。它们应该少而硬：�
 | Analysis edits reference tab only | `scratch/reference + scratchEdit + place-black-stone` | Analysis workspace with `referenceSnapshot`, active tab `reference` | Use a stone tool on an empty point | `referenceSnapshot.signMap` changes | `currentSnapshot` and game tree are unchanged | Reference preview or active board reflects the edit |
 | Analysis captures reference without dirtying game tree | `scratch/reference + scratchEdit + capture-reference` | Analysis workspace with a current snapshot | Capture reference | `referenceSnapshot` is created or replaced | Game tree and real history are unchanged | Reference UI becomes available |
 | Analysis marker tools write marker maps only | `scratch/current + scratchEdit + mark-point` | Analysis workspace, marker tool selected | Click a vertex | Current marker map changes | Snapshot stones and game tree are unchanged | Marker appears on board |
-| Analysis line/arrow writes edit lines only | `scratch/current + scratchEdit + draw-line` | Analysis workspace, line or arrow tool selected | Draw between two vertices | Current lines list changes | Snapshot stones and game tree are unchanged | Line or arrow appears on board |
-| Analysis drag moves only working-position stones | `scratch/current + scratchEdit + drag-stone` | Analysis workspace with a working-position stone | Drag stone to an empty vertex | Working snapshot source and target points change | Game tree is unchanged | Stone appears at the new point |
+| Analysis line/arrow writes edit lines only | `scratch/current + scratchEdit + draw-line` | Analysis workspace, line or arrow tool selected | Draw between two vertices with the rendered board mouse gesture | Current lines list changes | Snapshot stones and game tree are unchanged | Line or arrow appears on board |
+| Analysis drag moves only working-position stones | `scratch/current + scratchEdit + drag-stone` | Analysis workspace with a working-position stone | Drag the rendered stone to an empty vertex | Working snapshot source and target points change | Game tree is unchanged | Stone appears at the new point |
 
 ## P2 Tests
 
@@ -56,7 +56,7 @@ Phase 0 优先补 Playwright characterization tests。它们应该少而硬：�
 | Estimator toggles dead stones | `legacy + legacy-toggle-dead-stone` | `mode = estimator`, board has stones | Click an occupied vertex | `deadStones` toggles the chain | Game tree is unchanged | Stones are dimmed or restored |
 | Find click sets and clears find vertex | `legacy + legacy-find-point` | `mode = find` | Click a vertex, then click it again | `findVertex` is set, then cleared | Game tree and working snapshots are unchanged | Highlight appears, then disappears |
 | Analysis right-click stone tool toggles color behavior | `scratch/current + scratchEdit + place-opposite-stone` | Analysis workspace, `selectedTool = stone_1` or `stone_-1` | Right-click an empty vertex | Working snapshot receives the opposite color according to current behavior | Game tree is unchanged | Board shows the expected opposite-color stone |
-| Native SGF edit stays legacy | `legacy + legacy-sgf-edit` | Legacy edit path without edit workspace | Use an existing native edit affordance | Existing SGF edit behavior remains available where supported | New workbench paths are not invoked | Existing visible behavior is unchanged |
+| Native SGF edit stays legacy | `legacy + legacy-sgf-edit` | A real user-reachable legacy edit affordance, if one remains | Use the legacy affordance without corrupting state | Existing SGF edit behavior remains available where supported | New workbench paths are not invoked | Existing visible behavior is unchanged |
 
 ## Baseline Assertion Checklist
 
@@ -84,6 +84,16 @@ Play mode should assert the inverse:
 - `editWorkspace` was not created or mutated.
 
 Recall should account for current behavior: a correct answer may navigate forward through the game tree. The forbidden write is not "treePosition never changes"; it is "recall does not perform free board editing or scratch editing."
+
+Gesture baselines must use the real rendered-board path. A line test should
+dispatch the same mouse gesture that causes `onLineDraw`; a drag test should
+dispatch the same mouse gesture that causes `onStoneDragEnd`. Do not model those
+behaviors by calling lower-level edit helpers in sequence.
+
+Legacy fallback baselines should not manufacture impossible app state. Clearing
+`editWorkspace` after entering analysis protects an implementation escape hatch,
+not a user contract. Keep that path skipped or move it to a lower-level
+compatibility test until it can be deleted.
 
 ## Out of Scope for Phase 0
 

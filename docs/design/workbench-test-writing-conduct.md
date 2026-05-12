@@ -106,6 +106,21 @@ Visible result: progress, wrong state, or completion updates.
 
 When an existing behavior intentionally changes `treePosition`, document it. For example, a correct recall answer currently navigates to the next node, so the forbidden write should not assert that `treePosition` is stable.
 
+## Action Fidelity Rules
+
+Setup may use direct `window.__sabaki` calls to create deterministic state, but
+the action under test should use the same entrypoint a user would trigger.
+
+- Simple board clicks may call `clickVertex()` when the baseline is protecting
+  the board interaction dispatcher before migration.
+- Rendered pointer gestures such as drag, line draw, and area select must
+  dispatch real DOM mouse events on `.shudan-vertex` elements.
+- Do not replace one user action with a sequence of lower-level edits. For
+  example, a drag test must not simulate drag by placing a stone at the target
+  and erasing the source.
+- If a behavior is intentionally tested below the UI layer, move it to a unit
+  or focused integration test and name the executor/helper under test.
+
 ## State Snapshot Rules
 
 Prefer capturing state before and after the action inside `page.evaluate()`:
@@ -129,13 +144,24 @@ For forbidden writes, compare stable signatures instead of object identity. Good
 
 Avoid asserting large unrelated state objects wholesale. They are noisy and make tests brittle.
 
+Prefer contract helpers over scattered structure reads. A Playwright baseline
+may read `editWorkspace` today, but repeated assertions should go through helper
+functions such as `getWorkingSignAt()` or `expectRenderedVertexSign()`. If the
+working-position representation changes, update the helper rather than the
+whole suite.
+
 ## Playwright Conduct
 
 - Use existing helpers from `e2e/helpers.js` when available.
 - Prefer direct `window.__sabaki` setup for deterministic workbench state.
+- Keep direct state writes out of the action being characterized.
 - Wait for the specific state or DOM condition caused by the action.
 - Avoid fixed sleeps.
 - Prefer selecting board vertices by known dataset coordinates when possible.
+- Assert the target vertex or UI element, not just a global count, when the
+  visible result is point-specific.
+- Do not let fixture discovery silently skip the behavior. If a test needs an
+  occupied vertex or generated reference point, assert that it was found.
 - Keep each test focused on one contract boundary.
 - Avoid relying on localized text unless the test is specifically about copy or layout.
 - Do not require engines, network, or long analysis runs for Phase 0 behavior baselines.
@@ -181,6 +207,12 @@ Legacy fallback: existing scoring click branch
 
 Do not silently route a legacy behavior through a new executor unless the PR is intentionally migrating that behavior and includes tests for the new write boundary.
 
+Do not protect an internal legacy fallback by corrupting normal state in a
+Playwright test. For example, clearing `editWorkspace` after entering analysis
+only proves an implementation escape hatch, not a user contract. If such a path
+must remain temporarily, mark the test skipped or move it to a lower-level
+compatibility test with an explicit deletion condition.
+
 ## Review Checklist
 
 Before merging a workbench behavior change, check:
@@ -191,5 +223,9 @@ Before merging a workbench behavior change, check:
 - Does the test assert expected writes?
 - Does the test assert forbidden writes?
 - Does at least one user-visible result get verified when the behavior is UI-facing?
+- Does the test action use the same route as the user gesture it claims to
+  protect?
+- Does the test avoid protecting internal fallback paths created by impossible
+  state?
 - Are resolver combinations covered by unit tests instead of oversized Playwright suites?
 - Did the change avoid adding new workbench behavior directly to legacy `mode` branches?
