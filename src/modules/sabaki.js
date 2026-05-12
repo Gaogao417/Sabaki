@@ -1385,6 +1385,15 @@ class Sabaki extends EventEmitter {
       this._playServices = {
         documentStore: createDocumentStore(this, {
           getSetting: (key) => setting.get(key),
+          closeDrawer: () => this.closeDrawer(),
+          getTerritoryCompareAvailable: (state) =>
+            this.getTerritoryCompareAvailable(state),
+          syncEditWorkspaceToCurrentPosition: () =>
+            this.syncEditWorkspaceToCurrentPosition(),
+          scheduleEditWorkspaceAnalysis: () =>
+            this.scheduleEditWorkspaceAnalysis(),
+          scheduleLiveAnalysis: (treePosition) =>
+            this.scheduleLiveAnalysis(treePosition),
         }),
         engineService: createEngineService(this),
         analysisService: createAnalysisService(this),
@@ -2557,83 +2566,26 @@ class Sabaki extends EventEmitter {
   // History Management
 
   recordHistory({prevGameIndex, prevTreePosition} = {}) {
-    let currentEntry = this.history[this.historyPointer]
-    let newEntry = {
-      gameIndex: this.state.gameIndex,
-      gameTrees: this.state.gameTrees,
-      treePosition: this.state.treePosition,
-      timestamp: Date.now(),
-    }
-
-    if (
-      currentEntry != null &&
-      helper.shallowEquals(currentEntry.gameTrees, newEntry.gameTrees)
-    )
-      return
-
-    this.history = this.history.slice(
-      -setting.get('edit.max_history_count'),
-      this.historyPointer + 1,
-    )
-
-    if (
-      currentEntry != null &&
-      newEntry.timestamp - currentEntry.timestamp <
-        setting.get('edit.history_batch_interval')
-    ) {
-      this.history[this.historyPointer] = newEntry
-    } else {
-      if (
-        currentEntry != null &&
-        prevGameIndex != null &&
-        prevTreePosition != null
-      ) {
-        currentEntry.gameIndex = prevGameIndex
-        currentEntry.treePosition = prevTreePosition
-      }
-
-      this.history.push(newEntry)
-      this.historyPointer = this.history.length - 1
-    }
+    this.getPlayServices().documentStore.recordHistory({
+      prevGameIndex,
+      prevTreePosition,
+    })
   }
 
   clearHistory() {
-    this.history = []
-    this.recordHistory()
+    this.getPlayServices().documentStore.clearHistory()
   }
 
   checkoutHistory(historyPointer) {
-    let entry = this.history[historyPointer]
-    if (entry == null) return
-
-    let gameTree = entry.gameTrees[entry.gameIndex]
-
-    this.historyPointer = historyPointer
-    this.setState({
-      gameIndex: entry.gameIndex,
-      gameTrees: entry.gameTrees,
-      gameCurrents: entry.gameTrees.map((_) => ({})),
-    })
-
-    this.setCurrentTreePosition(gameTree, entry.treePosition, {
-      clearCache: true,
-    })
+    this.getPlayServices().documentStore.checkoutHistory(historyPointer)
   }
 
   undo() {
-    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
-      return
-    }
-    this.checkoutHistory(this.historyPointer - 1)
-    applogger.log('debug', 'user', 'user.undo', 'Undo')
+    this.getPlayServices().documentStore.undo()
   }
 
   redo() {
-    if (this.state.mode === 'analysis' && this.state.editWorkspace != null) {
-      return
-    }
-    this.checkoutHistory(this.historyPointer + 1)
-    applogger.log('debug', 'user', 'user.redo', 'Redo')
+    this.getPlayServices().documentStore.redo()
   }
 
   // File Management

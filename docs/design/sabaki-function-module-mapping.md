@@ -482,7 +482,14 @@ UI 状态（→ uiStore）、默认 overlay（→ presets）。映射表本身�
 当前代码已经推进到 Phase 10 收尾、Phase 11 开始；`sabaki.js` 中也已经接入
 `documentStore`、`engineService`、`analysisService`、`trainingStore` 等 facade。因此后续
 不应再按原先的粗粒度 Phase 12 一次性“presets + legacy 清理”收尾，而应拆成几条明确的
-服务所有权迁移线。
+服务所有权迁移线。Phase 12 的执行顺序应是串行的 `12A → 12B → 12C → 12D`，不是四条
+并行重构线：engine 和 analysis 可以依赖 documentStore 查询当前 tree/position，这属于
+正常的服务依赖链，不是循环依赖。
+
+State ownership 也应分两步理解。迁移期仍允许 `sabaki.state` 作为 App.js 的兼容镜像和
+change event 发布源；真正要先收紧的是“写入入口”：某个领域状态只能通过对应 store/service
+公开 API 写入。等写入入口稳定后，再考虑把内部存储从 `sabaki.state` 迁到独立 store。否则
+容易变成只搬函数文件，或者一次性改动 App.js 的订阅模型，风险都过高。
 
 1. **Phase 1-9（已基本完成）**：contracts、working-position helpers、board-interaction
    resolver/executor、scratch/play/recall 初步服务边界。
@@ -490,15 +497,17 @@ UI 状态（→ uiStore）、默认 overlay（→ presets）。映射表本身�
    从 `sabaki.js` 迁入 `analysisService`，不是只抽 `boardAnalysisContext`。
 3. **Phase 11（进行中）**：overlay 输入契约模块化。保留现有 `BoardOverlayStack` 渲染路径，
    先把 territory、compare、heatmap、human preference 的输入、层级、优先级标准化。
-4. **Phase 12A：document ownership**：扩展 `documentStore` 接管 `gameTrees`、
-   `treePosition`、`gameCurrents`、history、导航、SGF load/save；`sabaki.js` 只保留兼容
-   wrapper。`gameTreeWrites.js` 只放纯 game-tree mutation。
+4. **Phase 12A：document ownership（先行且拆小步）**：先让 `documentStore` 成为
+   `gameTrees`、`treePosition`、`gameCurrents`、history 和导航的唯一写入入口，
+   `sabaki.js` 只保留兼容 wrapper；SGF load/save 放在该阶段后半，不和导航/history 同步搬。
+   `gameTreeWrites.js` 只放纯 game-tree mutation。
 5. **Phase 12B：engine ownership**：扩展 `engineService` 接管 attach/detach/sync/genmove、
    engine game、HumanSL 和 GTP log wiring；engine 回调通过 `analysisService`/`documentStore`
-   公开入口写入。
+   公开入口写入。此阶段开始前，documentStore 的查询/导航/提交接口应已经稳定。
 6. **Phase 12C：analysis ownership**：迁出 `runBoardAnalysis`、`runOwnershipAnalysis`、
    `startAnalysis`、`stopAnalysis`、`quickAnalyzeAllNodes`、cache/writeback lifecycle，并修正
-   play executor 与 engine reply 之间的当前行棋方传递边界。
+   play executor 与 engine reply 之间的当前行棋方传递边界。analysisService 可调用
+   documentStore/engineService，但不直接持有 document state。
 7. **Phase 12D：workspace presets + uiStore + legacy 冻结**：拆 `setMode` 为 workspace
    preset 选择、UI 副作用和 overlay 默认值；迁出 drawer/busy/info overlay 等 UI-only state；
    `find`、`problem`、`guess`、`scoring` 等 legacy 分支先冻结/包进 legacy executor，再根据
