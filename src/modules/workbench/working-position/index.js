@@ -10,5 +10,20 @@ export {
   placeBlackStone,
   placeWhiteStone,
   eraseWorkingStone,
+  moveWorkingStone,
   setWorkingNextPlayer,
 } from './workingPositionBoard.js'
+
+export {
+  toggleMarker,
+  toggleCoordLabel,
+  toggleNumberLabel,
+  setLabelMarker,
+  createEmptyMarkerMap,
+} from './workingPositionMarkers.js'
+
+export {
+  addLine,
+  removeLineAt,
+  createEmptyLines,
+} from './workingPositionLines.js'

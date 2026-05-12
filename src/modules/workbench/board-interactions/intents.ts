@@ -12,9 +12,16 @@ export const BOARD_INTENTS = Object.freeze({
   PLACE_BLACK_STONE: 'place-black-stone',
   PLACE_WHITE_STONE: 'place-white-stone',
   ERASE_STONE: 'erase-stone',
+  DRAG_STONE: 'drag-stone',
   MARK_POINT: 'mark-point',
   DRAW_LINE: 'draw-line',
   SUBMIT_RECALL_ANSWER: 'submit-recall-answer',
+
+  // Scratch-edit extended intents (Phase 7)
+  SET_NEXT_PLAYER: 'set-next-player',
+  CAPTURE_REFERENCE: 'capture-reference',
+  TOGGLE_TAB: 'toggle-tab',
+  SAVE_AS_PROBLEM: 'save-as-problem',
 
   // Explicit no-op
   NOOP: 'noop',
@@ -36,9 +43,14 @@ export type BoardIntent =
   | 'place-black-stone'
   | 'place-white-stone'
   | 'erase-stone'
+  | 'drag-stone'
   | 'mark-point'
   | 'draw-line'
   | 'submit-recall-answer'
+  | 'set-next-player'
+  | 'capture-reference'
+  | 'toggle-tab'
+  | 'save-as-problem'
   | 'noop'
   | 'legacy-toggle-dead-stones'
   | 'legacy-find-move'

@@ -101,6 +101,39 @@ export function eraseWorkingStone(position, vertex) {
 }
 
 /**
+ * Move a stone from source to an empty target. Returns a new working position
+ * and leaves invalid/no-op drags unchanged.
+ *
+ * @param {WorkingPosition} position
+ * @param {number[]} source - [x, y]
+ * @param {number[]} target - [x, y]
+ * @returns {WorkingPosition}
+ */
+export function moveWorkingStone(position, source, target) {
+  let result = cloneWorkingPosition(position)
+
+  if (!hasVertex(position, source) || !hasVertex(position, target)) {
+    return result
+  }
+
+  let [sx, sy] = source
+  let [tx, ty] = target
+  let sign = position.signMap[sy][sx]
+
+  if (sign === 0 || position.signMap[ty][tx] !== 0) {
+    return result
+  }
+
+  if (sx === tx && sy === ty) {
+    return result
+  }
+
+  result.signMap[sy][sx] = 0
+  result.signMap[ty][tx] = sign
+  return result
+}
+
+/**
  * Update nextPlayer on a working position. sign > 0 normalizes to 1,
  * otherwise -1. Returns a new working position; does not modify the input.
  *
@@ -115,6 +148,18 @@ export function setWorkingNextPlayer(position, sign) {
 }
 
 // --- internal ---
+
+function hasVertex(position, vertex) {
+  let [x, y] = vertex
+  return (
+    Number.isInteger(x) &&
+    Number.isInteger(y) &&
+    y >= 0 &&
+    y < position.height &&
+    x >= 0 &&
+    x < position.width
+  )
+}
 
 function placeStone(position, sign, vertex) {
   let board = workingPositionToBoard(position)

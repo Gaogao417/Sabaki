@@ -27,6 +27,11 @@ type StateLike = {
     activeTab?: string
     currentSnapshot?: {id?: string; role?: string} | null
     referenceSnapshot?: {id?: string; role?: string} | null
+    currentMarkerMap?: (null | {type: string; label?: string})[][] | null
+    referenceMarkerMap?: (null | {type: string; label?: string})[][] | null
+    currentLines?: {v1: number[]; v2: number[]; type: string}[] | null
+    referenceLines?: {v1: number[]; v2: number[]; type: string}[] | null
+    lineFirstVertex?: {type: string; vertex: number[]} | null
   } | null
 }
 
@@ -34,12 +39,14 @@ export function createBoardInteractionContext({
   state,
   board,
   vertex,
+  sourceVertex,
   event,
   isMac = false,
 }: {
   state: StateLike | null
   board: BoardLike | null
   vertex: [number, number]
+  sourceVertex?: [number, number] | null
   event: {button?: number; ctrlKey?: boolean; metaKey?: boolean}
   isMac?: boolean
 }) {
@@ -50,6 +57,11 @@ export function createBoardInteractionContext({
   let sign = board.get(vertex)
   let [vx, vy] = vertex
   let marker = board.markers[vy]?.[vx]
+  let sourceSign =
+    sourceVertex == null ? null : board.get(sourceVertex)
+  let [svx, svy] = sourceVertex ?? [-1, -1]
+  let sourceMarker =
+    sourceVertex == null ? null : board.markers[svy]?.[svx]
   let mode = state.mode ?? 'play'
   let selectedTool = state.selectedTool ?? 'stone_1'
 
@@ -70,6 +82,14 @@ export function createBoardInteractionContext({
       markerType: marker?.type ?? null,
     },
     vertex,
+    sourceVertex: sourceVertex ?? null,
+    sourcePoint:
+      sourceVertex == null
+        ? null
+        : {
+            sign: sourceSign ?? 0,
+            markerType: sourceMarker?.type ?? null,
+          },
     positionSource,
     mutationContract,
     editWorkspacePresent: state.editWorkspace != null,

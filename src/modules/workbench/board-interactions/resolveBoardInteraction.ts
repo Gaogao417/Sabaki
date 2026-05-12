@@ -34,6 +34,8 @@ export type ResolverInput = {
   event: BoardEvent
   point: PointState
   vertex: [number, number]
+  sourceVertex?: [number, number] | null
+  sourcePoint?: PointState | null
   positionSource: PositionSource | null
   mutationContract: MutationContract | null
   editWorkspacePresent: boolean
@@ -71,6 +73,10 @@ function isRightClick(event: BoardEvent): boolean {
   return event.button === 2 || (event.isMac && event.button === 0 && event.ctrlKey)
 }
 
+function verticesEqual(a: [number, number], b: [number, number]): boolean {
+  return a[0] === b[0] && a[1] === b[1]
+}
+
 // --- Mode-specific resolvers ---
 
 function resolvePlay(input: ResolverInput): BoardInteractionResult {
@@ -100,8 +106,34 @@ function resolvePlay(input: ResolverInput): BoardInteractionResult {
 }
 
 function resolveAnalysisEdit(input: ResolverInput): BoardInteractionResult {
-  let {selectedTool, event, point, vertex} = input
+  let {selectedTool, event, point, sourcePoint, sourceVertex, vertex} = input
   let effectiveTool = selectedTool
+
+  if (sourceVertex != null) {
+    if (event.button !== 0) {
+      return noop('drag stone: unsupported button', input)
+    }
+
+    if (verticesEqual(sourceVertex, vertex)) {
+      return noop('drag stone: same source and target', input)
+    }
+
+    if ((sourcePoint?.sign ?? 0) === 0) {
+      return noop('drag stone: empty source', input)
+    }
+
+    if (point.sign !== 0) {
+      return noop('drag stone: occupied target', input)
+    }
+
+    return {
+      intent: BOARD_INTENTS.DRAG_STONE,
+      positionSource: input.positionSource,
+      mutationContract: input.mutationContract,
+      status: RESOLVE_STATUSES.RESOLVED,
+      payload: {source: sourceVertex, target: vertex, vertex},
+    }
+  }
 
   // Right-click toggles stone color
   if (isRightClick(event) && ['stone_1', 'stone_-1'].includes(effectiveTool)) {

@@ -2101,41 +2101,34 @@ class Sabaki extends EventEmitter {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
-    let {
-      snapshotKey: key,
-      analysisKey,
-      ownershipKey,
-    } = this.getEditWorkspaceTabKeys(ws.activeTab)
-    let snapshot = ws[key]
+    let {snapshotKey} = this.getEditWorkspaceTabKeys(ws.activeTab)
+    let snapshot = ws[snapshotKey]
     if (snapshot == null) return
 
-    let [sx, sy] = source
-    let [tx, ty] = target
+    let workingBoard = boardFromSnapshot(snapshot)
+    if (workingBoard == null) return
 
-    let sourceSign = snapshot.signMap[sy]?.[sx] ?? 0
-    let targetSign = snapshot.signMap[ty]?.[tx] ?? 0
-
-    if (sourceSign === 0 || targetSign !== 0) return
-    if (helper.vertexEquals(source, target)) return
-
-    let nextSnapshot = cloneSnapshot(snapshot)
-    nextSnapshot.signMap[sy][sx] = 0
-    nextSnapshot.signMap[ty][tx] = sourceSign
-
-    this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
-    this.setState({
-      editWorkspace: {
-        ...ws,
-        positionSource: createScratchPositionSource(
-          nextSnapshot.id,
-          nextSnapshot.role ?? ws.activeTab,
-        ),
-        [key]: nextSnapshot,
-        [analysisKey]: null,
-        [ownershipKey]: null,
-      },
+    let context = createBoardInteractionContext({
+      state: this.state,
+      board: workingBoard,
+      vertex: target,
+      sourceVertex: source,
+      event: {button: 0, ctrlKey: false, metaKey: false},
+      isMac: helper.isMac,
     })
-    this.scheduleEditWorkspaceAnalysis(ws.activeTab)
+    if (context == null) return
+
+    let result = resolveBoardInteraction(context)
+
+    let execContext = createScratchEditExecutionContext(ws)
+    if (execContext == null) return
+
+    let execResult = executeBoardInteraction(result, execContext)
+    if (!execResult.handled) return
+
+    if (execResult.changed) {
+      this.commitEditResult(execResult)
+    }
   }
 
   getAnalyzeCommand(syncer) {

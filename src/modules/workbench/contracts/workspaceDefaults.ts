@@ -91,7 +91,7 @@ type SabakiStateLike = {
   mode?: string
   treePosition?: TreePosition
   editWorkspace?: {
-    activeTab?: ScratchRole
+    activeTab?: string
     currentSnapshot?: ScratchSnapshotLike | null
     referenceSnapshot?: ScratchSnapshotLike | null
   } | null
@@ -141,9 +141,11 @@ export function getPositionSourceFromState(
         ? state.editWorkspace.referenceSnapshot
         : state.editWorkspace.currentSnapshot
 
+    let role = snapshot?.role ?? (activeTab as ScratchRole)
+
     return snapshot?.id == null
       ? null
-      : createScratchPositionSource(snapshot.id, snapshot.role ?? activeTab)
+      : createScratchPositionSource(snapshot.id, role)
   }
 
   if (
@@ -157,10 +159,19 @@ export function getPositionSourceFromState(
   return null
 }
 
+type MarkerCell = {type: string; label?: string} | null
+
+type LineEntry = {v1: number[]; v2: number[]; type: string}
+
 export type ScratchEditExecutionContext = {
   activeTab: string
   currentSnapshot: ScratchPosition | null
   referenceSnapshot: ScratchPosition | null
+  currentMarkerMap: MarkerCell[][] | null
+  referenceMarkerMap: MarkerCell[][] | null
+  currentLines: LineEntry[] | null
+  referenceLines: LineEntry[] | null
+  lineFirstVertex: {type: string; vertex: number[]} | null
 }
 
 export function createScratchEditExecutionContext(
@@ -168,6 +179,11 @@ export function createScratchEditExecutionContext(
     activeTab?: string
     currentSnapshot?: ScratchPosition | null
     referenceSnapshot?: ScratchPosition | null
+    currentMarkerMap?: MarkerCell[][] | null
+    referenceMarkerMap?: MarkerCell[][] | null
+    currentLines?: LineEntry[] | null
+    referenceLines?: LineEntry[] | null
+    lineFirstVertex?: {type: string; vertex: number[]} | null
   } | null | undefined,
 ): ScratchEditExecutionContext | null {
   if (editWorkspace == null) return null
@@ -176,5 +192,10 @@ export function createScratchEditExecutionContext(
     activeTab: editWorkspace.activeTab ?? 'current',
     currentSnapshot: editWorkspace.currentSnapshot ?? null,
     referenceSnapshot: editWorkspace.referenceSnapshot ?? null,
+    currentMarkerMap: editWorkspace.currentMarkerMap ?? null,
+    referenceMarkerMap: editWorkspace.referenceMarkerMap ?? null,
+    currentLines: editWorkspace.currentLines ?? null,
+    referenceLines: editWorkspace.referenceLines ?? null,
+    lineFirstVertex: editWorkspace.lineFirstVertex ?? null,
   }
 }

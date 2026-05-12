@@ -234,18 +234,18 @@ describe('Phase 5 edit-analysis click redirect', () => {
       })
     }
 
-    it('line tool: NOT handled', () => {
+    it('line tool: handled (Phase 7 migrated)', () => {
       let state = makeAnalysisState('line')
       let {handled} = runPipeline(state, [3, 3], leftClick())
 
-      assert.equal(handled, false)
+      assert.equal(handled, true)
     })
 
-    it('arrow tool: NOT handled', () => {
+    it('arrow tool: handled (Phase 7 migrated)', () => {
       let state = makeAnalysisState('arrow')
       let {handled} = runPipeline(state, [3, 3], leftClick())
 
-      assert.equal(handled, false)
+      assert.equal(handled, true)
     })
 
     it('right-click label: NOT handled (menu action)', () => {
