@@ -12,6 +12,8 @@ view older versions of the documentation, you can browse by tag on GitHub.
 - [Workbench Architecture Overview](design/workbench-architecture-overview.md)
 - [Workbench UI/UX Spec](design/workbench-ui-ux-spec.md)
 - [Position Source and Mutation Contract](design/position-source-mutation-contract.md)
+- [Workbench Phase 0 Behavior Baseline Tests](design/workbench-phase0-behavior-baseline-tests.md)
+- [Workbench Test Writing Conduct](design/workbench-test-writing-conduct.md)
 - [Workbench Reference Pictures](design/workbench-ref-pics/)
 
 ## Historical Design Reports
@@ -24,6 +26,7 @@ view older versions of the documentation, you can browse by tag on GitHub.
 
 - [Building & Tests](guides/building-tests.md)
 - [Debugging](guides/debugging.md)
+- [Workbench Coding Conduct](guides/workbench-coding-conduct.md)
 
 ## User Guides
 

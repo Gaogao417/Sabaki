@@ -25,6 +25,10 @@ First of all, thank you for taking the time to contribute to Sabaki!
 - Avoid platform-dependent code.
 - Create mocha unit tests if possible and applicable. For UI or integration
   behavior, add Playwright E2E tests in the `e2e/` directory.
+- For workbench board behavior, follow the
+  [Workbench Coding Conduct](docs/guides/workbench-coding-conduct.md). New
+  behavior must state its `PositionSource`, `MutationContract`,
+  `BoardInteractionIntent`, executor owner, legacy fallback, and tests.
 - Document new code in the documentation if applicable.
 - Note the issue number in your pull request.
 

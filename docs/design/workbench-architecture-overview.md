@@ -465,6 +465,10 @@ PositionSource
 - Stop adding new workbench behavior to legacy mode branches.
 - Require every new workbench behavior to state its `PositionSource`,
   `MutationContract`, and `BoardInteractionIntent`.
+- Use [Workbench Coding Conduct](../guides/workbench-coding-conduct.md) as the
+  implementation gate.
+- Use [Workbench Phase 0 Behavior Baseline Tests](workbench-phase0-behavior-baseline-tests.md)
+  and [Workbench Test Writing Conduct](workbench-test-writing-conduct.md) as the testing gate.
 
 ### Phase 1: Stabilize Contracts
 
