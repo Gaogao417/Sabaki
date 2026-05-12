@@ -13,3 +13,6 @@ export type {
 } from './resolveBoardInteraction.ts'
 
 export {createBoardInteractionContext} from './createBoardInteractionContext.ts'
+
+export {executeBoardInteraction} from './executeBoardInteraction.js'
+export {executeScratchEdit} from './executors/scratchEditInteractionExecutor.js'

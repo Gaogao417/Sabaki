@@ -1,6 +1,6 @@
 import type {MutationContract} from './mutationContracts.ts'
 import {MUTATION_CONTRACTS} from './mutationContracts.ts'
-import type {PositionSource, ScratchRole, TreePosition} from './positionSource.ts'
+import type {PositionSource, ScratchPosition, ScratchRole, TreePosition} from './positionSource.ts'
 import {
   createGameTreePositionSource,
   createScratchPositionSource,
@@ -155,4 +155,26 @@ export function getPositionSourceFromState(
   }
 
   return null
+}
+
+export type ScratchEditExecutionContext = {
+  activeTab: string
+  currentSnapshot: ScratchPosition | null
+  referenceSnapshot: ScratchPosition | null
+}
+
+export function createScratchEditExecutionContext(
+  editWorkspace: {
+    activeTab?: string
+    currentSnapshot?: ScratchPosition | null
+    referenceSnapshot?: ScratchPosition | null
+  } | null | undefined,
+): ScratchEditExecutionContext | null {
+  if (editWorkspace == null) return null
+
+  return {
+    activeTab: editWorkspace.activeTab ?? 'current',
+    currentSnapshot: editWorkspace.currentSnapshot ?? null,
+    referenceSnapshot: editWorkspace.referenceSnapshot ?? null,
+  }
 }

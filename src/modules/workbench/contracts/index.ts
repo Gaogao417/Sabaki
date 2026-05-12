@@ -23,12 +23,13 @@ export type {MutationContract} from './mutationContracts.ts'
 export {
   WORKSPACE_DEFAULTS,
   WORKSPACE_KINDS,
+  createScratchEditExecutionContext,
   getMutationContractForWorkspace,
   getMutationContractFromState,
   getPositionSourceFromState,
   getWorkspaceKindFromState,
 } from './workspaceDefaults.ts'
-export type {WorkspaceKind} from './workspaceDefaults.ts'
+export type {ScratchEditExecutionContext, WorkspaceKind} from './workspaceDefaults.ts'
 
 export {
   OVERLAY_LAYER_SOURCES,
