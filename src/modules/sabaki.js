@@ -1320,6 +1320,8 @@ class Sabaki extends EventEmitter {
     }
 
     let inferredState = this.getInferredState(state)
+    // Legacy analysis fallback: this may still serve unmigrated modes. Use
+    // getActivePositionSource() for canonical Phase 1 source/contract mapping.
     return {
       source: 'play',
       tab: null,
