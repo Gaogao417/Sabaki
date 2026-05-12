@@ -42,6 +42,11 @@ import {
   createSnapshotFromBoard,
   snapshotToGameTree,
 } from './study.js'
+import {
+  SCRATCH_ANALYSIS_SOURCE,
+  createScratchAnalysisContext,
+  getScratchAnalysisCacheKey,
+} from './workbench/analysis/index.js'
 import * as sound from './sound.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
@@ -253,6 +258,7 @@ class Sabaki extends EventEmitter {
 
     this.treeHash = this.generateTreeHash()
     this.ownershipCache = {}
+    this.scratchOwnershipCache = {}
     this.previewOwnershipCache = {}
     this.auxAnalysisRequestId = 0
     this.analysisRequestId = 0
@@ -1235,6 +1241,17 @@ class Sabaki extends EventEmitter {
     return key == null ? null : this.ownershipCache[key] || null
   }
 
+  cacheScratchOwnership(syncerId, snapshot, ownership) {
+    let key = getScratchAnalysisCacheKey(syncerId, snapshot)
+    if (key == null || ownership == null) return
+    this.scratchOwnershipCache[key] = ownership
+  }
+
+  getCachedScratchOwnership(syncerId, snapshot) {
+    let key = getScratchAnalysisCacheKey(syncerId, snapshot)
+    return key == null ? null : this.scratchOwnershipCache[key] || null
+  }
+
   cachePreviewOwnership(syncerId, tree, treePosition, moves, ownership) {
     let key = getAnalysisPreviewCacheKey(tree, treePosition, moves)
     if (syncerId == null || key == null || ownership == null) return
@@ -1310,7 +1327,7 @@ class Sabaki extends EventEmitter {
 
       let {tree, treePosition} = context
       return {
-        source: 'analysis',
+        source: SCRATCH_ANALYSIS_SOURCE,
         tab: activeTab,
         positionSource: createScratchPositionSource(
           snapshot.id,
@@ -1981,19 +1998,28 @@ class Sabaki extends EventEmitter {
       editWorkspace: {...ws, analysisPending: true},
     })
 
-    let analyzeTab = async (snapshot, analysisKey, ownershipKey) => {
+    let analyzeTab = async (snapshot, analysisKey, ownershipKey, tab) => {
       if (snapshot == null) return null
-      let {tree, treePosition} = snapshotToGameTree(
-        snapshot,
-        [],
-        this.inferredState.gameTree,
-      )
-      return await this.runBoardAnalysis({
+
+      let cached = this.getCachedScratchOwnership(syncer.id, snapshot)
+      if (cached != null) {
+        return {ownership: cached}
+      }
+
+      let ctx = createScratchAnalysisContext(snapshot, {
+        tab,
+        sourceTree: this.inferredState.gameTree,
+        syncerId: syncer.id,
+      })
+      if (ctx == null) return null
+      let result = await this.runBoardAnalysis({
         syncer,
-        tree,
-        treePosition,
-        analyzePlayer: snapshot.nextPlayer,
-        requestGroup: 'study',
+        tree: ctx.tree,
+        treePosition: ctx.treePosition,
+        analyzePlayer: ctx.analyzePlayer,
+        requestGroup: 'scratch-analysis',
+        analysisSource: SCRATCH_ANALYSIS_SOURCE,
+        skipOwnershipCache: true,
         onAnalysisUpdate: (analysis) => {
           if (this.editAnalysisGeneration !== generation) return
           let current = this.state.editWorkspace
@@ -2008,6 +2034,12 @@ class Sabaki extends EventEmitter {
           }
         },
       })
+
+      if (result?.ownership != null) {
+        this.cacheScratchOwnership(syncer.id, snapshot, result.ownership)
+      }
+
+      return result
     }
 
     let analyzeCurrent = targetTab == null || targetTab === 'current'
@@ -2018,6 +2050,7 @@ class Sabaki extends EventEmitter {
           ws.currentSnapshot,
           'currentAnalysis',
           'currentOwnership',
+          'current',
         )
       : ws.currentAnalysis
 
@@ -2026,6 +2059,7 @@ class Sabaki extends EventEmitter {
           ws.referenceSnapshot,
           'referenceAnalysis',
           'referenceOwnership',
+          'reference',
         )
       : ws.referenceAnalysis
 
@@ -2344,6 +2378,8 @@ class Sabaki extends EventEmitter {
     analyzePlayer,
     pendingStateKey = null,
     requestGroup = 'aux',
+    analysisSource = 'game-tree',
+    skipOwnershipCache = false,
     showLoadingText = null,
     previewCacheMoves = null,
     onAnalysisUpdate = null,
@@ -2470,7 +2506,7 @@ class Sabaki extends EventEmitter {
         }
       })
 
-      if (analysis?.ownership != null) {
+      if (analysis?.ownership != null && !skipOwnershipCache) {
         if (previewCacheMoves != null) {
           this.cachePreviewOwnership(
             syncer.id,
@@ -2490,6 +2526,7 @@ class Sabaki extends EventEmitter {
         this.state.analyzingEngineSyncerId === syncer.id &&
         this.state.treePosition === originTreePosition &&
         requestGroup !== 'analysis' &&
+        requestGroup !== 'scratch-analysis' &&
         !(this.state.mode === 'analysis' && this.state.editWorkspace != null)
       ) {
         this.analyzeMove(originTreePosition)
@@ -4450,6 +4487,15 @@ class Sabaki extends EventEmitter {
 
       syncer.on('analysis-update', () => {
         if (this.state.analyzingEngineSyncerId === syncer.id) {
+          // Scratch analysis uses temporary trees whose nodes are not in the
+          // real game tree. Skip the global state / SBKV / SBKS write-back so
+          // scratch results never pollute the SGF.
+          if (
+            this.state.mode === 'analysis' &&
+            this.state.editWorkspace != null
+          ) {
+            return
+          }
           // Update analysis info
 
           let tree = this.state.gameTrees[this.state.gameIndex]

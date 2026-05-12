@@ -226,14 +226,19 @@ export function snapshotToGameTree(snapshot, moves = [], sourceTree = null) {
       snapshot.nextPlayer > 0 ? 'B' : 'W',
     ])
 
-    // Copy rules and komi from source tree so engine analysis uses the same rules
-    if (sourceTree != null) {
-      for (let prop of ['RU', 'KM']) {
-        let value = gametree.getRootProperty(sourceTree, prop)
-        if (value != null) {
-          draft.updateProperty(draft.root.id, prop, [value.toString()])
-        }
-      }
+    // Prefer snapshot komi/rules, fall back to source tree
+    if (snapshot.komi != null) {
+      draft.updateProperty(draft.root.id, 'KM', [snapshot.komi.toString()])
+    } else if (sourceTree != null) {
+      let value = gametree.getRootProperty(sourceTree, 'KM')
+      if (value != null) draft.updateProperty(draft.root.id, 'KM', [value.toString()])
+    }
+
+    if (snapshot.rules != null) {
+      draft.updateProperty(draft.root.id, 'RU', [snapshot.rules])
+    } else if (sourceTree != null) {
+      let value = gametree.getRootProperty(sourceTree, 'RU')
+      if (value != null) draft.updateProperty(draft.root.id, 'RU', [value.toString()])
     }
 
     for (let y = 0; y < snapshot.height; y++) {
