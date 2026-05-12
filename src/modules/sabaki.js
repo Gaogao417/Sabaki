@@ -25,11 +25,17 @@ import {
   SCRATCH_ROLES,
   WORKSPACE_KINDS,
   createGameTreePositionSource,
+  createScratchEditExecutionContext,
   createScratchPositionFromSnapshot,
   createScratchPositionSource,
   getMutationContractFromState,
   getPositionSourceFromState,
 } from './workbench/contracts/index.ts'
+import {
+  createBoardInteractionContext,
+  executeBoardInteraction,
+  resolveBoardInteraction,
+} from './workbench/board-interactions/index.ts'
 import {
   boardFromSnapshot,
   cloneSnapshot,
@@ -1526,6 +1532,68 @@ class Sabaki extends EventEmitter {
 
       check()
     })
+  }
+
+  // Phase 5: Edit-Analysis Click Redirect
+
+  handleEditAnalysisClick(vertex, {button = 0, ctrlKey = false} = {}) {
+    let ws = this.state.editWorkspace
+    if (ws == null) return false
+
+    let tab = ws.activeTab
+    let {snapshotKey} = this.getEditWorkspaceTabKeys(tab)
+    let snapshot = ws[snapshotKey]
+    if (snapshot == null) return false
+
+    let workingBoard = boardFromSnapshot(snapshot)
+    if (workingBoard == null) return false
+
+    let context = createBoardInteractionContext({
+      state: this.state,
+      board: workingBoard,
+      vertex,
+      event: {button, ctrlKey, metaKey: false},
+      isMac: helper.isMac,
+    })
+    if (context == null) return false
+
+    let result = resolveBoardInteraction(context)
+
+    let execContext = createScratchEditExecutionContext(ws)
+    if (execContext == null) return false
+
+    let execResult = executeBoardInteraction(result, execContext)
+
+    if (!execResult.handled) return false
+
+    if (execResult.changed) {
+      this.commitEditResult(execResult)
+    }
+
+    return true
+  }
+
+  commitEditResult({tab, snapshot}) {
+    let ws = this.state.editWorkspace
+    if (ws == null || snapshot == null) return
+
+    let {snapshotKey, analysisKey, ownershipKey} =
+      this.getEditWorkspaceTabKeys(tab)
+
+    this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+    this.setState({
+      editWorkspace: {
+        ...ws,
+        positionSource: createScratchPositionSource(
+          snapshot.id,
+          snapshot.role ?? tab,
+        ),
+        [snapshotKey]: snapshot,
+        [analysisKey]: null,
+        [ownershipKey]: null,
+      },
+    })
+    this.scheduleEditWorkspaceAnalysis(tab)
   }
 
   // Scratch Edit Contract
@@ -3421,6 +3489,10 @@ class Sabaki extends EventEmitter {
       }
     } else if (this.state.mode === 'analysis') {
       if (this.state.editWorkspace != null) {
+        if (this.handleEditAnalysisClick(vertex, {button, ctrlKey})) {
+          return
+        }
+
         this.scratchEdit(vertex, {button, ctrlKey, x, y})
         return
       }

@@ -57,3 +57,7 @@ export type {
 } from '../board-interactions/resolveBoardInteraction.ts'
 
 export {createBoardInteractionContext} from '../board-interactions/createBoardInteractionContext.ts'
+
+// Phase 4: board interaction executor
+export {executeBoardInteraction} from '../board-interactions/executeBoardInteraction.js'
+export {executeScratchEdit} from '../board-interactions/executors/scratchEditInteractionExecutor.js'
