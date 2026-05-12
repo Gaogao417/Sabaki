@@ -789,16 +789,26 @@ PositionSource
   `paint`, `marker`, `tooltip`, or `sidebar` roles and do not compete for the same
   primary visual channel without priority rules.
 
-### Phase 12: Workspace Presets and Legacy Deletion
+### Phase 12: Service Ownership and Legacy Deletion
 
+- Treat Phase 12 as several ownership migrations, not a single cleanup pass. By this point
+  the facade services may exist, but many of them can still delegate back into `sabaki.js`.
+- Move document ownership first: `documentStore` should own `gameTrees`, `treePosition`,
+  `gameCurrents`, history, navigation, and SGF load/save; keep `gameTreeWrites` focused on
+  pure game-tree mutations.
+- Move engine ownership next: `engineService` should own attach/detach/sync/genmove,
+  engine-game loops, HumanSL state, and GTP log wiring. Engine callbacks should update
+  analysis or document state through service boundaries instead of writing directly into
+  `sabaki.js`.
+- Finish analysis ownership: `analysisService` should own board/ownership analysis request
+  lifecycle, quick analysis, cache lookup/writeback, and game-tree vs scratch vs variation
+  targets. This is a continuation of Phase 10, not just a helper extraction.
 - Move layout defaults, controls, and overlay defaults into workspace-level presets only
-  after source, contract, resolver, and executor boundaries are stable.
-- Workspace selects defaults; mutation contracts and intent executors enforce behavior.
+  after source, contract, resolver, executor, and overlay input boundaries are stable.
+- Move drawers, busy state, info overlays, and other UI-only state into `uiStore`.
 - New features should target workspace plus contract, not raw `mode`.
-- After workspace presets are stable, continue migrating remaining `sabaki.js` state slices
-  into `documentStore`, `workbenchStore`, `analysisService`, `engineService`,
-  `trainingStore`, `overlayStore`, and `uiStore`.
-- Hide legacy entrances before deleting code.
+- Hide legacy entrances before deleting code. `find`, `problem`, `guess`, `scoring`, and
+  other legacy branches should be frozen or wrapped before removal.
 - Delete legacy branches only after migrated workspaces no longer depend on them and
   tests or telemetry confirm the branch is unused.
 

@@ -479,14 +479,30 @@ UI 状态（→ uiStore）、默认 overlay（→ presets）。映射表本身�
 
 ## 迁移优先级建议
 
-根据架构文档的 Phase 规划：
+当前代码已经推进到 Phase 10 收尾、Phase 11 开始；`sabaki.js` 中也已经接入
+`documentStore`、`engineService`、`analysisService`、`trainingStore` 等 facade。因此后续
+不应再按原先的粗粒度 Phase 12 一次性“presets + legacy 清理”收尾，而应拆成几条明确的
+服务所有权迁移线。
 
-1. **Phase 1-2（已基本完成）**：contracts、working-position helpers
-2. **Phase 3-5（当前重点）**：board-interaction resolver → scratchEdit executor
-3. **Phase 6**：scratchAnalysis 从 sabaki.js 剥离
-4. **Phase 7**：marker/line/drag/reference 迁入 working-position
-5. **Phase 8**：play executor + documentStore
-6. **Phase 9**：recall executor + trainingStore
-7. **Phase 10**：analysis 上下文拆分
-8. **Phase 11**：overlay 模块化
-9. **Phase 12**：workspace presets + legacy 清理
+1. **Phase 1-9（已基本完成）**：contracts、working-position helpers、board-interaction
+   resolver/executor、scratch/play/recall 初步服务边界。
+2. **Phase 10（收尾）**：继续把 analysis state、cache、request lifecycle、SGF write-back
+   从 `sabaki.js` 迁入 `analysisService`，不是只抽 `boardAnalysisContext`。
+3. **Phase 11（进行中）**：overlay 输入契约模块化。保留现有 `BoardOverlayStack` 渲染路径，
+   先把 territory、compare、heatmap、human preference 的输入、层级、优先级标准化。
+4. **Phase 12A：document ownership**：扩展 `documentStore` 接管 `gameTrees`、
+   `treePosition`、`gameCurrents`、history、导航、SGF load/save；`sabaki.js` 只保留兼容
+   wrapper。`gameTreeWrites.js` 只放纯 game-tree mutation。
+5. **Phase 12B：engine ownership**：扩展 `engineService` 接管 attach/detach/sync/genmove、
+   engine game、HumanSL 和 GTP log wiring；engine 回调通过 `analysisService`/`documentStore`
+   公开入口写入。
+6. **Phase 12C：analysis ownership**：迁出 `runBoardAnalysis`、`runOwnershipAnalysis`、
+   `startAnalysis`、`stopAnalysis`、`quickAnalyzeAllNodes`、cache/writeback lifecycle，并修正
+   play executor 与 engine reply 之间的当前行棋方传递边界。
+7. **Phase 12D：workspace presets + uiStore + legacy 冻结**：拆 `setMode` 为 workspace
+   preset 选择、UI 副作用和 overlay 默认值；迁出 drawer/busy/info overlay 等 UI-only state；
+   `find`、`problem`、`guess`、`scoring` 等 legacy 分支先冻结/包进 legacy executor，再根据
+   测试覆盖逐步隐藏和删除入口。
+
+最终目标不是让 `sabaki.js` 变成零函数，而是只保留 app lifecycle、service 装配、顶层
+`setState`/`inferredState`、菜单门面和兼容 wrapper。
