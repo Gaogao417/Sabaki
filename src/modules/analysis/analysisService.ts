@@ -64,10 +64,10 @@ function narrowSyncer(raw: unknown): EngineSyncerLike | null {
   if (raw == null || typeof raw !== 'object') return null
   let obj = raw as Record<string, unknown>
   if (typeof obj.id !== 'string') return null
-  return {
-    id: obj.id,
-    suspended: obj.suspended == null ? undefined : !!obj.suspended,
-  }
+  // Return the original object — runBoardAnalysis needs the full syncer
+  // (commands, engine, removeListener, sendAbort, treePosition, analysis, etc.)
+  // Stripping to {id, suspended} breaks the GTP command pipeline.
+  return raw as EngineSyncerLike
 }
 
 function narrowGameTree(raw: unknown): GameTree | null {
@@ -200,7 +200,7 @@ export function createAnalysisService(sabaki: SabakiLike) {
     async refreshScratchAnalysis(tab: string | null = null): Promise<void> {
       let syncer = narrowSyncer(sabaki.inferredState.analyzingEngineSyncer)
       let gameTree = narrowGameTree(sabaki.inferredState.gameTree)
-      let runFn = narrowRunBoardAnalysis(sabaki.runBoardAnalysis)
+      let runFn = narrowRunBoardAnalysis((opts) => sabaki.runBoardAnalysis(opts))
 
       let deps: ScratchAnalysisDeps = {
         getState: () => sabaki.state as ScratchAnalysisDeps['getState'] extends () => infer R ? R : never,
@@ -226,7 +226,7 @@ export function createAnalysisService(sabaki: SabakiLike) {
           getSyncer: () => syncer,
           getGameTree: () => gameTree,
           getPlayer: (tp) => sabaki.getPlayer(tp) as 1 | -1,
-          runBoardAnalysis: narrowRunBoardAnalysis(sabaki.runBoardAnalysis),
+          runBoardAnalysis: narrowRunBoardAnalysis((opts) => sabaki.runBoardAnalysis(opts)),
         },
         treePosition,
       )
@@ -252,6 +252,11 @@ export function createAnalysisService(sabaki: SabakiLike) {
         },
         treePosition,
       )
+    },
+
+    /** Alias used by playInteractionExecutor — delegates to scheduleGameTreeAnalysis. */
+    scheduleLiveAnalysis(treePosition: string): void {
+      this.scheduleGameTreeAnalysis(treePosition)
     },
 
     cacheScratchOwnership(

@@ -127,7 +127,12 @@ export function log(level, category, event, message, data = null, options = {}) 
   let fileLevel = setting.get('app.logging_level') || 'info'
   let fileLevelIndex = LEVELS.indexOf(fileLevel)
 
-  if (!loggingEnabled && !fileEnabled) return
+  if (!loggingEnabled && !fileEnabled) {
+    try {
+      console.log(`[applogger] [${level}] ${category}.${event}: ${message}`, data ?? '')
+    } catch (e) {}
+    return
+  }
 
   let mode = options.mode != null ? options.mode : getModeFromState()
   let timestamp = new Date().toISOString()

@@ -261,6 +261,7 @@ class Sabaki extends EventEmitter {
     this.ownershipCache = {}
     this.previewOwnershipCache = {}
     this.auxAnalysisRequestId = 0
+    this.scratchAnalysisRequestId = 0
     this.analysisRequestId = 0
     this.historyPointer = 0
     this.history = []
@@ -1195,16 +1196,26 @@ class Sabaki extends EventEmitter {
   async ensureAnalysisReady({requireOwnership = false} = {}) {
     let syncer = this.inferredState.analyzingEngineSyncer
 
+    console.log('[ensure.ready.start]', {
+      hasSyncer: syncer != null,
+      requireOwnership,
+      syncerId: syncer?.id,
+      syncerSuspended: syncer?._suspended,
+      syncerCommands: syncer?.commands?.length,
+    })
+
     if (
       syncer != null &&
       (!requireOwnership || this.engineSupportsOwnership(syncer))
     ) {
+      console.log('[ensure.ready.reuse]', {syncerId: syncer.id})
       return syncer
     }
 
     let syncerId = this.getAnalysisSyncerId({requireOwnership})
 
     if (syncerId == null) {
+      console.log('[ensure.ready.attach]', {requireOwnership})
       syncer = await this.attachDefaultAnalysisEngine({requireOwnership})
       syncerId = syncer?.id ?? null
     }
@@ -1248,9 +1259,18 @@ class Sabaki extends EventEmitter {
     // Auto-detect engines if none configured (transient — not persisted)
     if (engines.length === 0) {
       let detected = detectEngines()
+      console.log('[attach.detect]', {
+        detectedCount: detected.length,
+        detectedPaths: detected.map((e) => e.path),
+      })
       if (detected.length > 0) {
         engines = detected
       }
+    } else {
+      console.log('[attach.configured]', {
+        engineCount: engines.length,
+        enginePaths: engines.map((e) => e.path),
+      })
     }
 
     for (let i = 0; i < engines.length; i++) {
@@ -1891,6 +1911,7 @@ class Sabaki extends EventEmitter {
 
   getAnalyzeCommand(syncer) {
     if (syncer == null) return null
+    if (!Array.isArray(syncer.commands) || syncer.commands.length === 0) return null
 
     let analyzeCommands = setting.get('engines.analyze_commands')
     return analyzeCommands.find((cmd) => syncer.commands.includes(cmd)) || null
@@ -2135,17 +2156,38 @@ class Sabaki extends EventEmitter {
     previewCacheMoves = null,
     onAnalysisUpdate = null,
   }) {
+    applogger.log('info', 'engine', 'runBoardAnalysis', 'Board analysis requested', {
+      syncerId: syncer?.id,
+      suspended: syncer?.suspended,
+      treePosition,
+      analyzePlayer,
+      requestGroup,
+      analysisSource,
+    })
+
     if (
       syncer == null ||
       syncer.suspended ||
       tree == null ||
       treePosition == null
     ) {
+      applogger.log('debug', 'engine', 'runBoardAnalysis.skip', 'Analysis skipped', {
+        syncerNull: syncer == null,
+        suspended: syncer?.suspended,
+        treeNull: tree == null,
+        treePositionNull: treePosition == null,
+      })
       return null
     }
 
     let commandName = this.getAnalyzeCommand(syncer)
-    if (commandName == null) return null
+    if (commandName == null) {
+      applogger.log('debug', 'engine', 'runBoardAnalysis.no_command', 'No analyze command available', {
+        syncerId: syncer.id,
+        commands: syncer.commands,
+      })
+      return null
+    }
 
     let args = this.buildAnalyzeArgs(syncer, analyzePlayer, {
       analysisAreaVertices: this.state.analysisAreaVertices,
@@ -2158,7 +2200,9 @@ class Sabaki extends EventEmitter {
     let requestId =
       requestGroup === 'analysis'
         ? ++this.analysisRequestId
-        : ++this.auxAnalysisRequestId
+        : requestGroup === 'scratch-analysis'
+          ? ++this.scratchAnalysisRequestId
+          : ++this.auxAnalysisRequestId
     let visitLimit = this.getAnalysisVisitLimit(syncer)
     let maxTime = this.getAnalysisMaxTime(syncer)
     let timeoutMs = maxTime != null ? Math.round(maxTime * 1000) : null
@@ -2173,11 +2217,20 @@ class Sabaki extends EventEmitter {
 
     try {
       let synced = await this.syncEngine(syncer.id, treePosition, {tree})
-      if (
-        !synced ||
-        (requestGroup === 'analysis' && requestId !== this.analysisRequestId) ||
-        (requestGroup !== 'analysis' && requestId !== this.auxAnalysisRequestId)
-      ) {
+      let currentId =
+        requestGroup === 'analysis'
+          ? this.analysisRequestId
+          : requestGroup === 'scratch-analysis'
+            ? this.scratchAnalysisRequestId
+            : this.auxAnalysisRequestId
+      if (!synced || requestId !== currentId) {
+        applogger.log('debug', 'engine', 'runBoardAnalysis.cancelled', 'Analysis cancelled after sync', {
+          synced,
+          staleRequestId: requestId !== currentId,
+          requestId,
+          currentId,
+          requestGroup,
+        })
         return null
       }
 
@@ -2198,12 +2251,14 @@ class Sabaki extends EventEmitter {
         }
 
         let handleUpdate = () => {
-          let invalid =
+          let currentId =
             requestGroup === 'analysis'
-              ? requestId !== this.analysisRequestId
-              : requestId !== this.auxAnalysisRequestId
+              ? this.analysisRequestId
+              : requestGroup === 'scratch-analysis'
+                ? this.scratchAnalysisRequestId
+                : this.auxAnalysisRequestId
 
-          if (invalid) {
+          if (requestId !== currentId) {
             finish(null)
             return
           }
@@ -2251,8 +2306,18 @@ class Sabaki extends EventEmitter {
               analysisAreaVertices: this.state.analysisAreaVertices,
             },
           )
+          applogger.log('debug', 'engine', 'runBoardAnalysis.queue_command', 'Queuing analyze command', {
+            commandName,
+            args,
+            treePosition,
+            requestGroup,
+          })
           syncer.queueCommand({name: commandName, args})
         } catch (err) {
+          applogger.log('warn', 'engine', 'runBoardAnalysis.queue_error', 'Failed to queue analyze command', {
+            error: err?.message,
+            treePosition,
+          })
           finish(null)
         }
       })
@@ -2360,6 +2425,12 @@ class Sabaki extends EventEmitter {
   }
 
   async setTerritoryEnabled(territoryEnabled) {
+    console.log('[territory.set]', {
+      territoryEnabled,
+      currentState: this.state.territoryEnabled,
+      mode: this.state.mode,
+    })
+
     if (territoryEnabled === this.state.territoryEnabled) return true
 
     if (!territoryEnabled) {
@@ -2375,6 +2446,7 @@ class Sabaki extends EventEmitter {
 
     let syncer = await this.ensureAnalysisReady({requireOwnership: true})
     if (syncer == null) {
+      console.log('[territory.no_syncer]', 'ensureAnalysisReady returned null')
       this.setState({
         territoryEnabled: false,
         territoryCompareEnabled: false,
@@ -2382,13 +2454,22 @@ class Sabaki extends EventEmitter {
       return false
     }
 
+    console.log('[territory.syncer_ready]', {
+      mode: this.state.mode,
+      analysisTreePosition: this.state.analysisTreePosition,
+      treePosition: this.state.treePosition,
+      currentOwnership: this.getCurrentOwnership(syncer) != null,
+    })
+
     if (
       this.state.mode !== 'analysis' &&
       (this.state.analysisTreePosition !== this.state.treePosition ||
         this.getCurrentOwnership(syncer) == null)
     ) {
+      console.log('[territory.analyze_move]', {treePosition: this.state.treePosition})
       this.analyzeMove(this.state.treePosition)
     } else if (this.state.mode === 'analysis') {
+      console.log('[territory.schedule_edit]')
       this.scheduleEditWorkspaceAnalysis()
     }
 
@@ -4244,7 +4325,7 @@ class Sabaki extends EventEmitter {
           'engine',
           'engine.start_failed',
           'Engine path error',
-          {name: engine.name, error: syncer.pathError},
+          {name: engine.name, path: engine.path, error: syncer.pathError},
         )
 
         this.addEngineLogEntry(engine.name, {
@@ -4255,6 +4336,13 @@ class Sabaki extends EventEmitter {
 
         continue
       }
+
+      console.log('[engine.creating]', {
+        name: engine.name,
+        path: engine.path,
+        args: engine.args,
+        syncerId: syncer.id,
+      })
 
       syncer.on('error', (err) => {
         applogger.log(
@@ -4442,6 +4530,11 @@ class Sabaki extends EventEmitter {
           internal: true,
           content: 'Engine Stopped',
         })
+      })
+
+      console.log('[engine.starting]', {
+        name: engine.name,
+        syncerId: syncer.id,
       })
 
       syncer.start()
@@ -4798,6 +4891,12 @@ class Sabaki extends EventEmitter {
   }
 
   async startAnalysis(syncerId) {
+    console.log('[analysis.start]', {
+      syncerId,
+      currentAnalyzingId: this.state.analyzingEngineSyncerId,
+      match: this.state.analyzingEngineSyncerId === syncerId,
+    })
+
     if (this.state.analyzingEngineSyncerId === syncerId) return
 
     let t = i18n.context('sabaki.engine')
