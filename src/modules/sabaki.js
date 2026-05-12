@@ -482,6 +482,7 @@ class Sabaki extends EventEmitter {
       referenceMarkerMap: null,
       currentLines: [],
       referenceLines: [],
+      lineFirstVertex: null,
     }
   }
 
@@ -1400,6 +1401,7 @@ class Sabaki extends EventEmitter {
         currentOwnership: null,
         currentMarkerMap: snapshot.signMap.map((row) => row.map(() => null)),
         currentLines: [],
+        lineFirstVertex: null,
       },
     })
   }
@@ -1612,7 +1614,7 @@ class Sabaki extends EventEmitter {
 
     if (!execResult.handled) return false
 
-    if (execResult.changed) {
+    if (execResult.changed || execResult.lineFirstVertex !== undefined) {
       this.commitEditResult(execResult)
     }
 
@@ -2207,7 +2209,7 @@ class Sabaki extends EventEmitter {
     let execResult = executeBoardInteraction(result, execContext)
     if (!execResult.handled) return
 
-    if (execResult.changed) {
+    if (execResult.changed || execResult.lineFirstVertex !== undefined) {
       this.commitEditResult(execResult)
     }
   }

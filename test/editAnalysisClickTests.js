@@ -46,6 +46,9 @@ function makeAnalysisState(tool, overrides = {}) {
       activeTab: 'current',
       currentSnapshot: snapshot,
       referenceSnapshot: null,
+      currentMarkerMap: signMap.map((row) => row.map(() => null)),
+      currentLines: [],
+      lineFirstVertex: null,
     },
     ...overrides.stateOverrides,
   }
@@ -215,8 +218,8 @@ describe('Phase 5 edit-analysis click redirect', () => {
     })
   })
 
-  describe('unmigrated intents (markers, lines, labels) -> fallback', () => {
-    const unmigratedTools = [
+  describe('migrated marker intents', () => {
+    const markerTools = [
       'cross',
       'triangle',
       'square',
@@ -225,27 +228,50 @@ describe('Phase 5 edit-analysis click redirect', () => {
       'number',
     ]
 
-    for (let tool of unmigratedTools) {
-      it(`${tool}: NOT handled (falls back to legacy scratchEdit)`, () => {
+    for (let tool of markerTools) {
+      it(`${tool}: handled, changed, returns markerMap`, () => {
         let state = makeAnalysisState(tool)
-        let {handled} = runPipeline(state, [3, 3], leftClick())
+        let {handled, changed, markerMap} = runPipeline(state, [3, 3], leftClick())
 
-        assert.equal(handled, false)
+        assert.equal(handled, true)
+        assert.equal(changed, true)
+        assert.ok(markerMap != null, 'markerMap should be present')
       })
     }
 
-    it('line tool: handled (Phase 7 migrated)', () => {
+    it('line tool first click: handled, NOT changed, saves lineFirstVertex', () => {
       let state = makeAnalysisState('line')
-      let {handled} = runPipeline(state, [3, 3], leftClick())
+      let {handled, changed, lineFirstVertex} = runPipeline(state, [3, 3], leftClick())
 
       assert.equal(handled, true)
+      assert.equal(changed, false)
+      assert.deepEqual(lineFirstVertex, {type: 'line', vertex: [3, 3]})
     })
 
-    it('arrow tool: handled (Phase 7 migrated)', () => {
+    it('arrow tool first click: handled, NOT changed, saves lineFirstVertex', () => {
       let state = makeAnalysisState('arrow')
-      let {handled} = runPipeline(state, [3, 3], leftClick())
+      let {handled, changed, lineFirstVertex} = runPipeline(state, [3, 3], leftClick())
 
       assert.equal(handled, true)
+      assert.equal(changed, false)
+      assert.deepEqual(lineFirstVertex, {type: 'arrow', vertex: [3, 3]})
+    })
+
+    it('line tool second click: produces completed line and clears lineFirstVertex', () => {
+      let state = makeAnalysisState('line')
+      // Simulate first click already committed — workspace has lineFirstVertex
+      state.editWorkspace.lineFirstVertex = {type: 'line', vertex: [3, 3]}
+
+      let {handled, changed, lines, lineFirstVertex: lfResult} = runPipeline(state, [5, 5], leftClick())
+
+      assert.equal(handled, true)
+      assert.equal(changed, true)
+      assert.ok(lines != null)
+      assert.equal(lines.length, 1)
+      assert.deepEqual(lines[0].v1, [3, 3])
+      assert.deepEqual(lines[0].v2, [5, 5])
+      assert.equal(lines[0].type, 'line')
+      assert.equal(lfResult, null)
     })
 
     it('right-click label: NOT handled (menu action)', () => {
@@ -303,6 +329,32 @@ describe('Phase 5 edit-analysis click redirect', () => {
       )
       assert.equal(source.kind, 'scratch')
       assert.equal(source.snapshotId, snapshot.id)
+    })
+
+    it('cross marker produces markerMap with correct shape', () => {
+      let state = makeAnalysisState('cross')
+      let {markerMap, tab} = runPipeline(state, [3, 3], leftClick())
+
+      assert.equal(tab, 'current')
+      assert.ok(markerMap)
+      assert.equal(markerMap[3][3].type, 'cross')
+    })
+
+    it('number marker produces sequential label', () => {
+      let state = makeAnalysisState('number')
+      let {markerMap} = runPipeline(state, [3, 3], leftClick())
+
+      assert.ok(markerMap)
+      assert.equal(markerMap[3][3].type, 'label')
+      assert.equal(markerMap[3][3].label, '1')
+    })
+
+    it('line first click produces lineFirstVertex but no lines', () => {
+      let state = makeAnalysisState('line')
+      let {lineFirstVertex, lines} = runPipeline(state, [3, 3], leftClick())
+
+      assert.deepEqual(lineFirstVertex, {type: 'line', vertex: [3, 3]})
+      assert.equal(lines, undefined)
     })
   })
 

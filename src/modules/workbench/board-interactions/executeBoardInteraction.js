@@ -11,7 +11,18 @@ import {executeScratchEdit} from './executors/scratchEditInteractionExecutor.js'
  * @param {import('./intents.ts').BoardInteractionResult} result
  * @param {import('../contracts/workspaceDefaults.ts').ScratchEditExecutionContext} context
  * @param {{invalidateEditAnalysis?: () => void, scheduleEditWorkspaceAnalysis?: (tab: string) => void}} [deps]
- * @returns {{handled: boolean, changed: boolean, reason?: string, tab?: string, snapshot?: object}}
+ * @returns {{
+ *   handled: boolean,
+ *   changed: boolean,
+ *   reason?: string,
+ *   tab?: string,
+ *   snapshot?: object,
+ *   markerMap?: (object|null)[][],
+ *   lines?: object[],
+ *   lineFirstVertex?: {type: string, vertex: number[]} | null,
+ *   newTab?: string,
+ *   capturedSnapshot?: object,
+ * }}
  */
 export function executeBoardInteraction(result, context, deps) {
   if (result.status !== RESOLVE_STATUSES.RESOLVED) {
