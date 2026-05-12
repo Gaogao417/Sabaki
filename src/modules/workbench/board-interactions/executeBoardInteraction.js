@@ -5,8 +5,8 @@ import {executeScratchEdit} from './executors/scratchEditInteractionExecutor.js'
  * Thin router: given a resolved BoardInteractionResult and an edit workspace
  * context, dispatch to the correct executor or defer.
  *
- * Phase 4 handles only mutationContract === scratchEdit with supported stone
- * intents. All other contracts and intents are deferred for later phases.
+ * Phase 4 handles mutationContract === scratchEdit.
+ * Phase 8 adds mutationContract === playMove via executePlayInteractionAsync.
  *
  * @param {import('./intents.ts').BoardInteractionResult} result
  * @param {import('../contracts/workspaceDefaults.ts').ScratchEditExecutionContext} context
@@ -26,5 +26,7 @@ export function executeBoardInteraction(result, context, deps) {
     return executeScratchEdit(result, context, deps)
   }
 
+  // playMove is handled by the async router (executeBoardInteractionAsync),
+  // not this synchronous path.
   return {handled: false, changed: false, reason: `unsupported contract: ${result.mutationContract}`}
 }

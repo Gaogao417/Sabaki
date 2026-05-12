@@ -16,3 +16,4 @@ export {createBoardInteractionContext} from './createBoardInteractionContext.ts'
 
 export {executeBoardInteraction} from './executeBoardInteraction.js'
 export {executeScratchEdit} from './executors/scratchEditInteractionExecutor.js'
+export {executePlayInteraction} from './executors/playInteractionExecutor.js'

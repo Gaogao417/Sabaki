@@ -32,10 +32,15 @@ import {
   getPositionSourceFromState,
 } from './workbench/contracts/index.ts'
 import {
+  RESOLVE_STATUSES,
   createBoardInteractionContext,
   executeBoardInteraction,
+  executePlayInteraction,
   resolveBoardInteraction,
 } from './workbench/board-interactions/index.ts'
+import {createDocumentStore} from './document/documentStore.js'
+import {createEngineService} from './engine/engineService.js'
+import {createAnalysisService} from './analysis/analysisService.js'
 import {
   boardFromSnapshot,
   cloneSnapshot,
@@ -1551,6 +1556,30 @@ class Sabaki extends EventEmitter {
     })
   }
 
+  // Phase 8: Play Interaction Services
+
+  _playServices = null
+
+  getPlayServices() {
+    if (this._playServices == null) {
+      this._playServices = {
+        documentStore: createDocumentStore(this, {
+          getSetting: (key) => setting.get(key),
+        }),
+        engineService: createEngineService(this),
+        analysisService: createAnalysisService(this),
+      }
+    }
+    return this._playServices
+  }
+
+  async executePlayMove(result) {
+    let services = this.getPlayServices()
+    let context = {}
+
+    await executePlayInteraction(result, context, services)
+  }
+
   // Phase 5: Edit-Analysis Click Redirect
 
   handleEditAnalysisClick(vertex, {button = 0, ctrlKey = false} = {}) {
@@ -1590,27 +1619,79 @@ class Sabaki extends EventEmitter {
     return true
   }
 
-  commitEditResult({tab, snapshot}) {
+  commitEditResult({tab, snapshot, markerMap, lines, lineFirstVertex, newTab, capturedSnapshot}) {
     let ws = this.state.editWorkspace
-    if (ws == null || snapshot == null) return
+    if (ws == null) return
 
-    let {snapshotKey, analysisKey, ownershipKey} =
-      this.getEditWorkspaceTabKeys(tab)
+    let effectiveTab = newTab ?? tab ?? ws.activeTab
+    let {snapshotKey, analysisKey, ownershipKey, markerKey, linesKey} =
+      this.getEditWorkspaceTabKeys(effectiveTab)
 
-    this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
-    this.setState({
-      editWorkspace: {
-        ...ws,
-        positionSource: createScratchPositionSource(
-          snapshot.id,
-          snapshot.role ?? tab,
-        ),
-        [snapshotKey]: snapshot,
-        [analysisKey]: null,
-        [ownershipKey]: null,
-      },
-    })
-    this.scheduleEditWorkspaceAnalysis(tab)
+    // Snapshot write: invalidates analysis and ownership
+    if (snapshot != null) {
+      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      this.setState({
+        editWorkspace: {
+          ...ws,
+          positionSource: createScratchPositionSource(
+            snapshot.id,
+            snapshot.role ?? effectiveTab,
+          ),
+          [snapshotKey]: snapshot,
+          [analysisKey]: null,
+          [ownershipKey]: null,
+        },
+      })
+      this.scheduleEditWorkspaceAnalysis(effectiveTab)
+      return
+    }
+
+    // Marker write
+    if (markerMap != null) {
+      this.setState({
+        editWorkspace: {
+          ...ws,
+          [markerKey]: markerMap,
+        },
+      })
+      return
+    }
+
+    // Line write or line-first-vertex state update
+    if (lines != null || lineFirstVertex !== undefined) {
+      let updates = {...ws}
+      if (lines != null) updates[linesKey] = lines
+      if (lineFirstVertex !== undefined) updates.lineFirstVertex = lineFirstVertex
+      this.setState({editWorkspace: updates})
+      return
+    }
+
+    // Tab switch without snapshot change
+    if (newTab != null) {
+      this.setState({
+        editWorkspace: {
+          ...ws,
+          activeTab: newTab,
+        },
+      })
+      this.scheduleEditWorkspaceAnalysis(newTab)
+      return
+    }
+
+    // Capture reference
+    if (capturedSnapshot != null) {
+      let targetTab = effectiveTab
+      let targetSnapshotKey = this.getEditWorkspaceTabKeys(targetTab).snapshotKey
+      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      this.setState({
+        editWorkspace: {
+          ...ws,
+          activeTab: targetTab,
+          [targetSnapshotKey]: capturedSnapshot,
+        },
+      })
+      this.scheduleEditWorkspaceAnalysis(targetTab)
+    }
   }
 
   // Scratch Edit Contract
@@ -3453,6 +3534,32 @@ class Sabaki extends EventEmitter {
     let [vx, vy] = vertex
 
     if (['play', 'autoplay'].includes(this.state.mode)) {
+      // Phase 8: async play router for play mode left-click empty point
+      if (this.state.mode === 'play') {
+        let playCtx = createBoardInteractionContext({
+          state: this.state,
+          board,
+          vertex,
+          event: {button, ctrlKey, metaKey},
+          isMac: helper.isMac,
+        })
+
+        if (playCtx != null) {
+          let playResult = resolveBoardInteraction(playCtx)
+
+          if (
+            playResult.status === RESOLVE_STATUSES.RESOLVED &&
+            playResult.intent === 'play-stone' &&
+            playResult.mutationContract === 'playMove'
+          ) {
+            this.executePlayMove(playResult)
+            return
+          }
+        }
+
+        // noop/deferred: fall through to legacy play handling
+      }
+
       if (button === 0 && !(helper.isMac && ctrlKey)) {
         if (board.get(vertex) === 0) {
           this.playMove(vertex, {
@@ -4059,7 +4166,7 @@ class Sabaki extends EventEmitter {
 
   // Navigation
 
-  setCurrentTreePosition(tree, treePosition, {clearCache = false} = {}) {
+  setCurrentTreePosition(tree, treePosition, {clearCache = false, scheduleAnalysis = true} = {}) {
     if (clearCache) gametree.clearBoardCache()
 
     let navigated = treePosition !== this.state.treePosition
@@ -4109,15 +4216,17 @@ class Sabaki extends EventEmitter {
 
     // Continuous analysis
 
-    if (
-      navigated &&
-      this.state.mode === 'analysis' &&
-      this.state.editWorkspace != null
-    ) {
-      this.syncEditWorkspaceToCurrentPosition()
-      this.scheduleEditWorkspaceAnalysis()
-    } else if (navigated) {
-      this.scheduleLiveAnalysis(treePosition)
+    if (scheduleAnalysis) {
+      if (
+        navigated &&
+        this.state.mode === 'analysis' &&
+        this.state.editWorkspace != null
+      ) {
+        this.syncEditWorkspaceToCurrentPosition()
+        this.scheduleEditWorkspaceAnalysis()
+      } else if (navigated) {
+        this.scheduleLiveAnalysis(treePosition)
+      }
     }
   }
 
