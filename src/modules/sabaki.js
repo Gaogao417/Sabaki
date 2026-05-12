@@ -40,7 +40,7 @@ import {
 } from './workbench/board-interactions/index.ts'
 import {createDocumentStore} from './document/documentStore.js'
 import {createEngineService} from './engine/engineService.js'
-import {createAnalysisService} from './analysis/analysisService.js'
+import {createAnalysisService} from './analysis/analysisService.ts'
 import {createTrainingStore} from './training/trainingStore.js'
 import {
   boardFromSnapshot,
@@ -48,18 +48,6 @@ import {
   createSnapshotFromBoard,
   snapshotToGameTree,
 } from './study.js'
-import {
-  SCRATCH_ANALYSIS_SOURCE,
-  createScratchAnalysisContext,
-  getScratchAnalysisCacheKey,
-  scheduleScratchAnalysis,
-  refreshScratchAnalysis,
-} from './analysis/scratchAnalysis.js'
-import {getBoardAnalysisContext as buildBoardAnalysisContext} from './analysis/boardAnalysisContext.js'
-import {
-  analyzeGameTreePosition,
-  scheduleGameTreeAnalysis,
-} from './analysis/gameTreeAnalysis.js'
 import * as sound from './sound.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
@@ -271,7 +259,6 @@ class Sabaki extends EventEmitter {
 
     this.treeHash = this.generateTreeHash()
     this.ownershipCache = {}
-    this.scratchOwnershipCache = {}
     this.previewOwnershipCache = {}
     this.auxAnalysisRequestId = 0
     this.analysisRequestId = 0
@@ -1087,14 +1074,18 @@ class Sabaki extends EventEmitter {
   }
 
   cacheScratchOwnership(syncerId, snapshot, ownership) {
-    let key = getScratchAnalysisCacheKey(syncerId, snapshot)
-    if (key == null || ownership == null) return
-    this.scratchOwnershipCache[key] = ownership
+    this.getPlayServices().analysisService.cacheScratchOwnership(
+      syncerId,
+      snapshot,
+      ownership,
+    )
   }
 
   getCachedScratchOwnership(syncerId, snapshot) {
-    let key = getScratchAnalysisCacheKey(syncerId, snapshot)
-    return key == null ? null : this.scratchOwnershipCache[key] || null
+    return this.getPlayServices().analysisService.getCachedScratchOwnership(
+      syncerId,
+      snapshot,
+    )
   }
 
   cachePreviewOwnership(syncerId, tree, treePosition, moves, ownership) {
@@ -1156,14 +1147,9 @@ class Sabaki extends EventEmitter {
   }
 
   getBoardAnalysisContext({state = this.state, tab = null} = {}) {
-    return buildBoardAnalysisContext({
+    return this.getPlayServices().analysisService.getBoardAnalysisContext({
       state,
-      inferredState: this.getInferredState(state),
       tab,
-      getEditWorkspaceTabKeys: this.getEditWorkspaceTabKeys.bind(this),
-      getCurrentOwnership: () =>
-        this.getCurrentOwnership(this.inferredState.analyzingEngineSyncer),
-      getPlayer: this.getPlayer.bind(this),
     })
   }
 
@@ -1443,7 +1429,7 @@ class Sabaki extends EventEmitter {
 
     // Snapshot write: invalidates analysis and ownership
     if (snapshot != null) {
-      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      // Phase 10: generation tracking moved into scratchAnalysis.ts
       this.setState({
         editWorkspace: {
           ...ws,
@@ -1496,7 +1482,7 @@ class Sabaki extends EventEmitter {
     if (capturedSnapshot != null) {
       let targetTab = effectiveTab
       let targetSnapshotKey = this.getEditWorkspaceTabKeys(targetTab).snapshotKey
-      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      // Phase 10: generation tracking moved into scratchAnalysis.ts
       this.setState({
         editWorkspace: {
           ...ws,
@@ -1583,7 +1569,7 @@ class Sabaki extends EventEmitter {
         }
       }
 
-      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      // Phase 10: generation tracking moved into scratchAnalysis.ts
       this.setState({
         editWorkspace: {
           ...ws,
@@ -1630,7 +1616,7 @@ class Sabaki extends EventEmitter {
       // Switch player for next move
       nextSnapshot.nextPlayer = -sign
 
-      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      // Phase 10: generation tracking moved into scratchAnalysis.ts
       this.setState({
         editWorkspace: {
           ...ws,
@@ -1654,7 +1640,7 @@ class Sabaki extends EventEmitter {
     } else if (tool === 'eraser') {
       let nextSnapshot = cloneSnapshot(snapshot)
       nextSnapshot.signMap[vy][vx] = 0
-      this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+      // Phase 10: generation tracking moved into scratchAnalysis.ts
       this.setState({
         editWorkspace: {
           ...ws,
@@ -1844,7 +1830,7 @@ class Sabaki extends EventEmitter {
       nextPlayer: sign > 0 ? 1 : -1,
     }
 
-    this.editAnalysisGeneration = (this.editAnalysisGeneration || 0) + 1
+    // Phase 10: generation tracking moved into scratchAnalysis.ts
 
     this.setState({
       editWorkspace: {
@@ -1862,49 +1848,11 @@ class Sabaki extends EventEmitter {
   }
 
   scheduleEditWorkspaceAnalysis(targetTab = null) {
-    if (!this._scratchTimerRef) {
-      this._scratchTimerRef = {id: null}
-    }
-    scheduleScratchAnalysis(
-      {
-        refreshFn: (tab) => this.refreshEditWorkspaceAnalysis(tab),
-        delayMs: 200,
-        timerRef: this._scratchTimerRef,
-      },
-      targetTab,
-    )
+    this.getPlayServices().analysisService.scheduleScratchAnalysis(targetTab)
   }
 
   async refreshEditWorkspaceAnalysis(targetTab = null) {
-    if (!this._scratchGenerationRef) {
-      this._scratchGenerationRef = {value: 0}
-    }
-    // Keep this.editAnalysisGeneration in sync so that snapshot invalidations
-    // from other sabaki methods (stone placement, eraser, tab switch, …)
-    // still cancel in-flight analysis.
-    this._scratchGenerationRef.value = this.editAnalysisGeneration || 0
-
-    let result = await refreshScratchAnalysis(
-      {
-        getState: () => this.state,
-        setState: (patch) => this.setState(patch),
-        getSyncer: () => this.inferredState.analyzingEngineSyncer,
-        engineSupportsOwnership: (s) => this.engineSupportsOwnership(s),
-        getCachedScratchOwnership: (syncerId, snapshot) =>
-          this.getCachedScratchOwnership(syncerId, snapshot),
-        cacheScratchOwnership: (syncerId, snapshot, ownership) =>
-          this.cacheScratchOwnership(syncerId, snapshot, ownership),
-        runBoardAnalysis: (opts) => this.runBoardAnalysis(opts),
-        getSourceTree: () => this.inferredState.gameTree,
-        generationRef: this._scratchGenerationRef,
-        logger: applogger,
-      },
-      targetTab,
-    )
-
-    // Sync generation back so next invalidation picks up the right counter
-    this.editAnalysisGeneration = this._scratchGenerationRef.value
-    return result
+    return this.getPlayServices().analysisService.refreshScratchAnalysis(targetTab)
   }
 
   handleEditDragEnd({source, target}) {
@@ -4840,31 +4788,13 @@ class Sabaki extends EventEmitter {
   }
 
   async analyzeMove(treePosition) {
-    return analyzeGameTreePosition(
-      {
-        getSyncer: () => this.inferredState.analyzingEngineSyncer,
-        getGameTree: () => this.inferredState.gameTree,
-        getPlayer: (tp) => this.getPlayer(tp),
-        runBoardAnalysis: (opts) => this.runBoardAnalysis(opts),
-      },
+    return this.getPlayServices().analysisService.analyzeGameTreePosition(
       treePosition,
     )
   }
 
   scheduleLiveAnalysis(treePosition) {
-    if (!this._gameTreeTimerRef) {
-      this._gameTreeTimerRef = {id: null}
-    }
-    scheduleGameTreeAnalysis(
-      {
-        getSyncer: () => this.inferredState.analyzingEngineSyncer,
-        getState: () => this.state,
-        analyzeFn: (tp) => this.analyzeMove(tp),
-        getDelay: () => setting.get('game.navigation_analysis_delay'),
-        timerRef: this._gameTreeTimerRef,
-      },
-      treePosition,
-    )
+    this.getPlayServices().analysisService.scheduleGameTreeAnalysis(treePosition)
   }
 
   async startAnalysis(syncerId) {

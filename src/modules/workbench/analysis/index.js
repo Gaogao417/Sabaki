@@ -3,4 +3,4 @@ export {
   SCRATCH_ANALYSIS_SOURCE,
   createScratchAnalysisContext,
   getScratchAnalysisCacheKey,
-} from '../../analysis/scratchAnalysis.js'
+} from '../../analysis/scratchAnalysis.ts'

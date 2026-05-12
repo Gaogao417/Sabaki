@@ -9,7 +9,7 @@ import {
   SCRATCH_ANALYSIS_SOURCE,
   createScratchAnalysisContext,
   getScratchAnalysisCacheKey,
-} from '../src/modules/analysis/scratchAnalysis.js'
+} from '../src/modules/analysis/scratchAnalysis.ts'
 
 function makeSnapshot(width = 9, height = 9, nextPlayer = 1, extras = {}) {
   let board = newBoard(width, height)
