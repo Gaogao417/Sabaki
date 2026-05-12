@@ -38,83 +38,6 @@ export type MutationContract =
   | 'recallAnswer'
   | 'variationMove'
 
-export type InteractionContractId = MutationContract
-
-/**
- * Which durable state a committed interaction is allowed to write.
- *
- * - game-tree: A normal played move updates the SGF tree/current line.
- * - scratch-position: A setup/edit operation updates only the scratch snapshot.
- * - training-attempt: A recall answer updates attempt/session progress.
- * - game-tree-variation: A candidate move updates a variation branch, not the
- *   main play line.
- * - none: Read-only interactions such as hover/selection do not write board
- *   state.
- */
-export type InteractionBoardUpdate =
-  | 'game-tree'
-  | 'scratch-position'
-  | 'training-attempt'
-  | 'game-tree-variation'
-  | 'none'
-
-/**
- * Which analysis or feedback pipeline should run after the write.
- *
- * - refresh-game-tree-analysis: Re-analyze the active game-tree node or
- *   variation.
- * - refresh-scratch-analysis: Re-analyze the scratch current/reference board.
- * - refresh-recall-feedback: Recompute answer correctness, hint, progress, or
- *   completion state.
- * - none: The interaction does not require analysis/feedback refresh.
- */
-export type InteractionAnalysisUpdate =
-  | 'refresh-game-tree-analysis'
-  | 'refresh-scratch-analysis'
-  | 'refresh-recall-feedback'
-  | 'none'
-
-/**
- * How overlays should react once board/analysis state has changed.
- *
- * - derive-from-active-position: Show helpers for the current game-tree or
- *   variation position.
- * - derive-from-current-reference: Show scratch overlays derived from current
- *   and optional reference snapshots.
- * - clear-or-hide: Hide/clear overlays when they would reveal training answers
- *   or no longer match the task.
- * - preserve: Keep the current overlay display unchanged.
- */
-export type InteractionOverlayUpdate =
-  | 'derive-from-active-position'
-  | 'derive-from-current-reference'
-  | 'clear-or-hide'
-  | 'preserve'
-
-/**
- * Contract for one committed board/workbench interaction.
- *
- * Read this as "when the user finishes one meaningful operation, which state
- * pipeline should run?" It is deliberately about state updates, not raw input
- * gestures. A click, drag, toolbar action, or answer submission can all end up
- * using one of these contracts once the UI has interpreted the input.
- *
- * Field meanings:
- * - id: Product-level operation name, used by older helpers as the mutation id.
- * - boardUpdate: Which durable board/session state this operation is allowed to
- *   write.
- * - analysisUpdate: Which analysis or feedback result should refresh after the
- *   write.
- * - overlayUpdate: How visible helper layers should react after the new state is
- *   available.
- */
-export type InteractionContract = {
-  id: InteractionContractId
-  boardUpdate: InteractionBoardUpdate
-  analysisUpdate: InteractionAnalysisUpdate
-  overlayUpdate: InteractionOverlayUpdate
-}
-
 export type WorkspaceKind =
   | 'play'
   | 'scratch-analysis'
@@ -158,7 +81,7 @@ type ScratchPositionInput = Omit<ScratchPosition, 'signMap' | 'nextPlayer'> & {
 
 /**
  * Minimal shape of Sabaki state needed to derive workspace kind, position source,
- * and interaction contract. Mode-to-workspace mapping:
+ * and mutation contract. Mode-to-workspace mapping:
  *   'play' | 'autoplay' -> PLAY
  *   'analysis'          -> SCRATCH_ANALYSIS
  *   'recall'            -> RECALL
@@ -192,15 +115,12 @@ export const SCRATCH_ROLES = Object.freeze({
 } as const)
 
 /**
- * Legacy write-permission contract ids.
+ * Write-permission contract ids.
  *
- * New workbench code should prefer `INTERACTION_CONTRACTS`, which describes the
- * full state-update pipeline after a committed interaction. These ids remain as
- * the low-level board/session write names so older call sites can migrate in
- * small steps.
- *
- * Do not extend this as the primary abstraction; add/update an
- * `InteractionContract` instead.
+ * These values name the durable state a committed action may write. They should
+ * stay thin: raw input meaning belongs in a BoardInteractionIntent resolver, and
+ * concrete refresh/overlay side effects belong in the executor that handles that
+ * intent.
  */
 export const MUTATION_CONTRACTS = Object.freeze({
   PLAY_MOVE: 'playMove',
@@ -210,68 +130,14 @@ export const MUTATION_CONTRACTS = Object.freeze({
 } as const)
 
 /**
- * Interaction contracts - state-update pipelines for committed interactions.
- *
- * This layer answers what happens after an interaction is accepted: which board
- * state may change, which analysis should refresh, and how overlays should
- * respond. Raw click/drag interpretation can still be implemented by dedicated
- * interaction handlers, but workspace defaults should point here rather than to
- * a growing board mode enum.
- *
- * Operation meanings:
- * - PLAY_MOVE: The user plays a normal move in a real game/review line. The move
- *   becomes part of the SGF game tree; engine analysis and overlays follow the
- *   new active game-tree node.
- * - SCRATCH_EDIT: The user edits a scratch board for study, such as placing a
- *   black/white stone, removing a stone, dragging a setup stone, changing the
- *   next player, or editing the reference board. The current SGF tree must not
- *   be changed; scratch analysis and current/reference overlays are refreshed.
- * - RECALL_ANSWER: The user submits an answer during recall/training. The click
- *   is recorded as an attempt/session result instead of a free board edit;
- *   recall feedback updates, and normal analysis overlays are hidden or cleared
- *   so they do not leak the answer.
- * - VARIATION_MOVE: The user tries a candidate move from a game-tree position.
- *   This is not scratch setup: it writes a game-tree variation, or later a
- *   temporary variation branch, then refreshes variation/game-tree analysis.
- */
-export const INTERACTION_CONTRACTS = Object.freeze({
-  PLAY_MOVE: {
-    id: 'playMove',
-    boardUpdate: 'game-tree',
-    analysisUpdate: 'refresh-game-tree-analysis',
-    overlayUpdate: 'derive-from-active-position',
-  },
-  SCRATCH_EDIT: {
-    id: 'scratchEdit',
-    boardUpdate: 'scratch-position',
-    analysisUpdate: 'refresh-scratch-analysis',
-    overlayUpdate: 'derive-from-current-reference',
-  },
-  RECALL_ANSWER: {
-    id: 'recallAnswer',
-    boardUpdate: 'training-attempt',
-    analysisUpdate: 'refresh-recall-feedback',
-    overlayUpdate: 'clear-or-hide',
-  },
-  VARIATION_MOVE: {
-    id: 'variationMove',
-    boardUpdate: 'game-tree-variation',
-    analysisUpdate: 'refresh-game-tree-analysis',
-    overlayUpdate: 'derive-from-active-position',
-  },
-} as const satisfies Record<string, InteractionContract>)
-
-/**
  * Workspace kinds - top-level task presets.
  *
- * Three layers stay intentionally separate:
+ * Two layers stay intentionally separate:
  * - Workspace: what task the user is doing.
- * - InteractionContract: how a committed action updates board, analysis, and
- *   overlay state.
- * - Overlay display/preset: what auxiliary information is visible.
+ * - MutationContract: which durable state a committed action may write.
  *
- * A workspace may select defaults for those layers, but it must not become the
- * board write boundary itself.
+ * A workspace may select defaults, but it must not become the board write
+ * boundary itself.
  *
  * Implicit mode -> workspace mapping (see `getWorkspaceKindFromState`):
  *   state.mode 'play'      -> PLAY
@@ -332,37 +198,32 @@ export const OVERLAY_RENDER_MODES = Object.freeze({
 /**
  * Default contracts for each workspace.
  *
- * This preserves the three-layer split:
+ * This preserves the workspace/write-boundary split:
  * - workspace: what task the user is doing;
- * - interactionContract: how committed actions update board, analysis, overlay;
- * - overlay display/preset: what auxiliary information is visible.
- *
- * Overlay defaults are intentionally not encoded here yet. Phase 5 should add a
- * separate overlay preset contract instead of folding display state into the
- * workspace or interaction contract.
+ * - mutationContract: which durable state committed actions may write.
  */
 export const WORKSPACE_DEFAULTS = Object.freeze({
   [WORKSPACE_KINDS.PLAY]: {
     positionSourceKind: 'game-tree',
-    interactionContract: INTERACTION_CONTRACTS.PLAY_MOVE,
+    mutationContract: MUTATION_CONTRACTS.PLAY_MOVE,
   },
   [WORKSPACE_KINDS.SCRATCH_ANALYSIS]: {
     positionSourceKind: 'scratch',
-    interactionContract: INTERACTION_CONTRACTS.SCRATCH_EDIT,
+    mutationContract: MUTATION_CONTRACTS.SCRATCH_EDIT,
   },
   [WORKSPACE_KINDS.VARIATION_ANALYSIS]: {
     positionSourceKind: 'game-tree',
-    interactionContract: INTERACTION_CONTRACTS.VARIATION_MOVE,
+    mutationContract: MUTATION_CONTRACTS.VARIATION_MOVE,
   },
   [WORKSPACE_KINDS.RECALL]: {
     positionSourceKind: 'game-tree',
-    interactionContract: INTERACTION_CONTRACTS.RECALL_ANSWER,
+    mutationContract: MUTATION_CONTRACTS.RECALL_ANSWER,
   },
 } satisfies Record<
   WorkspaceKind,
   {
     positionSourceKind: PositionSource['kind']
-    interactionContract: InteractionContract
+    mutationContract: MutationContract
   }
 >)
 
@@ -462,18 +323,12 @@ export function snapshotFromScratchPosition(
   return createScratchPositionFromSnapshot(position)
 }
 
-export function getInteractionContractForWorkspace(
-  workspaceKind: WorkspaceKind | null,
-): InteractionContract | null {
-  return workspaceKind == null
-    ? null
-    : (WORKSPACE_DEFAULTS[workspaceKind]?.interactionContract ?? null)
-}
-
 export function getMutationContractForWorkspace(
   workspaceKind: WorkspaceKind | null,
 ): MutationContract | null {
-  return getInteractionContractForWorkspace(workspaceKind)?.id ?? null
+  return workspaceKind == null
+    ? null
+    : (WORKSPACE_DEFAULTS[workspaceKind]?.mutationContract ?? null)
 }
 
 export function getWorkspaceKindFromState(
@@ -491,16 +346,10 @@ export function getWorkspaceKindFromState(
   return null
 }
 
-export function getInteractionContractFromState(
-  state: SabakiStateLike | null,
-): InteractionContract | null {
-  return getInteractionContractForWorkspace(getWorkspaceKindFromState(state))
-}
-
 export function getMutationContractFromState(
   state: SabakiStateLike | null,
 ): MutationContract | null {
-  return getInteractionContractFromState(state)?.id ?? null
+  return getMutationContractForWorkspace(getWorkspaceKindFromState(state))
 }
 
 export function getPositionSourceFromState(

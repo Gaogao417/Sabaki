@@ -17,31 +17,31 @@ future work should implement against.
 ```ts
 type PositionSource =
   | {kind: 'game-tree'; treePosition: TreePosition}
-  | {kind: 'scratch'; snapshotId: string; role?: ScratchRole}
+  | {kind: 'scratch'; snapshotId: string; role?: WorkingPositionRole}
 
-type ScratchRole = 'current' | 'reference' | 'problem-attempt'
+type WorkingPositionRole = 'current' | 'reference' | 'problem-attempt'
 ```
 
 - `game-tree`: The position comes from the current SGF game tree node.
-- `scratch`: The position comes from a temporary snapshot that must not
+- `scratch`: Legacy code name for a temporary working snapshot that must not
   implicitly dirty the SGF tree.
-- `role`: The purpose of the scratch position, such as the active analysis
+- `role`: The purpose of the working position, such as the active analysis
   board, the comparison reference, or a problem attempt.
 
-## ScratchPosition
+## WorkingPosition
 
-Scratch positions extend the existing study snapshot shape. They intentionally
+Working positions extend the existing study snapshot shape. They intentionally
 keep `signMap` so they remain compatible with `study.js`, `boardFromSnapshot`,
 `snapshotToGameTree`, engine analysis, and overlay code.
 
 ```ts
-type ScratchPosition = {
+type WorkingPosition = {
   id: string
   width: number
   height: number
   signMap: number[][]
   nextPlayer: 1 | -1
-  role?: ScratchRole
+  role?: WorkingPositionRole
   komi?: number
   rules?: string
   source?: {
@@ -51,15 +51,18 @@ type ScratchPosition = {
 }
 ```
 
-Scratch positions may be analyzed, compared, overlaid, and saved as problem
+Working positions may be analyzed, compared, overlaid, and saved as problem
 material. By default they do not write back to the current SGF tree.
 
 The current `editWorkspace.currentSnapshot` and
-`editWorkspace.referenceSnapshot` are the phase-one scratch positions:
+`editWorkspace.referenceSnapshot` are the phase-one working positions:
 
 - `currentSnapshot` maps to `role: 'current'`.
 - `referenceSnapshot` maps to `role: 'reference'`.
 - `editWorkspace` remains as a compatibility name while the data model evolves.
+- Existing code may still use `ScratchPosition`, `SCRATCH_ROLES`, and
+  `scratchEdit`; new design language should use working position for the data
+  shape and `scratchEdit` for the write boundary.
 
 ## Mutation Contracts
 
@@ -77,11 +80,11 @@ Allowed:
 
 Forbidden:
 
-- Mutating scratch positions.
+- Mutating working positions.
 
 ### scratchEdit
 
-Used for scratch analysis.
+Used for scratch/edit analysis.
 
 Allowed:
 
@@ -90,9 +93,9 @@ Allowed:
 - Remove stones.
 - Drag stones.
 - Set the next player.
-- Mutate scratch positions.
+- Mutate working positions.
 - Trigger engine analysis.
-- Save a scratch position as a problem snapshot.
+- Save a working position as a problem snapshot.
 
 Forbidden:
 
@@ -115,7 +118,7 @@ Forbidden:
 
 - Free board editing.
 - Writing to the current SGF game tree.
-- Mutating scratch setup.
+- Mutating edit setup.
 
 ### variationMove
 
@@ -132,12 +135,77 @@ Forbidden:
 
 - Sharing the same write path as `scratchEdit`.
 
+## BoardInteractionIntent and Dispatch
+
+Contracts do not remove dispatch. A board event must still be routed to code
+that can perform the requested action. The goal is to move from one large
+`mode` branch that understands every feature to a small routing step followed
+by focused executors.
+
+`BoardInteractionIntent` describes what the raw input means after considering
+workspace, selected tool, mouse button, board cell state, and modifiers.
+Examples:
+
+- `play-stone`
+- `place-black-stone`
+- `place-white-stone`
+- `erase-stone`
+- `drag-stone`
+- `mark-point`
+- `draw-line`
+- `submit-recall-answer`
+- `open-variation-menu`
+- `legacy-toggle-dead-stone`
+
+`MutationContract` describes where an accepted intent is allowed to write. One
+mutation contract can own many intents. For example, `scratchEdit` may include
+stone placement, erasing, dragging, markers, labels, lines, next-player changes,
+and reference-snapshot updates, but all of those writes stay inside working
+positions or scratch/edit state.
+
+Recommended routing shape:
+
+```txt
+Goban raw event
+  -> boardInteractionResolver
+  -> BoardInteractionIntent + PositionSource + MutationContract
+  -> focused executor
+```
+
+Executor ownership:
+
+| Executor | Owns | Must not own |
+| --- | --- | --- |
+| `playInteractionExecutor` | Real moves, game-tree writes, play analysis refresh | Scratch markers, recall attempts |
+| `scratchEditInteractionExecutor` | Working positions, edit markers/lines, scratch analysis refresh | Current SGF game-tree writes |
+| `recallInteractionExecutor` | Answer attempts, hints, skipped/correct/wrong progress | Free board editing |
+| `variationInteractionExecutor` | Variation writes or future temporary variations | Scratch setup writes |
+| `legacyInteractionExecutor` | Unmigrated scoring, estimator, find, guess, autoplay, native SGF edit | New workbench behavior |
+
+If code still exposes an `InteractionContract`, treat it as compatibility
+metadata or a derived description of post-write effects. It should not become a
+second primary dispatch key. Analysis, overlay, and UI refreshes should either
+live in the focused executor that owns the write or be returned by that executor
+as explicit effects.
+
+Anti-goal:
+
+```txt
+raw event
+  -> mutation contract
+  -> one central switch that implements every mode again
+```
+
+That shape recreates the current `clickVertex` problem with new names. The
+module split is valuable only when the resolver is pure and the write/effect
+logic moves behind executor boundaries.
+
 ## Workspace Defaults
 
 | Workspace          | Position source                          | Mutation contract | Notes                                                                          |
 | ------------------ | ---------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
 | Play               | `game-tree`                              | `playMove`        | Simple overlays and play controls.                                             |
-| Scratch analysis   | `scratch/current`                        | `scratchEdit`     | Current/reference scratch boards, territory compare, heatmaps, problem saving. |
+| Edit analysis      | `scratch/current`                        | `scratchEdit`     | Current/reference working boards, territory compare, heatmaps, problem saving. |
 | Variation analysis | `game-tree`                              | `variationMove`   | Phase one keeps the interface; full UI can come later.                         |
 | Recall             | `game-tree` or `scratch/problem-attempt` | `recallAnswer`    | Answer-focused controls; overlays hidden by default.                           |
 
@@ -192,8 +260,8 @@ legacy modes.
 
 - `src/modules/position-contracts.ts` defines the shared TypeScript contract
   types and runtime helpers.
-- `src/modules/study.js` preserves optional scratch metadata when cloning or
+- `src/modules/study.js` preserves optional working-position metadata when cloning or
   deserializing snapshots.
-- `src/modules/sabaki.js` seeds analysis workspace snapshots as scratch
+- `src/modules/sabaki.js` seeds analysis workspace snapshots as working
   positions and exposes `playMove`, `scratchEdit`, `recallAnswer`, and
   `variationMove` method boundaries.
