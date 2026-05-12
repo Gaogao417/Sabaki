@@ -376,7 +376,10 @@ src/modules/
   的兼容映射。
 - `workbench/board-interactions/intents.ts`: 定义 `play-stone`、`place-black-stone`、
   `place-white-stone`、`erase-stone`、`drag-stone`、`mark-point`、`draw-line`、
-  `submit-recall-answer`、`open-variation-menu`、`legacy-*` 等 intent。
+  `submit-recall-answer`、`open-variation-menu`、`save-as-problem` 以及 legacy fallback
+  intents（`legacy-toggle-dead-stones`、`legacy-find-move`、`legacy-guess-move`、
+  `legacy-problem-move`、`legacy-sgf-edit`、`legacy-analysis-fallback`、
+  `legacy-autoplay`、`legacy-play-right-click`）等 intent。
 - `workbench/board-interactions/resolveBoardInteraction.ts`: 纯 resolver。输入 state 摘要、棋盘事件、
   当前工具和棋盘点状态；输出 intent、position source、mutation contract。
 - `workbench/board-interactions/createBoardInteractionContext.js`: 从 `sabaki.state`、`inferredState`、
@@ -627,6 +630,33 @@ PositionSource
 - Migrate only the smallest edit-analysis loop first:
   `stone_1`, `stone_-1`, `eraser`, and `play` as next-player placement if the current
   tool semantics require it.
+- Formalize the executor input as `ScratchEditExecutionContext` with a pure helper
+  `createScratchEditExecutionContext()` so Phase 5 wiring does not need to hand-assemble
+  objects in `sabaki.clickVertex()`.
+- The context carries: `activeTab` (`current`/`reference`), `currentSnapshot` and
+  `referenceSnapshot`, `currentMarkerMap` and `referenceMarkerMap`, `currentLines` and
+  `referenceLines`, `lineFirstVertex` for two-click line drawing state, plus
+  `positionSource` and `mutationContract` derived from state.
+- The executor returns a structured effect instead of mutating state directly:
+
+  ```ts
+  type ScratchEditEffect = {
+    handled: boolean      // executor recognized the intent
+    changed: boolean      // state was actually modified
+    reason?: string       // why an operation was skipped
+    tab?: string          // which tab was affected
+    snapshot?: object     // updated working position
+    markerMap?: MarkerCell[][]
+    lines?: LineEntry[]
+    lineFirstVertex?: {type: string, vertex: number[]} | null
+    newTab?: string       // for tab switching
+    capturedSnapshot?: object  // for reference capture
+  }
+  ```
+
+- The distinction between `handled` (executor recognized the intent) and `changed`
+  (state was actually modified) lets the router distinguish "routed correctly but
+  no-op" from "fell through to wrong executor".
 - The scratch edit executor may update working positions through `workbenchStore` and
   trigger scratch analysis through `analysisService`.
 - It must not write game tree nodes, SGF properties, real move history, variation state,
@@ -640,6 +670,10 @@ PositionSource
   `createBoardInteractionContext() -> resolveBoardInteraction() ->
   executeBoardInteraction() -> scratchEditInteractionExecutor()`.
 - Apply this only to the migrated edit-analysis intents from Phase 4.
+- Unmigrated tools (markers, lines, labels, numbers) fall back to the legacy
+  `scratchEdit` handler inside `clickVertex()`. The fallback is explicit:
+  if the resolver returns a `LEGACY_*` intent or the executor returns
+  `{handled: false}`, `clickVertex()` continues into the old branch.
 - Keep play, recall, scoring, estimator, find, guess, autoplay, problem, review, and
   native SGF edit on legacy paths.
 - Keep `sabaki.js` as the transition coordinator / legacy facade, but move
@@ -651,7 +685,26 @@ PositionSource
 
 - Ensure edit analysis runs from the working position, including ownership and analysis
   result write-back, without dirtying the current SGF tree.
-- Clarify the temporary game-tree conversion used for engine analysis and its cache keys.
+- Scratch analysis runs as a distinct analysis source (`scratch-analysis`) with isolated
+  ownership cache, preventing any writes to the real SGF tree (`SBKV`/`SBKS`) or global
+  analysis state.
+- `createScratchAnalysisContext()` converts a working position snapshot into an
+  engine-analyzable context:
+
+  ```ts
+  type ScratchAnalysisContext = {
+    source: 'scratch-analysis'
+    tab: 'current' | 'reference'
+    tree: GameTree             // converted from snapshot
+    treePosition: string
+    analyzePlayer: number      // from snapshot.nextPlayer
+    syncerId: string
+  }
+  ```
+
+- Cache keys use a content-based signature: `[syncerId, snapshotSignature].join(':')`.
+  The signature is derived from the snapshot's `signMap` content, so any stone change
+  naturally invalidates the cache without manual key management.
 - Extract the core of `refreshEditWorkspaceAnalysis()` into a scratch analysis service:
   `sabaki.js` passes dependencies and commits returned results, while
   `src/modules/analysis/scratchAnalysis.js` owns scheduling, cache keys, ownership cache,
@@ -666,6 +719,26 @@ PositionSource
   in this order:
   drag stone, marker tools, line/arrow tools, set next player, reference snapshot,
   and save as problem.
+- Marker tools (`cross`, `triangle`, `square`, `circle`, `label`, `number`) are handled
+  by `workingPositionMarkers.js`, which provides:
+  `toggleCoordLabel()` for coordinate labels (e.g. `"A1"`, `"B2"` using board height),
+  `toggleNumberLabel()` for sequential numbering with gap detection,
+  `setLabelMarker()` for custom labels, and `createEmptyMarkerMap()`.
+- Line/arrow tools use a two-click state machine: the first click stores
+  `{type: lineType, vertex}` in `context.lineFirstVertex`; the second click completes
+  the line from `v1` to `v2` and clears the state. `workingPositionLines.js` provides
+  `addLine()`, `removeLineAt()` and `createEmptyLines()`, all returning immutable
+  new arrays.
+- Drag stone is handled by `moveWorkingStone()` in `workingPositionBoard.js`, which
+  validates that the target is empty and within bounds before moving. Stone placement
+  uses `board.makeMove()` for automatic capture handling.
+- Set next player normalizes the sign (`sign > 0 ? 1 : -1`) via `setWorkingNextPlayer()`.
+- Reference capture clones the snapshot (stripping `id`, `role` and metadata), determines
+  source/target tab based on `activeTab`, and may switch tabs after capture.
+- Save as problem delegates snapshot serialization to the executor caller; the executor
+  only returns the effect `{handled: true, changed: true, snapshot: ...}`.
+- The dual-tab structure (`current`/`reference`) means each effect must specify which tab
+  it affects via the `tab` field, and the caller applies state to the correct slot.
 - Keep these writes scoped to working position or edit workspace state.
 - Add tests at each step so marker/line/reference behavior does not leak into game-tree
   mutation helpers.
