@@ -3824,279 +3824,60 @@ class Sabaki extends EventEmitter {
 
   // Navigation
 
-  setCurrentTreePosition(tree, treePosition, {clearCache = false, scheduleAnalysis = true} = {}) {
-    if (clearCache) gametree.clearBoardCache()
-
-    let navigated = treePosition !== this.state.treePosition
-
-    if (navigated && this.state.mode === 'analysis') {
-      clearTimeout(this.editAnalysisId)
-    }
-
-    if (['scoring', 'estimator'].includes(this.state.mode) && navigated) {
-      this.setState({mode: 'play'})
-    }
-
-    let {gameTrees, gameCurrents, blockedGuesses} = this.state
-    let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
-    let currents = gameCurrents[gameIndex]
-
-    let n = tree.get(treePosition)
-    while (n.parentId != null) {
-      // Update currents
-
-      currents[n.parentId] = n.id
-      n = tree.get(n.parentId)
-    }
-
-    let prevGameIndex = this.state.gameIndex
-    let prevTreePosition = this.state.treePosition
-    let nextPreviewState = {
-      ...this.state,
-      treePosition,
-    }
-
-    this.setState({
-      playVariation: null,
-      blockedGuesses: navigated ? [] : blockedGuesses,
-      gameTrees: gameTrees.map((t, i) => (i !== gameIndex ? t : tree)),
-      gameIndex,
-      treePosition,
-      mode: this.state.mode,
-      territoryCompareEnabled:
-        this.state.territoryCompareEnabled &&
-        (!navigated || this.getTerritoryCompareAvailable(nextPreviewState)),
-    })
-
-    this.recordHistory({prevGameIndex, prevTreePosition})
-
-    if (navigated) this.events.emit('navigate')
-
-    // Continuous analysis
-
-    if (scheduleAnalysis) {
-      if (
-        navigated &&
-        this.state.mode === 'analysis' &&
-        this.state.editWorkspace != null
-      ) {
-        this.syncEditWorkspaceToCurrentPosition()
-        this.scheduleEditWorkspaceAnalysis()
-      } else if (navigated) {
-        this.scheduleLiveAnalysis(treePosition)
-      }
-    }
+  setCurrentTreePosition(tree, treePosition, options) {
+    this.getPlayServices().documentStore.setCurrentTreePosition(tree, treePosition, options)
   }
 
   goStep(step) {
-    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let node = tree.navigate(treePosition, step, gameCurrents[gameIndex])
-    if (node != null) this.setCurrentTreePosition(tree, node.id)
+    this.getPlayServices().documentStore.goStep(step)
   }
 
   goToMoveNumber(number) {
-    number = +number
-
-    if (isNaN(number)) return
-    if (number < 0) number = 0
-
-    let {gameTrees, gameIndex, gameCurrents} = this.state
-    let tree = gameTrees[gameIndex]
-    let node = tree.navigate(
-      tree.root.id,
-      Math.round(number),
-      gameCurrents[gameIndex],
-    )
-
-    if (node != null) this.setCurrentTreePosition(tree, node.id)
-    else this.goToEnd()
+    this.getPlayServices().documentStore.goToMoveNumber(number)
   }
 
   goToNextFork() {
-    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let next = tree.navigate(treePosition, 1, gameCurrents[gameIndex])
-    if (next == null) return
-    let sequence = [...tree.getSequence(next.id)]
-
-    this.setCurrentTreePosition(tree, sequence.slice(-1)[0].id)
+    this.getPlayServices().documentStore.goToNextFork()
   }
 
   goToPreviousFork() {
-    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let node = tree.get(treePosition)
-    let prev = tree.get(node.parentId)
-    if (prev == null) return
-    let newTreePosition = tree.root.id
-
-    for (let node of tree.listNodesVertically(
-      prev.id,
-      -1,
-      gameCurrents[gameIndex],
-    )) {
-      if (node.children.length > 1) {
-        newTreePosition = node.id
-        break
-      }
-    }
-
-    this.setCurrentTreePosition(tree, newTreePosition)
+    this.getPlayServices().documentStore.goToPreviousFork()
   }
 
   goToComment(step) {
-    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let commentProps = setting.get('sgf.comment_properties')
-    let newTreePosition = null
-
-    for (let node of tree.listNodesVertically(
-      treePosition,
-      step,
-      gameCurrents[gameIndex],
-    )) {
-      if (
-        node.id !== treePosition &&
-        commentProps.some((prop) => node.data[prop] != null)
-      ) {
-        newTreePosition = node.id
-        break
-      }
-    }
-
-    if (newTreePosition != null)
-      this.setCurrentTreePosition(tree, newTreePosition)
+    this.getPlayServices().documentStore.goToComment(step)
   }
 
   goToBeginning() {
-    let {gameTrees, gameIndex} = this.state
-    let tree = gameTrees[gameIndex]
-
-    this.setCurrentTreePosition(tree, tree.root.id)
+    this.getPlayServices().documentStore.goToBeginning()
   }
 
   goToEnd() {
-    let {gameTrees, gameIndex, gameCurrents} = this.state
-    let tree = gameTrees[gameIndex]
-    let [node] = [...tree.listCurrentNodes(gameCurrents[gameIndex])].slice(-1)
-
-    this.setCurrentTreePosition(tree, node.id)
+    this.getPlayServices().documentStore.goToEnd()
   }
 
   goToSiblingVariation(step) {
-    let {gameTrees, gameIndex, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let section = [...tree.getSection(tree.getLevel(treePosition))]
-    let index = section.findIndex((node) => node.id === treePosition)
-    let newIndex =
-      (((step + index) % section.length) + section.length) % section.length
-
-    this.setCurrentTreePosition(tree, section[newIndex].id)
+    this.getPlayServices().documentStore.goToSiblingVariation(step)
   }
 
   changeDownstreamVariation(step) {
-    // redirects gameCurrents[gameIndex] to a new stream
-    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let currents = gameCurrents[gameIndex]
-
-    let chIdx = [-1, 0] // for + changes
-    if (step < 0) {
-      chIdx = [0, -1] // for - changes
-    }
-
-    // find the lowest fork node which does not point to the last child
-    let sequence = [...tree.getSequence(treePosition)]
-    let node = sequence.slice(-1)[0]
-    let next = tree.navigate(node.id, 1, currents)
-    if (next == null) return
-    let lowestFork = node
-    while (next != null) {
-      if (next.id != node.children.slice(chIdx[0])[0].id) {
-        lowestFork = node
-      }
-      sequence = [...tree.getSequence(next.id)]
-      node = sequence.slice(-1)[0]
-      next = tree.navigate(node.id, 1, currents)
-    }
-
-    // increment the currents for the lowest fork node
-    next = tree.navigate(lowestFork.id, 1, currents)
-    let idx = lowestFork.children.findIndex((ch) => ch.id == next.id)
-    let ch_len = lowestFork.children.length
-    idx = (((idx + step) % ch_len) + ch_len) % ch_len // force idx >= 0 :eyeroll:
-    currents[lowestFork.id] = lowestFork.children[idx].id
-
-    next = tree.navigate(lowestFork.id, 1, currents) //using new currents
-
-    // then zero the downstream currents.
-    while (next.id != null) {
-      sequence = [...tree.getSequence(next.id)]
-      node = sequence.slice(-1)[0]
-      if (node.children.length > 0) {
-        currents[node.id] = node.children.slice(chIdx[1])[0].id
-        next = tree.navigate(node.id, 1, currents)
-      } else {
-        break
-      }
-    }
+    this.getPlayServices().documentStore.changeDownstreamVariation(step)
   }
 
   goToMainVariation() {
-    let {gameTrees, gameIndex, gameCurrents, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-
-    gameCurrents[gameIndex] = {}
-    this.setState({gameCurrents})
-
-    if (tree.onMainLine(treePosition)) {
-      this.setCurrentTreePosition(tree, treePosition)
-    } else {
-      let id = treePosition
-      while (!tree.onMainLine(id)) {
-        id = tree.get(id).parentId
-      }
-
-      this.setCurrentTreePosition(tree, id)
-    }
+    this.getPlayServices().documentStore.goToMainVariation()
   }
 
   goToSiblingGame(step) {
-    let {gameTrees, gameIndex} = this.state
-    let newIndex = Math.max(0, Math.min(gameTrees.length - 1, gameIndex + step))
-
-    this.closeDrawer()
-    this.setCurrentTreePosition(
-      gameTrees[newIndex],
-      gameTrees[newIndex].root.id,
-    )
+    this.getPlayServices().documentStore.goToSiblingGame(step)
   }
 
   startAutoscrolling(step) {
-    if (this.autoscrollId != null) return
-
-    let first = true
-    let maxDelay = setting.get('autoscroll.max_interval')
-    let minDelay = setting.get('autoscroll.min_interval')
-    let diff = setting.get('autoscroll.diff')
-
-    let scroll = (delay = null) => {
-      this.goStep(step)
-
-      clearTimeout(this.autoscrollId)
-      this.autoscrollId = setTimeout(() => {
-        scroll(first ? maxDelay : Math.max(minDelay, delay - diff))
-        first = false
-      }, delay)
-    }
-
-    scroll(400)
+    this.getPlayServices().documentStore.startAutoscrolling(step)
   }
 
   stopAutoscrolling() {
-    clearTimeout(this.autoscrollId)
-    this.autoscrollId = null
+    this.getPlayServices().documentStore.stopAutoscrolling()
   }
 
   // Engine Management

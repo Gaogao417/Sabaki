@@ -161,6 +161,8 @@ export function createDocumentStore(sabaki, deps = {}) {
     }
   }
 
+  let autoscrollId = null
+
   return {
     getCurrent,
     setCurrentTreePosition,
@@ -480,6 +482,32 @@ export function createDocumentStore(sabaki, deps = {}) {
         ko,
         doublePass,
       }
+    },
+
+    startAutoscrolling(step) {
+      if (autoscrollId != null) return
+
+      let first = true
+      let maxDelay = resolveSetting('autoscroll.max_interval')
+      let minDelay = resolveSetting('autoscroll.min_interval')
+      let diff = resolveSetting('autoscroll.diff')
+
+      let scroll = (delay = null) => {
+        this.goStep(step)
+
+        clearTimeout(autoscrollId)
+        autoscrollId = setTimeout(() => {
+          scroll(first ? maxDelay : Math.max(minDelay, delay - diff))
+          first = false
+        }, delay)
+      }
+
+      scroll(400)
+    },
+
+    stopAutoscrolling() {
+      clearTimeout(autoscrollId)
+      autoscrollId = null
     },
   }
 }
