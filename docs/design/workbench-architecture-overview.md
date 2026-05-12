@@ -635,8 +635,10 @@ PositionSource
   objects in `sabaki.clickVertex()`.
 - The context carries: `activeTab` (`current`/`reference`), `currentSnapshot` and
   `referenceSnapshot`, `currentMarkerMap` and `referenceMarkerMap`, `currentLines` and
-  `referenceLines`, `lineFirstVertex` for two-click line drawing state, plus
-  `positionSource` and `mutationContract` derived from state.
+  `referenceLines`, `lineFirstVertex` for two-click line drawing state.
+  `positionSource` and `mutationContract` are not in the executor context; they live in
+  `BoardInteractionResult` (returned by the resolver) and are used by the router to
+  select the correct executor.
 - The executor returns a structured effect instead of mutating state directly:
 
   ```ts
@@ -703,8 +705,9 @@ PositionSource
   ```
 
 - Cache keys use a content-based signature: `[syncerId, snapshotSignature].join(':')`.
-  The signature is derived from the snapshot's `signMap` content, so any stone change
-  naturally invalidates the cache without manual key management.
+  The signature is `serializeSnapshot(snapshot)`, which serializes the full cloned
+  snapshot (width, height, signMap, nextPlayer, id, role, komi, rules, source), not
+  just signMap. Any field change naturally invalidates the cache.
 - Extract the core of `refreshEditWorkspaceAnalysis()` into a scratch analysis service:
   `sabaki.js` passes dependencies and commits returned results, while
   `src/modules/analysis/scratchAnalysis.js` owns scheduling, cache keys, ownership cache,
@@ -733,10 +736,14 @@ PositionSource
   validates that the target is empty and within bounds before moving. Stone placement
   uses `board.makeMove()` for automatic capture handling.
 - Set next player normalizes the sign (`sign > 0 ? 1 : -1`) via `setWorkingNextPlayer()`.
-- Reference capture clones the snapshot (stripping `id`, `role` and metadata), determines
-  source/target tab based on `activeTab`, and may switch tabs after capture.
+- Reference capture shallow-copies the source snapshot (`{...sourceSnapshot}`), determines
+  source/target tab based on `activeTab`, and may switch tabs after capture. The executor
+  does not strip `id`, `role` or metadata from the clone; the caller (`sabaki.js`) is
+  responsible for reassigning id/role and clearing analysis, ownership, markers and lines
+  on the target.
 - Save as problem delegates snapshot serialization to the executor caller; the executor
-  only returns the effect `{handled: true, changed: true, snapshot: ...}`.
+  returns `{handled: true, changed: false, reason: 'save-as-problem: delegated to caller'}`
+  without modifying any state.
 - The dual-tab structure (`current`/`reference`) means each effect must specify which tab
   it affects via the `tab` field, and the caller applies state to the correct slot.
 - Keep these writes scoped to working position or edit workspace state.
