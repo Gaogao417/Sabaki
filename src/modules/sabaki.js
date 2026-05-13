@@ -1093,8 +1093,8 @@ class Sabaki extends EventEmitter {
     return tree?.get(treePosition)?.parentId ?? null
   }
 
-  getTerritoryCompareAvailable(state = this.state) {
-    return this.getOverlayStore().getTerritoryCompareAvailable(state)
+  getTerritoryCompareAvailable() {
+    return this.getOverlayStore().getTerritoryCompareAvailable()
   }
 
   getBoardAnalysisContext({state = this.state, tab = null} = {}) {
@@ -1214,13 +1214,21 @@ class Sabaki extends EventEmitter {
 
   getOverlayStore() {
     if (this._overlayStore == null) {
-      this._overlayStore = createOverlayStore(this, {
+      this._overlayStore = createOverlayStore({
+        getAppState: () => ({
+          mode: this.state.mode,
+          editWorkspace: this.state.editWorkspace,
+          treePosition: this.state.treePosition,
+          analysisTreePosition: this.state.analysisTreePosition,
+          currentOwnership: (syncer) => this.getCurrentOwnership(syncer),
+        }),
         ensureAnalysisReady: (opts) => this.ensureAnalysisReady(opts),
         analyzeMove: (tp) => this.analyzeMove(tp),
-        scheduleEditWorkspaceAnalysis: (tab) =>
-          this.scheduleEditWorkspaceAnalysis(tab),
+        scheduleEditWorkspaceAnalysis: () =>
+          this.scheduleEditWorkspaceAnalysis(),
         captureEditReference: () => this.captureEditReference(),
-        hideInfoOverlay: () => this.hideInfoOverlay(),
+        getInfoOverlayDuration: () => setting.get('infooverlay.duration'),
+        notifyChange: () => this.setState({}),
       })
     }
     return this._overlayStore
@@ -1298,9 +1306,9 @@ class Sabaki extends EventEmitter {
 
   async executePlayMove(result) {
     let services = this.getPlayServices()
-    let context = {}
+    let currentPlayer = this.getPlayer(this.state.treePosition)
 
-    await executePlayInteraction(result, context, services)
+    await executePlayInteraction(result, {player: currentPlayer}, services)
   }
 
   // Phase 5: Edit-Analysis Click Redirect
@@ -1825,12 +1833,12 @@ class Sabaki extends EventEmitter {
     return this.getPlayServices().analysisService.getAnalysisSyncerId({requireOwnership})
   }
 
-  async toggleTerritoryEnabled() {
-    return await this.getOverlayStore().toggleTerritoryEnabled()
+  toggleTerritoryEnabled() {
+    return this.getOverlayStore().toggleTerritoryEnabled()
   }
 
-  async toggleTerritoryCompareEnabled() {
-    return await this.getOverlayStore().toggleTerritoryCompareEnabled()
+  toggleTerritoryCompareEnabled() {
+    return this.getOverlayStore().toggleTerritoryCompareEnabled()
   }
 
   getOwnershipForTreePosition(syncer, treePosition) {
@@ -3603,7 +3611,7 @@ class Sabaki extends EventEmitter {
         ...engines.map((engine, i) => ({
           label: engine.name || t('(Unnamed Engine)'),
           click: () => {
-            this.attachEngines([this.normalizeEngineConfig(engine, i)])
+            this.getPlayServices().engineService.attachEngines([this.normalizeEngineConfig(engine, i)])
           },
         })),
         engines.length > 0 && {type: 'separator'},
@@ -3678,8 +3686,9 @@ class Sabaki extends EventEmitter {
           checked: this.getPlayServices().engineService.getBlackSyncerId() === syncerId,
           click: () => {
             let es = this.getPlayServices().engineService
-            es.setBlackSyncerId(
+            es.setBlackWhiteSyncerIds(
               es.getBlackSyncerId() === syncerId ? null : syncerId,
+              es.getWhiteSyncerId(),
             )
           },
         },
@@ -3689,7 +3698,8 @@ class Sabaki extends EventEmitter {
           checked: this.getPlayServices().engineService.getWhiteSyncerId() === syncerId,
           click: () => {
             let es = this.getPlayServices().engineService
-            es.setWhiteSyncerId(
+            es.setBlackWhiteSyncerIds(
+              es.getBlackSyncerId(),
               es.getWhiteSyncerId() === syncerId ? null : syncerId,
             )
           },

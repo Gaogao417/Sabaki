@@ -44,6 +44,7 @@ export type AnalysisLifecycleDeps = {
     getAnalysisVisitLimit: (syncer: EngineSyncerLike | null) => number | null
     getAnalysisMaxTime: (syncer: EngineSyncerLike | null) => number | null
     getLastAnalyzingEngineSyncerId: () => string | null
+    getAttachedSyncers: () => EngineSyncerLike[]
     attachEngines: (engines: any[]) => EngineSyncerLike[]
     detachEngines: (syncerIds: string[]) => Promise<void>
     normalizeEngineConfig: (engine: any, index?: number) => any
@@ -423,8 +424,7 @@ export function getAnalysisSyncerId(
   opts: {requireOwnership?: boolean} = {},
 ): string | null {
   let {requireOwnership = false} = opts
-  let state = deps.getState()
-  let attachedSyncers = state.attachedEngineSyncers as EngineSyncerLike[]
+  let attachedSyncers = deps.engineService.getAttachedSyncers()
 
   let candidates = attachedSyncers.filter((syncer) => {
     if (deps.engineService.getAnalyzeCommand(syncer) == null) return false
@@ -574,9 +574,8 @@ export async function ensureAnalysisReady(
     },
   )
   await deps.engineService.startAnalysis(syncerId)
-  let state = deps.getState()
   return (
-    (state.attachedEngineSyncers as EngineSyncerLike[]).find((x) => x.id === syncerId) || null
+    deps.engineService.getAttachedSyncers().find((x) => x.id === syncerId) || null
   )
 }
 
