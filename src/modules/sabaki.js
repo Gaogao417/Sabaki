@@ -1285,6 +1285,7 @@ class Sabaki extends EventEmitter {
         hideInfoOverlay: () => this.hideInfoOverlay(),
         showMessageBox: (msg, type) => dialog.showMessageBox(msg, type),
         notifyChange: () => this.setState({}),
+        getUserDataDirectory: () => window.sabaki.setting.userDataDirectory,
       })
 
       // Late-bind engineService into analysisService (breaks circular creation ordering).

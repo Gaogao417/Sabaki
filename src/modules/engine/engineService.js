@@ -41,6 +41,7 @@ import * as sound from '../sound.js'
  * @property {() => void} hideInfoOverlay
  * @property {(msg: string, type: string) => Promise<void>} showMessageBox
  * @property {() => void} notifyChange — triggers sabaki setState({}) to re-render
+ * @property {() => string} getUserDataDirectory — path to user data dir (for HumanSL models)
  */
 
 // ---------------------------------------------------------------------------
@@ -102,6 +103,7 @@ export function createEngineService(deps) {
     hideInfoOverlay,
     showMessageBox,
     notifyChange,
+    getUserDataDirectory,
   } = deps
 
   // ── Owned state ──────────────────────────────────────────────────
@@ -127,17 +129,32 @@ export function createEngineService(deps) {
 
   // Internal instance state (not exposed)
   let lastAnalyzingEngineSyncerId = null
+  let epoch = 0
 
   function getState() {
     return state
   }
 
+  function getEpoch() {
+    return epoch
+  }
+
   function setState(patch) {
+    epoch++
     if (typeof patch === 'function') {
       patch = patch(state)
     }
     Object.assign(state, patch)
     notifyChange()
+  }
+
+  function transaction(checkFn, patchFn) {
+    if (!checkFn(state)) return {committed: false, epoch}
+    epoch++
+    let patch = typeof patchFn === 'function' ? patchFn(state) : patchFn
+    if (patch != null) Object.assign(state, patch)
+    notifyChange()
+    return {committed: true, epoch}
   }
 
   function getAnalyzingEngineSyncer() {
@@ -347,7 +364,7 @@ export function createEngineService(deps) {
         let humanSLModelPath =
           engine.humanModelPath ||
           join(
-            window.sabaki.setting.userDataDirectory,
+            getUserDataDirectory(),
             'models',
             humanSLModelFilename,
           )
@@ -582,7 +599,10 @@ export function createEngineService(deps) {
       })
 
       syncer.on('analysis-update', () => {
+        let handlerEpoch = epoch
+
         if (state.analyzingEngineSyncerId === syncer.id) {
+          if (epoch !== handlerEpoch) return
           if (
             getMode() === 'analysis' &&
             getEditWorkspace() != null
@@ -1120,7 +1140,11 @@ export function createEngineService(deps) {
       match: state.analyzingEngineSyncerId === syncerId,
     })
 
-    if (state.analyzingEngineSyncerId === syncerId) return
+    let {committed} = transaction(
+      (s) => s.analyzingEngineSyncerId !== syncerId,
+      {analyzingEngineSyncerId: syncerId},
+    )
+    if (!committed) return
 
     let t = i18n.context('sabaki.engine')
     let syncer = state.attachedEngineSyncers.find(
@@ -1382,15 +1406,6 @@ export function createEngineService(deps) {
     })
   }
 
-  /** Assign the black player engine. */
-  function setBlackSyncerId(id) {
-    setState({blackEngineSyncerId: id})
-  }
-
-  /** Assign the white player engine. */
-  function setWhiteSyncerId(id) {
-    setState({whiteEngineSyncerId: id})
-  }
 
   // ── Purpose-driven query methods ────────────────────────────────
   //
@@ -1573,6 +1588,11 @@ export function createEngineService(deps) {
   // ── Public API ──────────────────────────────────────────────────
 
   return {
+    // State reads (raw — used by App.js render)
+    getState,
+    setState,
+    getEpoch,
+
     // Purpose-driven queries (replaces raw getState())
     isEngineGameRunning,
     getEnginePlayerSyncerId,
@@ -1643,7 +1663,10 @@ export function createEngineService(deps) {
 
     // Cross-domain setters
     setBlackWhiteSyncerIds,
-    setBlackSyncerId,
-    setWhiteSyncerId,
+
+    // Late binding
+    setEngineService: noop,
   }
+
+  function noop() {}
 }
