@@ -490,6 +490,7 @@ class Sabaki extends EventEmitter {
     if (this.state.mode === 'analysis' && mode !== 'analysis') {
       clearTimeout(this.editAnalysisId)
       stateChange.editWorkspace = null
+      stateChange.areaSelectMode = false
     }
 
     if (['scoring', 'estimator'].includes(mode)) {
@@ -3314,10 +3315,13 @@ class Sabaki extends EventEmitter {
   }
 
   toggleAreaSelectMode() {
+    if (this.state.mode !== 'analysis') return
     this.setState({areaSelectMode: !this.state.areaSelectMode})
   }
 
   async toggleShowAISuggestions() {
+    if (this.state.mode !== 'analysis') return
+
     let value = !this.state.showAISuggestions
     setting.set('board.show_ai_suggestions', value)
     setting.set('board.show_analysis', value)
@@ -3332,6 +3336,8 @@ class Sabaki extends EventEmitter {
   }
 
   async toggleShowHumanPreference() {
+    if (this.state.mode !== 'analysis') return
+
     let value = !this.state.showHumanPreference
     setting.set('board.show_human_preference', value)
     this.setState({showHumanPreference: value})
