@@ -22,7 +22,7 @@ import i18n from '../../i18n.js'
  *   clearBoardCache?: () => void,
  *   closeDrawer?: () => void,
  *   setMode?: (mode: string) => void,
- *   getTerritoryCompareAvailable?: (state: object) => boolean,
+ *   onOverlayNavigation?: () => void,
  *   syncEditWorkspaceToCurrentPosition?: () => void,
  *   scheduleEditWorkspaceAnalysis?: () => void,
  *   scheduleLiveAnalysis?: (treePosition: string) => void,
@@ -124,13 +124,6 @@ export function createDocumentStore(sabaki, deps = {}) {
 
     let prevGameIndex = sabaki.state.gameIndex
     let prevTreePosition = sabaki.state.treePosition
-    let nextPreviewState = {
-      ...sabaki.state,
-      treePosition,
-    }
-    let getTerritoryCompareAvailable =
-      deps.getTerritoryCompareAvailable ??
-      ((state) => sabaki.getTerritoryCompareAvailable(state))
 
     sabaki.setState({
       playVariation: null,
@@ -139,10 +132,14 @@ export function createDocumentStore(sabaki, deps = {}) {
       gameIndex,
       treePosition,
       mode: sabaki.state.mode,
-      territoryCompareEnabled:
-        sabaki.state.territoryCompareEnabled &&
-        (!navigated || getTerritoryCompareAvailable(nextPreviewState)),
     })
+
+    // Let overlayStore revalidate after navigation
+    if (navigated) {
+      let onOverlayNavigation =
+        deps.onOverlayNavigation ?? (() => sabaki.getOverlayStore().onNavigation())
+      onOverlayNavigation()
+    }
 
     recordHistory({prevGameIndex, prevTreePosition})
 

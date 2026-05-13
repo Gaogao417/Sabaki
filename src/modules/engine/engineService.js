@@ -500,6 +500,15 @@ export function createEngineService(sabaki, deps = {}) {
       })
 
       syncer.on('analysis-update', () => {
+        console.log('[engine.analysis-update]', {
+          syncerId: syncer.id,
+          analyzingId: sabaki.state.analyzingEngineSyncerId,
+          mode: sabaki.state.mode,
+          treePosition: sabaki.state.treePosition,
+          syncerTreePosition: syncer.treePosition,
+          hasOwnership: syncer.analysis?.ownership != null,
+          territoryEnabled: sabaki.getOverlayStore().getState().territoryEnabled,
+        })
         if (sabaki.state.analyzingEngineSyncerId === syncer.id) {
           // Scratch analysis uses temporary trees whose nodes are not in the
           // real game tree. Skip the global state / SBKV / SBKS write-back so

@@ -1,159 +1,345 @@
 /**
- * Overlay state ownership: territory, compare, and overlay mode.
+ * Overlay state ownership: territory, compare, info overlay.
  *
- * Phase 11 completion — overlay control layer extracted from sabaki.js.
- * During migration, sabaki.state remains the storage; this module owns the
- * write entrypoints and the domain logic around when/how to toggle overlays.
+ * This module OWNS its state (territoryEnabled, territoryCompareEnabled,
+ * showInfoOverlay, infoOverlayText). All dependencies are injected through
+ * OverlayStoreDeps — zero sabaki references.  Follows the analysisLifecycle.ts
+ * pattern: typed deps, own state, event notification.
  *
- * @param {object} sabaki
- * @param {{
- *   ensureAnalysisReady?: (opts?: {requireOwnership?: boolean}) => Promise<object|null>,
- *   analyzeMove?: (treePosition: string) => Promise<void>,
- *   scheduleEditWorkspaceAnalysis?: (tab?: string|null) => void,
- *   captureEditReference?: () => void,
- *   hideInfoOverlay?: () => void,
- * }} [deps]
+ * The async engine-capability check runs as a separate reaction, not inside the
+ * setter. This eliminates the CTA (Check-Then-Act) window: the setter is synchronous,
+ * and stale async results are discarded via a generation counter.
  */
-export function createOverlayStore(sabaki, deps = {}) {
-  let {
-    ensureAnalysisReady,
-    analyzeMove,
-    scheduleEditWorkspaceAnalysis,
-    captureEditReference,
-    hideInfoOverlay,
-  } = deps
 
-  // Fallbacks — call through sabaki when dep not explicitly provided
-  let resolveEnsureAnalysis = ensureAnalysisReady ?? ((opts) =>
-    sabaki.ensureAnalysisReady(opts))
-  let resolveAnalyzeMove = analyzeMove ?? ((tp) =>
-    sabaki.analyzeMove(tp))
-  let resolveScheduleEditAnalysis = scheduleEditWorkspaceAnalysis ?? (() =>
-    sabaki.scheduleEditWorkspaceAnalysis())
-  let resolveCaptureRef = captureEditReference ?? (() =>
-    sabaki.captureEditReference())
-  let resolveHideInfo = hideInfoOverlay ?? (() =>
-    sabaki.hideInfoOverlay())
+// ---------------------------------------------------------------------------
+// State & Deps types
+// ---------------------------------------------------------------------------
 
-  function getTerritoryCompareAvailable(state = sabaki.state) {
+export type OverlayState = {
+  territoryEnabled: boolean
+  territoryCompareEnabled: boolean
+  showInfoOverlay: boolean
+  infoOverlayText: string
+}
+
+export type OverlayStoreDeps = {
+  // State reads (read-only access to external state)
+  getAppState: () => {
+    mode: string
+    editWorkspace: any
+    treePosition: string
+    analysisTreePosition: string
+    currentOwnership: (syncer: any) => any
+  }
+
+  // Async capability check
+  ensureAnalysisReady: (opts: {requireOwnership: boolean}) => Promise<any>
+
+  // Analysis triggers
+  analyzeMove: (treePosition: string) => void
+  scheduleEditWorkspaceAnalysis: () => void
+  captureEditReference: () => void
+
+  // Settings
+  getInfoOverlayDuration: () => number
+
+  // React notification — triggers App.js setState to re-render
+  notifyChange: () => void
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+export function createOverlayStore(deps: OverlayStoreDeps) {
+  let state: OverlayState = {
+    territoryEnabled: false,
+    territoryCompareEnabled: false,
+    showInfoOverlay: false,
+    infoOverlayText: '',
+  }
+
+  let generation = 0
+  let hideInfoOverlayTimer: ReturnType<typeof setTimeout> | null = null
+
+  function snapshot() {
+    return {
+      territoryEnabled: state.territoryEnabled,
+      territoryCompareEnabled: state.territoryCompareEnabled,
+      mode: deps.getAppState().mode,
+      gen: generation,
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // State reads
+  // ---------------------------------------------------------------------------
+
+  function getState(): Readonly<OverlayState> {
+    return state
+  }
+
+  function getTerritoryCompareAvailable(): boolean {
+    let app = deps.getAppState()
     return (
-      state.mode === 'analysis' &&
-      state.editWorkspace?.referenceSnapshot != null
+      app.mode === 'analysis' && app.editWorkspace?.referenceSnapshot != null
     )
   }
 
-  async function setTerritoryEnabled(territoryEnabled) {
-    console.log('[territory.set]', {
-      territoryEnabled,
-      currentState: sabaki.state.territoryEnabled,
-      mode: sabaki.state.mode,
+  // ---------------------------------------------------------------------------
+  // Info overlay
+  // ---------------------------------------------------------------------------
+
+  function showInfoOverlay(text: string): void {
+    state.showInfoOverlay = true
+    state.infoOverlayText = text
+    deps.notifyChange()
+  }
+
+  function hideInfoOverlay(): void {
+    state.showInfoOverlay = false
+    deps.notifyChange()
+  }
+
+  function flashInfoOverlay(text: string, duration?: number): void {
+    if (duration == null) duration = deps.getInfoOverlayDuration()
+
+    showInfoOverlay(text)
+
+    if (hideInfoOverlayTimer != null) clearTimeout(hideInfoOverlayTimer)
+    hideInfoOverlayTimer = setTimeout(() => hideInfoOverlay(), duration)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Territory enabled
+  // ---------------------------------------------------------------------------
+
+  function setTerritoryEnabled(territoryEnabled: boolean): boolean {
+    let app = deps.getAppState()
+    console.log('[overlay.setTerritoryEnabled]', {
+      requested: territoryEnabled,
+      current: state.territoryEnabled,
+      mode: app.mode,
+      treePosition: app.treePosition,
     })
 
-    if (territoryEnabled === sabaki.state.territoryEnabled) return true
+    if (territoryEnabled === state.territoryEnabled) return true
 
     if (!territoryEnabled) {
-      resolveHideInfo()
-      sabaki.setState({
-        territoryEnabled: false,
-      })
+      hideInfoOverlay()
+      state.territoryEnabled = false
+      console.log('[overlay.setTerritoryEnabled] → disabled', snapshot())
+      deps.notifyChange()
       return true
     }
 
-    resolveHideInfo()
-    sabaki.setState({territoryEnabled: true})
-
-    let syncer = await resolveEnsureAnalysis({requireOwnership: true})
-    if (syncer == null) {
-      console.log('[territory.no_syncer]', 'ensureAnalysisReady returned null')
-      sabaki.setState({
-        territoryEnabled: false,
-        territoryCompareEnabled: false,
+    // Reject if current mode doesn't allow territory overlay
+    if (!TERRITORY_ALLOWED_MODES.has(app.mode)) {
+      console.warn('[overlay.setTerritoryEnabled] rejected outside analysis', {
+        requested: territoryEnabled,
+        mode: app.mode,
+        treePosition: app.treePosition,
       })
+      console.log(
+        '[overlay.setTerritoryEnabled] → rejected (mode not allowed)',
+        app.mode,
+      )
       return false
     }
 
-    console.log('[territory.syncer_ready]', {
-      mode: sabaki.state.mode,
-      analysisTreePosition: sabaki.state.analysisTreePosition,
-      treePosition: sabaki.state.treePosition,
-      currentOwnership: sabaki.getCurrentOwnership(syncer) != null,
+    // Sync: record intent, trigger render (UI shows "pending" via resolveOverlayInput)
+    hideInfoOverlay()
+    state.territoryEnabled = true
+    console.log('[overlay.setTerritoryEnabled] → enabled (sync)', snapshot())
+    deps.notifyChange()
+
+    // Async reaction: confirm engine capability
+    let gen = ++generation
+    console.log('[overlay.setTerritoryEnabled] awaiting engine, gen=', gen)
+    deps.ensureAnalysisReady({requireOwnership: true}).then((syncer) => {
+      console.log('[overlay.setTerritoryEnabled] engine resolved', {
+        requestedGen: gen,
+        currentGen: generation,
+        stale: gen !== generation,
+        stillEnabled: state.territoryEnabled,
+        syncerOk: syncer != null,
+        ...snapshot(),
+      })
+
+      // Double-check: territoryEnabled may have been turned off by onModeChange
+      if (gen !== generation || !state.territoryEnabled) return
+
+      if (syncer == null) {
+        state.territoryEnabled = false
+        state.territoryCompareEnabled = false
+        console.log(
+          '[overlay.setTerritoryEnabled] → rollback (no syncer)',
+          snapshot(),
+        )
+        deps.notifyChange()
+        return
+      }
+
+      // Re-read latest external state after await
+      let appAfter = deps.getAppState()
+      console.log('[overlay.setTerritoryEnabled] post-await state', {
+        mode: appAfter.mode,
+        treePosition: appAfter.treePosition,
+        analysisTreePosition: appAfter.analysisTreePosition,
+        ownership: appAfter.currentOwnership(syncer) != null,
+      })
+
+      if (
+        appAfter.mode !== 'analysis' &&
+        (appAfter.analysisTreePosition !== appAfter.treePosition ||
+          appAfter.currentOwnership(syncer) == null)
+      ) {
+        console.log(
+          '[overlay.setTerritoryEnabled] → trigger analyzeMove',
+          appAfter.treePosition,
+        )
+        deps.analyzeMove(appAfter.treePosition)
+      } else if (appAfter.mode === 'analysis') {
+        console.log(
+          '[overlay.setTerritoryEnabled] → trigger scheduleEditAnalysis',
+        )
+        deps.scheduleEditWorkspaceAnalysis()
+      }
     })
 
-    if (
-      sabaki.state.mode !== 'analysis' &&
-      (sabaki.state.analysisTreePosition !== sabaki.state.treePosition ||
-        sabaki.getCurrentOwnership(syncer) == null)
-    ) {
-      console.log('[territory.analyze_move]', {treePosition: sabaki.state.treePosition})
-      resolveAnalyzeMove(sabaki.state.treePosition)
-    } else if (sabaki.state.mode === 'analysis') {
-      console.log('[territory.schedule_edit]')
-      resolveScheduleEditAnalysis()
-    }
-
     return true
   }
 
-  async function toggleTerritoryEnabled() {
-    return await setTerritoryEnabled(!sabaki.state.territoryEnabled)
+  function toggleTerritoryEnabled(): boolean {
+    return setTerritoryEnabled(!state.territoryEnabled)
   }
 
-  async function setTerritoryCompareEnabled(territoryCompareEnabled) {
-    if (territoryCompareEnabled === sabaki.state.territoryCompareEnabled)
-      return true
+  // ---------------------------------------------------------------------------
+  // Territory compare enabled
+  // ---------------------------------------------------------------------------
+
+  function setTerritoryCompareEnabled(
+    territoryCompareEnabled: boolean,
+  ): boolean {
+    if (territoryCompareEnabled === state.territoryCompareEnabled) return true
 
     if (!territoryCompareEnabled) {
-      sabaki.setState({territoryCompareEnabled: false})
+      state.territoryCompareEnabled = false
+      deps.notifyChange()
       return true
     }
 
-    if (sabaki.state.mode !== 'analysis') return false
-    if (sabaki.state.editWorkspace == null) return false
+    let app = deps.getAppState()
+    if (app.mode !== 'analysis') return false
+    if (app.editWorkspace == null) return false
 
-    if (sabaki.state.editWorkspace.referenceSnapshot == null) {
-      resolveCaptureRef()
+    if (app.editWorkspace.referenceSnapshot == null) {
+      deps.captureEditReference()
     }
 
-    resolveHideInfo()
-    let syncer = await resolveEnsureAnalysis({requireOwnership: true})
-    if (syncer == null) {
-      sabaki.setState({territoryCompareEnabled: false})
-      return false
-    }
+    hideInfoOverlay()
 
-    if (!getTerritoryCompareAvailable()) {
-      return false
-    }
+    let gen = ++generation
+    deps.ensureAnalysisReady({requireOwnership: true}).then((syncer) => {
+      if (gen !== generation) return
 
-    resolveScheduleEditAnalysis()
-    sabaki.setState({territoryCompareEnabled: true})
+      if (syncer == null) {
+        state.territoryCompareEnabled = false
+        deps.notifyChange()
+        return
+      }
+
+      if (!getTerritoryCompareAvailable()) {
+        return
+      }
+
+      deps.scheduleEditWorkspaceAnalysis()
+      state.territoryCompareEnabled = true
+      deps.notifyChange()
+    })
+
     return true
   }
 
-  async function toggleTerritoryCompareEnabled() {
-    return await setTerritoryCompareEnabled(
-      !sabaki.state.territoryCompareEnabled,
-    )
+  function toggleTerritoryCompareEnabled(): boolean {
+    return setTerritoryCompareEnabled(!state.territoryCompareEnabled)
   }
 
-  async function setOverlayMode(overlayMode) {
-    if (overlayMode === 'territory') {
-      return await setTerritoryEnabled(true)
+  // ---------------------------------------------------------------------------
+  // Cross-domain: mode change & navigation revalidation
+  // ---------------------------------------------------------------------------
+
+  const TERRITORY_ALLOWED_MODES = new Set(['analysis'])
+
+  /** Called after mode changes. Turns off overlays that are incompatible with
+   *  the new mode. Territory overlays are only valid in analysis mode. */
+  function onModeChange(mode: string): void {
+    let changed = false
+
+    console.log('[overlay.onModeChange]', {
+      mode,
+      territoryEnabled: state.territoryEnabled,
+      territoryCompareEnabled: state.territoryCompareEnabled,
+      allowed: TERRITORY_ALLOWED_MODES.has(mode),
+    })
+
+    if (!TERRITORY_ALLOWED_MODES.has(mode) && state.territoryEnabled) {
+      console.warn(
+        '[overlay.onModeChange] territory enabled outside analysis; clearing',
+        {
+          mode,
+          territoryEnabled: state.territoryEnabled,
+          territoryCompareEnabled: state.territoryCompareEnabled,
+        },
+      )
+      state.territoryEnabled = false
+      generation++ // invalidate any in-flight async reaction
+      changed = true
+      console.log('[overlay.onModeChange] → turned off territoryEnabled')
     }
 
-    if (overlayMode === 'off') {
-      return await setTerritoryEnabled(false)
+    if (mode !== 'analysis' && state.territoryCompareEnabled) {
+      console.warn(
+        '[overlay.onModeChange] territory compare enabled outside analysis; clearing',
+        {
+          mode,
+          territoryEnabled: state.territoryEnabled,
+          territoryCompareEnabled: state.territoryCompareEnabled,
+        },
+      )
+      state.territoryCompareEnabled = false
+      generation++ // invalidate any in-flight async reaction
+      changed = true
+      console.log('[overlay.onModeChange] → turned off territoryCompareEnabled')
     }
 
-    return false
+    if (changed) deps.notifyChange()
   }
+
+  /** Called after tree position changes. Turns off territoryCompareEnabled if
+   *  the new position makes compare unavailable (e.g. left analysis mode). */
+  function onNavigation(): void {
+    if (state.territoryCompareEnabled && !getTerritoryCompareAvailable()) {
+      state.territoryCompareEnabled = false
+      deps.notifyChange()
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
 
   return {
+    getState,
     getTerritoryCompareAvailable,
+    showInfoOverlay,
+    hideInfoOverlay,
+    flashInfoOverlay,
     setTerritoryEnabled,
     toggleTerritoryEnabled,
     setTerritoryCompareEnabled,
     toggleTerritoryCompareEnabled,
-    setOverlayMode,
+    onModeChange,
+    onNavigation,
   }
 }

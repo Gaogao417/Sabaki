@@ -185,9 +185,9 @@ class App extends Component {
             sabaki.state.mode === 'analysis' &&
             sabaki.state.editWorkspace != null
           ) {
-            sabaki.toggleTerritoryCompareEnabled()
+            sabaki.getOverlayStore().toggleTerritoryCompareEnabled()
           } else if (!evt.shiftKey) {
-            sabaki.toggleTerritoryEnabled()
+            sabaki.getOverlayStore().toggleTerritoryEnabled()
           }
           return
         }
@@ -259,10 +259,10 @@ class App extends Component {
       }
 
       if (evt.key === 'Escape') {
-        if (sabaki.state.territoryCompareEnabled) {
-          sabaki.setTerritoryCompareEnabled(false)
-        } else if (sabaki.state.territoryEnabled) {
-          sabaki.setTerritoryEnabled(false)
+        if (sabaki.getOverlayStore().getState().territoryCompareEnabled) {
+          sabaki.toggleTerritoryCompareEnabled()
+        } else if (sabaki.getOverlayStore().getState().territoryEnabled) {
+          sabaki.toggleTerritoryEnabled()
         } else if (sabaki.state.openDrawer != null) {
           sabaki.closeDrawer()
         } else if (sabaki.state.mode !== 'play') {
@@ -413,7 +413,7 @@ class App extends Component {
 
     // Clear overlay status when territory mode turns off
 
-    if (prevState.territoryEnabled && !sabaki.state.territoryEnabled) {
+    if (prevState.territoryEnabled && !sabaki.getOverlayStore().getState().territoryEnabled) {
       this.setState({overlayStatusProps: null})
     }
   }
@@ -498,9 +498,10 @@ class App extends Component {
     let editPreviewOwnership =
       editPreviewKeys == null ? null : editWs[editPreviewKeys.ownershipKey]
     let scoreBoard, areaMap
-    let territoryMode = state.territoryEnabled || state.territoryCompareEnabled
+    let overlayStoreState = sabaki.getOverlayStore().getState()
+    let territoryMode = overlayStoreState.territoryEnabled || overlayStoreState.territoryCompareEnabled
     let territoryCompareActive =
-      state.territoryCompareEnabled && editWorkspaceActive
+      overlayStoreState.territoryCompareEnabled && editWorkspaceActive
     let activeAnalysis = editWorkspaceActive
       ? editAnalysis
       : state.analysisTreePosition === state.treePosition
@@ -563,6 +564,10 @@ class App extends Component {
     state = {
       ...state,
       ...inferredState,
+      territoryEnabled: overlayStoreState.territoryEnabled,
+      territoryCompareEnabled: overlayStoreState.territoryCompareEnabled,
+      showInfoOverlay: overlayStoreState.showInfoOverlay,
+      infoOverlayText: overlayStoreState.infoOverlayText,
       editWorkspaceActive,
       editActiveTab,
       editPreviewTab,
@@ -630,8 +635,8 @@ class App extends Component {
         showMoveColorization: state.showMoveColorization,
         showNextMoves: state.showNextMoves,
         showSiblings: state.showSiblings,
-        territoryEnabled: state.territoryEnabled,
-        territoryCompareEnabled: state.territoryCompareEnabled,
+        territoryEnabled: overlayStoreState.territoryEnabled,
+        territoryCompareEnabled: overlayStoreState.territoryCompareEnabled,
         territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
         showWinrateGraph: state.showWinrateGraph,
         showGameGraph: state.showGameGraph,
