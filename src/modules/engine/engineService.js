@@ -14,54 +14,137 @@ import * as gametree from '../gametree.js'
 import * as helper from '../helper.js'
 import * as sound from '../sound.js'
 
-const setting = {
-  get: (key) => window.sabaki.setting.get(key),
-}
+// ---------------------------------------------------------------------------
+// Deps interface — zero sabaki references. Follows analysisLifecycle.ts pattern.
+// ---------------------------------------------------------------------------
 
 /**
- * Create an engine service over a sabaki instance.
- *
- * Phase 12B: engine ownership. During the migration the store still writes
- * through sabaki.setState so App.js and legacy callers keep their current
- * subscription model, but engine lifecycle, HumanSL state, GTP log wiring,
- * engine-game loops, and analysis control writes should flow through this
- * module instead of living in sabaki.js.
- *
- * @param {object} sabaki
- * @param {{
- *   getSetting?: (key: string) => any,
- *   getPlayer?: (treePosition: string) => number,
- *   documentStore?: {setCurrentTreePosition: function},
- *   analysisService?: {scheduleLiveAnalysis: function, analyzeGameTreePosition: function},
- *   cacheOwnership?: (syncerId: string, tree: any, treePosition: string, ownership: any) => void,
- *   saveCurrentGame?: () => Promise,
- *   startRecallSession?: (gameId: string) => Promise,
- *   setBusy?: (busy: boolean) => void,
- *   showInfoOverlay?: (text: string) => void,
- *   hideInfoOverlay?: () => void,
- * }} [deps]
+ * @typedef {Object} EngineServiceDeps
+ * @property {(key: string) => any} getSetting
+ * @property {(treePosition: string) => number} getPlayer
+ * @property {() => any} getGameTree
+ * @property {() => string} getTreePosition
+ * @property {() => string} getMode
+ * @property {() => any} getEditWorkspace
+ * @property {() => number} getGameIndex
+ * @property {() => any[]} getGameTrees
+ * @property {(tree: any, pos: string, opts?: any) => void} setCurrentTreePosition
+ * @property {(tp: string) => void} analyzeMove
+ * @property {() => void} scheduleEditWorkspaceAnalysis
+ * @property {(tp: string) => void} scheduleLiveAnalysis
+ * @property {() => void} syncEditWorkspaceToCurrentPosition
+ * @property {(syncerId: string, tree: any, tp: string, ownership: any) => void} cacheOwnership
+ * @property {() => Promise} saveCurrentGame
+ * @property {(gameId: string) => Promise} startRecallSession
+ * @property {(busy: boolean) => void} setBusy
+ * @property {(text: string) => void} showInfoOverlay
+ * @property {() => void} hideInfoOverlay
+ * @property {(msg: string, type: string) => Promise<void>} showMessageBox
+ * @property {() => void} notifyChange — triggers sabaki setState({}) to re-render
  */
-export function createEngineService(sabaki, deps = {}) {
+
+// ---------------------------------------------------------------------------
+// Internal state type
+// ---------------------------------------------------------------------------
+
+/**
+ * @typedef {Object} EngineState
+ * @property {EngineSyncer[]} attachedEngineSyncers
+ * @property {string|null} analyzingEngineSyncerId
+ * @property {string|null} blackEngineSyncerId
+ * @property {string|null} whiteEngineSyncerId
+ * @property {string|null} engineGameOngoing
+ * @property {string|null} analysisTreePosition
+ * @property {object|null} analysis
+ * @property {number|null} quickAnalysisId
+ * @property {string|null} quickAnalysisSyncerId
+ * @property {boolean} humanSLAvailable
+ * @property {boolean} humanSLModelLoaded
+ * @property {string} humanSLProfile
+ * @property {string|null} humanSLPendingProfile
+ * @property {string|null} humanSLError
+ * @property {object[]} consoleLog
+ */
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Create an engine service that OWNS its state.
+ *
+ * This module owns all engine-related state (syncers, analysis, HumanSL, GTP
+ * log). All dependencies are injected through deps — zero sabaki references.
+ * Follows the analysisLifecycle.ts / overlayStore.ts pattern.
+ *
+ * @param {EngineServiceDeps} deps
+ */
+export function createEngineService(deps) {
   let {
     getSetting,
     getPlayer,
-    documentStore,
-    analysisService,
+    getGameTree,
+    getTreePosition,
+    getMode,
+    getEditWorkspace,
+    getGameIndex,
+    getGameTrees,
+    setCurrentTreePosition,
+    analyzeMove,
+    scheduleEditWorkspaceAnalysis,
+    scheduleLiveAnalysis,
+    syncEditWorkspaceToCurrentPosition,
     cacheOwnership,
     saveCurrentGame,
     startRecallSession,
     setBusy,
     showInfoOverlay,
     hideInfoOverlay,
+    showMessageBox,
+    notifyChange,
   } = deps
 
-  let resolveSetting = getSetting ?? ((key) => setting.get(key))
-  let resolveGetPlayer = getPlayer ?? ((tp) => sabaki.getPlayer(tp))
-  let resolveDocumentStore = documentStore
-  let resolveAnalysisService = analysisService
+  // ── Owned state ──────────────────────────────────────────────────
 
-  // Internal instance state
+  /** @type {EngineState} */
+  let state = {
+    attachedEngineSyncers: [],
+    analyzingEngineSyncerId: null,
+    blackEngineSyncerId: null,
+    whiteEngineSyncerId: null,
+    engineGameOngoing: null,
+    analysisTreePosition: null,
+    analysis: null,
+    quickAnalysisId: null,
+    quickAnalysisSyncerId: null,
+    humanSLAvailable: false,
+    humanSLModelLoaded: false,
+    humanSLProfile: 'rank_1d',
+    humanSLPendingProfile: null,
+    humanSLError: null,
+    consoleLog: [],
+  }
+
+  // Internal instance state (not exposed)
   let lastAnalyzingEngineSyncerId = null
+
+  function getState() {
+    return state
+  }
+
+  function setState(patch) {
+    if (typeof patch === 'function') {
+      patch = patch(state)
+    }
+    Object.assign(state, patch)
+    notifyChange()
+  }
+
+  function getAnalyzingEngineSyncer() {
+    return state.attachedEngineSyncers.find(
+      (syncer) => syncer.id === state.analyzingEngineSyncerId,
+    ) || null
+  }
 
   // ── Pure config helpers ─────────────────────────────────────────
 
@@ -69,7 +152,7 @@ export function createEngineService(sabaki, deps = {}) {
     if (syncer == null) return null
     if (!Array.isArray(syncer.commands) || syncer.commands.length === 0) return null
 
-    let analyzeCommands = resolveSetting('engines.analyze_commands')
+    let analyzeCommands = getSetting('engines.analyze_commands')
     return analyzeCommands.find((cmd) => syncer.commands.includes(cmd)) || null
   }
 
@@ -80,21 +163,21 @@ export function createEngineService(sabaki, deps = {}) {
 
   function getAnalysisMaxTime(syncer = null) {
     let maxTime = +(
-      syncer?.engine.analysis?.maxTime || resolveSetting('board.analysis_max_time')
+      syncer?.engine.analysis?.maxTime || getSetting('board.analysis_max_time')
     )
     return Number.isFinite(maxTime) && maxTime > 0 ? maxTime : null
   }
 
   function getAnalysisVisitLimit(syncer = null) {
     let maxVisits = +(
-      syncer?.engine.analysis?.visits || resolveSetting('board.analysis_max_visits')
+      syncer?.engine.analysis?.visits || getSetting('board.analysis_max_visits')
     )
     return Number.isFinite(maxVisits) && maxVisits > 0 ? Math.round(maxVisits) : null
   }
 
   function getGenmoveAnalyzeCommand(syncer) {
     if (syncer == null) return null
-    let commands = resolveSetting('engines.gemove_analyze_commands')
+    let commands = getSetting('engines.gemove_analyze_commands')
     return commands.find((cmd) => syncer.commands.includes(cmd)) || null
   }
 
@@ -108,7 +191,7 @@ export function createEngineService(sabaki, deps = {}) {
 
     let args = [
       analyzePlayer > 0 ? 'B' : 'W',
-      resolveSetting('board.analysis_interval').toString(),
+      getSetting('board.analysis_interval').toString(),
     ]
 
     if (commandName.includes('kata')) {
@@ -138,7 +221,7 @@ export function createEngineService(sabaki, deps = {}) {
     let commandName = getGenmoveAnalyzeCommand(syncer)
     if (commandName == null) return {commandName: 'genmove', args: null}
 
-    let args = [color, resolveSetting('board.analysis_interval').toString()]
+    let args = [color, getSetting('board.analysis_interval').toString()]
 
     if (commandName.includes('kata')) {
       let candidates = +syncer.engine.analysis?.candidates
@@ -176,7 +259,7 @@ export function createEngineService(sabaki, deps = {}) {
     try {
       let analysis = syncer.engine.analysis || {}
       let maxVisits = +(
-        analysis.visits || resolveSetting('board.analysis_max_visits')
+        analysis.visits || getSetting('board.analysis_max_visits')
       )
       if (Number.isFinite(maxVisits) && maxVisits > 0) {
         await syncer.queueCommand({
@@ -194,7 +277,7 @@ export function createEngineService(sabaki, deps = {}) {
       }
 
       let maxTime = +(
-        analysis.maxTime || resolveSetting('board.analysis_max_time')
+        analysis.maxTime || getSetting('board.analysis_max_time')
       )
       if (Number.isFinite(maxTime) && maxTime > 0) {
         await syncer.queueCommand({
@@ -212,7 +295,7 @@ export function createEngineService(sabaki, deps = {}) {
       }
 
       if (syncer.commands.includes('kata-set-rules')) {
-        let rules = gametree.getRootProperty(sabaki.inferredState.gameTree, 'RU')
+        let rules = gametree.getRootProperty(getGameTree(), 'RU')
         if (rules) {
           await syncer.queueCommand({
             name: 'kata-set-rules',
@@ -284,7 +367,7 @@ export function createEngineService(sabaki, deps = {}) {
   }
 
   function getConfiguredEngine(engineIndex) {
-    let engines = resolveSetting('engines.list') || []
+    let engines = getSetting('engines.list') || []
     let engine = engines[engineIndex]
     return normalizeEngineConfig(engine, engineIndex)
   }
@@ -293,7 +376,7 @@ export function createEngineService(sabaki, deps = {}) {
 
   function updateHumanSLStateFromSyncer(syncer) {
     if (syncer == null) {
-      sabaki.setState({
+      setState({
         humanSLAvailable: false,
         humanSLModelLoaded: false,
         humanSLPendingProfile: null,
@@ -302,7 +385,7 @@ export function createEngineService(sabaki, deps = {}) {
       return
     }
 
-    sabaki.setState({
+    setState({
       humanSLAvailable: syncer.humanSL.available,
       humanSLModelLoaded: syncer.humanSL.modelLoaded,
       humanSLProfile: syncer.humanSL.currentProfile,
@@ -323,7 +406,7 @@ export function createEngineService(sabaki, deps = {}) {
   }
 
   async function setHumanSLProfile(profile) {
-    let syncer = sabaki.inferredState.analyzingEngineSyncer
+    let syncer = getAnalyzingEngineSyncer()
     if (syncer == null || syncer.suspended) return false
 
     try {
@@ -338,17 +421,17 @@ export function createEngineService(sabaki, deps = {}) {
   }
 
   async function refreshHumanSLAnalysis() {
-    if (sabaki.state.analyzingEngineSyncerId == null) return false
-    await resolveAnalysisService.analyzeGameTreePosition(sabaki.state.treePosition)
+    if (state.analyzingEngineSyncerId == null) return false
+    await analyzeMove(getTreePosition())
     return true
   }
 
   // ── GTP log wiring ──────────────────────────────────────────────
 
   function addEngineLogEntry(engineName, response) {
-    let maxLength = resolveSetting('console.max_history_count')
+    let maxLength = getSetting('console.max_history_count')
 
-    sabaki.setState(({consoleLog}) => {
+    setState(({consoleLog}) => {
       let newLog = consoleLog.slice(
         Math.max(consoleLog.length - maxLength + 1, 0),
       )
@@ -367,9 +450,9 @@ export function createEngineService(sabaki, deps = {}) {
   function handleCommandSent({syncer, command, subscribe, getResponse}) {
     let t = i18n.context('sabaki.engine')
     let entry = {name: syncer.engine.name, command, waiting: true}
-    let maxLength = resolveSetting('console.max_history_count')
+    let maxLength = getSetting('console.max_history_count')
 
-    sabaki.setState(({consoleLog}) => {
+    setState(({consoleLog}) => {
       let newLog = consoleLog.slice(
         Math.max(consoleLog.length - maxLength + 1, 0),
       )
@@ -380,7 +463,7 @@ export function createEngineService(sabaki, deps = {}) {
 
     let updateEntry = (update) => {
       Object.assign(entry, update)
-      sabaki.setState(({consoleLog}) => ({consoleLog}))
+      setState(({consoleLog}) => ({consoleLog}))
     }
 
     subscribe(({line, response, end}) => {
@@ -430,7 +513,7 @@ export function createEngineService(sabaki, deps = {}) {
 
       while (
         attaching.some(hasName) ||
-        sabaki.state.attachedEngineSyncers.some(hasName)
+        state.attachedEngineSyncers.some(hasName)
       ) {
         counter++
       }
@@ -443,7 +526,6 @@ export function createEngineService(sabaki, deps = {}) {
 
       let syncer = new EngineSyncer(engine)
 
-      // Handle engine path errors
       if (syncer.pathError) {
         dialog.showMessageBox(syncer.pathError, 'error')
         applogger.log(
@@ -500,28 +582,15 @@ export function createEngineService(sabaki, deps = {}) {
       })
 
       syncer.on('analysis-update', () => {
-        console.log('[engine.analysis-update]', {
-          syncerId: syncer.id,
-          analyzingId: sabaki.state.analyzingEngineSyncerId,
-          mode: sabaki.state.mode,
-          treePosition: sabaki.state.treePosition,
-          syncerTreePosition: syncer.treePosition,
-          hasOwnership: syncer.analysis?.ownership != null,
-          territoryEnabled: sabaki.getOverlayStore().getState().territoryEnabled,
-        })
-        if (sabaki.state.analyzingEngineSyncerId === syncer.id) {
-          // Scratch analysis uses temporary trees whose nodes are not in the
-          // real game tree. Skip the global state / SBKV / SBKS write-back so
-          // scratch results never pollute the SGF.
+        if (state.analyzingEngineSyncerId === syncer.id) {
           if (
-            sabaki.state.mode === 'analysis' &&
-            sabaki.state.editWorkspace != null
+            getMode() === 'analysis' &&
+            getEditWorkspace() != null
           ) {
             return
           }
-          // Update analysis info
 
-          let tree = sabaki.state.gameTrees[sabaki.state.gameIndex]
+          let tree = getGameTrees()[getGameIndex()]
           if (
             syncer.treePosition != null &&
             tree.get(syncer.treePosition) == null
@@ -530,10 +599,10 @@ export function createEngineService(sabaki, deps = {}) {
           }
 
           let currentAnalysisUpdate =
-            syncer.treePosition === sabaki.state.treePosition
+            syncer.treePosition === getTreePosition()
 
           if (currentAnalysisUpdate) {
-            sabaki.setState({
+            setState({
               analysis: syncer.analysis,
               analysisTreePosition: syncer.treePosition,
             })
@@ -567,24 +636,24 @@ export function createEngineService(sabaki, deps = {}) {
               }
             })
 
-            resolveDocumentStore.setCurrentTreePosition(
+            setCurrentTreePosition(
               newTree,
-              sabaki.state.treePosition,
+              getTreePosition(),
             )
           }
 
           if (
             syncer.treePosition != null &&
-            syncer.treePosition !== sabaki.state.treePosition
+            syncer.treePosition !== getTreePosition()
           ) {
-            resolveAnalysisService.scheduleLiveAnalysis(sabaki.state.treePosition)
+            scheduleLiveAnalysis(getTreePosition())
           }
         }
       })
 
       syncer.on('human-sl-update', () => {
-        if (sabaki.state.analyzingEngineSyncerId === syncer.id) {
-          sabaki.setState({
+        if (state.analyzingEngineSyncerId === syncer.id) {
+          setState({
             humanSLAvailable: syncer.humanSL.available,
             humanSLModelLoaded: syncer.humanSL.modelLoaded,
             humanSLProfile: syncer.humanSL.currentProfile,
@@ -611,7 +680,7 @@ export function createEngineService(sabaki, deps = {}) {
           engine: engine.name,
         })
 
-        sabaki.setState(({consoleLog}) => {
+        setState(({consoleLog}) => {
           let lastIndex = consoleLog.length - 1
           let lastEntry = consoleLog[lastIndex]
 
@@ -684,7 +753,7 @@ export function createEngineService(sabaki, deps = {}) {
       })
     }
 
-    sabaki.setState(({attachedEngineSyncers}) => ({
+    setState(({attachedEngineSyncers}) => ({
       attachedEngineSyncers: [...attachedEngineSyncers, ...attaching],
     }))
 
@@ -692,7 +761,7 @@ export function createEngineService(sabaki, deps = {}) {
   }
 
   async function detachEngines(syncerIds) {
-    let detachEngineSyncers = sabaki.state.attachedEngineSyncers.filter(
+    let detachEngineSyncers = state.attachedEngineSyncers.filter(
       (syncer) => syncerIds.includes(syncer.id),
     )
 
@@ -712,20 +781,20 @@ export function createEngineService(sabaki, deps = {}) {
           lastAnalyzingEngineSyncerId = null
         }
 
-        sabaki.setState((state) => ({
-          attachedEngineSyncers: state.attachedEngineSyncers.filter(
-            (s) => s.id !== syncer.id,
+        setState((s) => ({
+          attachedEngineSyncers: s.attachedEngineSyncers.filter(
+            (e) => e.id !== syncer.id,
           ),
           engineGameOngoing:
-            state.engineGameOngoing &&
-            [state.blackEngineSyncerId, state.whiteEngineSyncerId].includes(
+            s.engineGameOngoing &&
+            [s.blackEngineSyncerId, s.whiteEngineSyncerId].includes(
               syncer.id,
             )
               ? false
-              : state.engineGameOngoing,
-          blackEngineSyncerId: unset(state.blackEngineSyncerId),
-          whiteEngineSyncerId: unset(state.whiteEngineSyncerId),
-          analyzingEngineSyncerId: unset(state.analyzingEngineSyncerId),
+              : s.engineGameOngoing,
+          blackEngineSyncerId: unset(s.blackEngineSyncerId),
+          whiteEngineSyncerId: unset(s.whiteEngineSyncerId),
+          analyzingEngineSyncerId: unset(s.analyzingEngineSyncerId),
         }))
       }),
     )
@@ -734,9 +803,9 @@ export function createEngineService(sabaki, deps = {}) {
   async function syncEngine(
     syncerId,
     treePosition,
-    {tree = sabaki.inferredState.gameTree} = {},
+    {tree = getGameTree()} = {},
   ) {
-    let syncer = sabaki.state.attachedEngineSyncers.find(
+    let syncer = state.attachedEngineSyncers.find(
       (syncer) => syncer.id === syncerId,
     )
 
@@ -773,7 +842,7 @@ export function createEngineService(sabaki, deps = {}) {
     let engine = getConfiguredEngine(engineIndex)
     if (engine == null || engine.enabled === false) return null
 
-    let syncer = sabaki.state.attachedEngineSyncers.find((syncer) => {
+    let syncer = state.attachedEngineSyncers.find((syncer) => {
       let attached = syncer.engine
       if (attached.id != null && engine.id != null)
         return attached.id === engine.id
@@ -792,7 +861,7 @@ export function createEngineService(sabaki, deps = {}) {
 
   async function startEngineGame(treePosition) {
     let t = i18n.context('sabaki.engine')
-    let {engineGameOngoing, attachedEngineSyncers} = sabaki.state
+    let {engineGameOngoing, attachedEngineSyncers} = state
     let engineCount = attachedEngineSyncers.length
     if (engineGameOngoing != null) return
 
@@ -804,31 +873,31 @@ export function createEngineService(sabaki, deps = {}) {
 
       return
     } else {
-      sabaki.setState((state) => ({
+      setState((s) => ({
         blackEngineSyncerId:
-          state.blackEngineSyncerId == null
-            ? state.attachedEngineSyncers[0].id
-            : state.blackEngineSyncerId,
+          s.blackEngineSyncerId == null
+            ? s.attachedEngineSyncers[0].id
+            : s.blackEngineSyncerId,
         whiteEngineSyncerId:
-          state.whiteEngineSyncerId == null
-            ? state.attachedEngineSyncers[1 % engineCount].id
-            : state.whiteEngineSyncerId,
+          s.whiteEngineSyncerId == null
+            ? s.attachedEngineSyncers[1 % engineCount].id
+            : s.whiteEngineSyncerId,
       }))
     }
 
     let gameId = uuid()
-    sabaki.setState({engineGameOngoing: gameId})
+    setState({engineGameOngoing: gameId})
 
     let consecutivePasses = 0
 
-    while (sabaki.state.engineGameOngoing === gameId) {
+    while (state.engineGameOngoing === gameId) {
       let syncerId =
-        resolveGetPlayer(treePosition) > 0
-          ? sabaki.state.blackEngineSyncerId
-          : sabaki.state.whiteEngineSyncerId
+        getPlayer(treePosition) > 0
+          ? state.blackEngineSyncerId
+          : state.whiteEngineSyncerId
 
       let move = await generateMove(syncerId, treePosition, {
-        commit: () => sabaki.state.engineGameOngoing,
+        commit: () => state.engineGameOngoing,
       })
 
       if (move == null || move.resign) {
@@ -857,21 +926,21 @@ export function createEngineService(sabaki, deps = {}) {
   }
 
   async function stopEngineGame(gameId = null) {
-    if (sabaki.state.engineGameOngoing == null) return
+    if (state.engineGameOngoing == null) return
 
-    sabaki.setState((state) => ({
+    setState((s) => ({
       engineGameOngoing:
-        gameId == null || state.engineGameOngoing === gameId
+        gameId == null || s.engineGameOngoing === gameId
           ? null
-          : state.engineGameOngoing,
+          : s.engineGameOngoing,
     }))
 
-    let syncer = sabaki.inferredState.analyzingEngineSyncer
+    let syncer = getAnalyzingEngineSyncer()
     if (syncer == null) return
   }
 
   async function startStopEngineGame(treePosition) {
-    if (sabaki.state.engineGameOngoing != null) {
+    if (state.engineGameOngoing != null) {
       stopEngineGame()
     } else {
       startEngineGame(treePosition)
@@ -882,9 +951,9 @@ export function createEngineService(sabaki, deps = {}) {
 
   async function generateMove(syncerId, treePosition, {commit = () => true} = {}) {
     let t = i18n.context('sabaki.engine')
-    let sign = resolveGetPlayer(treePosition)
+    let sign = getPlayer(treePosition)
     let color = sign > 0 ? 'B' : 'W'
-    let syncer = sabaki.state.attachedEngineSyncers.find(
+    let syncer = state.attachedEngineSyncers.find(
       (syncer) => syncer.id === syncerId,
     )
     if (syncer == null) {
@@ -909,7 +978,8 @@ export function createEngineService(sabaki, deps = {}) {
     let synced = await syncEngine(syncerId, treePosition)
     if (!synced) return
 
-    let {gameTree: tree, board} = sabaki.inferredState
+    let tree = getGameTree()
+    let board = gametree.getBoard(tree, treePosition)
     let coord
     try {
       let genmoveResult = buildGenmoveAnalyzeArgs(syncer, color)
@@ -973,8 +1043,8 @@ export function createEngineService(sabaki, deps = {}) {
       })
     }
 
-    let currentTree = sabaki.inferredState.gameTree
-    let currentTreePosition = sabaki.state.treePosition
+    let currentTree = getGameTree()
+    let currentTreePosition = getTreePosition()
     let positionMoved =
       currentTree.root.id !== tree.root.id ||
       currentTreePosition !== treePosition
@@ -1009,7 +1079,7 @@ export function createEngineService(sabaki, deps = {}) {
       if (capturing || suicide) sound.playCapture()
     }
 
-    resolveDocumentStore.setCurrentTreePosition(
+    setCurrentTreePosition(
       newTree,
       !positionMoved ? newTreePosition : currentTreePosition,
     )
@@ -1046,14 +1116,14 @@ export function createEngineService(sabaki, deps = {}) {
   async function startAnalysis(syncerId) {
     console.log('[analysis.start]', {
       syncerId,
-      currentAnalyzingId: sabaki.state.analyzingEngineSyncerId,
-      match: sabaki.state.analyzingEngineSyncerId === syncerId,
+      currentAnalyzingId: state.analyzingEngineSyncerId,
+      match: state.analyzingEngineSyncerId === syncerId,
     })
 
-    if (sabaki.state.analyzingEngineSyncerId === syncerId) return
+    if (state.analyzingEngineSyncerId === syncerId) return
 
     let t = i18n.context('sabaki.engine')
-    let syncer = sabaki.state.attachedEngineSyncers.find(
+    let syncer = state.attachedEngineSyncers.find(
       (syncer) => syncer.id === syncerId,
     )
 
@@ -1068,34 +1138,35 @@ export function createEngineService(sabaki, deps = {}) {
     }
 
     lastAnalyzingEngineSyncerId = syncerId
-    sabaki.setState({
+    setState({
       analyzingEngineSyncerId: syncerId,
     })
     updateHumanSLStateFromSyncer(syncer)
     detectHumanSL(syncer).catch(helper.noop)
 
     if (
-      !sabaki.state.engineGameOngoing ||
-      (sabaki.state.blackEngineSyncerId !== syncerId &&
-        sabaki.state.whiteEngineSyncerId !== syncerId)
+      !state.engineGameOngoing ||
+      (state.blackEngineSyncerId !== syncerId &&
+        state.whiteEngineSyncerId !== syncerId)
     ) {
-      if (sabaki.state.mode === 'analysis' && sabaki.state.editWorkspace != null) {
-        sabaki.syncEditWorkspaceToCurrentPosition()
-        sabaki.scheduleEditWorkspaceAnalysis()
+      if (getMode() === 'analysis' && getEditWorkspace() != null) {
+        syncEditWorkspaceToCurrentPosition()
+        scheduleEditWorkspaceAnalysis()
       } else {
-        sabaki.analyzeMove(sabaki.state.treePosition)
+        analyzeMove(getTreePosition())
       }
     }
   }
 
   function stopAnalysis() {
-    let syncer = sabaki.inferredState.analyzingEngineSyncer
+    let syncer = getAnalyzingEngineSyncer()
 
     if (syncer != null) {
       syncer.sendAbort()
     }
 
-    sabaki.setState({
+    // Clear analysis state and editWorkspace analysis state (owned by sabaki)
+    setState({
       analysis: null,
       analysisTreePosition: null,
       analyzingEngineSyncerId: null,
@@ -1103,18 +1174,21 @@ export function createEngineService(sabaki, deps = {}) {
       humanSLModelLoaded: false,
       humanSLPendingProfile: null,
       humanSLError: null,
-      editWorkspace:
-        sabaki.state.editWorkspace == null
-          ? null
-          : {
-              ...sabaki.state.editWorkspace,
-              currentAnalysis: null,
-              currentOwnership: null,
-              referenceAnalysis: null,
-              referenceOwnership: null,
-              analysisPending: false,
-            },
     })
+
+    // editWorkspace analysis fields are owned by sabaki.state —
+    // return them so sabaki can clear them via a separate setState.
+    let editWorkspace = getEditWorkspace()
+    if (editWorkspace != null) {
+      return {
+        currentAnalysis: null,
+        currentOwnership: null,
+        referenceAnalysis: null,
+        referenceOwnership: null,
+        analysisPending: false,
+      }
+    }
+    return null
   }
 
   // ── Quick analysis ──────────────────────────────────────────────
@@ -1141,8 +1215,7 @@ export function createEngineService(sabaki, deps = {}) {
       }
 
       let handleUpdate = () => {
-        // Cancellation check
-        if (sabaki.state.quickAnalysisId !== analysisId) {
+        if (state.quickAnalysisId !== analysisId) {
           finish(null)
           return
         }
@@ -1151,7 +1224,6 @@ export function createEngineService(sabaki, deps = {}) {
           return
         }
 
-        // Track the latest valid analysis for this position
         latestAnalysis = syncer.analysis
 
         let bestVisits = Math.max(
@@ -1170,9 +1242,9 @@ export function createEngineService(sabaki, deps = {}) {
   }
 
   async function quickAnalyzeAllNodes() {
-    if (sabaki.state.quickAnalysisId != null) return
+    if (state.quickAnalysisId != null) return
 
-    let syncer = await sabaki.ensureAnalysisReady()
+    let syncer = getAnalyzingEngineSyncer()
     if (syncer == null) return
 
     let commandName = getAnalyzeCommand(syncer)
@@ -1188,17 +1260,16 @@ export function createEngineService(sabaki, deps = {}) {
     }
 
     let analysisId = Date.now()
-    sabaki.setState({
+    setState({
       quickAnalysisId: analysisId,
       quickAnalysisSyncerId: syncer.id,
     })
     setBusy(true)
 
-    let tree = sabaki.inferredState.gameTree
+    let tree = getGameTree()
     let nodes = [...tree.listMainNodes()]
     let results = []
 
-    // Override KataGo maxVisits for quick mode
     let isKata =
       commandName.includes('kata') && syncer.commands.includes('kata-set-param')
 
@@ -1211,21 +1282,19 @@ export function createEngineService(sabaki, deps = {}) {
       }
 
       for (let i = 0; i < nodes.length; i++) {
-        // Cancellation check
-        if (sabaki.state.quickAnalysisId !== analysisId) break
+        if (state.quickAnalysisId !== analysisId) break
 
         let node = nodes[i]
         showInfoOverlay(`Analyzing ${i + 1}/${nodes.length}...`)
 
         let synced = await syncEngine(syncer.id, node.id, {tree})
-        if (!synced || sabaki.state.quickAnalysisId !== analysisId) break
+        if (!synced || state.quickAnalysisId !== analysisId) break
 
         await prepareHumanSL(syncer)
 
-        let sign = resolveGetPlayer(node.id)
+        let sign = getPlayer(node.id)
         let args = buildAnalyzeArgs(syncer, sign)
 
-        // Must await: ensures command is queued before listener checks
         await syncer.queueCommand({name: commandName, args})
 
         let analysis = await waitForQuickAnalysis(
@@ -1237,9 +1306,8 @@ export function createEngineService(sabaki, deps = {}) {
         )
 
         if (analysis == null) continue
-        if (sabaki.state.quickAnalysisId !== analysisId) break
+        if (state.quickAnalysisId !== analysisId) break
 
-        // Convert to Black's perspective
         let winrate = analysis.winrate
         let scoreLead = analysis.scoreLead
         if (analysis.sign < 0) winrate = 100 - winrate
@@ -1248,7 +1316,6 @@ export function createEngineService(sabaki, deps = {}) {
         results.push({nodeId: node.id, winrate, scoreLead})
       }
 
-      // Batch write all results in one mutation
       if (results.length > 0) {
         let newTree = tree.mutate((draft) => {
           for (let {nodeId, winrate, scoreLead} of results) {
@@ -1264,35 +1331,33 @@ export function createEngineService(sabaki, deps = {}) {
             }
           }
         })
-        resolveDocumentStore.setCurrentTreePosition(newTree, sabaki.state.treePosition)
+        setCurrentTreePosition(newTree, getTreePosition())
       }
     } finally {
-      // Restore KataGo params to user settings
       if (isKata) {
         await configureKataAnalysis(syncer).catch(() => {})
       }
 
       hideInfoOverlay()
-      sabaki.setState({quickAnalysisId: null, quickAnalysisSyncerId: null})
+      setState({quickAnalysisId: null, quickAnalysisSyncerId: null})
       setBusy(false)
 
-      // Resume normal analysis if active
-      if (sabaki.state.analyzingEngineSyncerId != null) {
-        resolveAnalysisService.analyzeGameTreePosition(sabaki.state.treePosition)
+      if (state.analyzingEngineSyncerId != null) {
+        analyzeMove(getTreePosition())
       }
     }
   }
 
   function stopQuickAnalysis() {
-    let syncer = sabaki.state.attachedEngineSyncers.find(
-      (s) => s.id === sabaki.state.quickAnalysisSyncerId,
+    let syncer = state.attachedEngineSyncers.find(
+      (s) => s.id === state.quickAnalysisSyncerId,
     )
     if (syncer != null) {
       syncer.sendAbort()
     }
 
     hideInfoOverlay()
-    sabaki.setState({quickAnalysisId: null, quickAnalysisSyncerId: null})
+    setState({quickAnalysisId: null, quickAnalysisSyncerId: null})
   }
 
   // ── generateReply (facade for play interaction) ─────────────────
@@ -1300,18 +1365,239 @@ export function createEngineService(sabaki, deps = {}) {
   function generateReply(treePosition, currentPlayer) {
     let syncerId =
       currentPlayer > 0
-        ? sabaki.state.whiteEngineSyncerId
-        : sabaki.state.blackEngineSyncerId
+        ? state.whiteEngineSyncerId
+        : state.blackEngineSyncerId
 
     if (syncerId == null) return
 
     generateMove(syncerId, treePosition)
   }
 
+  // ── Cross-domain: set engine syncer IDs for game start ──────────
+
+  function setBlackWhiteSyncerIds(blackId, whiteId) {
+    setState({
+      blackEngineSyncerId: blackId,
+      whiteEngineSyncerId: whiteId,
+    })
+  }
+
+  /** Assign the black player engine. */
+  function setBlackSyncerId(id) {
+    setState({blackEngineSyncerId: id})
+  }
+
+  /** Assign the white player engine. */
+  function setWhiteSyncerId(id) {
+    setState({whiteEngineSyncerId: id})
+  }
+
+  // ── Purpose-driven query methods ────────────────────────────────
+  //
+  // Each method encapsulates a specific question the rest of the
+  // application needs answered, so callers never read raw state fields.
+
+  /** Whether an engine-vs-engine game is currently in progress. */
+  function isEngineGameRunning() {
+    return state.engineGameOngoing != null
+  }
+
+  /**
+   * The syncerId for the engine assigned to play the given side.
+   * Used by Generate Move and reply logic to pick the correct engine.
+   */
+  function getEnginePlayerSyncerId(playerSign) {
+    return playerSign > 0 ? state.blackEngineSyncerId : state.whiteEngineSyncerId
+  }
+
+  /** Whether a syncer is assigned as the analyzer. */
+  function hasAnalyzer() {
+    return state.analyzingEngineSyncerId != null
+  }
+
+  /**
+   * The current analysis result, but only if it matches the given treePosition.
+   * Returns null if analysis is stale (different position) or absent.
+   */
+  function getAnalysisForPosition(treePosition) {
+    if (state.analysisTreePosition === treePosition) return state.analysis
+    return null
+  }
+
+  /** Whether the analysis treePosition matches the given position. */
+  function isAnalysisAtPosition(treePosition) {
+    return state.analysisTreePosition === treePosition
+  }
+
+  /**
+   * The unique ID for the currently running quick analysis, or null.
+   * Used to toggle the "Stop Quick Analyze" menu label.
+   */
+  function getQuickAnalysisId() {
+    return state.quickAnalysisId
+  }
+
+  /**
+   * All currently attached engine syncers.
+   * Used by PeerList, InfoDrawer, PreferencesDrawer to render engine lists.
+   */
+  function getAttachedSyncers() {
+    return state.attachedEngineSyncers
+  }
+
+  /**
+   * Whether at least one engine is attached.
+   * Simpler than checking getAttachedSyncers().length everywhere.
+   */
+  function hasAttachedEngines() {
+    return state.attachedEngineSyncers.length > 0
+  }
+
+  /**
+   * Whether the given syncer is the current analyzer.
+   * Used by PeerList to show the analyzing indicator.
+   */
+  function isAnalyzing(syncerId) {
+    return state.analyzingEngineSyncerId === syncerId
+  }
+
+  /** The analyzing engine syncerId (may be null). */
+  function getAnalyzingSyncerId() {
+    return state.analyzingEngineSyncerId
+  }
+
+  /** The black engine syncerId (may be null). */
+  function getBlackSyncerId() {
+    return state.blackEngineSyncerId
+  }
+
+  /** The white engine syncerId (may be null). */
+  function getWhiteSyncerId() {
+    return state.whiteEngineSyncerId
+  }
+
+  /**
+   * Current HumanSL state for the analyzer engine.
+   * Returns an object {modelLoaded, error} for UI rendering.
+   */
+  function getHumanSLState() {
+    return {
+      modelLoaded: state.humanSLModelLoaded,
+      error: state.humanSLError,
+    }
+  }
+
+  /**
+   * The GTP console log entries.
+   * Used by the ConsoleDrawer to render command/response history.
+   */
+  function getConsoleLog() {
+    return state.consoleLog
+  }
+
+  /**
+   * Append a log entry to the console log.
+   * Used by applogger to write application-level log entries.
+   */
+  function appendConsoleLog(entry) {
+    let maxLength = getSetting('console.max_history_count') || 1000
+    setState(({consoleLog}) => {
+      let newLog = consoleLog.slice(Math.max(consoleLog.length - maxLength + 1, 0))
+      newLog.push(entry)
+      return {consoleLog: newLog}
+    })
+  }
+
+  /**
+   * Find the first attached syncer that supports analysis commands.
+   * Used by menu.js Toggle Analysis to pick a default analyzer.
+   */
+  function findFirstAnalysisCapableSyncerId() {
+    let analyzeCommands = getSetting('engines.analyze_commands')
+    let syncer = state.attachedEngineSyncers.find((s) =>
+      s.commands.some((x) => analyzeCommands.includes(x)),
+    )
+    return syncer?.id ?? null
+  }
+
+  /**
+   * Ensure an analyzer is attached for problem mode.
+   * Picks the first attached engine if no analyzer is set.
+   */
+  function ensureAnalyzerForProblemMode() {
+    if (state.analyzingEngineSyncerId == null && state.attachedEngineSyncers.length > 0) {
+      setState({analyzingEngineSyncerId: state.attachedEngineSyncers[0].id})
+    }
+  }
+
+  /**
+   * Return the IDs of all attached syncers.
+   * Used when detaching all engines on newFile/close.
+   */
+  function getAttachedSyncerIds() {
+    return state.attachedEngineSyncers.map((s) => s.id)
+  }
+
+  /**
+   * Clear the GTP console log.
+   */
+  function clearConsoleLog() {
+    setState({consoleLog: []})
+  }
+
+  /**
+   * The analyzing engine syncerId from the previous session (before stop).
+   * Used by menu.js Toggle Analysis to resume the same engine.
+   */
+  function getLastAnalyzingSyncerId() {
+    return lastAnalyzingEngineSyncerId
+  }
+
+  /**
+   * Return engine-owned state fields needed by analysisService.
+   * This is a controlled escape hatch — only analysisService should use it.
+   * Fields returned: analysis, analysisTreePosition, analyzingEngineSyncerId,
+   * engineGameOngoing, blackEngineSyncerId, whiteEngineSyncerId.
+   */
+  function getAnalysisRelevantState() {
+    return {
+      analysis: state.analysis,
+      analysisTreePosition: state.analysisTreePosition,
+      analyzingEngineSyncerId: state.analyzingEngineSyncerId,
+      engineGameOngoing: state.engineGameOngoing,
+      blackEngineSyncerId: state.blackEngineSyncerId,
+      whiteEngineSyncerId: state.whiteEngineSyncerId,
+    }
+  }
+
   // ── Public API ──────────────────────────────────────────────────
 
   return {
-    // Config helpers (called by analysisService via sabaki wrapper)
+    // Purpose-driven queries (replaces raw getState())
+    isEngineGameRunning,
+    getEnginePlayerSyncerId,
+    hasAnalyzer,
+    getAnalysisForPosition,
+    isAnalysisAtPosition,
+    getQuickAnalysisId,
+    getAttachedSyncers,
+    hasAttachedEngines,
+    isAnalyzing,
+    getAnalyzingSyncerId,
+    getBlackSyncerId,
+    getWhiteSyncerId,
+    getHumanSLState,
+    getConsoleLog,
+    appendConsoleLog,
+    findFirstAnalysisCapableSyncerId,
+    ensureAnalyzerForProblemMode,
+    getAttachedSyncerIds,
+    clearConsoleLog,
+    getLastAnalyzingSyncerId,
+    getAnalyzingEngineSyncer,
+    getAnalysisRelevantState,
+
+    // Config helpers
     getAnalyzeCommand,
     engineSupportsOwnership,
     getAnalysisMaxTime,
@@ -1330,10 +1616,6 @@ export function createEngineService(sabaki, deps = {}) {
     detectHumanSL,
     setHumanSLProfile,
     refreshHumanSLAnalysis,
-
-    // GTP log
-    addEngineLogEntry,
-    handleCommandSent,
 
     // Lifecycle
     attachEngines,
@@ -1359,7 +1641,9 @@ export function createEngineService(sabaki, deps = {}) {
     quickAnalyzeAllNodes,
     stopQuickAnalysis,
 
-    // Internal state accessors
-    getLastAnalyzingEngineSyncerId: () => lastAnalyzingEngineSyncerId,
+    // Cross-domain setters
+    setBlackWhiteSyncerIds,
+    setBlackSyncerId,
+    setWhiteSyncerId,
   }
 }

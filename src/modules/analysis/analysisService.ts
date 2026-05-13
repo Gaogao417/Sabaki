@@ -62,6 +62,10 @@ type SabakiLike = {
   analyzeMove?: (treePosition: string) => Promise<unknown>
   applogger?: {log: (...args: unknown[]) => void}
   setting?: {get: (key: string) => unknown}
+  getEngineService?: () => {
+    getAnalysisRelevantState: () => Record<string, unknown>
+    engineSupportsOwnership: (syncer: unknown) => boolean
+  }
 }
 
 // Phase 12C: additional deps for analysis ownership.
@@ -189,8 +193,9 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
   // construction time, but will be by the time any method is called.
   function getLifecycleDeps(): AnalysisLifecycleDeps {
     let es = resolveEngineService()
+    let engineState = es?.getAnalysisRelevantState?.() ?? {}
     return {
-      getState: () => sabaki.state as Record<string, any>,
+      getState: () => ({...(sabaki.state as Record<string, any>), ...engineState}),
       getInferredState: () => ({
         analyzingEngineSyncer: narrowSyncer(sabaki.inferredState.analyzingEngineSyncer),
         gameTree: narrowGameTree(sabaki.inferredState.gameTree),
@@ -236,17 +241,19 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
     cachePreviewOwnership: cache.cachePreviewOwnership,
     getCachedPreviewOwnership: cache.getCachedPreviewOwnership,
     getCurrentOwnership(syncer: unknown): OwnershipGrid | null {
+      let engineState = resolveEngineService()?.getAnalysisRelevantState?.() ?? {}
       return getCurrentOwnershipFromCache(
         narrowSyncer(syncer),
-        sabaki.state as any,
+        {...(sabaki.state as any), ...engineState},
         narrowGameTree(sabaki.inferredState.gameTree),
       )
     },
     getOwnershipForTreePosition(syncer: unknown, treePosition: string): OwnershipGrid | null {
+      let engineState = resolveEngineService()?.getAnalysisRelevantState?.() ?? {}
       return getOwnershipForTreePositionFromCache(
         narrowSyncer(syncer),
         treePosition,
-        sabaki.state as any,
+        {...(sabaki.state as any), ...engineState},
         narrowGameTree(sabaki.inferredState.gameTree),
       )
     },
@@ -277,8 +284,9 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
       state?: Record<string, unknown>,
       tab?: string | null,
     ): AnalysisTarget | null {
+      let engineState = resolveEngineService()?.getAnalysisRelevantState?.() ?? {}
       return buildAnalysisTargetFromState(
-        state ?? sabaki.state,
+        state ?? {...(sabaki.state as Record<string, unknown>), ...engineState},
         tab ?? null,
         sabaki.getEditWorkspaceTabKeys,
       )
@@ -287,7 +295,8 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
     getBoardAnalysisContext(
       opts: {state?: Record<string, unknown>; tab?: string | null} = {},
     ): AnalysisContext | null {
-      let state = opts.state ?? sabaki.state
+      let engineState = resolveEngineService()?.getAnalysisRelevantState?.() ?? {}
+      let state = opts.state ?? {...(sabaki.state as Record<string, unknown>), ...engineState}
       let target = buildAnalysisTargetFromState(
         state,
         opts.tab ?? null,
@@ -330,11 +339,12 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
       let syncer = narrowSyncer(sabaki.inferredState.analyzingEngineSyncer)
       let gameTree = narrowGameTree(sabaki.inferredState.gameTree)
 
+      let engineState = resolveEngineService()?.getAnalysisRelevantState?.() ?? {}
       let deps: ScratchAnalysisDeps = {
-        getState: () => sabaki.state as ScratchAnalysisDeps['getState'] extends () => infer R ? R : never,
+        getState: () => ({...(sabaki.state as Record<string, any>), ...engineState}) as ScratchAnalysisDeps['getState'] extends () => infer R ? R : never,
         setState: (patch: Record<string, unknown>) => sabaki.setState(patch),
         getSyncer: () => syncer,
-        engineSupportsOwnership: (s: EngineSyncerLike) => sabaki.engineSupportsOwnership(s),
+        engineSupportsOwnership: (s: EngineSyncerLike) => resolveEngineService()?.engineSupportsOwnership?.(s) ?? false,
         runBoardAnalysis: narrowRunBoardAnalysis(runBoardAnalysisInternal),
         getSourceTree: () => gameTree,
         logger: sabaki.applogger,
@@ -362,15 +372,16 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
 
     scheduleGameTreeAnalysis(treePosition: string): void {
       let syncer = narrowSyncer(sabaki.inferredState.analyzingEngineSyncer)
+      let engineState = sabaki.getEngineService?.()?.getAnalysisRelevantState?.() ?? {}
 
       scheduleGameTreeAnalysis(
         {
           getSyncer: () => syncer,
           getState: () => ({
-            engineGameOngoing: sabaki.state.engineGameOngoing,
-            blackEngineSyncerId: sabaki.state.blackEngineSyncerId as string | undefined,
-            whiteEngineSyncerId: sabaki.state.whiteEngineSyncerId as string | undefined,
-            analyzingEngineSyncerId: sabaki.state.analyzingEngineSyncerId as string | undefined,
+            engineGameOngoing: engineState.engineGameOngoing,
+            blackEngineSyncerId: engineState.blackEngineSyncerId as string | undefined,
+            whiteEngineSyncerId: engineState.whiteEngineSyncerId as string | undefined,
+            analyzingEngineSyncerId: engineState.analyzingEngineSyncerId as string | undefined,
             mode: sabaki.state.mode as string | undefined,
             editWorkspace: sabaki.state.editWorkspace,
           }),

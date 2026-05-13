@@ -486,15 +486,10 @@ exports.get = function (props = {}) {
           label: i18n.t('menu.engines', 'Toggle &Analysis'),
           accelerator: 'F4',
           click: () => {
+            let engineService = sabaki.getPlayServices().engineService
             let syncerId =
-              sabaki.lastAnalyzingEngineSyncerId ||
-              sabaki.state.attachedEngineSyncers
-                .filter((syncer) =>
-                  syncer.commands.some((x) =>
-                    setting.get('engines.analyze_commands').includes(x),
-                  ),
-                )
-                .map((syncer) => syncer.id)[0]
+              engineService.getLastAnalyzingSyncerId() ||
+              engineService.findFirstAnalysisCapableSyncerId()
 
             if (syncerId == null) {
               dialog.showMessageBox(
@@ -507,10 +502,10 @@ exports.get = function (props = {}) {
               return
             }
 
-            if (sabaki.state.analyzingEngineSyncerId == null) {
-              sabaki.startAnalysis(syncerId)
+            if (!engineService.hasAnalyzer()) {
+              engineService.startAnalysis(syncerId)
             } else {
-              sabaki.stopAnalysis()
+              engineService.stopAnalysis()
             }
           },
         },
@@ -520,7 +515,7 @@ exports.get = function (props = {}) {
             : i18n.t('menu.engines', 'Stop Engine vs. Engine &Game'),
           accelerator: 'F5',
           click: () => {
-            sabaki.startStopEngineGame(sabaki.state.treePosition)
+            sabaki.getPlayServices().engineService.startStopEngineGame(sabaki.state.treePosition)
           },
         },
         {
@@ -529,10 +524,8 @@ exports.get = function (props = {}) {
           enabled: !engineGameOngoing,
           click: () => {
             let sign = sabaki.getPlayer(sabaki.state.treePosition)
-            let syncerId =
-              sign > 0
-                ? sabaki.state.blackEngineSyncerId
-                : sabaki.state.whiteEngineSyncerId
+            let engineService = sabaki.getPlayServices().engineService
+            let syncerId = engineService.getEnginePlayerSyncerId(sign)
 
             if (syncerId == null) {
               dialog.showMessageBox(
@@ -544,7 +537,7 @@ exports.get = function (props = {}) {
               )
             }
 
-            sabaki.generateMove(syncerId, sabaki.state.treePosition)
+            sabaki.getPlayServices().engineService.generateMove(syncerId, sabaki.state.treePosition)
           },
         },
         {type: 'separator'},

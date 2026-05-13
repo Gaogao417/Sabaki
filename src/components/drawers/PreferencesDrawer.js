@@ -997,7 +997,7 @@ export default class PreferencesDrawer extends Component {
     if (prevProps.show && !this.props.show) {
       // Validate GTP logging path
 
-      if (sabaki.state.attachedEngineSyncers.length > 0) {
+      if (sabaki.getPlayServices().engineService.hasAttachedEngines()) {
         if (!gtplogger.updatePath()) {
           // Force the user to fix the issue
 

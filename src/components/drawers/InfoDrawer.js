@@ -85,7 +85,7 @@ export default class InfoDrawer extends Component {
           let {syncer, engine} = syncerEngine
 
           if (syncer == null) {
-            syncer = sabaki.attachEngines([engine])[0]
+            syncer = sabaki.getPlayServices().engineService.attachEngines([engine])[0]
           }
 
           playerSyncerId = syncer.id

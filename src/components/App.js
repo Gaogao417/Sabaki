@@ -325,8 +325,8 @@ class App extends Component {
 
       setTimeout(async () => {
         if (await sabaki.askForSave()) {
-          sabaki.detachEngines(
-            this.state.attachedEngineSyncers.map((syncer) => syncer.id),
+          sabaki.getPlayServices().engineService.detachEngines(
+            sabaki.getPlayServices().engineService.getAttachedSyncerIds(),
           )
 
           gtplogger.close()
@@ -502,11 +502,10 @@ class App extends Component {
     let territoryMode = overlayStoreState.territoryEnabled || overlayStoreState.territoryCompareEnabled
     let territoryCompareActive =
       overlayStoreState.territoryCompareEnabled && editWorkspaceActive
+    let engineService = sabaki.getPlayServices().engineService
     let activeAnalysis = editWorkspaceActive
       ? editAnalysis
-      : state.analysisTreePosition === state.treePosition
-        ? state.analysis
-        : null
+      : engineService.getAnalysisForPosition(state.treePosition)
 
     if (['scoring', 'estimator'].includes(state.mode)) {
       // Calculate area map
@@ -587,7 +586,7 @@ class App extends Component {
       appMode: state.mode,
       engineSyncerAvailable: engineSyncer != null,
       analysisPending: editWs?.analysisPending ?? false,
-      analysisTreePositionMatches: state.analysisTreePosition === state.treePosition,
+      analysisTreePositionMatches: engineService.isAnalysisAtPosition(state.treePosition),
       gameTreeOwnership,
       editCurrentOwnership: editActiveKeys != null ? editWs[editActiveKeys.ownershipKey] : null,
       editReferenceOwnership: editWs?.referenceOwnership ?? null,
@@ -642,19 +641,32 @@ class App extends Component {
         showGameGraph: state.showGameGraph,
         showCommentBox: state.showCommentBox,
         showLeftSidebar: state.showLeftSidebar,
-        engineGameOngoing: state.engineGameOngoing,
-        quickAnalysisId: state.quickAnalysisId,
+        engineGameOngoing: engineService.isEngineGameRunning(),
+        quickAnalysisId: engineService.getQuickAnalysisId(),
       }),
 
       workbenchMode
-        ? h(WorkbenchShell, state)
+        ? h(WorkbenchShell, {
+          ...state,
+          attachedEngineSyncers: engineService.getAttachedSyncers(),
+          blackEngineSyncerId: engineService.getBlackSyncerId(),
+          whiteEngineSyncerId: engineService.getWhiteSyncerId(),
+          engineGameOngoing: engineService.isEngineGameRunning(),
+          quickAnalysisId: engineService.getQuickAnalysisId(),
+        })
         : h(TripleSplitContainer, {
             id: 'mainlayout',
 
             beginSideSize: effectiveLeftSidebar ? state.leftSidebarWidth : 0,
             endSideSize: effectiveSidebar ? state.sidebarWidth : 0,
 
-            beginSideContent: h(LeftSidebar, state),
+            beginSideContent: h(LeftSidebar, {
+              ...state,
+              attachedEngineSyncers: engineService.getAttachedSyncers(),
+              blackEngineSyncerId: engineService.getBlackSyncerId(),
+              whiteEngineSyncerId: engineService.getWhiteSyncerId(),
+              consoleLog: engineService.getConsoleLog(),
+            }),
             mainContent: h(MainView, state),
             endSideContent: h(Sidebar, state),
 
@@ -664,16 +676,24 @@ class App extends Component {
 
       h(EngineFloatingPanel, {
         open: this.state.enginePanelOpen,
-        attachedEngineSyncers: state.attachedEngineSyncers,
-        analyzingEngineSyncerId: state.analyzingEngineSyncerId,
-        blackEngineSyncerId: state.blackEngineSyncerId,
-        whiteEngineSyncerId: state.whiteEngineSyncerId,
-        engineGameOngoing: state.engineGameOngoing,
-        consoleLog: state.consoleLog,
+        attachedEngineSyncers: engineService.getAttachedSyncers(),
+        analyzingEngineSyncerId: engineService.getAnalyzingSyncerId(),
+        blackEngineSyncerId: engineService.getBlackSyncerId(),
+        whiteEngineSyncerId: engineService.getWhiteSyncerId(),
+        engineGameOngoing: engineService.isEngineGameRunning(),
+        consoleLog: engineService.getConsoleLog(),
         onClose: this.handleEnginePanelClose,
       }),
 
-      h(DrawerManager, state),
+      h(DrawerManager, {
+        ...state,
+        attachedEngineSyncers: engineService.getAttachedSyncers(),
+        blackEngineSyncerId: engineService.getBlackSyncerId(),
+        whiteEngineSyncerId: engineService.getWhiteSyncerId(),
+        humanSLModelLoaded: engineService.getHumanSLState().modelLoaded,
+        humanSLError: engineService.getHumanSLState().error,
+        consoleLog: engineService.getConsoleLog(),
+      }),
 
       h(InputBox, {
         text: state.inputBoxText,

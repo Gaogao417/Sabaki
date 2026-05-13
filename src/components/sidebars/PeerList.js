@@ -162,7 +162,7 @@ export class EnginePeerList extends Component {
     }
 
     this.handleStartStopGameButtonClick = (evt) => {
-      sabaki.startStopEngineGame(sabaki.state.treePosition)
+      sabaki.getPlayServices().engineService.startStopEngineGame(sabaki.state.treePosition)
     }
   }
 

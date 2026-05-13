@@ -153,13 +153,9 @@ export function log(level, category, event, message, data = null, options = {}) 
     try {
       isAppendingConsoleLog = true
       let sabaki = window.sabaki
-      if (sabaki && sabaki.setState) {
-        let maxLength = setting.get('console.max_history_count') || 1000
-        sabaki.setState(({consoleLog}) => {
-          let newLog = consoleLog.slice(Math.max(consoleLog.length - maxLength + 1, 0))
-          newLog.push(entry)
-          return {consoleLog: newLog}
-        })
+      if (sabaki && sabaki.getPlayServices) {
+        let engineService = sabaki.getPlayServices().engineService
+        engineService.appendConsoleLog(entry)
       }
     } catch (e) {
       // Silently fail — never let logging break the app
