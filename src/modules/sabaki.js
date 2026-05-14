@@ -943,14 +943,14 @@ class Sabaki extends EventEmitter {
   }
 
   handleProblemMove(vertex) {
-    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} =
-      this.state
-    if (!problemSession || this.state.problemSubmitted) return
+    const {runtimeStore} = this.getTrainingServices()
+    let pv = runtimeStore.getState().problemView
+    let problemSession = pv ? pv.legacyProblemSession : this.state.problemSession
+    if (!problemSession || (pv && pv.submitted) || this.state.problemSubmitted) return
 
     logger.info('problem.move', 'Problem move', {
       vertex,
       problemId: problemSession.id,
-      userLineLength: problemAttempt.userLine?.length ?? 0,
     })
 
     let {gameTrees, gameIndex, treePosition} = this.state
@@ -960,13 +960,11 @@ class Sabaki extends EventEmitter {
     if (board.get(vertex) !== 0) return
 
     let player = problemSession.sideToMove === 'black' ? 1 : -1
-    let currentPlayer = this.getPlayer(treePosition)
 
-    // Capture pre-move analysis before modifying the tree
     let preMoveAnalysis =
       this.getPlayServices().engineService.getAnalysisForPosition(treePosition)
 
-    // Place the stone
+    // Place the stone (board infrastructure)
     let newTree = tree.mutate((draft) => {
       draft.appendNode(treePosition, {
         [player > 0 ? 'B' : 'W']: [sgf.stringifyVertex(vertex)],
@@ -979,17 +977,15 @@ class Sabaki extends EventEmitter {
     }
 
     let moveStr = board.stringifyVertex(vertex)
-    let userLine = [...(problemAttempt.userLine || []), moveStr]
 
-    // Basic evaluation using analysis data if available
+    // Inline evaluation (uses analysis data if available)
     let moveEval = {
-      moveIndex: userLine.length - 1,
+      moveIndex: (pv ? pv.evalCache.length : (this.state.problemEvalCache?.length ?? 0)),
       move: moveStr,
       isBadMove: false,
       severity: 'none',
     }
 
-    // Use pre-move analysis to check if the move was bad
     if (preMoveAnalysis) {
       let analysis = preMoveAnalysis
       let isSolverMove =
@@ -999,13 +995,6 @@ class Sabaki extends EventEmitter {
         helper.vertexEquals(v.vertex, vertex),
       )
       if (variation) {
-        // Check if this is significantly worse than the top move
-        let topWinrate = analysis.variations[0]?.winrate || 50
-        let moveWinrate = variation.winrate
-        let winrateDrop = isSolverMove
-          ? topWinrate - moveWinrate
-          : moveWinrate - topWinrate
-
         if (
           analysis.variations[0]?.scoreLead != null &&
           variation.scoreLead != null
@@ -1014,7 +1003,6 @@ class Sabaki extends EventEmitter {
             ? analysis.variations[0].scoreLead - variation.scoreLead
             : variation.scoreLead - analysis.variations[0].scoreLead
 
-          // Adjust sign based on solver's perspective
           if (player < 0) scoreDrop = -scoreDrop
 
           moveEval.beforeScoreLead = analysis.variations[0].scoreLead
@@ -1035,10 +1023,10 @@ class Sabaki extends EventEmitter {
       }
     }
 
-    problemEvalCache.push(moveEval)
-
+    let newEvalCache = [...(pv ? pv.evalCache : (this.state.problemEvalCache || [])), moveEval]
+    let newBadMoves = [...(pv ? pv.badMoves : (this.state.problemBadMoves || []))]
     if (moveEval.isBadMove) {
-      problemBadMoves.push({
+      newBadMoves.push({
         moveIndex: moveEval.moveIndex,
         move: moveStr,
         severity: moveEval.severity,
@@ -1046,30 +1034,42 @@ class Sabaki extends EventEmitter {
       })
     }
 
-    let updatedAttempt = {
-      ...problemAttempt,
-      userLine,
-      moveEvaluations: problemEvalCache,
+    // Update runtime store
+    if (pv) {
+      runtimeStore.setProblemView({
+        ...pv,
+        evalCache: newEvalCache,
+        badMoves: newBadMoves,
+      })
     }
+
+    // Legacy compat
     this.setState({
-      problemEvalCache,
-      problemBadMoves,
-      problemAttempt: updatedAttempt,
+      problemEvalCache: newEvalCache,
+      problemBadMoves: newBadMoves,
+      problemAttempt: {
+        ...(this.state.problemAttempt || {}),
+        userLine: newEvalCache.map((e) => e.move),
+        moveEvaluations: newEvalCache,
+      },
     })
   }
 
   async submitProblemAttempt() {
-    let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} =
-      this.state
-    if (!problemSession || this.state.problemSubmitted) return
+    const {runtimeStore, reviewService} = this.getTrainingServices()
+    let pv = runtimeStore.getState().problemView
+    let problemSession = pv ? pv.legacyProblemSession : this.state.problemSession
+    let problemBadMoves = pv ? pv.badMoves : this.state.problemBadMoves
+    let problemAttempt = this.state.problemAttempt
+
+    if (!problemSession || (pv && pv.submitted) || this.state.problemSubmitted) return
 
     logger.info('problem.submit', 'Problem attempt submitted', {
       problemId: problemSession.id,
-      userLineLength: problemAttempt.userLine?.length ?? 0,
       badMoveCount: problemBadMoves.length,
     })
 
-    // Determine result
+    // Determine result using inline evaluation thresholds
     let result = 'pass'
     let hasSevere = problemBadMoves.some((m) => m.severity === 'severe')
     let hasMajor = problemBadMoves.some((m) => m.severity === 'major')
@@ -1125,26 +1125,41 @@ class Sabaki extends EventEmitter {
     updatedAttempt.generatedPunishmentProblemIds = punishmentIds
     await window.sabaki.db.saveProblemAttempt(updatedAttempt)
 
-    // Update review schedule
-    let dueAt = new Date()
-    if (result === 'fail') {
-      dueAt.setDate(dueAt.getDate() + 1)
-    } else if (result === 'soft_pass') {
-      dueAt.setDate(dueAt.getDate() + 3)
-    } else {
-      dueAt.setDate(dueAt.getDate() + 7)
+    // Delegate review schedule update to reviewService
+    try {
+      await reviewService.updateScheduleAfterResult({
+        itemId: problemSession.id,
+        itemType: 'problem',
+        result,
+      })
+    } catch (_e) {
+      // Fallback to legacy inline schedule if service fails
+      let dueAt = new Date()
+      if (result === 'fail') dueAt.setDate(dueAt.getDate() + 1)
+      else if (result === 'soft_pass') dueAt.setDate(dueAt.getDate() + 3)
+      else dueAt.setDate(dueAt.getDate() + 7)
+
+      await window.sabaki.db.upsertReviewSchedule({
+        itemId: problemSession.id,
+        itemType: 'problem',
+        dueAt: dueAt.toISOString(),
+        intervalDays: result === 'fail' ? 1 : result === 'soft_pass' ? 3 : 7,
+        lastResult: result,
+        consecutivePassCount: result === 'pass' ? 1 : 0,
+        totalFailCount: result === 'fail' ? 1 : 0,
+      })
     }
 
-    await window.sabaki.db.upsertReviewSchedule({
-      itemId: problemSession.id,
-      itemType: 'problem',
-      dueAt: dueAt.toISOString(),
-      intervalDays: result === 'fail' ? 1 : result === 'soft_pass' ? 3 : 7,
-      lastResult: result,
-      consecutivePassCount: result === 'pass' ? 1 : 0,
-      totalFailCount: result === 'fail' ? 1 : 0,
-    })
+    // Update runtime store
+    if (pv) {
+      runtimeStore.setProblemView({
+        ...pv,
+        submitted: true,
+        result,
+      })
+    }
 
+    // Legacy compat
     this.setState({
       problemSubmitted: true,
       problemResult: result,
@@ -1195,21 +1210,24 @@ class Sabaki extends EventEmitter {
   }
 
   undoProblemMove() {
-    let {problemAttempt, problemEvalCache, problemBadMoves} = this.state
+    const {runtimeStore} = this.getTrainingServices()
+    let pv = runtimeStore.getState().problemView
+    let problemEvalCache = pv ? pv.evalCache : (this.state.problemEvalCache || [])
+    let problemBadMoves = pv ? pv.badMoves : (this.state.problemBadMoves || [])
+    let problemAttempt = this.state.problemAttempt
+
     if (!problemAttempt || problemEvalCache.length === 0) return
 
     let userLine = [...(problemAttempt.userLine || [])]
     let lastEval = problemEvalCache[problemEvalCache.length - 1]
 
     userLine.pop()
-    problemEvalCache = problemEvalCache.slice(0, -1)
-    if (lastEval.isBadMove) {
-      problemBadMoves = problemBadMoves.filter(
-        (m) => m.moveIndex !== lastEval.moveIndex,
-      )
-    }
+    let newEvalCache = problemEvalCache.slice(0, -1)
+    let newBadMoves = lastEval.isBadMove
+      ? problemBadMoves.filter((m) => m.moveIndex !== lastEval.moveIndex)
+      : problemBadMoves
 
-    // Navigate back in tree
+    // Navigate back in tree (board infrastructure)
     let {gameTrees, gameIndex, treePosition} = this.state
     let tree = gameTrees[gameIndex]
     let node = tree.get(treePosition)
@@ -1217,14 +1235,30 @@ class Sabaki extends EventEmitter {
       this.setCurrentTreePosition(tree, node.parentId)
     }
 
+    // Update runtime store
+    if (pv) {
+      runtimeStore.setProblemView({
+        ...pv,
+        evalCache: newEvalCache,
+        badMoves: newBadMoves,
+      })
+    }
+
+    // Legacy compat
     this.setState({
       problemAttempt: {...problemAttempt, userLine},
-      problemEvalCache,
-      problemBadMoves,
+      problemEvalCache: newEvalCache,
+      problemBadMoves: newBadMoves,
     })
   }
 
   exitProblemMode() {
+    const {runtimeStore} = this.getTrainingServices()
+
+    // Clear runtime store
+    runtimeStore.setProblemView(null)
+
+    // Legacy compat
     this.setState({
       problemSession: null,
       problemAttempt: null,
@@ -1234,36 +1268,52 @@ class Sabaki extends EventEmitter {
     this.setMode('play')
   }
 
-  // Review Mode
+  // Review Mode — queue/inbox only, NOT a board mode
 
   async startReviewSession() {
+    const {runtimeStore} = this.getTrainingServices()
     let dueItems = await window.sabaki.db.getDueReviews()
     if (dueItems.length === 0) return
 
     let queue = dueItems.map((item) => item.item_id)
 
+    // Update runtime store (dashboard state)
+    runtimeStore.setReviewQueueView({
+      queue,
+      currentIndex: 0,
+      totalDue: queue.length,
+    })
+
+    // Legacy compat
     this.setState({
       reviewQueue: queue,
       reviewCurrentIndex: 0,
       reviewTotalDue: queue.length,
     })
 
+    // Open first item as normal problem tab (NOT mode='review')
     await this.startProblem(queue[0])
-    this.setMode('review')
   }
 
   async advanceReview() {
-    let {reviewQueue, reviewCurrentIndex} = this.state
-    let nextIndex = reviewCurrentIndex + 1
+    const {runtimeStore} = this.getTrainingServices()
+    let rv = runtimeStore.getState().reviewQueueView
+    let queue = rv ? rv.queue : this.state.reviewQueue
+    let currentIndex = rv ? rv.currentIndex : this.state.reviewCurrentIndex
+    let nextIndex = currentIndex + 1
 
-    if (nextIndex >= reviewQueue.length) {
+    if (nextIndex >= queue.length) {
+      runtimeStore.setReviewQueueView(null)
       this.exitProblemMode()
       return
     }
 
+    if (rv) {
+      runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
+    }
     this.setState({reviewCurrentIndex: nextIndex})
-    await this.startProblem(reviewQueue[nextIndex])
-    this.setMode('review')
+
+    await this.startProblem(queue[nextIndex])
   }
 
   setBusy(busy) {
