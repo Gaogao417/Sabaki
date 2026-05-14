@@ -40,10 +40,10 @@ function generateId(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 }
 
-function buildPassRuleFromSnapshot(input: ProblemSnapshotInput): PassRule {
+function buildPassRuleFromSnapshot(_input: ProblemSnapshotInput): PassRule {
   return {
     scoreDropThreshold: 2.0,
-    severeDropThreshold: 5.0,
+    severeDropThreshold: 8.0,
     requireNoSevereBadMove: false,
     compareWithReference: false,
   }
@@ -64,6 +64,12 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
 
     if (tab.phase !== 'analysis') {
       throw new Error(`snapshotService.captureSnapshotInput: tab must be in analysis phase (current=${tab.phase})`)
+    }
+
+    if (tab.taskId !== input.sourceTaskId) {
+      throw new Error(
+        `snapshotService.captureSnapshotInput: sourceTaskId (${input.sourceTaskId}) does not match tab.taskId (${tab.taskId})`,
+      )
     }
 
     const task = await repository.loadTask(input.sourceTaskId)

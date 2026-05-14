@@ -44,6 +44,16 @@ function createFakeRepo(overrides = {}) {
           updatedAt: '2026-01-01T00:00:00.000Z',
         }
       }
+      if (taskId === 'task_snap') {
+        return {
+          id: 'task_snap',
+          kind: 'snapshot_problem',
+          source: { kind: 'snapshot_problem', problemId: 'snap_orig' },
+          rootPositionSgf: '(;SZ[9])',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        }
+      }
       return null
     },
     async createProblem(problem) {
@@ -113,6 +123,18 @@ describe('snapshotService', () => {
       assert.strictEqual(input.sourceProblemId, undefined)
     })
 
+    it('resolves sourceProblemId from snapshot_problem task', async () => {
+      store.addTab(makeTab({ id: 'tab_3', taskId: 'task_snap', phase: 'analysis' }))
+
+      const input = await service.captureSnapshotInput({
+        tabId: 'tab_3',
+        sourceTaskId: 'task_snap',
+      })
+
+      assert.strictEqual(input.sourceProblemId, 'snap_orig')
+      assert.strictEqual(input.sourceGameId, undefined)
+    })
+
     it('throws if tab not found', async () => {
       await assert.rejects(
         () => service.captureSnapshotInput({ tabId: 'missing', sourceTaskId: 'task_1' }),
@@ -129,11 +151,28 @@ describe('snapshotService', () => {
       )
     })
 
-    it('throws if task not found', async () => {
-      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_missing', phase: 'analysis' }))
+    it('throws if sourceTaskId does not match tab.taskId', async () => {
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
 
       await assert.rejects(
-        () => service.captureSnapshotInput({ tabId: 'tab_1', sourceTaskId: 'task_missing' }),
+        () => service.captureSnapshotInput({ tabId: 'tab_1', sourceTaskId: 'task_2' }),
+        /sourceTaskId.*does not match.*tab\.taskId/,
+      )
+    })
+
+    it('throws if task not found', async () => {
+      const noTaskService = createSnapshotService({
+        repository: {
+          async loadTask() { return null },
+          async createProblem(p) { return p },
+        },
+        positionSnapshotAdapter: adapter,
+        workbenchStore: store,
+      })
+      store.addTab(makeTab({ id: 'tab_ghost', taskId: 'task_ghost', phase: 'analysis' }))
+
+      await assert.rejects(
+        () => noTaskService.captureSnapshotInput({ tabId: 'tab_ghost', sourceTaskId: 'task_ghost' }),
         /task not found/,
       )
     })
@@ -234,7 +273,7 @@ describe('snapshotService', () => {
       assert.notStrictEqual(p1.id, p2.id)
     })
 
-    it('builds default pass rule', async () => {
+    it('builds default pass rule matching evaluationRules thresholds', async () => {
       const input = {
         sourceTaskId: 'task_1',
         positionSgf: '(;SZ[9])',
@@ -244,9 +283,22 @@ describe('snapshotService', () => {
       const problem = await service.createProblemFromCurrentAnalysisPosition(input)
 
       assert.strictEqual(problem.passRule.scoreDropThreshold, 2.0)
-      assert.strictEqual(problem.passRule.severeDropThreshold, 5.0)
+      assert.strictEqual(problem.passRule.severeDropThreshold, 8.0)
       assert.strictEqual(problem.passRule.requireNoSevereBadMove, false)
       assert.strictEqual(problem.passRule.compareWithReference, false)
+    })
+
+    it('sets empty positionDescription and taskGoal for user to fill', async () => {
+      const input = {
+        sourceTaskId: 'task_1',
+        positionSgf: '(;SZ[9])',
+        sideToMove: 'black',
+      }
+
+      const problem = await service.createProblemFromCurrentAnalysisPosition(input)
+
+      assert.strictEqual(problem.positionDescription, '')
+      assert.strictEqual(problem.taskGoal, '')
     })
   })
 
