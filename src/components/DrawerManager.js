@@ -13,7 +13,6 @@ import ProblemEditorDrawer from './drawers/ProblemEditorDrawer.js'
 import TrainingDashboardDrawer from './drawers/TrainingDashboardDrawer.js'
 // import FoxGameImportDrawer from './drawers/FoxGameImportDrawer.js'
 import NewGameDialog from './drawers/NewGameDialog.js'
-import ManagementHub from './ManagementHub.js'
 
 export default class DrawerManager extends Component {
   constructor() {
