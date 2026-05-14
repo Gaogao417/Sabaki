@@ -18,6 +18,7 @@ import * as gametree from './gametree.js'
 import * as gobantransformer from './gobantransformer.js'
 import * as gtplogger from './gtplogger.js'
 import * as applogger from './applogger.js'
+import {createLoggerService, createWinstonWriter} from './logger/index.js'
 import * as helper from './helper.js'
 import {
   MUTATION_CONTRACTS,
@@ -181,7 +182,26 @@ class Sabaki extends EventEmitter {
     }
 
     this.events = new EventEmitter()
-    applogger.init()
+
+    // --- LoggerService + Winston writer (Phase 1) ---
+    this.loggerService = createLoggerService({bufferSize: 500})
+
+    this._winstonWriter = createWinstonWriter({
+      isFileEnabled: () => setting.get('app.logging_file_enabled'),
+      getFileLevel: () => setting.get('app.logging_level') || 'info',
+      getLogPath: () => setting.get('app.logging_file_path'),
+      isWritableDir: (dir) => helper.isWritableDirectory(dir),
+      showWarning: (msg, type) => dialog.showMessageBox(msg, type),
+    })
+
+    applogger.init({
+      loggerService: this.loggerService,
+      winstonWriter: this._winstonWriter,
+    })
+
+    // Subscribe LoggerService → engineService.appendConsoleLog (Phase 1 bridge)
+    this._loggerUnsubscribe = null
+
     // App info will be set via IPC - use defaults initially
     this.appName = 'Sabaki'
     this.version = ''
@@ -1305,6 +1325,16 @@ class Sabaki extends EventEmitter {
       analysisService.setEngineService(engineService)
 
       this._playServices = {documentStore, engineService, analysisService}
+
+      // Phase 1 bridge: subscribe LoggerService → engineService.appendConsoleLog
+      // so app log entries appear in the GTP console panel.
+      if (this._loggerUnsubscribe) this._loggerUnsubscribe()
+      this._loggerUnsubscribe = this.loggerService.subscribe((entry) => {
+        let loggingEnabled = setting.get('app.logging_enabled')
+        if (!loggingEnabled) return
+        if (!entry.appLog) return
+        engineService.appendConsoleLog(entry)
+      })
     }
     return this._playServices
   }
