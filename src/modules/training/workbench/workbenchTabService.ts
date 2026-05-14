@@ -95,7 +95,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
       generatedPunishmentProblemIds: [],
     })
 
-    legacyAdapter.setupProblemLegacyState({
+    legacyAdapter.getSabaki().setState({
       problemSession: problem,
       problemAttempt: attempt,
       problemWorkspace: tree,
@@ -107,7 +107,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
 
     await legacyAdapter.loadGameTrees([tree])
     legacyAdapter.setCurrentTreePosition(tree, (tree as { root: { id: string } }).root.id)
-    legacyAdapter.setProblemMode()
+    legacyAdapter.getSabaki().setMode('problem')
     legacyAdapter.startAnalysisIfEngineReady((tree as { root: { id: string } }).root.id)
   }
 

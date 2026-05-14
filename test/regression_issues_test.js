@@ -27,6 +27,7 @@ describe('regression: review mode defaults', () => {
         },
         getInfoOverlayDuration: () => 1,
         notifyChange: () => { notified++ },
+        logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
       },
       get notified() { return notified },
     }

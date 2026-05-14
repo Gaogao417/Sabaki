@@ -17,9 +17,7 @@ export default class WorkspaceDock extends Component {
           ? '回忆工作区'
           : mode === 'problem'
             ? '当前题目'
-            : mode === 'review'
-              ? '复习'
-              : mode === 'find'
+            : mode === 'find'
                 ? t('Find')
                 : mode === 'guess'
                   ? t('Guess')

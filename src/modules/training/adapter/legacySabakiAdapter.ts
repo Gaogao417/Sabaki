@@ -27,7 +27,6 @@ type SabakiLike = {
     }
     analysisService: unknown
   }
-  getTrainingStore(): unknown
   analyzeMove(treePosition: string): void
   inferredState: {
     analyzingEngineSyncer: unknown | null
@@ -45,18 +44,7 @@ export type LegacySabakiAdapter = {
   getCurrentTree(): unknown
   getSabaki(): SabakiLike
 
-  // Problem-mode setup helpers
-  setupProblemLegacyState(patch: {
-    problemSession: unknown
-    problemAttempt: unknown
-    problemWorkspace: unknown
-    problemEvalCache: unknown[]
-    problemBadMoves: unknown[]
-    problemSubmitted: boolean
-    problemResult: unknown
-  }): void
   setCurrentTreePosition(tree: unknown, position: string): void
-  setProblemMode(): void
   startAnalysisIfEngineReady(treePosition: string): void
 }
 
@@ -94,24 +82,8 @@ export function createLegacySabakiAdapter(sabaki: SabakiLike): LegacySabakiAdapt
       return sabaki
     },
 
-    setupProblemLegacyState(patch) {
-      sabaki.setState({
-        problemSession: patch.problemSession,
-        problemAttempt: patch.problemAttempt,
-        problemWorkspace: patch.problemWorkspace,
-        problemEvalCache: patch.problemEvalCache,
-        problemBadMoves: patch.problemBadMoves,
-        problemSubmitted: patch.problemSubmitted,
-        problemResult: patch.problemResult,
-      })
-    },
-
     setCurrentTreePosition(tree: unknown, position: string) {
       sabaki.setCurrentTreePosition(tree, position)
-    },
-
-    setProblemMode() {
-      sabaki.setMode('problem')
     },
 
     startAnalysisIfEngineReady(treePosition: string) {

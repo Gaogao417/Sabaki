@@ -40,7 +40,6 @@ import {
 import {createDocumentStore} from './document/documentStore.js'
 import {createEngineService} from './engine/engineService.js'
 import {createAnalysisService} from './analysis/analysisService.ts'
-import {createTrainingStore} from './training/trainingStore.js'
 import {createOverlayStore} from './overlays/overlayStore.ts'
 import {
   createWorkbenchStore,
@@ -583,13 +582,14 @@ class Sabaki extends EventEmitter {
         textarea.focus()
       })
     } else if (mode === 'recall') {
-      if (this.state.recallSession == null) return
+      const {runtimeStore} = this.getTrainingServices()
+      if (!runtimeStore.getState().recallView && !this.state.recallSession) return
     } else if (mode === 'problem') {
-      if (this.state.problemSession == null) return
+      const {runtimeStore} = this.getTrainingServices()
+      if (!runtimeStore.getState().problemView && !this.state.problemSession) return
       this.getPlayServices().engineService.ensureAnalyzerForProblemMode()
-    } else if (mode === 'review') {
-      if (this.state.problemSession == null) return
     }
+    // mode='review' is no longer a board mode — review items open as problem tabs
 
     this.setState(stateChange)
     this.events.emit('modeChange')
@@ -1166,9 +1166,10 @@ class Sabaki extends EventEmitter {
       problemAttempt: updatedAttempt,
     })
 
-    // If in review mode, advance to next
-    if (this.state.mode === 'review') {
-      this.advanceReview()
+    // If reviewing from queue, advance to next
+    let rqv = runtimeStore?.getState().reviewQueueView
+    if (rqv && rqv.currentIndex < rqv.queue.length - 1) {
+      // Queue advancement is handled by ProblemBar's onNextReview callback
     }
   }
 
@@ -1536,20 +1537,8 @@ class Sabaki extends EventEmitter {
   // Phase 8: Play Interaction Services
 
   _playServices = null
-  _trainingStore = null
   _overlayStore = null
   _trainingServices = null
-
-  getTrainingStore() {
-    if (this._trainingStore == null) {
-      this._trainingStore = createTrainingStore(this, {
-        logger,
-        playErrorSound: () => sound.playError(),
-        db: window.sabaki.db,
-      })
-    }
-    return this._trainingStore
-  }
 
   getTrainingServices() {
     if (this._trainingServices == null) {
@@ -3079,34 +3068,11 @@ class Sabaki extends EventEmitter {
         this.findMove(1, {vertex, text: this.state.findText})
       }
     } else if (this.state.mode === 'recall') {
-      // Phase 9: resolver + executor routing for recall
-      let recallCtx = createBoardInteractionContext({
-        state: this.state,
-        board,
-        vertex,
-        event: {button, ctrlKey, metaKey},
-        isMac: helper.isMac,
-      })
-
-      if (recallCtx != null) {
-        let recallResult = resolveBoardInteraction(recallCtx)
-
-        if (
-          recallResult.status === RESOLVE_STATUSES.RESOLVED &&
-          recallResult.intent === 'submit-recall-answer' &&
-          recallResult.mutationContract === 'recallAnswer'
-        ) {
-          this.getTrainingStore().submitRecallAnswer(vertex)
-          return
-        }
-      }
-
-      // noop/deferred: fall through to legacy recall handling
       if (button !== 0) return
       if (board.get(vertex) === 0) {
-        this.recallAnswer(vertex)
+        this.handleRecallMove(vertex)
       }
-    } else if (this.state.mode === 'problem' || this.state.mode === 'review') {
+    } else if (this.state.mode === 'problem') {
       if (button !== 0) return
 
       let board = gametree.getBoard(tree, treePosition)
