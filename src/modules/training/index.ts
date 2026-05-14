@@ -22,4 +22,9 @@ export {
   shouldCreateBadMove,
 } from './attempt/index'
 
+export {
+  createRecallService,
+  createRecallCheckpointService,
+} from './recall/index'
+
 export type * from './types/index'

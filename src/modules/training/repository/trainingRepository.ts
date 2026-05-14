@@ -68,6 +68,7 @@ export type TrainingRepository = {
   listBadMovesByAttempt(attemptId: string): Promise<BadMove[]>
   listBadMovesByTask(taskId: string): Promise<BadMove[]>
   markBadMoveAsNotBad(badMoveId: string): Promise<void>
+  updateBadMove(badMoveId: string, patch: Partial<BadMove>): Promise<void>
 
   // Recall (new)
   createRecallSession(session: RecallSession): Promise<RecallSession>
@@ -86,6 +87,7 @@ export type TrainingRepository = {
   createProblem(problem: Problem): Promise<Problem>
   loadProblem(problemId: string): Promise<Problem | null>
   updateProblem(problemId: string, patch: Partial<Problem>): Promise<void>
+  archiveProblem(problemId: string): Promise<void>
 
   // Comment
   createMoveComment(comment: MoveComment): Promise<MoveComment>
@@ -273,82 +275,188 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     await db.markTrainingBadMoveAsNotBad(badMoveId)
   }
 
+  async function updateBadMove(badMoveId: string, patch: Partial<BadMove>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.recallCheckpointId !== undefined) mapped.recallCheckpointId = patch.recallCheckpointId
+    if (patch.generatedProblemId !== undefined) mapped.generatedProblemId = patch.generatedProblemId
+    if (patch.userMarkedAsNotBad !== undefined) mapped.userMarkedAsNotBad = patch.userMarkedAsNotBad
+    await db.updateTrainingBadMove(badMoveId, mapped)
+  }
+
   // --- Remaining stubs (Phase 3+) ---
 
-  function _notImplemented(method: string): never {
-    throw new Error(`trainingRepository.${method}: not yet implemented (post-Phase 2 stub)`)
+  async function createRecallSession(session: RecallSession): Promise<RecallSession> {
+    const row = await db.createTrainingRecallSession({
+      id: session.id,
+      taskId: session.taskId,
+      tabId: session.tabId,
+      type: session.type,
+      source: session.source,
+      startMove: session.startMove,
+      endMove: session.endMove,
+      expectedMoves: session.expectedMoves,
+      currentMoveIndex: session.currentMoveIndex,
+      completed: session.completed,
+      completedAt: session.completedAt,
+    })
+    return mapRecallSessionRow(row)
   }
 
-  function createRecallSession(session: RecallSession): Promise<RecallSession> {
-    _notImplemented('createRecallSession')
+  async function loadRecallSession(sessionId: string): Promise<RecallSession | null> {
+    const row = await db.loadTrainingRecallSession(sessionId)
+    return row ? mapRecallSessionRow(row) : null
   }
 
-  function loadRecallSession(sessionId: string): Promise<RecallSession | null> {
-    _notImplemented('loadRecallSession')
+  async function updateRecallSession(sessionId: string, patch: Partial<RecallSession>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.currentMoveIndex !== undefined) mapped.currentMoveIndex = patch.currentMoveIndex
+    if (patch.completed !== undefined) mapped.completed = patch.completed
+    if (patch.completedAt !== undefined) mapped.completedAt = patch.completedAt
+    await db.updateTrainingRecallSession(sessionId, mapped)
   }
 
-  function updateRecallSession(sessionId: string, patch: Partial<RecallSession>): Promise<void> {
-    _notImplemented('updateRecallSession')
+  async function createRecallAttempt(attempt: RecallAttempt): Promise<RecallAttempt> {
+    const row = await db.createTrainingRecallAttempt({
+      id: attempt.id,
+      recallSessionId: attempt.recallSessionId,
+      moveNumber: attempt.moveNumber,
+      expectedMove: attempt.expectedMove,
+      userMove: attempt.userMove,
+      isCorrect: attempt.isCorrect,
+      hintLevelUsed: attempt.hintLevelUsed,
+    })
+    return mapRecallAttemptRow(row)
   }
 
-  function createRecallAttempt(attempt: RecallAttempt): Promise<RecallAttempt> {
-    _notImplemented('createRecallAttempt')
+  async function listRecallAttempts(sessionId: string): Promise<RecallAttempt[]> {
+    const rows = await db.listTrainingRecallAttemptsBySession(sessionId)
+    return rows.map(mapRecallAttemptRow)
   }
 
-  function listRecallAttempts(sessionId: string): Promise<RecallAttempt[]> {
-    _notImplemented('listRecallAttempts')
+  async function createRecallCheckpoint(checkpoint: RecallCheckpoint): Promise<RecallCheckpoint> {
+    const row = await db.createTrainingRecallCheckpoint({
+      id: checkpoint.id,
+      recallSessionId: checkpoint.recallSessionId,
+      badMoveId: checkpoint.badMoveId,
+      status: checkpoint.status,
+      userCorrectionLine: checkpoint.userCorrectionLine,
+      aiCandidateLines: checkpoint.aiCandidateLines,
+      userCommentId: checkpoint.userCommentId,
+      completedAt: checkpoint.completedAt,
+    })
+    return mapRecallCheckpointRow(row)
   }
 
-  function createRecallCheckpoint(checkpoint: RecallCheckpoint): Promise<RecallCheckpoint> {
-    _notImplemented('createRecallCheckpoint')
+  async function loadRecallCheckpoint(checkpointId: string): Promise<RecallCheckpoint | null> {
+    const row = await db.loadTrainingRecallCheckpoint(checkpointId)
+    return row ? mapRecallCheckpointRow(row) : null
   }
 
-  function loadRecallCheckpoint(checkpointId: string): Promise<RecallCheckpoint | null> {
-    _notImplemented('loadRecallCheckpoint')
+  async function updateRecallCheckpoint(checkpointId: string, patch: Partial<RecallCheckpoint>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.status !== undefined) mapped.status = patch.status
+    if (patch.userCorrectionLine !== undefined) mapped.userCorrectionLine = patch.userCorrectionLine
+    if (patch.aiCandidateLines !== undefined) mapped.aiCandidateLines = patch.aiCandidateLines
+    if (patch.userCommentId !== undefined) mapped.userCommentId = patch.userCommentId
+    if (patch.completedAt !== undefined) mapped.completedAt = patch.completedAt
+    await db.updateTrainingRecallCheckpoint(checkpointId, mapped)
   }
 
-  function updateRecallCheckpoint(checkpointId: string, patch: Partial<RecallCheckpoint>): Promise<void> {
-    _notImplemented('updateRecallCheckpoint')
+  async function listCheckpointsByRecallSession(sessionId: string): Promise<RecallCheckpoint[]> {
+    const rows = await db.listTrainingRecallCheckpointsBySession(sessionId)
+    return rows.map(mapRecallCheckpointRow)
   }
 
-  function listCheckpointsByRecallSession(sessionId: string): Promise<RecallCheckpoint[]> {
-    _notImplemented('listCheckpointsByRecallSession')
+  async function createProblem(problem: Problem): Promise<Problem> {
+    const row = await db.saveProblem(problem)
+    return mapProblemRow(row)
   }
 
-  function createProblem(problem: Problem): Promise<Problem> {
-    _notImplemented('createProblem')
+  async function loadProblem(problemId: string): Promise<Problem | null> {
+    const row = await db.getProblem(problemId)
+    return row ? mapProblemRow(row) : null
   }
 
-  function loadProblem(problemId: string): Promise<Problem | null> {
-    _notImplemented('loadProblem')
+  async function updateProblem(problemId: string, patch: Partial<Problem>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.type !== undefined) mapped.type = patch.type
+    if (patch.positionSgf !== undefined) mapped.positionSgf = patch.positionSgf
+    if (patch.sideToMove !== undefined) mapped.sideToMove = patch.sideToMove
+    if (patch.title !== undefined) mapped.title = patch.title
+    if (patch.positionDescription !== undefined) mapped.positionDescription = patch.positionDescription
+    if (patch.taskGoal !== undefined) mapped.taskGoal = patch.taskGoal
+    if (patch.referenceLines !== undefined) mapped.referenceLines = patch.referenceLines
+    if (patch.passRule !== undefined) mapped.passRule = patch.passRule
+    if (patch.tags !== undefined) mapped.tags = patch.tags
+    if (patch.difficulty !== undefined) mapped.difficulty = patch.difficulty
+    if (patch.status !== undefined) mapped.status = patch.status
+    if (patch.sourceGameId !== undefined) mapped.sourceGameId = patch.sourceGameId
+    if (patch.sourceMoveIndex !== undefined) mapped.sourceMoveIndex = patch.sourceMoveIndex
+    if (patch.sourceProblemId !== undefined) mapped.sourceProblemId = patch.sourceProblemId
+    if (patch.sourceTaskId !== undefined) mapped.sourceTaskId = patch.sourceTaskId
+    if (patch.sourceAttemptId !== undefined) mapped.sourceAttemptId = patch.sourceAttemptId
+    if (patch.parentProblemId !== undefined) mapped.parentProblemId = patch.parentProblemId
+    if (patch.parentSnapshotReason !== undefined) mapped.parentSnapshotReason = patch.parentSnapshotReason
+    await db.updateProblem(problemId, mapped)
   }
 
-  function updateProblem(problemId: string, patch: Partial<Problem>): Promise<void> {
-    _notImplemented('updateProblem')
+  async function archiveProblem(problemId: string): Promise<void> {
+    await db.archiveProblem(problemId)
   }
 
-  function createMoveComment(comment: MoveComment): Promise<MoveComment> {
-    _notImplemented('createMoveComment')
+  async function createMoveComment(comment: MoveComment): Promise<MoveComment> {
+    const row = await db.createTrainingMoveComment({
+      id: comment.id,
+      target: comment.target,
+      content: comment.content,
+      templateAnswers: comment.templateAnswers,
+    })
+    return mapMoveCommentRow(row)
   }
 
-  function loadMoveComment(commentId: string): Promise<MoveComment | null> {
-    _notImplemented('loadMoveComment')
+  async function loadMoveComment(commentId: string): Promise<MoveComment | null> {
+    const row = await db.loadTrainingMoveComment(commentId)
+    return row ? mapMoveCommentRow(row) : null
   }
 
-  function updateMoveComment(commentId: string, patch: Partial<MoveComment>): Promise<void> {
-    _notImplemented('updateMoveComment')
+  async function updateMoveComment(commentId: string, patch: Partial<MoveComment>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.content !== undefined) mapped.content = patch.content
+    if (patch.templateAnswers !== undefined) mapped.templateAnswers = patch.templateAnswers
+    await db.updateTrainingMoveComment(commentId, mapped)
   }
 
-  function createReviewSchedule(schedule: ReviewSchedule): Promise<ReviewSchedule> {
-    _notImplemented('createReviewSchedule')
+  async function createReviewSchedule(schedule: ReviewSchedule): Promise<ReviewSchedule> {
+    const row = await db.upsertReviewSchedule({
+      id: schedule.id,
+      itemId: schedule.itemId,
+      itemType: schedule.itemType,
+      dueAt: schedule.dueAt,
+      intervalDays: schedule.intervalDays,
+      easeFactor: schedule.easeFactor,
+      lastResult: schedule.lastResult,
+      consecutivePassCount: schedule.consecutivePassCount,
+      totalFailCount: schedule.totalFailCount,
+      lastReviewedAt: schedule.lastReviewedAt,
+    })
+    return mapReviewScheduleRow(row)
   }
 
-  function listDueReviewItems(now: string): Promise<ReviewSchedule[]> {
-    _notImplemented('listDueReviewItems')
+  async function listDueReviewItems(_now: string): Promise<ReviewSchedule[]> {
+    const rows = await db.getDueReviews()
+    return rows.map(mapReviewScheduleRow)
   }
 
-  function updateReviewSchedule(id: string, patch: Partial<ReviewSchedule>): Promise<void> {
-    _notImplemented('updateReviewSchedule')
+  async function updateReviewSchedule(id: string, patch: Partial<ReviewSchedule>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.dueAt !== undefined) mapped.dueAt = patch.dueAt
+    if (patch.intervalDays !== undefined) mapped.intervalDays = patch.intervalDays
+    if (patch.easeFactor !== undefined) mapped.easeFactor = patch.easeFactor
+    if (patch.lastResult !== undefined) mapped.lastResult = patch.lastResult
+    if (patch.consecutivePassCount !== undefined) mapped.consecutivePassCount = patch.consecutivePassCount
+    if (patch.totalFailCount !== undefined) mapped.totalFailCount = patch.totalFailCount
+    if (patch.lastReviewedAt !== undefined) mapped.lastReviewedAt = patch.lastReviewedAt
+    await db.updateReviewSchedule(id, mapped)
   }
 
   async function listIncompleteAttempts(): Promise<TrainingAttempt[]> {
@@ -356,8 +464,9 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     return rows.map(mapAttemptRow)
   }
 
-  function listIncompleteRecallSessions(): Promise<RecallSession[]> {
-    _notImplemented('listIncompleteRecallSessions')
+  async function listIncompleteRecallSessions(): Promise<RecallSession[]> {
+    const rows = await db.listIncompleteTrainingRecallSessions()
+    return rows.map(mapRecallSessionRow)
   }
 
   async function listExpiredPendingMoveEvaluations(now: string): Promise<MoveEvaluation[]> {
@@ -366,8 +475,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function transaction<T>(fn: () => Promise<T>): Promise<T> {
-    // IPC does not support real transactions; sequential execution is safe for MVP
-    return fn()
+    return db.transaction(() => fn())
   }
 
   // --- Row mappers ---
@@ -447,6 +555,106 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     }
   }
 
+  function mapRecallSessionRow(row: Record<string, unknown>): RecallSession {
+    return {
+      id: row.id as string,
+      taskId: row.taskId as string,
+      tabId: (row.tabId as string) ?? undefined,
+      type: (row.type as 'line_recall') ?? 'line_recall',
+      source: typeof row.source === 'string' ? JSON.parse(row.source) : row.source,
+      startMove: (row.startMove as number) ?? 0,
+      endMove: (row.endMove as number) ?? undefined,
+      expectedMoves: typeof row.expectedMoves === 'string' ? JSON.parse(row.expectedMoves) : (row.expectedMoves as string[]),
+      currentMoveIndex: (row.currentMoveIndex as number) ?? 0,
+      completed: !!row.completed,
+      createdAt: row.createdAt as string,
+      completedAt: (row.completedAt as string) ?? undefined,
+    }
+  }
+
+  function mapRecallAttemptRow(row: Record<string, unknown>): RecallAttempt {
+    return {
+      id: row.id as string,
+      recallSessionId: row.recallSessionId as string,
+      moveNumber: row.moveNumber as number,
+      expectedMove: row.expectedMove as string,
+      userMove: row.userMove as string,
+      isCorrect: !!row.isCorrect,
+      hintLevelUsed: (row.hintLevelUsed as number) ?? 0,
+      createdAt: row.createdAt as string,
+    }
+  }
+
+  function mapRecallCheckpointRow(row: Record<string, unknown>): RecallCheckpoint {
+    return {
+      id: row.id as string,
+      recallSessionId: row.recallSessionId as string,
+      badMoveId: row.badMoveId as string,
+      status: row.status as RecallCheckpoint['status'],
+      userCorrectionLine: typeof row.userCorrectionLine === 'string' ? JSON.parse(row.userCorrectionLine) : (row.userCorrectionLine as string[]),
+      aiCandidateLines: typeof row.aiCandidateLines === 'string' ? JSON.parse(row.aiCandidateLines) : (row.aiCandidateLines as RecallCheckpoint['aiCandidateLines']),
+      userCommentId: (row.userCommentId as string) ?? undefined,
+      createdAt: row.createdAt as string,
+      completedAt: (row.completedAt as string) ?? undefined,
+    }
+  }
+
+  function mapMoveCommentRow(row: Record<string, unknown>): MoveComment {
+    return {
+      id: row.id as string,
+      target: typeof row.target === 'string' ? JSON.parse(row.target) : row.target,
+      content: row.content as string,
+      templateAnswers: row.templateAnswers
+        ? (typeof row.templateAnswers === 'string' ? JSON.parse(row.templateAnswers) : row.templateAnswers)
+        : undefined,
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string,
+    }
+  }
+
+  function mapProblemRow(row: Record<string, unknown>): Problem {
+    return {
+      id: row.id as string,
+      type: row.type as Problem['type'],
+      positionSgf: row.positionSgf as string,
+      sideToMove: row.sideToMove as 'black' | 'white',
+      title: row.title as string | undefined,
+      positionDescription: (row.positionDescription as string) || '',
+      taskGoal: (row.taskGoal as string) || '',
+      referenceLines: typeof row.referenceLines === 'string' ? JSON.parse(row.referenceLines) : (row.referenceLines as Problem['referenceLines']),
+      passRule: typeof row.passRule === 'string' ? JSON.parse(row.passRule) : (row.passRule as Problem['passRule']),
+      tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags as string[]),
+      difficulty: row.difficulty as Problem['difficulty'],
+      status: row.status as Problem['status'],
+      sourceGameId: row.sourceGameId as string | undefined,
+      sourceProblemId: row.sourceProblemId as string | undefined,
+      sourceTaskId: row.sourceTaskId as string | undefined,
+      sourceAttemptId: row.sourceAttemptId as string | undefined,
+      sourceMoveIndex: row.sourceMoveIndex as number | undefined,
+      parentProblemId: row.parentProblemId as string | undefined,
+      parentSnapshotReason: row.parentSnapshotReason as string | undefined,
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string,
+    }
+  }
+
+  function mapReviewScheduleRow(row: Record<string, unknown>): ReviewSchedule {
+    return {
+      id: row.id as string,
+      itemId: row.itemId as string,
+      itemType: row.itemType as ReviewSchedule['itemType'],
+      dueAt: row.dueAt as string,
+      intervalDays: (row.intervalDays as number) ?? 1,
+      easeFactor: row.easeFactor as number | undefined,
+      lastResult: row.lastResult as ReviewSchedule['lastResult'],
+      consecutivePassCount: (row.consecutivePassCount as number) ?? 0,
+      totalFailCount: (row.totalFailCount as number) ?? 0,
+      lastReviewedAt: row.lastReviewedAt as string | undefined,
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string,
+    }
+  }
+
   return {
     saveGame, getGame, getRecentGames,
     saveRecallSession, saveRecallAttempts,
@@ -457,10 +665,10 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     createTask, loadTask, findTaskBySource, updateTask,
     createAttempt, loadAttempt, listAttemptsByTask, updateAttempt,
     createMoveEvaluation, updateMoveEvaluation, listMoveEvaluationsByAttempt,
-    createBadMove, loadBadMove, listBadMovesByAttempt, listBadMovesByTask, markBadMoveAsNotBad,
+    createBadMove, loadBadMove, listBadMovesByAttempt, listBadMovesByTask, markBadMoveAsNotBad, updateBadMove,
     createRecallSession, loadRecallSession, updateRecallSession, createRecallAttempt, listRecallAttempts,
     createRecallCheckpoint, loadRecallCheckpoint, updateRecallCheckpoint, listCheckpointsByRecallSession,
-    createProblem, loadProblem, updateProblem,
+    createProblem, loadProblem, updateProblem, archiveProblem,
     createMoveComment, loadMoveComment, updateMoveComment,
     createReviewSchedule, listDueReviewItems, updateReviewSchedule,
     listIncompleteAttempts, listIncompleteRecallSessions, listExpiredPendingMoveEvaluations,

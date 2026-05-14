@@ -730,6 +730,78 @@ function setupIpcHandlers() {
     await dbInit
     return db.markTrainingBadMoveAsNotBad(badMoveId)
   })
+  ipcMain.handle('db:updateTrainingBadMove', async (_, badMoveId, patch) => {
+    await dbInit
+    return db.updateTrainingBadMove(badMoveId, patch)
+  })
+
+  // Training domain (Phase 3: Recall / Checkpoint / Comment)
+  ipcMain.handle('db:createTrainingRecallSession', async (_, session) => {
+    await dbInit
+    return db.createTrainingRecallSession(session)
+  })
+  ipcMain.handle('db:loadTrainingRecallSession', async (_, sessionId) => {
+    await dbInit
+    return db.loadTrainingRecallSession(sessionId)
+  })
+  ipcMain.handle('db:updateTrainingRecallSession', async (_, sessionId, patch) => {
+    await dbInit
+    return db.updateTrainingRecallSession(sessionId, patch)
+  })
+  ipcMain.handle('db:listIncompleteTrainingRecallSessions', async () => {
+    await dbInit
+    return db.listIncompleteTrainingRecallSessions()
+  })
+  ipcMain.handle('db:createTrainingRecallAttempt', async (_, attempt) => {
+    await dbInit
+    return db.createTrainingRecallAttempt(attempt)
+  })
+  ipcMain.handle('db:listTrainingRecallAttemptsBySession', async (_, sessionId) => {
+    await dbInit
+    return db.listTrainingRecallAttemptsBySession(sessionId)
+  })
+  ipcMain.handle('db:createTrainingRecallCheckpoint', async (_, checkpoint) => {
+    await dbInit
+    return db.createTrainingRecallCheckpoint(checkpoint)
+  })
+  ipcMain.handle('db:loadTrainingRecallCheckpoint', async (_, checkpointId) => {
+    await dbInit
+    return db.loadTrainingRecallCheckpoint(checkpointId)
+  })
+  ipcMain.handle('db:updateTrainingRecallCheckpoint', async (_, checkpointId, patch) => {
+    await dbInit
+    return db.updateTrainingRecallCheckpoint(checkpointId, patch)
+  })
+  ipcMain.handle('db:listTrainingRecallCheckpointsBySession', async (_, sessionId) => {
+    await dbInit
+    return db.listTrainingRecallCheckpointsBySession(sessionId)
+  })
+  ipcMain.handle('db:createTrainingMoveComment', async (_, comment) => {
+    await dbInit
+    return db.createTrainingMoveComment(comment)
+  })
+  ipcMain.handle('db:loadTrainingMoveComment', async (_, commentId) => {
+    await dbInit
+    return db.loadTrainingMoveComment(commentId)
+  })
+  ipcMain.handle('db:updateTrainingMoveComment', async (_, commentId, patch) => {
+    await dbInit
+    return db.updateTrainingMoveComment(commentId, patch)
+  })
+
+  // Problem + Review (previously missing IPC bridges)
+  ipcMain.handle('db:updateProblem', async (_, problemId, patch) => {
+    await dbInit
+    return db.updateProblem(problemId, patch)
+  })
+  ipcMain.handle('db:archiveProblem', async (_, problemId) => {
+    await dbInit
+    return db.archiveProblem(problemId)
+  })
+  ipcMain.handle('db:updateReviewSchedule', async (_, id, patch) => {
+    await dbInit
+    return db.updateReviewSchedule(id, patch)
+  })
 
   ipcMain.on('setting:getPathsSync', (e) => {
     try {

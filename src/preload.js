@@ -192,6 +192,27 @@ window.sabaki = {
     listTrainingBadMovesByAttempt: (attemptId) => ipcRenderer.invoke('db:listTrainingBadMovesByAttempt', attemptId),
     listTrainingBadMovesByTask: (taskId) => ipcRenderer.invoke('db:listTrainingBadMovesByTask', taskId),
     markTrainingBadMoveAsNotBad: (badMoveId) => ipcRenderer.invoke('db:markTrainingBadMoveAsNotBad', badMoveId),
+    updateTrainingBadMove: (badMoveId, patch) => ipcRenderer.invoke('db:updateTrainingBadMove', badMoveId, patch),
+
+    // Training domain (Phase 3: Recall / Checkpoint / Comment)
+    createTrainingRecallSession: (session) => ipcRenderer.invoke('db:createTrainingRecallSession', session),
+    loadTrainingRecallSession: (sessionId) => ipcRenderer.invoke('db:loadTrainingRecallSession', sessionId),
+    updateTrainingRecallSession: (sessionId, patch) => ipcRenderer.invoke('db:updateTrainingRecallSession', sessionId, patch),
+    listIncompleteTrainingRecallSessions: () => ipcRenderer.invoke('db:listIncompleteTrainingRecallSessions'),
+    createTrainingRecallAttempt: (attempt) => ipcRenderer.invoke('db:createTrainingRecallAttempt', attempt),
+    listTrainingRecallAttemptsBySession: (sessionId) => ipcRenderer.invoke('db:listTrainingRecallAttemptsBySession', sessionId),
+    createTrainingRecallCheckpoint: (checkpoint) => ipcRenderer.invoke('db:createTrainingRecallCheckpoint', checkpoint),
+    loadTrainingRecallCheckpoint: (checkpointId) => ipcRenderer.invoke('db:loadTrainingRecallCheckpoint', checkpointId),
+    updateTrainingRecallCheckpoint: (checkpointId, patch) => ipcRenderer.invoke('db:updateTrainingRecallCheckpoint', checkpointId, patch),
+    listTrainingRecallCheckpointsBySession: (sessionId) => ipcRenderer.invoke('db:listTrainingRecallCheckpointsBySession', sessionId),
+    createTrainingMoveComment: (comment) => ipcRenderer.invoke('db:createTrainingMoveComment', comment),
+    loadTrainingMoveComment: (commentId) => ipcRenderer.invoke('db:loadTrainingMoveComment', commentId),
+    updateTrainingMoveComment: (commentId, patch) => ipcRenderer.invoke('db:updateTrainingMoveComment', commentId, patch),
+
+    // Problem + Review (previously missing IPC bridges)
+    updateProblem: (problemId, patch) => ipcRenderer.invoke('db:updateProblem', problemId, patch),
+    archiveProblem: (problemId) => ipcRenderer.invoke('db:archiveProblem', problemId),
+    updateReviewSchedule: (id, patch) => ipcRenderer.invoke('db:updateReviewSchedule', id, patch),
   },
 
   // File path helper for Electron 32+ (File.path was removed)
