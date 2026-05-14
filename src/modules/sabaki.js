@@ -327,31 +327,7 @@ class Sabaki extends EventEmitter {
       change = change(this.state)
     }
 
-    let changedKeys = Object.keys(change).filter(
-      (k) => change[k] !== this.state[k],
-    )
-
     Object.assign(this.state, change)
-
-    if (changedKeys.length > 0) {
-      let summary = {}
-      for (let k of changedKeys) {
-        let val = change[k]
-        if (k === 'gameTrees') {
-          summary[k] = `[${val.length} trees]`
-        } else if (k === 'gameCurrents') {
-          summary[k] = `[${val.length} entries]`
-        } else if (k === 'editWorkspace') {
-          summary[k] = val ? `{workspaceKind: ${val.workspaceKind}}` : null
-        } else if (typeof val === 'function') {
-          summary[k] = '[function]'
-        } else {
-          summary[k] = val
-        }
-      }
-      logger.debug('state.changed', 'State updated', summary)
-    }
-
     this.emit('change', {change, callback})
   }
 
