@@ -27,6 +27,7 @@ import * as gametree from '../modules/gametree.js'
 import * as gtplogger from '../modules/gtplogger.js'
 import * as helper from '../modules/helper.js'
 import {boardFromSnapshot} from '../modules/study.js'
+import {resolveAnalysisDisplay} from '../modules/overlays/resolveAnalysisDisplay.ts'
 
 if (process.env.SABAKI_E2E) window.__sabaki = sabaki
 
@@ -629,6 +630,16 @@ class App extends Component {
     let effectiveSidebar =
       state.showSidebar || (workbenchMode && state.mode !== 'play')
 
+    let analysisDisplay = resolveAnalysisDisplay({
+      mode: state.mode,
+      showAnalysis: state.showAnalysis,
+      showAISuggestions: state.showAISuggestions,
+      showHumanPreference: state.showHumanPreference,
+      showNextMoves: state.showNextMoves,
+      showSiblings: state.showSiblings,
+      editWorkspaceActive: state.editWorkspaceActive,
+    })
+
     return h(
       'section',
       {
@@ -648,20 +659,16 @@ class App extends Component {
         showMenuBar: state.showMenuBar,
         disableAll: state.busy > 0,
         analysisType: state.analysisType,
-        showAnalysis:
-          state.mode === 'analysis' &&
-          state.showAnalysis &&
-          (state.showAISuggestions || state.showHumanPreference),
-        showAISuggestions: state.mode === 'analysis' && state.showAISuggestions,
-        showHumanPreference:
-          state.mode === 'analysis' && state.showHumanPreference,
+        showAnalysis: analysisDisplay.showAnalysis,
+        showAISuggestions: analysisDisplay.showAISuggestions,
+        showHumanPreference: analysisDisplay.showHumanPreference,
         selectedAnalysisVertex: state.selectedAnalysisVertex,
         showCoordinates: state.showCoordinates,
         coordinatesType: state.coordinatesType,
         showMoveNumbers: state.showMoveNumbers,
         showMoveColorization: state.showMoveColorization,
-        showNextMoves: state.showNextMoves,
-        showSiblings: state.showSiblings,
+        showNextMoves: analysisDisplay.showNextMoves,
+        showSiblings: analysisDisplay.showSiblings,
         territoryEnabled: overlayStoreState.territoryEnabled,
         territoryCompareEnabled: overlayStoreState.territoryCompareEnabled,
         territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),

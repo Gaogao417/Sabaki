@@ -417,7 +417,7 @@ export default class Sidebar extends Component {
           class: 'inspector-sidebar',
         },
 
-        mode === 'analysis' &&
+        (mode === 'analysis' || mode === 'recall') &&
           h(AnalysisSummaryCard, {
             analysis: activeAnalysis,
             boardHeight: inspectorSummary?.boardHeight ?? 19,

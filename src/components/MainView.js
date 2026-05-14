@@ -423,20 +423,8 @@ export default class MainView extends Component {
       showMoveColorization,
       showMoveNumbers:
         mode === 'recall' || (mode !== 'analysis' && showMoveNumbers),
-      showNextMoves:
-        !editWorkspaceActive &&
-        mode !== 'guess' &&
-        mode !== 'recall' &&
-        mode !== 'problem' &&
-        mode !== 'review' &&
-        showNextMoves,
-      showSiblings:
-        !editWorkspaceActive &&
-        mode !== 'guess' &&
-        mode !== 'recall' &&
-        mode !== 'problem' &&
-        mode !== 'review' &&
-        showSiblings,
+      showNextMoves,
+      showSiblings,
       fuzzyStonePlacement,
       animateStonePlacement,
 
