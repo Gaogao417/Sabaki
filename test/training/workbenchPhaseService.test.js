@@ -27,7 +27,40 @@ describe('workbenchPhaseService', () => {
 
   beforeEach(() => {
     store = createWorkbenchStore()
-    service = createWorkbenchPhaseService({workbenchStore: store})
+    service = createWorkbenchPhaseService({
+      workbenchStore: store,
+      repository: {
+        loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
+      },
+      snapshotService: {
+        captureSnapshotInput: async () => ({
+          sourceTaskId: 'task_1',
+          positionSgf: '(;SZ[9])',
+          sideToMove: 'black',
+        }),
+        createProblemFromCurrentAnalysisPosition: async (input) => ({
+          id: 'snap_1',
+          type: 'best_move',
+          positionSgf: input.positionSgf,
+          sideToMove: input.sideToMove,
+          status: 'inbox',
+          tags: ['snapshot'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }),
+      },
+      tabService: {
+        openSnapshotProblemTab: async (problemId, opts) => ({
+          id: 'tab_snap_1',
+          taskId: 'task_snap_1',
+          phase: 'play',
+          parentTabId: opts?.parentTabId,
+          childTabIds: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }),
+      },
+    })
   })
 
   describe('valid transitions (table-driven)', () => {
@@ -119,6 +152,9 @@ describe('workbenchPhaseService', () => {
     const logs = []
     const loggedService = createWorkbenchPhaseService({
       workbenchStore: store,
+      repository: { loadTask: async () => null },
+      snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
+      tabService: { openSnapshotProblemTab: async () => ({}) },
       logger: {
         info(channel, message, data) {
           logs.push({channel, message, data})
@@ -148,6 +184,9 @@ describe('workbenchPhaseService', () => {
       const logs = []
       const loggedService = createWorkbenchPhaseService({
         workbenchStore: store,
+        repository: { loadTask: async () => null },
+        snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
+        tabService: { openSnapshotProblemTab: async () => ({}) },
         logger: {
           info(channel, message, data) {
             logs.push({channel, message, data})
@@ -187,6 +226,60 @@ describe('workbenchPhaseService', () => {
     service.transition('tab_1', 'submit')
     const tab = store.getState().tabs.find(t => t.id === 'tab_1')
     assert.notStrictEqual(tab.updatedAt, '2026-01-01T00:00:00.000Z')
+  })
+
+  // --- snapshotFromAnalysis ---
+
+  describe('snapshotFromAnalysis', () => {
+    it('creates new tab with play phase from analysis tab', async () => {
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
+
+      const newTab = await service.snapshotFromAnalysis('tab_1')
+
+      assert.strictEqual(newTab.phase, 'play')
+      assert.strictEqual(newTab.parentTabId, 'tab_1')
+    })
+
+    it('keeps original tab in analysis phase', async () => {
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
+
+      await service.snapshotFromAnalysis('tab_1')
+
+      assert.strictEqual(service.getPhase('tab_1'), 'analysis')
+    })
+
+    it('throws if tab not found', async () => {
+      await assert.rejects(
+        () => service.snapshotFromAnalysis('nonexistent'),
+        /tab not found/,
+      )
+    })
+
+    it('throws if tab is not in analysis phase', async () => {
+      store.addTab(makeTab({ id: 'tab_1', phase: 'play' }))
+
+      await assert.rejects(
+        () => service.snapshotFromAnalysis('tab_1'),
+        /must be in analysis phase/,
+      )
+    })
+
+    it('throws if task not found', async () => {
+      const failService = createWorkbenchPhaseService({
+        workbenchStore: store,
+        repository: {
+          loadTask: async () => null,
+        },
+        snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
+        tabService: { openSnapshotProblemTab: async () => ({}) },
+      })
+      store.addTab(makeTab({ id: 'tab_fail', taskId: 'task_missing', phase: 'analysis' }))
+
+      await assert.rejects(
+        () => failService.snapshotFromAnalysis('tab_fail'),
+        /task not found/,
+      )
+    })
   })
 })
 

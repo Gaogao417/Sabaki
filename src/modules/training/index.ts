@@ -27,4 +27,8 @@ export {
   createRecallCheckpointService,
 } from './recall/index'
 
+export {
+  createSnapshotService,
+} from './analysis/index'
+
 export type * from './types/index'
