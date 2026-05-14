@@ -5258,3 +5258,86 @@ button:active {
 .engine-analysis-field input {
   width: 100%;
 }
+
+/* Fox Game Import */
+
+.fox-import__input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fox-import__uid-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.fox-import__uid-input:focus {
+  outline: none;
+  border-color: var(--ui-blue);
+}
+
+.fox-import__error {
+  color: #dc2626;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.fox-import__loading,
+.fox-import__empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+}
+
+.fox-import__table-wrap {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.fox-import__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fox-import__table th {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text-secondary);
+  font-weight: 600;
+}
+
+.fox-import__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.fox-import__table tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fox-import__table tr:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.fox-import__table tr.fox-import__selected {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.fox-import__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}

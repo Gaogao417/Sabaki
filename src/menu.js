@@ -115,6 +115,11 @@ exports.get = function (props = {}) {
           enabled: !disableGameLoading,
           click: () => sabaki.openDrawer('gamechooser'),
         },
+        {
+          label: i18n.t('menu.file', 'Import &Fox Games…'),
+          enabled: !disableGameLoading,
+          click: () => sabaki.openDrawer('foxgameimport'),
+        },
         {type: 'separator'},
         {
           label: i18n.t('menu.file', '&Preferences…'),
