@@ -40,6 +40,10 @@ export {
 } from './problem/problemService'
 
 export {
+  createProblemFlowService,
+} from './problem/problemFlowService'
+
+export {
   projectTrainingState,
 } from './adapter/trainingStateProjection'
 

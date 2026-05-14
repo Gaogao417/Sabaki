@@ -57,6 +57,7 @@ import {
   createSnapshotService,
   createReviewService,
   createProblemService,
+  createProblemFlowService,
   projectTrainingState,
 } from './training/index.ts'
 import {
@@ -1056,121 +1057,17 @@ class Sabaki extends EventEmitter {
   }
 
   async submitProblemAttempt() {
-    const {runtimeStore, reviewService} = this.getTrainingServices()
-    let pv = runtimeStore.getState().problemView
-    let problemSession = pv ? pv.legacyProblemSession : this.state.problemSession
-    let problemBadMoves = pv ? pv.badMoves : this.state.problemBadMoves
-    let problemAttempt = this.state.problemAttempt
+    const {problemFlowService} = this.getTrainingServices()
 
-    if (!problemSession || (pv && pv.submitted) || this.state.problemSubmitted) return
-
-    logger.info('problem.submit', 'Problem attempt submitted', {
-      problemId: problemSession.id,
-      badMoveCount: problemBadMoves.length,
-    })
-
-    // Determine result using inline evaluation thresholds
-    let result = 'pass'
-    let hasSevere = problemBadMoves.some((m) => m.severity === 'severe')
-    let hasMajor = problemBadMoves.some((m) => m.severity === 'major')
-
-    if (hasSevere) {
-      result = 'fail'
-    } else if (hasMajor) {
-      result = 'soft_pass'
-    }
-
-    let submittedAt = new Date().toISOString()
-    let updatedAttempt = {
-      ...problemAttempt,
-      submittedAt,
-      result,
-    }
-
-    await window.sabaki.db.saveProblemAttempt(updatedAttempt)
-
-    // Save all bad moves to bad_moves table
-    let punishSide = problemSession.sideToMove === 'black' ? 'white' : 'black'
-    for (let bm of problemBadMoves) {
-      await window.sabaki.db.saveBadMove({
-        problemId: problemSession.id,
-        attemptId: updatedAttempt.id,
-        moveIndex: bm.moveIndex,
-        move: bm.move,
-        positionBeforeMoveSgf: '',
-        positionAfterMoveSgf: '',
-        severity: bm.severity,
-        scoreDrop: bm.scoreDrop,
-        punishSide,
-        generatedProblemId: null,
-      })
-    }
-
-    // Generate punishment problems for major/severe bad moves
-    let punishmentIds = []
-    for (let badMove of problemBadMoves.filter(
-      (m) => m.severity === 'major' || m.severity === 'severe',
-    )) {
-      let punishment = await this.generatePunishmentProblem(
-        badMove,
-        problemSession,
-        updatedAttempt,
-        punishSide,
-      )
-      if (punishment) {
-        punishmentIds.push(punishment.id)
-      }
-    }
-
-    updatedAttempt.generatedPunishmentProblemIds = punishmentIds
-    await window.sabaki.db.saveProblemAttempt(updatedAttempt)
-
-    // Delegate review schedule update to reviewService
-    try {
-      await reviewService.updateScheduleAfterResult({
-        itemId: problemSession.id,
-        itemType: 'problem',
-        result,
-      })
-    } catch (_e) {
-      // Fallback to legacy inline schedule if service fails
-      let dueAt = new Date()
-      if (result === 'fail') dueAt.setDate(dueAt.getDate() + 1)
-      else if (result === 'soft_pass') dueAt.setDate(dueAt.getDate() + 3)
-      else dueAt.setDate(dueAt.getDate() + 7)
-
-      await window.sabaki.db.upsertReviewSchedule({
-        itemId: problemSession.id,
-        itemType: 'problem',
-        dueAt: dueAt.toISOString(),
-        intervalDays: result === 'fail' ? 1 : result === 'soft_pass' ? 3 : 7,
-        lastResult: result,
-        consecutivePassCount: result === 'pass' ? 1 : 0,
-        totalFailCount: result === 'fail' ? 1 : 0,
-      })
-    }
-
-    // Update runtime store
-    if (pv) {
-      runtimeStore.setProblemView({
-        ...pv,
-        submitted: true,
-        result,
-      })
-    }
+    const submitResult = await problemFlowService.submitActiveProblem()
+    if (!submitResult) return
 
     // Legacy compat
     this.setState({
       problemSubmitted: true,
-      problemResult: result,
-      problemAttempt: updatedAttempt,
+      problemResult: submitResult.result,
+      problemAttempt: submitResult.attempt,
     })
-
-    // If reviewing from queue, advance to next
-    let rqv = runtimeStore?.getState().reviewQueueView
-    if (rqv && rqv.currentIndex < rqv.queue.length - 1) {
-      // Queue advancement is handled by ProblemBar's onNextReview callback
-    }
   }
 
   async generatePunishmentProblem(
@@ -1574,6 +1471,14 @@ class Sabaki extends EventEmitter {
       })
       const reviewService = createReviewService({ repository, workbenchTabService: tabService, logger })
       const problemService = createProblemService({ repository, reviewService, logger })
+      const problemFlowService = createProblemFlowService({
+        runtimeStore,
+        repository,
+        attemptService,
+        problemService,
+        reviewService,
+        logger,
+      })
 
       this._trainingServices = {
         workbenchStore,
@@ -1589,6 +1494,7 @@ class Sabaki extends EventEmitter {
         snapshotService,
         reviewService,
         problemService,
+        problemFlowService,
         projectTrainingState: () => projectTrainingState({
           legacyTrainingState: this.state,
           workbenchState: workbenchStore.getState(),
