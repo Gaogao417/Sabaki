@@ -125,25 +125,28 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
       sourceAttemptId: undefined,
     })
 
-    const problem = await snapshotService.createProblemFromCurrentAnalysisPosition(snapshotInput)
+    const { problem, snapshotTask } = await repository.transaction(async () => {
+      const problem = await snapshotService.createProblemFromCurrentAnalysisPosition(snapshotInput)
 
-    const now = new Date().toISOString()
-    const snapshotTask: TrainingTask = {
-      id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      kind: 'snapshot_problem',
-      source: {
+      const now = new Date().toISOString()
+      const snapshotTask: TrainingTask = {
+        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         kind: 'snapshot_problem',
-        problemId: problem.id,
-        parentTaskId: tab.taskId,
-      },
-      rootPositionSgf: problem.positionSgf,
-      sideToMove: problem.sideToMove,
-      title: problem.title,
-      createdAt: now,
-      updatedAt: now,
-    }
+        source: {
+          kind: 'snapshot_problem',
+          problemId: problem.id,
+          parentTaskId: tab.taskId,
+        },
+        rootPositionSgf: problem.positionSgf,
+        sideToMove: problem.sideToMove,
+        title: problem.title,
+        createdAt: now,
+        updatedAt: now,
+      }
 
-    await repository.createTask(snapshotTask)
+      await repository.createTask(snapshotTask)
+      return { problem, snapshotTask }
+    })
 
     logger?.info('phase.snapshot.created', 'Snapshot problem + task created', {
       tabId,

@@ -32,6 +32,7 @@ describe('workbenchPhaseService', () => {
       repository: {
         loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
         createTask: async t => t,
+        transaction: async fn => fn(),
       },
       snapshotService: {
         captureSnapshotInput: async () => ({
@@ -153,7 +154,7 @@ describe('workbenchPhaseService', () => {
     const logs = []
     const loggedService = createWorkbenchPhaseService({
       workbenchStore: store,
-      repository: { loadTask: async () => null, createTask: async t => t },
+      repository: { loadTask: async () => null, createTask: async t => t, transaction: async fn => fn() },
       snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
       tabService: { openSnapshotProblemTab: async () => ({}) },
       logger: {
@@ -185,7 +186,7 @@ describe('workbenchPhaseService', () => {
       const logs = []
       const loggedService = createWorkbenchPhaseService({
         workbenchStore: store,
-        repository: { loadTask: async () => null, createTask: async t => t },
+        repository: { loadTask: async () => null, createTask: async t => t, transaction: async fn => fn() },
         snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
         tabService: { openSnapshotProblemTab: async () => ({}) },
         logger: {
@@ -239,6 +240,7 @@ describe('workbenchPhaseService', () => {
         repository: {
           loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
           createTask: async t => t,
+          transaction: async fn => fn(),
         },
         snapshotService: {
           captureSnapshotInput: async input => {
@@ -277,6 +279,7 @@ describe('workbenchPhaseService', () => {
             calls.push({ method: 'createTask', task })
             return task
           },
+          transaction: async fn => fn(),
         },
         snapshotService: {
           captureSnapshotInput: async () => ({ sourceTaskId: 'task_1', positionSgf: '(;SZ[9]AB[dc])', sideToMove: 'black' }),
@@ -302,6 +305,11 @@ describe('workbenchPhaseService', () => {
       assert.strictEqual(createCall.task.source.kind, 'snapshot_problem')
       assert.strictEqual(createCall.task.source.problemId, 'snap_prob_1')
       assert.strictEqual(createCall.task.source.parentTaskId, 'task_1')
+      assert.strictEqual(createCall.task.rootPositionSgf, '(;SZ[9]AB[dc])')
+      assert.strictEqual(createCall.task.sideToMove, 'black')
+      assert.ok(createCall.task.id)
+      assert.ok(createCall.task.createdAt)
+      assert.ok(createCall.task.updatedAt)
     })
 
     it('calls openSnapshotProblemTab with correct problemId and parentTabId', async () => {
@@ -311,6 +319,7 @@ describe('workbenchPhaseService', () => {
         repository: {
           loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
           createTask: async t => t,
+          transaction: async fn => fn(),
         },
         snapshotService: {
           captureSnapshotInput: async () => ({ sourceTaskId: 'task_1', positionSgf: '(;SZ[9])', sideToMove: 'black' }),
@@ -336,6 +345,49 @@ describe('workbenchPhaseService', () => {
       assert.strictEqual(calls.length, 1)
       assert.strictEqual(calls[0].problemId, 'snap_prob_42')
       assert.strictEqual(calls[0].opts.parentTabId, 'tab_1')
+    })
+
+    it('wraps problem and task creation in transaction', async () => {
+      const calls = []
+
+      const spyService = createWorkbenchPhaseService({
+        workbenchStore: store,
+        repository: {
+          loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
+          transaction: async fn => {
+            calls.push('transaction')
+            return fn()
+          },
+          createTask: async task => {
+            calls.push('createTask')
+            return task
+          },
+        },
+        snapshotService: {
+          captureSnapshotInput: async () => ({ sourceTaskId: 'task_1', positionSgf: '(;SZ[9])', sideToMove: 'black' }),
+          createProblemFromCurrentAnalysisPosition: async () => {
+            calls.push('createProblem')
+            return { id: 'snap_prob_1', positionSgf: '(;SZ[9])', sideToMove: 'black', status: 'inbox',
+              createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+          },
+        },
+        tabService: {
+          openSnapshotProblemTab: async () => ({ id: 'tab_snap_1', taskId: 'task_snap_1', phase: 'play', childTabIds: [],
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }),
+        },
+      })
+
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
+      await spyService.snapshotFromAnalysis('tab_1')
+
+      assert.ok(calls.includes('transaction'), 'should call transaction')
+      assert.ok(calls.includes('createProblem'), 'should create problem inside transaction')
+      assert.ok(calls.includes('createTask'), 'should create task inside transaction')
+      const txIndex = calls.indexOf('transaction')
+      const probIndex = calls.indexOf('createProblem')
+      const taskIndex = calls.indexOf('createTask')
+      assert.ok(txIndex < probIndex, 'transaction should start before createProblem')
+      assert.ok(probIndex < taskIndex, 'createProblem should come before createTask')
     })
 
     it('keeps original tab in analysis phase', async () => {

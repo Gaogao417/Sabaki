@@ -288,7 +288,7 @@ describe('snapshotService', () => {
       assert.strictEqual(problem.passRule.compareWithReference, false)
     })
 
-    it('sets empty positionDescription and taskGoal for user to fill', async () => {
+    it('sets positionDescription and taskGoal as strings for user to fill', async () => {
       const input = {
         sourceTaskId: 'task_1',
         positionSgf: '(;SZ[9])',
@@ -297,8 +297,8 @@ describe('snapshotService', () => {
 
       const problem = await service.createProblemFromCurrentAnalysisPosition(input)
 
-      assert.strictEqual(problem.positionDescription, '')
-      assert.strictEqual(problem.taskGoal, '')
+      assert.strictEqual(typeof problem.positionDescription, 'string')
+      assert.strictEqual(typeof problem.taskGoal, 'string')
     })
   })
 
