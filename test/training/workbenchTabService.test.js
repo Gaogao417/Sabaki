@@ -43,6 +43,9 @@ function createMockRepository(overrides = {}) {
     async saveProblemAttempt(attempt) {
       return {...attempt, id: 'attempt_1'}
     },
+    async createTask(task) {
+      return task
+    },
   }
 }
 
@@ -75,6 +78,16 @@ function createMockLegacyAdapter() {
     },
     notifyLegacyStateChanged(patch) {
       calls.notifyLegacyStateChanged.push(patch)
+    },
+    getSabaki() {
+      return {
+        setState(patch) {
+          calls.setupProblemLegacyState.push(patch)
+        },
+        setMode(mode) {
+          calls.setProblemMode.push(mode)
+        },
+      }
     },
   }
 }

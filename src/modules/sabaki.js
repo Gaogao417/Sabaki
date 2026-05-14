@@ -943,18 +943,14 @@ class Sabaki extends EventEmitter {
     })
   }
 
-  handleProblemMove(vertex) {
-    const {runtimeStore} = this.getTrainingServices()
+  async handleProblemMove(vertex) {
+    const {runtimeStore, problemFlowService} = this.getTrainingServices()
     let pv = runtimeStore.getState().problemView
     let problemSession = pv ? pv.legacyProblemSession : this.state.problemSession
     if (!problemSession || (pv && pv.submitted) || this.state.problemSubmitted) return
 
-    logger.info('problem.move', 'Problem move', {
-      vertex,
-      problemId: problemSession.id,
-    })
-
     let {gameTrees, gameIndex, treePosition} = this.state
+    let positionBeforeHash = treePosition
     let tree = gameTrees[gameIndex]
     let board = gametree.getBoard(tree, treePosition)
 
@@ -979,79 +975,35 @@ class Sabaki extends EventEmitter {
 
     let moveStr = board.stringifyVertex(vertex)
 
-    // Inline evaluation (uses analysis data if available)
-    let moveEval = {
-      moveIndex: (pv ? pv.evalCache.length : (this.state.problemEvalCache?.length ?? 0)),
-      move: moveStr,
-      isBadMove: false,
-      severity: 'none',
-    }
-
-    if (preMoveAnalysis) {
-      let analysis = preMoveAnalysis
-      let isSolverMove =
-        (analysis.sign > 0 && player > 0) || (analysis.sign < 0 && player < 0)
-
-      let variation = analysis.variations.find((v) =>
-        helper.vertexEquals(v.vertex, vertex),
-      )
-      if (variation) {
-        if (
-          analysis.variations[0]?.scoreLead != null &&
-          variation.scoreLead != null
-        ) {
-          let scoreDrop = isSolverMove
-            ? analysis.variations[0].scoreLead - variation.scoreLead
-            : variation.scoreLead - analysis.variations[0].scoreLead
-
-          if (player < 0) scoreDrop = -scoreDrop
-
-          moveEval.beforeScoreLead = analysis.variations[0].scoreLead
-          moveEval.afterScoreLead = variation.scoreLead
-          moveEval.scoreDrop = Math.abs(scoreDrop)
-
-          if (Math.abs(scoreDrop) > 8) {
-            moveEval.isBadMove = true
-            moveEval.severity = 'severe'
-          } else if (Math.abs(scoreDrop) > 5) {
-            moveEval.isBadMove = true
-            moveEval.severity = 'major'
-          } else if (Math.abs(scoreDrop) > 2) {
-            moveEval.isBadMove = true
-            moveEval.severity = 'minor'
-          }
-        }
-      }
-    }
-
-    let newEvalCache = [...(pv ? pv.evalCache : (this.state.problemEvalCache || [])), moveEval]
-    let newBadMoves = [...(pv ? pv.badMoves : (this.state.problemBadMoves || []))]
-    if (moveEval.isBadMove) {
-      newBadMoves.push({
-        moveIndex: moveEval.moveIndex,
+    let result
+    try {
+      result = await problemFlowService.appendProblemMove({
         move: moveStr,
-        severity: moveEval.severity,
-        scoreDrop: moveEval.scoreDrop,
+        vertex,
+        playerSign: player,
+        positionBeforeHash,
+        positionAfterHash: nextId,
+        preMoveAnalysis,
       })
-    }
-
-    // Update runtime store
-    if (pv) {
-      runtimeStore.setProblemView({
-        ...pv,
-        evalCache: newEvalCache,
-        badMoves: newBadMoves,
+    } catch (err) {
+      logger.info('problem.move.error', 'Problem move flow failed', {
+        move: moveStr,
+        positionBeforeHash,
+        positionAfterHash: nextId,
+        error: String(err),
       })
+      return
     }
+    if (!result) return
 
     // Legacy compat
     this.setState({
-      problemEvalCache: newEvalCache,
-      problemBadMoves: newBadMoves,
+      problemEvalCache: result.evalCache,
+      problemBadMoves: result.badMoves,
       problemAttempt: {
         ...(this.state.problemAttempt || {}),
-        userLine: newEvalCache.map((e) => e.move),
-        moveEvaluations: newEvalCache,
+        userLine: result.evalCache.map((e) => e.move),
+        moveEvaluations: result.evalCache,
       },
     })
   }
@@ -1108,22 +1060,10 @@ class Sabaki extends EventEmitter {
   }
 
   undoProblemMove() {
-    const {runtimeStore} = this.getTrainingServices()
-    let pv = runtimeStore.getState().problemView
-    let problemEvalCache = pv ? pv.evalCache : (this.state.problemEvalCache || [])
-    let problemBadMoves = pv ? pv.badMoves : (this.state.problemBadMoves || [])
-    let problemAttempt = this.state.problemAttempt
+    const {problemFlowService} = this.getTrainingServices()
 
-    if (!problemAttempt || problemEvalCache.length === 0) return
-
-    let userLine = [...(problemAttempt.userLine || [])]
-    let lastEval = problemEvalCache[problemEvalCache.length - 1]
-
-    userLine.pop()
-    let newEvalCache = problemEvalCache.slice(0, -1)
-    let newBadMoves = lastEval.isBadMove
-      ? problemBadMoves.filter((m) => m.moveIndex !== lastEval.moveIndex)
-      : problemBadMoves
+    const result = problemFlowService.undoProblemMove()
+    if (!result) return
 
     // Navigate back in tree (board infrastructure)
     let {gameTrees, gameIndex, treePosition} = this.state
@@ -1133,20 +1073,11 @@ class Sabaki extends EventEmitter {
       this.setCurrentTreePosition(tree, node.parentId)
     }
 
-    // Update runtime store
-    if (pv) {
-      runtimeStore.setProblemView({
-        ...pv,
-        evalCache: newEvalCache,
-        badMoves: newBadMoves,
-      })
-    }
-
     // Legacy compat
     this.setState({
-      problemAttempt: {...problemAttempt, userLine},
-      problemEvalCache: newEvalCache,
-      problemBadMoves: newBadMoves,
+      problemAttempt: {...(this.state.problemAttempt || {}), userLine: result.userLine},
+      problemEvalCache: result.evalCache,
+      problemBadMoves: result.badMoves,
     })
   }
 
@@ -1475,6 +1406,7 @@ class Sabaki extends EventEmitter {
         runtimeStore,
         repository,
         attemptService,
+        monitor,
         problemService,
         reviewService,
         logger,
