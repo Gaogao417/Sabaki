@@ -170,6 +170,7 @@ export default class WorkbenchShell extends Component {
               selectedTool,
               onToolButtonClick: this.handleToolButtonClick,
               editWorkspace: editWs,
+              overlayStore: props.boardServices?.overlayStore,
               territoryEnabled: props.territoryEnabled,
               territoryCompareEnabled: props.territoryCompareEnabled,
               territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),

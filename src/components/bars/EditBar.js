@@ -8,14 +8,26 @@ import {noop} from '../../modules/helper.js'
 const t = i18n.context('EditBar')
 
 class EditBar extends Component {
-  constructor() {
-    super()
+  constructor(props) {
+    super(props)
 
     this.state = {
       stoneTool: 1,
+      overlayState:
+        props.overlayStore?.getState == null
+          ? null
+          : {...props.overlayStore.getState()},
     }
 
     this.handleToolButtonClick = this.handleToolButtonClick.bind(this)
+  }
+
+  componentDidMount() {
+    this.subscribeOverlayStore(this.props.overlayStore)
+  }
+
+  componentWillUnmount() {
+    this.unsubscribeOverlayStore?.()
   }
 
   componentWillReceiveProps({selectedTool}) {
@@ -26,8 +38,29 @@ class EditBar extends Component {
     }
   }
 
+  componentDidUpdate(prevProps) {
+    if (prevProps.overlayStore !== this.props.overlayStore) {
+      this.subscribeOverlayStore(this.props.overlayStore)
+    }
+  }
+
   shouldComponentUpdate(nextProps) {
     return nextProps.mode !== this.props.mode || nextProps.mode === 'analysis'
+  }
+
+  subscribeOverlayStore(overlayStore) {
+    this.unsubscribeOverlayStore?.()
+    this.unsubscribeOverlayStore = null
+
+    if (overlayStore?.subscribe == null) {
+      this.setState({overlayState: null})
+      return
+    }
+
+    this.setState({overlayState: {...overlayStore.getState()}})
+    this.unsubscribeOverlayStore = overlayStore.subscribe(() => {
+      this.setState({overlayState: {...overlayStore.getState()}})
+    })
   }
 
   handleToolButtonClick(evt) {
@@ -91,19 +124,27 @@ class EditBar extends Component {
       mode,
       selectedTool,
       editWorkspace,
+      overlayStore,
       territoryEnabled,
       territoryCompareEnabled,
+      territoryCompareAvailable = true,
       showAISuggestions,
       showHumanPreference,
       areaSelectMode,
       analysisAreaVertices,
     },
-    {stoneTool},
+    {stoneTool, overlayState},
   ) {
     if (mode !== 'analysis') return null
 
+    territoryEnabled =
+      overlayState?.territoryEnabled ?? territoryEnabled ?? false
+    territoryCompareEnabled =
+      overlayState?.territoryCompareEnabled ?? territoryCompareEnabled ?? false
+
     let isSelected = ([, id]) =>
       id.replace(/_-?1$/, '') === selectedTool.replace(/_-?1$/, '')
+    let overlayActions = overlayStore ?? sabaki.getOverlayStore()
 
     return h(
       'section',
@@ -152,12 +193,13 @@ class EditBar extends Component {
           this.renderActionButton(t('Territory'), {
             icon: './node_modules/@primer/octicons/build/svg/eye.svg',
             selected: territoryEnabled,
-            onClick: () => sabaki.toggleTerritoryEnabled(),
+            onClick: () => overlayActions.toggleTerritoryEnabled(),
           }),
           this.renderActionButton(t('Territory Compare'), {
             icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
             selected: territoryCompareEnabled,
-            onClick: () => sabaki.toggleTerritoryCompareEnabled(),
+            disabled: !territoryCompareAvailable,
+            onClick: () => overlayActions.toggleTerritoryCompareEnabled(),
           }),
           this.renderActionButton('AI 推荐点', {
             icon: './node_modules/@primer/octicons/build/svg/eye.svg',

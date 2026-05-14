@@ -487,9 +487,15 @@ export default class MainView extends Component {
         h(BoardToolbar, {
           mode,
           editWorkspaceActive,
-          territoryEnabled: (boardServices?.overlayStore?.getState()?.territoryEnabled || boardServices?.overlayStore?.getState()?.territoryCompareEnabled) ?? false,
+          territoryEnabled:
+            (boardServices?.overlayStore?.getState()?.territoryEnabled ||
+              boardServices?.overlayStore?.getState()
+                ?.territoryCompareEnabled) ??
+            false,
           territoryCompareEnabled,
-          territoryCompareAvailable: boardServices?.overlayStore?.getTerritoryCompareAvailable?.() ?? false,
+          territoryCompareAvailable:
+            boardServices?.overlayStore?.getTerritoryCompareAvailable?.() ??
+            false,
           currentPlayer,
           playerNames: gameInfo.playerNames,
           playerRanks: gameInfo.playerRanks,
@@ -574,6 +580,18 @@ export default class MainView extends Component {
             selectedTool,
             onToolButtonClick: this.handleToolButtonClick,
             editWorkspace: editWs,
+            overlayStore: boardServices?.overlayStore,
+            territoryEnabled:
+              boardServices?.overlayStore?.getState()?.territoryEnabled,
+            territoryCompareEnabled:
+              boardServices?.overlayStore?.getState()?.territoryCompareEnabled,
+            territoryCompareAvailable:
+              boardServices?.overlayStore?.getTerritoryCompareAvailable?.() ??
+              false,
+            showAISuggestions: this.props.showAISuggestions,
+            showHumanPreference,
+            areaSelectMode: this.props.areaSelectMode,
+            analysisAreaVertices,
           }),
 
           h(GuessBar, {
