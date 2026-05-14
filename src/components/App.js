@@ -15,6 +15,7 @@ import MainView from './MainView.js'
 import LeftSidebar from './LeftSidebar.js'
 import Sidebar from './Sidebar.js'
 import EngineFloatingPanel from './EngineFloatingPanel.js'
+import ThirdPartyPanel from './ThirdPartyPanel.js'
 import DrawerManager from './DrawerManager.js'
 import InputBox from './InputBox.js'
 import BusyScreen from './BusyScreen.js'
@@ -701,6 +702,11 @@ class App extends Component {
         engineGameOngoing: engineService.isEngineGameRunning(),
         consoleLog: engineService.getConsoleLog(),
         onClose: this.handleEnginePanelClose,
+      }),
+
+      h(ThirdPartyPanel, {
+        show: state.showThirdPartyPanel,
+        activeTab: state.thirdPartyPanelTab,
       }),
 
       h(DrawerManager, {

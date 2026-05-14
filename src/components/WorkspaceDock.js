@@ -112,8 +112,46 @@ export default class WorkspaceDock extends Component {
             '重做',
           ),
           h('button', {type: 'button', class: 'dock-tool'}, '清空'),
+          h('button', {type: 'button', class: 'dock-tool'}, '清空'),
           h('button', {type: 'button', class: 'dock-tool'}, '100%'),
         ),
+      h(
+        'footer',
+        {class: 'workspace-dock__footer'},
+        h(
+          'div',
+          {
+            class: 'dock-status-item',
+            onClick: () => sabaki.toggleThirdPartyPanel('fox'),
+          },
+          '🦊 野狐: ',
+          h(
+            'span',
+            {},
+            (() => {
+              const defaultId = window.sabaki.setting.get('fox.default_account')
+              const accounts = window.sabaki.setting.get('fox.accounts') || []
+              const entry = defaultId && accounts.find(a => a.id === defaultId)
+              if (entry) return entry.alias ? `${entry.account} (${entry.alias})` : entry.account
+              const legacy = window.sabaki.setting.get('fox.account') || ''
+              return legacy || '未设置'
+            })()
+          )
+        ),
+        h(
+          'div',
+          {
+            class: 'dock-status-item',
+            onClick: () => sabaki.toggleThirdPartyPanel('101'),
+          },
+          '🧩 101: ',
+          h(
+            'span',
+            {class: sabaki.state.weiqi101Connected ? 'connected' : ''},
+            sabaki.state.weiqi101Connected ? '已连接 ✓' : '未登录'
+          )
+        )
+      )
     )
   }
 }
