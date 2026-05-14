@@ -80,11 +80,6 @@ class App extends Component {
 
     sabaki.on('change', ({change, callback}) => this.setState(change, callback))
 
-    // Subscribe to training stores for re-render
-    const {workbenchStore, runtimeStore} = sabaki.getTrainingServices()
-    this._unsubWorkbench = workbenchStore.subscribe(() => this.forceUpdate())
-    this._unsubRuntime = runtimeStore.subscribe(() => this.forceUpdate())
-
     let bind = (f) => f.bind(this)
     this.handleMainLayoutSplitChange = bind(this.handleMainLayoutSplitChange)
     this.handleMainLayoutSplitFinish = bind(this.handleMainLayoutSplitFinish)
@@ -461,10 +456,6 @@ class App extends Component {
   // Render
 
   render(_, state) {
-    // Merge training projection into state for UI compat
-    const trainingProjected = sabaki.getTrainingServices().projectTrainingState()
-    state = {...state, ...trainingProjected}
-
     // Calculate some inferred values
 
     let inferredState = sabaki.inferredState

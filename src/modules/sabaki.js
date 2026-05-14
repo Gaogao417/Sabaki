@@ -178,7 +178,7 @@ class Sabaki extends EventEmitter {
       recallShowHint: false,
       recallCompleted: false,
 
-      // Problem Mode
+      // Problem Mode (LEGACY-FREEZE: stays on sabaki.state until problemService migration)
 
       problemSession: null,
       problemAttempt: null,
@@ -188,7 +188,7 @@ class Sabaki extends EventEmitter {
       problemSubmitted: false,
       problemResult: null,
 
-      // Review Mode
+      // Review Mode (LEGACY-FREEZE: stays on sabaki.state until reviewService migration)
 
       reviewQueue: [],
       reviewCurrentIndex: 0,
@@ -561,7 +561,7 @@ class Sabaki extends EventEmitter {
       })
     } else if (mode === 'recall') {
       const {runtimeStore} = this.getTrainingServices()
-      if (!runtimeStore.getState().recallView && !this.state.recallSession) return
+      if (!runtimeStore.getState().recallView) return
     }
     // mode='review' is no longer a board mode — review items open as problem tabs
 

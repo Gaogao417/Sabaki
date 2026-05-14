@@ -103,24 +103,6 @@ function extractRecallExpectedMoves(tree: any): ExpectedMove[] {
   return moves
 }
 
-/** Build legacy sabaki.state patch from RecallView. */
-function buildRecallLegacyPatch(
-  view: RecallView,
-  session?: Record<string, unknown> | null,
-): Record<string, unknown> {
-  const patch: Record<string, unknown> = {
-    recallMoveIndex: view.moveIndex,
-    recallUserAttempts: view.userAttempts,
-    recallShowHint: view.showHint,
-    recallCompleted: view.completed,
-  }
-  if (session != null) {
-    patch.recallSession = session
-    patch.recallExpectedMoves = view.expectedMoves
-  }
-  return patch
-}
-
 /** Navigate game tree to next move along the main line. */
 function recallNavigateNext(sabaki: SabakiLike) {
   let {gameTrees, gameIndex, gameCurrents, treePosition} = sabaki.state
@@ -140,6 +122,9 @@ export function createLegacyTrainingFlowController(deps: {
   getTrainingServices: () => Record<string, unknown>
 }): TrainingFlowController {
   const {sabaki, db} = deps
+
+  // Held in closure — written by startRecallSession, read by endRecallSession
+  let currentSession: Record<string, unknown> | null = null
 
   // ⚠️ Do NOT call getTrainingServices() at create time.
   // All service access must be lazy (inside method bodies) to avoid
@@ -197,8 +182,7 @@ export function createLegacyTrainingFlowController(deps: {
 
     const runtimeStore = getRuntimeStore()
     runtimeStore.setRecallView(view)
-
-    sabaki.setState(buildRecallLegacyPatch(view, session))
+    currentSession = session
 
     if (trees && trees.length > 0) {
       await sabaki.loadGameTrees(trees, {suppressAskForSave: true})
@@ -247,7 +231,6 @@ export function createLegacyTrainingFlowController(deps: {
         completed,
       }
       runtimeStore.setRecallView(updatedView)
-      sabaki.setState(buildRecallLegacyPatch(updatedView))
       return
     }
 
@@ -272,12 +255,10 @@ export function createLegacyTrainingFlowController(deps: {
         completed,
       }
       runtimeStore.setRecallView(updatedView)
-      sabaki.setState(buildRecallLegacyPatch(updatedView))
     } else {
       sound.playError()
       const updatedView: RecallView = {...view, userAttempts: newAttempts}
       runtimeStore.setRecallView(updatedView)
-      sabaki.setState(buildRecallLegacyPatch(updatedView))
     }
   }
 
@@ -309,7 +290,6 @@ export function createLegacyTrainingFlowController(deps: {
       completed,
     }
     runtimeStore.setRecallView(updatedView)
-    sabaki.setState(buildRecallLegacyPatch(updatedView))
   }
 
   function showRecallHint(): void {
@@ -319,7 +299,6 @@ export function createLegacyTrainingFlowController(deps: {
 
     const updatedView: RecallView = {...view, showHint: true}
     runtimeStore.setRecallView(updatedView)
-    sabaki.setState(buildRecallLegacyPatch(updatedView))
   }
 
   async function endRecallSession(): Promise<void> {
@@ -327,7 +306,8 @@ export function createLegacyTrainingFlowController(deps: {
     let view: RecallView | null = runtimeStore.getState().recallView
     if (!view) return
 
-    let session = sabaki.state.recallSession as Record<string, unknown> | null
+    let session = currentSession
+    currentSession = null
     if (session) {
       let completedSession = {
         ...session,
@@ -357,8 +337,7 @@ export function createLegacyTrainingFlowController(deps: {
     sabaki.setMode('analysis')
   }
 
-  // --- Problem / Review — still delegate to sabaki facade ---
-  // These will be migrated in a later commit.
+  // --- Problem / Review — LEGACY-FREEZE: delegates to sabaki facade until problemService/reviewService migration ---
 
   async function submitProblemAttempt(): Promise<void> {
     return (sabaki as any).submitProblemAttempt()

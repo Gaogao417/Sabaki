@@ -7,9 +7,6 @@ class TrainingWorkbenchContainer extends Component {
     const {runtimeStore, workbenchStore} =
       this.props.sabaki.getTrainingServices()
 
-    // Transitional: App still subscribes to training stores.
-    // Container subscription will become the sole owner after
-    // projectTrainingState is moved out of App.
     this._unsubRuntime = runtimeStore.subscribe(() => this.forceUpdate())
     this._unsubWorkbench = workbenchStore.subscribe(() => this.forceUpdate())
   }
@@ -24,17 +21,10 @@ class TrainingWorkbenchContainer extends Component {
     const {runtimeStore} = sabaki.getTrainingServices()
     const rt = runtimeStore.getState()
 
-    const recallViewModel = rt.recallView
-      ? {
-          moveIndex: rt.recallView.moveIndex,
-          totalMoves: rt.recallView.expectedMoves.length,
-          showHint: rt.recallView.showHint,
-          completed: rt.recallView.completed,
-        }
-      : null
+    // Project runtimeStore view models into legacy prop shapes
+    // that WorkbenchShell/RecallBar/ProblemBar expect.
+    const projected = projectFromRuntime(rt)
 
-    // Transitional: handlers delegate to sabaki facade via controller.
-    // Commit 3 replaces controller implementations with real logic.
     const {controller} = sabaki.getTrainingServices()
     const handlers = {
       onShowRecallHint: () => controller.showRecallHint(),
@@ -48,11 +38,46 @@ class TrainingWorkbenchContainer extends Component {
 
     return h(WorkbenchShell, {
       ...shellProps,
+      ...projected,
       ...handlers,
-      recallViewModel,
-      problemViewModel: rt.problemView,
     })
   }
+}
+
+function projectFromRuntime(rt) {
+  const result = {}
+
+  if (rt.recallView) {
+    const v = rt.recallView
+    result.recallSession = {active: true}
+    result.recallMoveIndex = v.moveIndex
+    result.recallExpectedMoves = v.expectedMoves
+    result.recallUserAttempts = v.userAttempts
+    result.recallShowHint = v.showHint
+    result.recallCompleted = v.completed
+  }
+
+  if (rt.problemView) {
+    const v = rt.problemView
+    result.problemSession = v.legacyProblemSession
+    result.problemAttempt = {
+      userLine: v.evalCache.map((e) => e.move),
+      moveEvaluations: v.evalCache,
+    }
+    result.problemEvalCache = v.evalCache
+    result.problemBadMoves = v.badMoves
+    result.problemSubmitted = v.submitted
+    result.problemResult = v.result
+  }
+
+  if (rt.reviewQueueView) {
+    const v = rt.reviewQueueView
+    result.reviewQueue = v.queue
+    result.reviewCurrentIndex = v.currentIndex
+    result.reviewTotalDue = v.totalDue
+  }
+
+  return result
 }
 
 export default TrainingWorkbenchContainer
