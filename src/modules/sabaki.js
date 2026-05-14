@@ -43,6 +43,13 @@ import {createAnalysisService} from './analysis/analysisService.ts'
 import {createTrainingStore} from './training/trainingStore.js'
 import {createOverlayStore} from './overlays/overlayStore.ts'
 import {
+  createWorkbenchStore,
+  createTrainingRepository,
+  createLegacySabakiAdapter,
+  createWorkbenchTabService,
+  createWorkbenchPhaseService,
+} from './training/index.ts'
+import {
   boardFromSnapshot,
   cloneSnapshot,
   createSnapshotFromBoard,
@@ -720,48 +727,12 @@ class Sabaki extends EventEmitter {
     return saved
   }
 
-  // Problem Mode
+  // Problem Mode — thin proxy to workbenchTabService
 
   async startProblem(problemId) {
-    let problem = await window.sabaki.db.getProblem(problemId)
-    if (!problem) return
-
-    logger.info('problem.start', 'Problem started', {
-      problemId: problem.id,
-      type: problem.type,
-      sideToMove: problem.sideToMove,
+    return this.getTrainingServices().tabService.openProblemTab(problemId, {
+      legacyCompatibility: true,
     })
-
-    let trees = fileformats.sgf.parse(problem.positionSgf)
-    if (!trees || trees.length === 0) return
-    let tree = trees[0]
-
-    let attempt = {
-      problemId: problem.id,
-      userLine: [],
-      moveEvaluations: [],
-      hintLevelUsed: 0,
-      generatedPunishmentProblemIds: [],
-    }
-    attempt = await window.sabaki.db.saveProblemAttempt(attempt)
-
-    this.setState({
-      problemSession: problem,
-      problemAttempt: attempt,
-      problemWorkspace: tree,
-      problemEvalCache: [],
-      problemBadMoves: [],
-      problemSubmitted: false,
-      problemResult: null,
-    })
-
-    this.loadGameTrees([tree])
-    this.setCurrentTreePosition(tree, tree.root.id)
-    this.setMode('problem')
-
-    if (this.inferredState.analyzingEngineSyncer != null) {
-      this.analyzeMove(tree.root.id)
-    }
   }
 
   handleProblemMove(vertex) {
@@ -1310,6 +1281,7 @@ class Sabaki extends EventEmitter {
   _playServices = null
   _trainingStore = null
   _overlayStore = null
+  _trainingServices = null
 
   getTrainingStore() {
     if (this._trainingStore == null) {
@@ -1320,6 +1292,23 @@ class Sabaki extends EventEmitter {
       })
     }
     return this._trainingStore
+  }
+
+  getTrainingServices() {
+    if (this._trainingServices == null) {
+      const workbenchStore = createWorkbenchStore()
+      const repository = createTrainingRepository(window.sabaki.db)
+      const legacyAdapter = createLegacySabakiAdapter(this)
+
+      this._trainingServices = {
+        workbenchStore,
+        repository,
+        legacyAdapter,
+        tabService: createWorkbenchTabService({ workbenchStore, repository, legacyAdapter, sgfParser: fileformats.sgf, logger }),
+        phaseService: createWorkbenchPhaseService({ workbenchStore, logger }),
+      }
+    }
+    return this._trainingServices
   }
 
   getOverlayStore() {

@@ -31,9 +31,16 @@ export function createWorkbenchStore(): WorkbenchStore {
     }
   }
 
+  function findTab(tabId: string): WorkbenchTab | undefined {
+    return state.tabs.find(t => t.id === tabId)
+  }
+
   return {
     getState() {
-      return state
+      return {
+        tabs: [...state.tabs],
+        activeTabId: state.activeTabId,
+      }
     },
 
     subscribe(listener: () => void) {
@@ -45,15 +52,25 @@ export function createWorkbenchStore(): WorkbenchStore {
 
     setTabs(tabs: WorkbenchTab[]) {
       state = { ...state, tabs }
+      // Clear activeTabId if it no longer references a tab in the new list
+      if (state.activeTabId != null && !tabs.some(t => t.id === state.activeTabId)) {
+        state = { ...state, activeTabId: null }
+      }
       notify()
     },
 
     addTab(tab: WorkbenchTab) {
-      state = { ...state, tabs: [...state.tabs, tab] }
+      if (findTab(tab.id)) {
+        throw new Error(`workbenchStore.addTab: duplicate tab id "${tab.id}"`)
+      }
+      state = { ...state, tabs: [...state.tabs, { ...tab }] }
       notify()
     },
 
     updateTab(tabId: string, patch: Partial<WorkbenchTab>) {
+      if (!findTab(tabId)) {
+        throw new Error(`workbenchStore.updateTab: tab not found (id="${tabId}")`)
+      }
       state = {
         ...state,
         tabs: state.tabs.map((t) =>
@@ -73,6 +90,9 @@ export function createWorkbenchStore(): WorkbenchStore {
     },
 
     setActiveTab(tabId: string | null) {
+      if (tabId != null && !findTab(tabId)) {
+        throw new Error(`workbenchStore.setActiveTab: tab not found (id="${tabId}")`)
+      }
       state = { ...state, activeTabId: tabId }
       notify()
     },

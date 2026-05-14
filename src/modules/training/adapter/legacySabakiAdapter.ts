@@ -21,10 +21,18 @@ type SabakiLike = {
       getCurrentTree(): unknown
       getCurrentTreePosition(): string
     }
-    engineService: unknown
+    engineService: {
+      ensureAnalyzerForProblemMode(): void
+      getAnalysisForPosition(tp: string): unknown
+    }
     analysisService: unknown
   }
   getTrainingStore(): unknown
+  analyzeMove(treePosition: string): void
+  inferredState: {
+    analyzingEngineSyncer: unknown | null
+    [key: string]: unknown
+  }
 }
 
 export type LegacySabakiAdapter = {
@@ -36,6 +44,20 @@ export type LegacySabakiAdapter = {
   loadGameTrees(trees: unknown[], options?: Record<string, unknown>): Promise<void>
   getCurrentTree(): unknown
   getSabaki(): SabakiLike
+
+  // Problem-mode setup helpers
+  setupProblemLegacyState(patch: {
+    problemSession: unknown
+    problemAttempt: unknown
+    problemWorkspace: unknown
+    problemEvalCache: unknown[]
+    problemBadMoves: unknown[]
+    problemSubmitted: boolean
+    problemResult: unknown
+  }): void
+  setCurrentTreePosition(tree: unknown, position: string): void
+  setProblemMode(): void
+  startAnalysisIfEngineReady(treePosition: string): void
 }
 
 export function createLegacySabakiAdapter(sabaki: SabakiLike): LegacySabakiAdapter {
@@ -70,6 +92,32 @@ export function createLegacySabakiAdapter(sabaki: SabakiLike): LegacySabakiAdapt
 
     getSabaki() {
       return sabaki
+    },
+
+    setupProblemLegacyState(patch) {
+      sabaki.setState({
+        problemSession: patch.problemSession,
+        problemAttempt: patch.problemAttempt,
+        problemWorkspace: patch.problemWorkspace,
+        problemEvalCache: patch.problemEvalCache,
+        problemBadMoves: patch.problemBadMoves,
+        problemSubmitted: patch.problemSubmitted,
+        problemResult: patch.problemResult,
+      })
+    },
+
+    setCurrentTreePosition(tree: unknown, position: string) {
+      sabaki.setCurrentTreePosition(tree, position)
+    },
+
+    setProblemMode() {
+      sabaki.setMode('problem')
+    },
+
+    startAnalysisIfEngineReady(treePosition: string) {
+      if (sabaki.inferredState.analyzingEngineSyncer != null) {
+        sabaki.analyzeMove(treePosition)
+      }
     },
   }
 }
