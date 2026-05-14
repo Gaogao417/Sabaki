@@ -43,7 +43,7 @@ export type AnalysisLifecycleDeps = {
     prepareAnalysis: (syncer: EngineSyncerLike, commandName: string) => Promise<void>
     getAnalysisVisitLimit: (syncer: EngineSyncerLike | null) => number | null
     getAnalysisMaxTime: (syncer: EngineSyncerLike | null) => number | null
-    getLastAnalyzingEngineSyncerId: () => string | null
+    getLastAnalyzingSyncerId: () => string | null
     getAttachedSyncers: () => EngineSyncerLike[]
     attachEngines: (engines: any[]) => EngineSyncerLike[]
     detachEngines: (syncerIds: string[]) => Promise<void>
@@ -435,7 +435,7 @@ export function getAnalysisSyncerId(
   if (candidates.length === 0) return null
 
   let preferredSyncer = candidates.find(
-    (syncer) => syncer.id === deps.engineService.getLastAnalyzingEngineSyncerId(),
+    (syncer) => syncer.id === deps.engineService.getLastAnalyzingSyncerId(),
   )
 
   return (preferredSyncer || candidates[0]).id
