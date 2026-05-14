@@ -17,8 +17,7 @@ import * as fileformats from './fileformats/index.js'
 import * as gametree from './gametree.js'
 import * as gobantransformer from './gobantransformer.js'
 import * as gtplogger from './gtplogger.js'
-import * as applogger from './applogger.js'
-import {createLoggerService, createWinstonWriter} from './logger/index.js'
+import {logger, createWinstonWriter} from './logger/index.js'
 import * as helper from './helper.js'
 import {
   MUTATION_CONTRACTS,
@@ -183,9 +182,7 @@ class Sabaki extends EventEmitter {
 
     this.events = new EventEmitter()
 
-    // --- LoggerService + Winston writer (Phase 1) ---
-    this.loggerService = createLoggerService({bufferSize: 500})
-
+    // --- LoggerService + Winston writer ---
     this._winstonWriter = createWinstonWriter({
       isFileEnabled: () => setting.get('app.logging_file_enabled'),
       getFileLevel: () => setting.get('app.logging_level') || 'info',
@@ -194,13 +191,7 @@ class Sabaki extends EventEmitter {
       showWarning: (msg, type) => dialog.showMessageBox(msg, type),
     })
 
-    applogger.init({
-      loggerService: this.loggerService,
-      winstonWriter: this._winstonWriter,
-    })
-
-    // Subscribe LoggerService → engineService.appendConsoleLog (Phase 1 bridge)
-    this._loggerUnsubscribe = null
+    logger.reconfigure({writers: [this._winstonWriter]})
 
     // App info will be set via IPC - use defaults initially
     this.appName = 'Sabaki'
@@ -492,11 +483,7 @@ class Sabaki extends EventEmitter {
       () => this.scheduleEditWorkspaceAnalysis(),
     )
     this.events.emit('modeChange')
-    applogger.log(
-      'info',
-      'game',
-      'analysis.workspace_reset',
-      'Analysis workspace reset',
+    logger.info('analysis.workspace_reset', 'Analysis workspace reset',
     )
   }
 
@@ -555,11 +542,7 @@ class Sabaki extends EventEmitter {
     // Let overlayStore react to mode change (clear territory when leaving analysis)
     this.getOverlayStore().onModeChange(mode)
 
-    applogger.log(
-      'info',
-      'user',
-      'mode.changed',
-      'Mode changed',
+    logger.info('mode.changed', 'Mode changed',
       {from: oldMode, to: mode},
       {mode},
     )
@@ -632,7 +615,7 @@ class Sabaki extends EventEmitter {
     let game = {sgf: sgfStr, source: 'play', result}
     let saved = await window.sabaki.db.saveGame(game)
     if (saved) {
-      applogger.log('info', 'game', 'game.saved', 'Game saved', {
+      logger.info('game.saved', 'Game saved', {
         gameId: saved.id,
       })
     }
@@ -1054,6 +1037,7 @@ class Sabaki extends EventEmitter {
   }
 
   clearConsole() {
+    logger.clear()
     if (this._playServices) {
       this.getPlayServices().engineService.clearConsoleLog()
     }
@@ -1229,7 +1213,7 @@ class Sabaki extends EventEmitter {
   getTrainingStore() {
     if (this._trainingStore == null) {
       this._trainingStore = createTrainingStore(this, {
-        applogger,
+        logger,
         playErrorSound: () => sound.playError(),
         db: window.sabaki.db,
       })
@@ -1287,7 +1271,7 @@ class Sabaki extends EventEmitter {
         detectEngines: () => detectEngines(),
         waitForEngineCommands: (syncer, opts) => this.waitForEngineCommands(syncer, opts),
         showMessageBox: (msg, type) => dialog.showMessageBox(msg, type),
-        applogger,
+        logger,
         getSetting: (key) => setting.get(key),
         scheduleEditWorkspaceAnalysis: (tab) => this.scheduleEditWorkspaceAnalysis(tab),
         i18n,
@@ -1325,16 +1309,6 @@ class Sabaki extends EventEmitter {
       analysisService.setEngineService(engineService)
 
       this._playServices = {documentStore, engineService, analysisService}
-
-      // Phase 1 bridge: subscribe LoggerService → engineService.appendConsoleLog
-      // so app log entries appear in the GTP console panel.
-      if (this._loggerUnsubscribe) this._loggerUnsubscribe()
-      this._loggerUnsubscribe = this.loggerService.subscribe((entry) => {
-        let loggingEnabled = setting.get('app.logging_enabled')
-        if (!loggingEnabled) return
-        if (!entry.appLog) return
-        engineService.appendConsoleLog(entry)
-      })
     }
     return this._playServices
   }
@@ -1549,11 +1523,7 @@ class Sabaki extends EventEmitter {
         },
       })
       this.scheduleEditWorkspaceAnalysis(tab)
-      applogger.log(
-        'debug',
-        'game',
-        'analysis.stone_toggled',
-        'Stone toggled',
+      logger.debug('analysis.stone_toggled', 'Stone toggled',
         {sign, vertex, tab},
       )
     } else if (tool === 'play') {
@@ -1596,11 +1566,7 @@ class Sabaki extends EventEmitter {
         },
       })
       this.scheduleEditWorkspaceAnalysis(tab)
-      applogger.log(
-        'debug',
-        'game',
-        'analysis.play_move',
-        'Play move in analysis',
+      logger.debug('analysis.play_move', 'Play move in analysis',
         {sign, vertex, tab},
       )
     } else if (tool === 'eraser') {
@@ -1740,11 +1706,7 @@ class Sabaki extends EventEmitter {
       },
     })
     this.scheduleEditWorkspaceAnalysis()
-    applogger.log(
-      'debug',
-      'user',
-      'analysis.reference_captured',
-      'Reference captured',
+    logger.debug('analysis.reference_captured', 'Reference captured',
       {sourceTab, targetTab},
     )
   }
@@ -1980,7 +1942,7 @@ class Sabaki extends EventEmitter {
       .set('game.default_komi', isNaN(komi) ? 0 : +komi)
       .set('game.default_handicap', isNaN(handicap) ? 0 : +handicap)
 
-    applogger.log('info', 'game', 'game.configuring', 'Configuring new game', {
+    logger.info('game.configuring', 'Configuring new game', {
       black: black.type,
       white: white.type,
       boardSize,
@@ -1994,7 +1956,7 @@ class Sabaki extends EventEmitter {
     let whiteSyncer =
       white.type === 'engine' ? this.getOrAttachEngine(white.engineIndex) : null
 
-    applogger.log('info', 'game', 'game.engines_resolved', 'Engines resolved', {
+    logger.info('game.engines_resolved', 'Engines resolved', {
       blackSyncer: blackSyncer
         ? {
             id: blackSyncer.id,
@@ -2032,11 +1994,7 @@ class Sabaki extends EventEmitter {
     )
 
     if (blackSyncer != null || whiteSyncer != null) {
-      applogger.log(
-        'info',
-        'engine',
-        'engine.waiting',
-        'Waiting for engines to be ready',
+      logger.info('engine.waiting', 'Waiting for engines to be ready',
         {
           engines: [blackSyncer, whiteSyncer]
             .filter((s) => s != null)
@@ -2050,11 +2008,7 @@ class Sabaki extends EventEmitter {
           .map((syncer) => this.waitForEngineCommands(syncer, {timeout: 5000})),
       )
 
-      applogger.log(
-        'info',
-        'engine',
-        'engine.ready_results',
-        'Engine readiness results',
+      logger.info('engine.ready_results', 'Engine readiness results',
         {
           results,
           engines: [blackSyncer, whiteSyncer]
@@ -2072,7 +2026,7 @@ class Sabaki extends EventEmitter {
     let treePosition = this.state.treePosition
     let nextPlayer = this.getPlayer(treePosition)
 
-    applogger.log('info', 'game', 'game.starting', 'Starting game play', {
+    logger.info('game.starting', 'Starting game play', {
       nextPlayer: nextPlayer > 0 ? 'black' : 'white',
       treePosition,
       engineGame: blackSyncer != null && whiteSyncer != null,
@@ -2087,7 +2041,7 @@ class Sabaki extends EventEmitter {
     }
 
     sound.playNewGame()
-    applogger.log('info', 'game', 'game.started', 'New game started', {
+    logger.info('game.started', 'New game started', {
       black: blackSyncer?.engine.name || 'Human',
       white: whiteSyncer?.engine.name || 'Human',
       boardSize,
@@ -2250,7 +2204,7 @@ class Sabaki extends EventEmitter {
     this.window.setProgressBar(-1)
     this.events.emit('fileLoad')
 
-    applogger.log('info', 'game', 'file.loaded', 'File loaded', {
+    logger.info('file.loaded', 'File loaded', {
       filename: this.state.representedFilename,
       count: gameTrees.length,
     })
@@ -2884,13 +2838,13 @@ class Sabaki extends EventEmitter {
     if (!pass) {
       sound.playPachi()
       if (capturing || suicide) sound.playCapture()
-      applogger.log('debug', 'game', 'game.move', 'Stone placed', {
+      logger.debug('game.move', 'Stone placed', {
         color,
         vertex: sgf.stringifyVertex(vertex),
       })
     } else {
       sound.playPass()
-      applogger.log('debug', 'game', 'game.pass', 'Pass', {color})
+      logger.debug('game.pass', 'Pass', {color})
     }
 
     // Enter scoring mode after two consecutive passes
@@ -2904,11 +2858,7 @@ class Sabaki extends EventEmitter {
 
       if (prevPass) {
         enterScoring = false
-        applogger.log(
-          'info',
-          'game',
-          'game.double_pass',
-          'Double pass detected, saving and entering recall',
+        logger.info('game.double_pass', 'Double pass detected, saving and entering recall',
         )
         this.stopEngineGame()
         let saved = await this.saveCurrentGame()
@@ -2942,7 +2892,7 @@ class Sabaki extends EventEmitter {
     let color = player > 0 ? 'W' : 'B'
     let tree = gameTrees[gameIndex]
 
-    applogger.log('info', 'game', 'game.resign', `${color} resigned`, {
+    logger.info('game.resign', `${color} resigned`, {
       color,
       player,
     })

@@ -60,7 +60,7 @@ type SabakiLike = {
   engineSupportsOwnership: (syncer: unknown) => boolean
   refreshEditWorkspaceAnalysis?: (targetTab: string | null) => Promise<unknown>
   analyzeMove?: (treePosition: string) => Promise<unknown>
-  applogger?: {log: (...args: unknown[]) => void}
+  logger?: {info: Function, warn: Function, error: Function, debug: Function}
   setting?: {get: (key: string) => unknown}
   getEngineService?: () => {
     getAnalysisRelevantState: () => Record<string, unknown>
@@ -76,7 +76,7 @@ export type AnalysisServiceDeps = {
   detectEngines?: () => any[]
   waitForEngineCommands?: (syncer: any, opts?: {timeout?: number}) => Promise<boolean>
   showMessageBox?: (message: string, type: string) => Promise<void>
-  applogger?: any
+  logger?: any
   getSetting?: (key: string) => any
   scheduleEditWorkspaceAnalysis?: (tab?: string | null) => void
   i18n?: {t: (key: string, fallback: string) => string}
@@ -211,7 +211,7 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
       waitForEngineCommands: serviceDeps.waitForEngineCommands ?? (() => Promise.resolve(false)),
       getSetting: serviceDeps.getSetting ?? ((key) => (sabaki as any).setting?.get?.(key)),
       showMessageBox: serviceDeps.showMessageBox ?? (() => Promise.resolve()),
-      applogger: serviceDeps.applogger ?? sabaki.applogger ?? {log: () => {}},
+      logger: serviceDeps.logger ?? sabaki.logger ?? {info: ()=>{}, warn: ()=>{}, error: ()=>{}, debug: ()=>{}},
       i18n: serviceDeps.i18n ?? {t: (_key: string, fallback: string) => fallback},
     }
   }
@@ -347,7 +347,7 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
         engineSupportsOwnership: (s: EngineSyncerLike) => resolveEngineService()?.engineSupportsOwnership?.(s) ?? false,
         runBoardAnalysis: narrowRunBoardAnalysis(runBoardAnalysisInternal),
         getSourceTree: () => gameTree,
-        logger: sabaki.applogger,
+        logger: sabaki.logger,
       }
 
       return refreshScratchAnalysis(deps, tab as ScratchAnalysisTab)

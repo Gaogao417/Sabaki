@@ -1,5 +1,5 @@
 /**
- * Safe serialization — extracted from the old applogger so it can be
+ * Safe serialization utility for logging.
  * shared between LoggerService and the legacy facade without duplication.
  */
 

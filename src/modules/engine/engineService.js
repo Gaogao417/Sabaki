@@ -9,7 +9,7 @@ import i18n from '../../i18n.js'
 import EngineSyncer from '../enginesyncer.js'
 import * as dialog from '../dialog.js'
 import * as gtplogger from '../gtplogger.js'
-import * as applogger from '../applogger.js'
+import {logger} from '../logger/index.js'
 import * as gametree from '../gametree.js'
 import * as helper from '../helper.js'
 import * as sound from '../sound.js'
@@ -320,11 +320,7 @@ export function createEngineService(deps) {
           })
         }
       }
-      applogger.log(
-        'info',
-        'engine',
-        'kata.configured',
-        'KataGo analysis configured',
+      logger.info('kata.configured', 'KataGo analysis configured',
         {
           maxVisits:
             Number.isFinite(maxVisits) && maxVisits > 0
@@ -545,11 +541,7 @@ export function createEngineService(deps) {
 
       if (syncer.pathError) {
         dialog.showMessageBox(syncer.pathError, 'error')
-        applogger.log(
-          'error',
-          'engine',
-          'engine.start_failed',
-          'Engine path error',
+        logger.error('engine.start_failed', 'Engine path error',
           { name: engine.name, path: engine.path, error: syncer.pathError },
         )
 
@@ -570,11 +562,7 @@ export function createEngineService(deps) {
       })
 
       syncer.on('error', (err) => {
-        applogger.log(
-          'error',
-          'engine',
-          'engine.start_failed',
-          'Engine start failed',
+        logger.error('engine.start_failed', 'Engine start failed',
           { name: engine.name, error: err },
         )
         let message
@@ -767,7 +755,7 @@ export function createEngineService(deps) {
       syncer.start()
 
       attaching.push(syncer)
-      applogger.log('info', 'engine', 'engine.attached', 'Engine attached', {
+      logger.info('engine.attached', 'Engine attached', {
         name: engine.name,
         syncerId: syncer.id,
       })
@@ -790,7 +778,7 @@ export function createEngineService(deps) {
         await stopEngineGame()
         await syncer.stop()
 
-        applogger.log('info', 'engine', 'engine.detached', 'Engine detached', {
+        logger.info('engine.detached', 'Engine detached', {
           name: syncer.engine.name,
           syncerId: syncer.id,
         })
@@ -832,11 +820,7 @@ export function createEngineService(deps) {
     if (syncer != null) {
       try {
         await syncer.sync(tree, treePosition)
-        applogger.log(
-          'info',
-          'engine',
-          'sync.success',
-          'Engine synced successfully',
+        logger.info('sync.success', 'Engine synced successfully',
           {
             syncerId,
             treePosition,
@@ -844,11 +828,7 @@ export function createEngineService(deps) {
         )
         return true
       } catch (err) {
-        applogger.log(
-          'warn',
-          'engine',
-          'engine.sync_failed',
-          'Engine sync failed',
+        logger.warn('engine.sync_failed', 'Engine sync failed',
           { name: syncer.engine.name, error: err.message },
         )
         await dialog.showMessageBox(err.message, 'error')
@@ -977,21 +957,13 @@ export function createEngineService(deps) {
       (syncer) => syncer.id === syncerId,
     )
     if (syncer == null) {
-      applogger.log(
-        'warn',
-        'engine',
-        'generateMove.no_syncer',
-        'No syncer found for move generation',
+      logger.warn('generateMove.no_syncer', 'No syncer found for move generation',
         { syncerId, color },
       )
       return
     }
 
-    applogger.log(
-      'info',
-      'engine',
-      'generateMove.start',
-      'Generating engine move',
+    logger.info('generateMove.start', 'Generating engine move',
       { name: syncer.engine.name, color, commands: syncer.commands.length },
     )
 
@@ -1041,7 +1013,7 @@ export function createEngineService(deps) {
     coord = coord.toLowerCase().trim()
 
     if (coord === 'resign') {
-      applogger.log('info', 'engine', 'engine.resign', 'Engine resigned', {
+      logger.info('engine.resign', 'Engine resigned', {
         name: syncer.engine.name,
       })
       await dialog.showMessageBox(
@@ -1057,7 +1029,7 @@ export function createEngineService(deps) {
       : board.parseVertex(coord)
 
     if (coord !== 'resign') {
-      applogger.log('info', 'engine', 'engine.move', 'Engine generated move', {
+      logger.info('engine.move', 'Engine generated move', {
         name: syncer.engine.name,
         coord,
       })
@@ -1511,14 +1483,15 @@ export function createEngineService(deps) {
   }
 
   /**
-   * Append a log entry to the console log.
-   * Used by applogger to write application-level log entries.
+   * Append a log entry to the engine console log.
+   * Merged with application logs in the UI (GtpConsole).
    */
   function appendConsoleLog(entry) {
     let maxLength = getSetting('console.max_history_count') || 1000
+    let entryWithTime = { time: Date.now(), ...entry }
     setState(({ consoleLog }) => {
       let newLog = consoleLog.slice(Math.max(consoleLog.length - maxLength + 1, 0))
-      newLog.push(entry)
+      newLog.push(entryWithTime)
       return { consoleLog: newLog }
     })
   }

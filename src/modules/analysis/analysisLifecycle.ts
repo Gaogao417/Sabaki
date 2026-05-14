@@ -78,14 +78,11 @@ export type AnalysisLifecycleDeps = {
   showMessageBox: (message: string, type: string) => Promise<void>
 
   // Logger
-  applogger: {
-    log: (
-      level: string,
-      area: string,
-      event: string,
-      message: string,
-      data?: any,
-    ) => void
+  logger: {
+    info: (event: string, message: string, data?: any) => void
+    warn: (event: string, message: string, data?: any) => void
+    error: (event: string, message: string, data?: any) => void
+    debug: (event: string, message: string, data?: any) => void
   }
 
   // i18n
@@ -154,7 +151,7 @@ export async function runBoardAnalysis(
     onAnalysisUpdate = null,
   } = opts
 
-  deps.applogger.log('info', 'engine', 'runBoardAnalysis', 'Board analysis requested', {
+  deps.logger.info('runBoardAnalysis', 'Board analysis requested', {
     syncerId: syncer?.id,
     suspended: syncer?.suspended,
     treePosition,
@@ -169,7 +166,7 @@ export async function runBoardAnalysis(
     tree == null ||
     treePosition == null
   ) {
-    deps.applogger.log('debug', 'engine', 'runBoardAnalysis.skip', 'Analysis skipped', {
+    deps.logger.debug('runBoardAnalysis.skip', 'Analysis skipped', {
       syncerNull: syncer == null,
       suspended: syncer?.suspended,
       treeNull: tree == null,
@@ -180,7 +177,7 @@ export async function runBoardAnalysis(
 
   let commandName = deps.engineService.getAnalyzeCommand(syncer)
   if (commandName == null) {
-    deps.applogger.log('debug', 'engine', 'runBoardAnalysis.no_command', 'No analyze command available', {
+    deps.logger.debug('runBoardAnalysis.no_command', 'No analyze command available', {
       syncerId: syncer.id,
       commands: syncer.commands,
     })
@@ -214,7 +211,7 @@ export async function runBoardAnalysis(
     let synced = await deps.engineService.syncEngine(syncer.id, treePosition, {tree})
     let currentId = getCurrentRequestId(requestGroup)
     if (!synced || requestId !== currentId) {
-      deps.applogger.log('debug', 'engine', 'runBoardAnalysis.cancelled', 'Analysis cancelled after sync', {
+      deps.logger.debug('runBoardAnalysis.cancelled', 'Analysis cancelled after sync', {
         synced,
         staleRequestId: requestId !== currentId,
         requestId,
@@ -274,11 +271,7 @@ export async function runBoardAnalysis(
       }
 
       try {
-        deps.applogger.log(
-          'info',
-          'engine',
-          'analysis.start',
-          'Engine analysis started',
+        deps.logger.info('analysis.start', 'Engine analysis started',
           {
             commandName,
             args,
@@ -291,7 +284,7 @@ export async function runBoardAnalysis(
             analysisAreaVertices,
           },
         )
-        deps.applogger.log('debug', 'engine', 'runBoardAnalysis.queue_command', 'Queuing analyze command', {
+        deps.logger.debug('runBoardAnalysis.queue_command', 'Queuing analyze command', {
           commandName,
           args,
           treePosition,
@@ -299,7 +292,7 @@ export async function runBoardAnalysis(
         })
         syncer.queueCommand({name: commandName, args})
       } catch (err) {
-        deps.applogger.log('warn', 'engine', 'runBoardAnalysis.queue_error', 'Failed to queue analyze command', {
+        deps.logger.warn('runBoardAnalysis.queue_error', 'Failed to queue analyze command', {
           error: (err as Error)?.message,
           treePosition,
         })
@@ -484,11 +477,7 @@ export async function attachDefaultAnalysisEngine(
       deps.engineService.getAnalyzeCommand(syncer) != null &&
       (!requireOwnership || deps.engineService.engineSupportsOwnership(syncer))
     ) {
-      deps.applogger.log(
-        'info',
-        'engine',
-        'attach.success',
-        'Engine attached successfully',
+      deps.logger.info('attach.success', 'Engine attached successfully',
         {
           enginePath: engine.path,
           requireOwnership,
@@ -502,11 +491,7 @@ export async function attachDefaultAnalysisEngine(
     await deps.engineService.detachEngines([syncer.id])
   }
 
-  deps.applogger.log(
-    'warn',
-    'engine',
-    'attach.failed',
-    'Failed to attach engine',
+  deps.logger.warn('attach.failed', 'Failed to attach engine',
     {
       requireOwnership,
       enginesCount: engines.length,
@@ -563,11 +548,7 @@ export async function ensureAnalysisReady(
     return null
   }
 
-  deps.applogger.log(
-    'info',
-    'engine',
-    'ensure.ready',
-    'Engine ready for analysis',
+  deps.logger.info('ensure.ready', 'Engine ready for analysis',
     {
       syncerId,
       requireOwnership,

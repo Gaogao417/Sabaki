@@ -12,13 +12,13 @@ import * as helper from '../helper.js'
 /**
  * @param {import('../sabaki.js')} sabaki
  * @param {{
- *   applogger?: typeof import('../applogger.js'),
+ *   logger?: typeof import('../logger/index.js').logger,
  *   playErrorSound?: () => void,
  *   db?: { getGame: function, saveRecallSession: function, saveRecallAttempts: function },
  * }} [deps]
  */
 export function createTrainingStore(sabaki, deps = {}) {
-  let logger = deps.applogger ?? null
+  let logger = deps.logger ?? null
   let playErrorSound = deps.playErrorSound ?? (() => {})
   let db = deps.db ?? window?.sabaki?.db
 

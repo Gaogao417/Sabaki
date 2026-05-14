@@ -2,7 +2,7 @@ import sgf from '@sabaki/sgf'
 import * as gametree from '../gametree.js'
 import {appendMoveNode, detectKo, detectPrevPass} from './gameTreeWrites.js'
 import * as dialog from '../dialog.js'
-import * as applogger from '../applogger.js'
+import {logger} from '../logger/index.js'
 import * as sound from '../sound.js'
 import * as helper from '../helper.js'
 import i18n from '../../i18n.js'
@@ -201,7 +201,7 @@ export function createDocumentStore(sabaki, deps = {}) {
         return
       }
       this.checkoutHistory(sabaki.historyPointer - 1)
-      applogger.log('debug', 'user', 'user.undo', 'Undo')
+      logger.debug('user.undo', 'Undo')
     },
 
     redo() {
@@ -209,7 +209,7 @@ export function createDocumentStore(sabaki, deps = {}) {
         return
       }
       this.checkoutHistory(sabaki.historyPointer + 1)
-      applogger.log('debug', 'user', 'user.redo', 'Redo')
+      logger.debug('user.redo', 'Redo')
     },
 
     goStep(step) {
@@ -454,13 +454,13 @@ export function createDocumentStore(sabaki, deps = {}) {
       if (!pass) {
         sound.playPachi()
         if (capturing || suicide) sound.playCapture()
-        applogger.log('debug', 'game', 'game.move', 'Stone placed', {
+        logger.debug('game.move', 'Stone placed', {
           color,
           vertex: vertex,
         })
       } else {
         sound.playPass()
-        applogger.log('debug', 'game', 'game.pass', 'Pass', {color})
+        logger.debug('game.pass', 'Pass', {color})
       }
 
       // Double pass detection
