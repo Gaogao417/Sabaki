@@ -3,269 +3,56 @@ const {join} = require('path')
 const fs = require('fs')
 const {v4: uuid} = require('uuid')
 
-let db = null
+const { createDbClient } = require('./db/client')
+const { migrate } = require('./db/migrate')
+const { createTrainingDbApi } = require('./db/trainingDbApi')
+
+let client = null
+let trainingApi = null
 let dbPath = null
 
 async function init(userDataDirectory) {
-  if (db) return db
+  if (client) return client
 
   dbPath = join(userDataDirectory, 'training.db')
 
   const SQL = await initSqlJs()
-
+  let sqlDb
   if (fs.existsSync(dbPath)) {
     const buffer = fs.readFileSync(dbPath)
-    db = new SQL.Database(buffer)
+    sqlDb = new SQL.Database(buffer)
   } else {
-    db = new SQL.Database()
+    sqlDb = new SQL.Database()
   }
 
-  db.run('PRAGMA foreign_keys = ON')
-  migrate(db)
-  return db
+  client = createDbClient(sqlDb, {
+    save: () => {
+      if (!sqlDb || !dbPath) return
+      const data = sqlDb.export()
+      const buffer = Buffer.from(data)
+      fs.writeFileSync(dbPath, buffer)
+    }
+  })
+
+  migrate(client)
+  trainingApi = createTrainingDbApi(client)
+  return client
 }
 
 function save() {
-  if (!db || !dbPath) return
-  const data = db.export()
-  const buffer = Buffer.from(data)
-  fs.writeFileSync(dbPath, buffer)
-}
-
-function migrate(db) {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS games (
-      id TEXT PRIMARY KEY,
-      title TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      source TEXT NOT NULL DEFAULT 'play',
-      sgf TEXT NOT NULL,
-      player_color TEXT NOT NULL DEFAULT 'black',
-      opponent_type TEXT NOT NULL DEFAULT 'ai',
-      ai_engine TEXT,
-      ai_level TEXT,
-      result TEXT,
-      tags TEXT NOT NULL DEFAULT '[]',
-      notes TEXT
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS recall_sessions (
-      id TEXT PRIMARY KEY,
-      game_id TEXT NOT NULL REFERENCES games(id),
-      mode TEXT NOT NULL DEFAULT 'full_game',
-      start_move INTEGER NOT NULL DEFAULT 0,
-      end_move INTEGER,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      completed_at TEXT
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS recall_attempts (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES recall_sessions(id),
-      move_number INTEGER NOT NULL,
-      expected_move TEXT NOT NULL,
-      user_move TEXT NOT NULL,
-      is_correct INTEGER NOT NULL DEFAULT 0,
-      hint_level_used INTEGER NOT NULL DEFAULT 0,
-      timestamp TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS problems (
-      id TEXT PRIMARY KEY,
-      source_game_id TEXT REFERENCES games(id),
-      source_move_number INTEGER,
-      source_problem_id TEXT REFERENCES problems(id),
-      type TEXT NOT NULL DEFAULT 'best_move',
-      position_sgf TEXT NOT NULL,
-      side_to_move TEXT NOT NULL DEFAULT 'black',
-      title TEXT,
-      position_description TEXT NOT NULL DEFAULT '',
-      task_goal TEXT NOT NULL DEFAULT '',
-      reference_lines TEXT NOT NULL DEFAULT '[]',
-      pass_rule TEXT NOT NULL DEFAULT '{}',
-      tags TEXT NOT NULL DEFAULT '[]',
-      difficulty INTEGER,
-      status TEXT NOT NULL DEFAULT 'inbox',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS problem_attempts (
-      id TEXT PRIMARY KEY,
-      problem_id TEXT NOT NULL REFERENCES problems(id),
-      started_at TEXT NOT NULL DEFAULT (datetime('now')),
-      submitted_at TEXT,
-      user_line TEXT NOT NULL DEFAULT '[]',
-      move_evaluations TEXT NOT NULL DEFAULT '[]',
-      result TEXT,
-      hint_level_used INTEGER NOT NULL DEFAULT 0,
-      generated_punishment_problem_ids TEXT NOT NULL DEFAULT '[]'
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS bad_moves (
-      id TEXT PRIMARY KEY,
-      problem_id TEXT NOT NULL REFERENCES problems(id),
-      attempt_id TEXT NOT NULL REFERENCES problem_attempts(id),
-      move_index INTEGER NOT NULL,
-      move TEXT NOT NULL,
-      position_before_move_sgf TEXT NOT NULL,
-      position_after_move_sgf TEXT NOT NULL,
-      severity TEXT NOT NULL DEFAULT 'minor',
-      score_drop REAL,
-      winrate_drop REAL,
-      punish_side TEXT NOT NULL,
-      suggested_punish_move TEXT,
-      generated_problem_id TEXT REFERENCES problems(id),
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS review_schedule (
-      item_id TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'problem',
-      due_at TEXT NOT NULL,
-      interval_days INTEGER NOT NULL DEFAULT 1,
-      ease_factor REAL NOT NULL DEFAULT 2.5,
-      last_result TEXT,
-      consecutive_pass_count INTEGER NOT NULL DEFAULT 0,
-      total_fail_count INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (item_id, item_type)
-    );
-  `)
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS weiqi101_problems (
-      problem_id TEXT PRIMARY KEY,
-      problem_code TEXT NOT NULL DEFAULT '',
-      rank TEXT,
-      problem_url TEXT NOT NULL DEFAULT '',
-      thumbnail_url TEXT,
-      correct_count INTEGER,
-      wrong_count INTEGER,
-      decoded_payload TEXT NOT NULL DEFAULT '',
-      sgf TEXT NOT NULL DEFAULT '',
-      synced_at TEXT NOT NULL DEFAULT (datetime('now')),
-      content_hash TEXT NOT NULL DEFAULT ''
-    );
-  `)
-
-  db.run('CREATE INDEX IF NOT EXISTS idx_problems_status ON problems(status)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_review_schedule_due ON review_schedule(due_at)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_recall_sessions_game ON recall_sessions(game_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_problem_attempts_problem ON problem_attempts(problem_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_bad_moves_attempt ON bad_moves(attempt_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_weiqi101_hash ON weiqi101_problems(content_hash)')
-
-  // --- New training domain tables (Phase 2) ---
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS training_tasks (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      source_json TEXT NOT NULL,
-      root_position_sgf TEXT NOT NULL,
-      side_to_move TEXT,
-      title TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS training_attempts (
-      id TEXT PRIMARY KEY,
-      task_id TEXT NOT NULL REFERENCES training_tasks(id),
-      tab_id TEXT,
-      started_at TEXT NOT NULL,
-      submitted_at TEXT,
-      completed_at TEXT,
-      root_position_sgf TEXT NOT NULL,
-      user_line_json TEXT NOT NULL DEFAULT '[]',
-      status TEXT NOT NULL DEFAULT 'playing',
-      result TEXT NOT NULL DEFAULT 'pending',
-      hint_level_used INTEGER NOT NULL DEFAULT 0,
-      recall_completed INTEGER NOT NULL DEFAULT 0,
-      analysis_opened INTEGER NOT NULL DEFAULT 0
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS move_evaluations (
-      id TEXT PRIMARY KEY,
-      attempt_id TEXT NOT NULL REFERENCES training_attempts(id),
-      move_index INTEGER NOT NULL,
-      move TEXT NOT NULL,
-      position_before_hash TEXT,
-      position_after_hash TEXT,
-      position_before_sgf TEXT,
-      position_after_sgf TEXT,
-      before_score_lead REAL,
-      after_score_lead REAL,
-      score_drop REAL,
-      before_winrate REAL,
-      after_winrate REAL,
-      winrate_drop REAL,
-      engine_suggested_move TEXT,
-      engine_suggested_line_json TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      evaluated_at TEXT
-    );
-  `)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS training_bad_moves (
-      id TEXT PRIMARY KEY,
-      move_evaluation_id TEXT NOT NULL REFERENCES move_evaluations(id),
-      attempt_id TEXT NOT NULL REFERENCES training_attempts(id),
-      task_id TEXT NOT NULL REFERENCES training_tasks(id),
-      move_index INTEGER NOT NULL,
-      severity TEXT NOT NULL,
-      punish_side TEXT NOT NULL,
-      position_before_sgf TEXT,
-      position_after_sgf TEXT,
-      user_marked_as_not_bad INTEGER NOT NULL DEFAULT 0,
-      generated_problem_id TEXT,
-      recall_checkpoint_id TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `)
-
-  db.run('CREATE INDEX IF NOT EXISTS idx_training_tasks_kind ON training_tasks(kind)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_training_attempts_task ON training_attempts(task_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_training_attempts_status ON training_attempts(status)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_move_evaluations_attempt ON move_evaluations(attempt_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_move_evaluations_status ON move_evaluations(status)')
-  db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_move_evaluations_attempt_move ON move_evaluations(attempt_id, move_index)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_attempt ON training_bad_moves(attempt_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_task ON training_bad_moves(task_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_evaluation ON training_bad_moves(move_evaluation_id)')
-  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_severity ON training_bad_moves(severity)')
-
-  save()
+  client && client.save()
 }
 
 function queryAll(sql, params = []) {
-  const stmt = db.prepare(sql)
-  stmt.bind(params)
-  const rows = []
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject())
-  }
-  stmt.free()
-  return rows
+  return client.queryAll(sql, params)
 }
 
 function queryOne(sql, params = []) {
-  const rows = queryAll(sql, params)
-  return rows.length > 0 ? rows[0] : null
+  return client.queryOne(sql, params)
 }
 
 function run(sql, params = []) {
-  db.run(sql, params)
+  client.run(sql, params)
 }
 
 // --- Games ---
@@ -327,7 +114,7 @@ function rowToGame(row) {
   }
 }
 
-// --- Recall Sessions ---
+// --- Recall Sessions (legacy) ---
 
 function saveRecallSession(session) {
   const id = session.id || uuid()
@@ -368,22 +155,31 @@ function saveProblem(problem) {
     run(`UPDATE problems SET title = ?, type = ?, position_sgf = ?, side_to_move = ?,
       position_description = ?, task_goal = ?, reference_lines = ?, pass_rule = ?,
       tags = ?, difficulty = ?, status = ?, updated_at = ?,
-      source_game_id = ?, source_move_number = ?, source_problem_id = ? WHERE id = ?`, [
+      source_game_id = ?, source_move_index = ?, source_problem_id = ?,
+      source_task_id = ?, source_attempt_id = ?,
+      parent_problem_id = ?, parent_snapshot_reason = ? WHERE id = ?`, [
       problem.title || null, problem.type || 'best_move', problem.positionSgf,
       problem.sideToMove || 'black', problem.positionDescription || '',
       problem.taskGoal || '', JSON.stringify(problem.referenceLines || []),
       JSON.stringify(problem.passRule || {}), JSON.stringify(problem.tags || []),
       problem.difficulty || null, problem.status || 'inbox', now,
-      problem.sourceGameId || null, problem.sourceMoveNumber || null,
-      problem.sourceProblemId || null, id,
+      problem.sourceGameId || null, problem.sourceMoveIndex ?? problem.sourceMoveNumber ?? null,
+      problem.sourceProblemId || null,
+      problem.sourceTaskId || null, problem.sourceAttemptId || null,
+      problem.parentProblemId || null, problem.parentSnapshotReason || null,
+      id,
     ])
   } else {
-    run(`INSERT INTO problems (id, source_game_id, source_move_number, source_problem_id,
+    run(`INSERT INTO problems (id, source_game_id, source_move_index, source_problem_id,
+      source_task_id, source_attempt_id, parent_problem_id, parent_snapshot_reason,
       type, position_sgf, side_to_move, title, position_description, task_goal,
       reference_lines, pass_rule, tags, difficulty, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      id, problem.sourceGameId || null, problem.sourceMoveNumber || null,
-      problem.sourceProblemId || null, problem.type || 'best_move',
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      id, problem.sourceGameId || null, problem.sourceMoveIndex ?? problem.sourceMoveNumber ?? null,
+      problem.sourceProblemId || null,
+      problem.sourceTaskId || null, problem.sourceAttemptId || null,
+      problem.parentProblemId || null, problem.parentSnapshotReason || null,
+      problem.type || 'best_move',
       problem.positionSgf, problem.sideToMove || 'black',
       problem.title || null, problem.positionDescription || '',
       problem.taskGoal || '', JSON.stringify(problem.referenceLines || []),
@@ -408,8 +204,12 @@ function rowToProblem(row) {
   return {
     id: row.id,
     sourceGameId: row.source_game_id,
-    sourceMoveNumber: row.source_move_number,
+    sourceMoveIndex: row.source_move_index ?? row.source_move_number,
     sourceProblemId: row.source_problem_id,
+    sourceTaskId: row.source_task_id,
+    sourceAttemptId: row.source_attempt_id,
+    parentProblemId: row.parent_problem_id,
+    parentSnapshotReason: row.parent_snapshot_reason,
     type: row.type,
     positionSgf: row.position_sgf,
     sideToMove: row.side_to_move,
@@ -457,7 +257,7 @@ function saveProblemAttempt(attempt) {
   return {...attempt, id}
 }
 
-// --- Bad Moves ---
+// --- Bad Moves (legacy) ---
 
 function saveBadMove(badMove) {
   const id = badMove.id || uuid()
@@ -481,6 +281,40 @@ function updateBadMoveGeneratedProblem(badMoveId, generatedProblemId) {
   save()
 }
 
+function updateProblem(problemId, patch) {
+  const now = new Date().toISOString()
+  const sets = ['updated_at = ?']
+  const params = [now]
+  if (patch.type !== undefined) { sets.push('type = ?'); params.push(patch.type) }
+  if (patch.positionSgf !== undefined) { sets.push('position_sgf = ?'); params.push(patch.positionSgf) }
+  if (patch.sideToMove !== undefined) { sets.push('side_to_move = ?'); params.push(patch.sideToMove) }
+  if (patch.title !== undefined) { sets.push('title = ?'); params.push(patch.title) }
+  if (patch.positionDescription !== undefined) { sets.push('position_description = ?'); params.push(patch.positionDescription) }
+  if (patch.taskGoal !== undefined) { sets.push('task_goal = ?'); params.push(patch.taskGoal) }
+  if (patch.referenceLines !== undefined) { sets.push('reference_lines = ?'); params.push(JSON.stringify(patch.referenceLines)) }
+  if (patch.passRule !== undefined) { sets.push('pass_rule = ?'); params.push(JSON.stringify(patch.passRule)) }
+  if (patch.tags !== undefined) { sets.push('tags = ?'); params.push(JSON.stringify(patch.tags)) }
+  if (patch.difficulty !== undefined) { sets.push('difficulty = ?'); params.push(patch.difficulty) }
+  if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status) }
+  if (patch.sourceGameId !== undefined) { sets.push('source_game_id = ?'); params.push(patch.sourceGameId) }
+  if (patch.sourceMoveIndex !== undefined) { sets.push('source_move_index = ?'); params.push(patch.sourceMoveIndex) }
+  if (patch.sourceProblemId !== undefined) { sets.push('source_problem_id = ?'); params.push(patch.sourceProblemId) }
+  if (patch.sourceTaskId !== undefined) { sets.push('source_task_id = ?'); params.push(patch.sourceTaskId) }
+  if (patch.sourceAttemptId !== undefined) { sets.push('source_attempt_id = ?'); params.push(patch.sourceAttemptId) }
+  if (patch.parentProblemId !== undefined) { sets.push('parent_problem_id = ?'); params.push(patch.parentProblemId) }
+  if (patch.parentSnapshotReason !== undefined) { sets.push('parent_snapshot_reason = ?'); params.push(patch.parentSnapshotReason) }
+  params.push(problemId)
+  run(`UPDATE problems SET ${sets.join(', ')} WHERE id = ?`, params)
+  save()
+  return rowToProblem(queryOne('SELECT * FROM problems WHERE id = ?', [problemId]))
+}
+
+function archiveProblem(problemId) {
+  const now = new Date().toISOString()
+  run('UPDATE problems SET status = ?, updated_at = ? WHERE id = ?', ['archived', now, problemId])
+  save()
+}
+
 // --- Review Schedule ---
 
 function getDueReviews() {
@@ -493,25 +327,45 @@ function getDueReviews() {
 }
 
 function upsertReviewSchedule(item) {
-  const existing = queryOne('SELECT item_id FROM review_schedule WHERE item_id = ? AND item_type = ?', [item.itemId, item.itemType || 'problem'])
+  const now = new Date().toISOString()
+  const id = item.id || `${item.itemId}_${item.itemType || 'problem'}`
+  const existing = queryOne('SELECT id FROM review_schedule WHERE id = ?', [id])
 
   if (existing) {
     run(`UPDATE review_schedule SET due_at = ?, interval_days = ?, ease_factor = ?,
-      last_result = ?, consecutive_pass_count = ?, total_fail_count = ?
-      WHERE item_id = ? AND item_type = ?`, [
-      item.dueAt, item.intervalDays || 1, item.easeFactor || 2.5,
-      item.lastResult || null, item.consecutivePassCount || 0,
-      item.totalFailCount || 0, item.itemId, item.itemType || 'problem',
+      last_result = ?, consecutive_pass_count = ?, total_fail_count = ?,
+      last_reviewed_at = ?, updated_at = ? WHERE id = ?`, [
+      item.dueAt, item.intervalDays ?? 1, item.easeFactor ?? null,
+      item.lastResult || null, item.consecutivePassCount ?? 0,
+      item.totalFailCount ?? 0, item.lastReviewedAt || null, now, id,
     ])
   } else {
-    run(`INSERT INTO review_schedule (item_id, item_type, due_at, interval_days, ease_factor,
-      last_result, consecutive_pass_count, total_fail_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
-      item.itemId, item.itemType || 'problem', item.dueAt,
-      item.intervalDays || 1, item.easeFactor || 2.5,
-      item.lastResult || null, item.consecutivePassCount || 0,
-      item.totalFailCount || 0,
+    run(`INSERT INTO review_schedule (id, item_id, item_type, due_at, interval_days, ease_factor,
+      last_result, consecutive_pass_count, total_fail_count, last_reviewed_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      id, item.itemId, item.itemType || 'problem', item.dueAt,
+      item.intervalDays ?? 1, item.easeFactor ?? null,
+      item.lastResult || null, item.consecutivePassCount ?? 0,
+      item.totalFailCount ?? 0, item.lastReviewedAt || null, now, now,
     ])
   }
+  save()
+  return {...item, id}
+}
+
+function updateReviewSchedule(id, patch) {
+  const now = new Date().toISOString()
+  const sets = ['updated_at = ?']
+  const params = [now]
+  if (patch.dueAt !== undefined) { sets.push('due_at = ?'); params.push(patch.dueAt) }
+  if (patch.intervalDays !== undefined) { sets.push('interval_days = ?'); params.push(patch.intervalDays) }
+  if (patch.easeFactor !== undefined) { sets.push('ease_factor = ?'); params.push(patch.easeFactor) }
+  if (patch.lastResult !== undefined) { sets.push('last_result = ?'); params.push(patch.lastResult) }
+  if (patch.consecutivePassCount !== undefined) { sets.push('consecutive_pass_count = ?'); params.push(patch.consecutivePassCount) }
+  if (patch.totalFailCount !== undefined) { sets.push('total_fail_count = ?'); params.push(patch.totalFailCount) }
+  if (patch.lastReviewedAt !== undefined) { sets.push('last_reviewed_at = ?'); params.push(patch.lastReviewedAt) }
+  params.push(id)
+  run(`UPDATE review_schedule SET ${sets.join(', ')} WHERE id = ?`, params)
   save()
 }
 
@@ -600,15 +454,26 @@ function rowToWeiqi101Problem(row) {
   }
 }
 
+// --- Transaction support ---
+
+function transaction(fn) {
+  return client.transaction(fn)
+}
+
 // --- Training Tasks ---
 
 function createTrainingTask(task) {
   const id = task.id || uuid()
   const now = new Date().toISOString()
-  run(`INSERT INTO training_tasks (id, kind, source_json, root_position_sgf, side_to_move, title, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
-    id, task.kind, JSON.stringify(task.source), task.rootPositionSgf,
-    task.sideToMove || null, task.title || null, now, now,
+  const source = task.source || {}
+  run(`INSERT INTO training_tasks (id, kind, source_json, source_kind, source_game_id, source_problem_id,
+    source_segment_id, parent_task_id, parent_attempt_id,
+    root_position_sgf, side_to_move, title, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, task.kind, JSON.stringify(source), source.kind || null,
+    source.gameId || null, source.problemId || null, source.segmentId || null,
+    source.parentTaskId || null, source.parentAttemptId || null,
+    task.rootPositionSgf, task.sideToMove || null, task.title || null, now, now,
   ])
   save()
   return {...rowToTrainingTask(queryOne('SELECT * FROM training_tasks WHERE id = ?', [id])), id}
@@ -634,6 +499,15 @@ function updateTrainingTask(taskId, patch) {
   if (patch.rootPositionSgf !== undefined) { sets.push('root_position_sgf = ?'); params.push(patch.rootPositionSgf) }
   if (patch.sideToMove !== undefined) { sets.push('side_to_move = ?'); params.push(patch.sideToMove) }
   if (patch.title !== undefined) { sets.push('title = ?'); params.push(patch.title) }
+  if (patch.source !== undefined) {
+    const source = patch.source
+    sets.push('source_kind = ?'); params.push(source.kind || null)
+    sets.push('source_game_id = ?'); params.push(source.gameId || null)
+    sets.push('source_problem_id = ?'); params.push(source.problemId || null)
+    sets.push('source_segment_id = ?'); params.push(source.segmentId || null)
+    sets.push('parent_task_id = ?'); params.push(source.parentTaskId || null)
+    sets.push('parent_attempt_id = ?'); params.push(source.parentAttemptId || null)
+  }
   sets.push('updated_at = ?'); params.push(now)
   params.push(taskId)
   run(`UPDATE training_tasks SET ${sets.join(', ')} WHERE id = ?`, params)
@@ -837,6 +711,10 @@ function markTrainingBadMoveAsNotBad(badMoveId) {
   save()
 }
 
+function updateTrainingBadMove(badMoveId, patch) {
+  return trainingApi.updateTrainingBadMove(badMoveId, patch)
+}
+
 function rowToTrainingBadMove(row) {
   return {
     id: row.id,
@@ -855,4 +733,20 @@ function rowToTrainingBadMove(row) {
   }
 }
 
-module.exports = {init, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, upsertReviewSchedule, getDashboardSummary, saveWeiqi101Problem, getWeiqi101Problem, getWeiqi101Problems, getWeiqi101ProblemCount, deleteAllWeiqi101Problems, createTrainingTask, loadTrainingTask, findTrainingTaskBySource, updateTrainingTask, createTrainingAttempt, loadTrainingAttempt, listTrainingAttemptsByTask, updateTrainingAttempt, listIncompleteTrainingAttempts, createMoveEvaluation, updateMoveEvaluation, listMoveEvaluationsByAttempt, listExpiredPendingMoveEvaluations, createTrainingBadMove, loadTrainingBadMove, listTrainingBadMovesByAttempt, listTrainingBadMovesByTask, markTrainingBadMoveAsNotBad}
+// --- Phase 3 delegates to trainingDbApi ---
+
+function createTrainingRecallSession(session) { return trainingApi.createTrainingRecallSession(session) }
+function loadTrainingRecallSession(sessionId) { return trainingApi.loadTrainingRecallSession(sessionId) }
+function updateTrainingRecallSession(sessionId, patch) { return trainingApi.updateTrainingRecallSession(sessionId, patch) }
+function listIncompleteTrainingRecallSessions() { return trainingApi.listIncompleteTrainingRecallSessions() }
+function createTrainingRecallAttempt(attempt) { return trainingApi.createTrainingRecallAttempt(attempt) }
+function listTrainingRecallAttemptsBySession(sessionId) { return trainingApi.listTrainingRecallAttemptsBySession(sessionId) }
+function createTrainingRecallCheckpoint(checkpoint) { return trainingApi.createTrainingRecallCheckpoint(checkpoint) }
+function loadTrainingRecallCheckpoint(checkpointId) { return trainingApi.loadTrainingRecallCheckpoint(checkpointId) }
+function updateTrainingRecallCheckpoint(checkpointId, patch) { return trainingApi.updateTrainingRecallCheckpoint(checkpointId, patch) }
+function listTrainingRecallCheckpointsBySession(sessionId) { return trainingApi.listTrainingRecallCheckpointsBySession(sessionId) }
+function createTrainingMoveComment(comment) { return trainingApi.createTrainingMoveComment(comment) }
+function loadTrainingMoveComment(commentId) { return trainingApi.loadTrainingMoveComment(commentId) }
+function updateTrainingMoveComment(commentId, patch) { return trainingApi.updateTrainingMoveComment(commentId, patch) }
+
+module.exports = {init, save, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, updateProblem, archiveProblem, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, upsertReviewSchedule, updateReviewSchedule, getDashboardSummary, saveWeiqi101Problem, getWeiqi101Problem, getWeiqi101Problems, getWeiqi101ProblemCount, deleteAllWeiqi101Problems, createTrainingTask, loadTrainingTask, findTrainingTaskBySource, updateTrainingTask, createTrainingAttempt, loadTrainingAttempt, listTrainingAttemptsByTask, updateTrainingAttempt, listIncompleteTrainingAttempts, createMoveEvaluation, updateMoveEvaluation, listMoveEvaluationsByAttempt, listExpiredPendingMoveEvaluations, createTrainingBadMove, loadTrainingBadMove, listTrainingBadMovesByAttempt, listTrainingBadMovesByTask, markTrainingBadMoveAsNotBad, updateTrainingBadMove, createTrainingRecallSession, loadTrainingRecallSession, updateTrainingRecallSession, listIncompleteTrainingRecallSessions, createTrainingRecallAttempt, listTrainingRecallAttemptsBySession, createTrainingRecallCheckpoint, loadTrainingRecallCheckpoint, updateTrainingRecallCheckpoint, listTrainingRecallCheckpointsBySession, createTrainingMoveComment, loadTrainingMoveComment, updateTrainingMoveComment, transaction}
