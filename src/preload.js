@@ -181,4 +181,31 @@ window.sabaki = {
     }
     return file.path // Fallback for older Electron
   },
+
+  // FoxWQ game import
+  fox: {
+    queryUserByName: (username) =>
+      ipcRenderer.invoke('fox:queryUserByName', username),
+    fetchGameList: (uid, lastcode) =>
+      ipcRenderer.invoke('fox:fetchGameList', uid, lastcode),
+    fetchSgf: (chessid) => ipcRenderer.invoke('fox:fetchSgf', chessid),
+  },
+
+  // Crypto (safeStorage)
+  crypto: {
+    isAvailable: () => ipcRenderer.invoke('safeStorage:isAvailable'),
+    encryptString: (t) => ipcRenderer.invoke('safeStorage:encryptString', t),
+    decryptString: (t) => ipcRenderer.invoke('safeStorage:decryptString', t),
+  },
+
+  // 101 Weiqi service
+  weiqi101: {
+    login: (username, password) =>
+      ipcRenderer.invoke('weiqi101:login', username, password),
+    fetchWrongProblems: (page) =>
+      ipcRenderer.invoke('weiqi101:fetchWrongProblems', page),
+    fetchProblemDetail: (id) =>
+      ipcRenderer.invoke('weiqi101:fetchProblemDetail', id),
+    sync: () => ipcRenderer.invoke('weiqi101:sync'),
+  },
 }

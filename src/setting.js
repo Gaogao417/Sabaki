@@ -226,6 +226,10 @@ let defaults = {
   'window.minwidth': 526,
   'window.width': 564,
   'window.maximized': false,
+  'fox.account': null,
+  'fox.accounts': [],
+  'fox.default_account': null,
+  'weiqi101.username': null,
 }
 
 let eventEmitters = {}
