@@ -266,6 +266,10 @@ export default class GtpConsole extends Component {
       popupMenu(
         [
           {
+            label: t('&Copy All Logs'),
+            click: () => this.copyAllLogs(),
+          },
+          {
             label: t('&Clear Console'),
             click: () => sabaki.clearConsole(),
           },
@@ -278,6 +282,46 @@ export default class GtpConsole extends Component {
     this.handleFilterChange = (filter) => {
       this.setState({logFilter: filter})
     }
+  }
+
+  copyAllLogs() {
+    let {consoleLog} = this.props
+    let {logFilter, appLogs} = this.state
+    let lines = []
+
+    let combined = []
+    if (logFilter === 'all' || logFilter === 'gtp') {
+      combined.push(...consoleLog.map(e => ({...e, appLog: false})))
+    }
+    if (logFilter === 'all' || logFilter === 'app') {
+      combined.push(...appLogs.map(e => ({...e, appLog: true})))
+    }
+    combined.sort((a, b) => (a.time || 0) - (b.time || 0))
+
+    for (let entry of combined) {
+      if (entry.appLog) {
+        let time = formatTimestamp(entry.time || Date.now())
+        lines.push(
+          `${time} ${entry.level.toUpperCase()} ${entry.source || entry.category} ${entry.message}`,
+        )
+      } else {
+        let {name, command, response} = entry
+        if (command) {
+          let cmdText = command.id != null ? `${command.id} ${command.name}` : command.name
+          let args = (command.args || []).join(' ')
+          if (args) cmdText += ` ${args}`
+          lines.push(`${name}> ${cmdText}`)
+        }
+        if (response) {
+          let prefix = response.error ? '?' : '='
+          let idStr = response.id != null ? response.id : ''
+          let content = typeof response.content === 'string' ? response.content : ''
+          lines.push(`${prefix}${idStr} ${content}`)
+        }
+      }
+    }
+
+    window.sabaki.clipboard.writeText(lines.join('\n'))
   }
 
   componentDidMount() {
