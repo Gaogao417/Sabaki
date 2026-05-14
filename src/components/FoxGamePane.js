@@ -1,9 +1,9 @@
 import {h, Component} from 'preact'
 import Board from '@sabaki/go-board'
-import MiniGoban from '../MiniGoban.js'
-import sabaki from '../../modules/sabaki.js'
-import * as fileformats from '../../modules/fileformats/index.js'
-import {getBoard} from '../../modules/gametree.js'
+import MiniGoban from './MiniGoban.js'
+import sabaki from '../modules/sabaki.js'
+import * as fileformats from '../modules/fileformats/index.js'
+import {getBoard} from '../modules/gametree.js'
 
 const setting = {
   get: (key) => window.sabaki.setting.get(key),

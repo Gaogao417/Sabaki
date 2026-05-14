@@ -2,7 +2,7 @@ import {h, Component} from 'preact'
 import classNames from 'classnames'
 
 import sabaki from '../modules/sabaki.js'
-import FoxGamePane from './management/FoxGamePane.js'
+import FoxGamePane from './FoxGamePane.js'
 import OneOhOneWeiqiPane from './OneOhOneWeiqiPane.js'
 
 const TABS = [
