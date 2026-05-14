@@ -474,7 +474,7 @@ export default class MainView extends Component {
         : mode === 'play'
           ? `当前第 ${gameTree.getLevel(treePosition)} 手 | 未连接引擎`
           : mode === 'recall'
-            ? `当前进度 ${sabaki.state.recallMoveIndex}/${sabaki.state.recallExpectedMoves.length} | 等待输入下一手`
+            ? `当前进度 ${this.props.recallMoveIndex}/${this.props.recallExpectedMoves.length} | 等待输入下一手`
             : ''
 
     let workbenchShell = this.props.workbenchShell
@@ -601,23 +601,23 @@ export default class MainView extends Component {
 
           h(RecallBar, {
             mode,
-            recallMoveIndex: sabaki.state.recallMoveIndex,
-            recallExpectedMoves: sabaki.state.recallExpectedMoves,
-            recallCompleted: sabaki.state.recallCompleted,
-            recallUserAttempts: sabaki.state.recallUserAttempts,
-            recallShowHint: sabaki.state.recallShowHint,
+            recallMoveIndex: this.props.recallMoveIndex,
+            recallExpectedMoves: this.props.recallExpectedMoves,
+            recallCompleted: this.props.recallCompleted,
+            recallUserAttempts: this.props.recallUserAttempts,
+            recallShowHint: this.props.recallShowHint,
           }),
 
           h(ProblemBar, {
             mode,
-            problemSession: sabaki.state.problemSession,
-            problemAttempt: sabaki.state.problemAttempt,
-            problemSubmitted: sabaki.state.problemSubmitted,
-            problemResult: sabaki.state.problemResult,
-            problemBadMoves: sabaki.state.problemBadMoves,
-            reviewQueue: sabaki.state.reviewQueue,
-            reviewCurrentIndex: sabaki.state.reviewCurrentIndex,
-            reviewTotalDue: sabaki.state.reviewTotalDue,
+            problemSession: this.props.problemSession,
+            problemAttempt: this.props.problemAttempt,
+            problemSubmitted: this.props.problemSubmitted,
+            problemResult: this.props.problemResult,
+            problemBadMoves: this.props.problemBadMoves,
+            reviewQueue: this.props.reviewQueue,
+            reviewCurrentIndex: this.props.reviewCurrentIndex,
+            reviewTotalDue: this.props.reviewTotalDue,
           }),
 
           h(AutoplayBar, {

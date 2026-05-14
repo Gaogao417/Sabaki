@@ -23,7 +23,7 @@ class ProblemBar extends Component {
 
     return h(
       Bar,
-      Object.assign({type: 'problem'}, this.props),
+      Object.assign({type: 'problem', active: true}, this.props),
       h('div', {class: 'problem-bar-content'},
         isReview && h('div', {class: 'review-counter'},
           '复习 ', (reviewCurrentIndex || 0) + 1, '/', reviewTotalDue || 0,
