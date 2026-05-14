@@ -44,10 +44,21 @@ import {createTrainingStore} from './training/trainingStore.js'
 import {createOverlayStore} from './overlays/overlayStore.ts'
 import {
   createWorkbenchStore,
+  createTrainingRuntimeStore,
   createTrainingRepository,
   createLegacySabakiAdapter,
+  createAnalysisResultAdapter,
+  createPositionSnapshotAdapter,
   createWorkbenchTabService,
   createWorkbenchPhaseService,
+  createAttemptService,
+  createPlayTrainingMonitor,
+  createRecallService,
+  createRecallCheckpointService,
+  createSnapshotService,
+  createReviewService,
+  createProblemService,
+  projectTrainingState,
 } from './training/index.ts'
 import {
   boardFromSnapshot,
@@ -636,11 +647,146 @@ class Sabaki extends EventEmitter {
   // Recall Mode
 
   async startRecallSession(gameId, options = {}) {
-    return this.getTrainingStore().startRecallSession(gameId, options)
+    let fileformats = await import('./fileformats/index.js')
+    let game = await window.sabaki.db.getGame(gameId)
+    if (!game) return
+
+    let trees = fileformats.sgf.parse(game.sgf)
+    if (!trees || trees.length === 0) return
+
+    // Extract expected moves from SGF
+    let tree = trees[0]
+    let moves = []
+    let nodeId = tree.root.id
+    while (true) {
+      let node = tree.get(nodeId)
+      if (!node) break
+      let sign = 0
+      let vertex = null
+      if (node.data.B && node.data.B[0] != null) {
+        sign = 1
+        vertex = node.data.B[0] === '' ? 'pass' : node.data.B[0]
+      } else if (node.data.W && node.data.W[0] != null) {
+        sign = -1
+        vertex = node.data.W[0] === '' ? 'pass' : node.data.W[0]
+      }
+      if (vertex != null) {
+        moves.push({sign, vertex: vertex === 'pass' ? null : vertex})
+      }
+      let children = node.children
+      if (children.length === 0) break
+      nodeId = children[0].id
+    }
+
+    let session = {
+      gameId,
+      mode: options.mode || 'full_game',
+      startMove: options.startMove || 0,
+    }
+    session = await window.sabaki.db.saveRecallSession(session)
+
+    // Update runtime store (new path) and legacy state (compat)
+    const {runtimeStore} = this.getTrainingServices()
+    runtimeStore.setRecallView({
+      recallSessionId: session.id,
+      taskId: null,
+      moveIndex: 0,
+      expectedMoves: moves,
+      userAttempts: [],
+      showHint: false,
+      completed: false,
+    })
+
+    // Legacy compat: still set state so projection can fall back
+    this.setState({
+      recallSession: session,
+      recallMoveIndex: 0,
+      recallExpectedMoves: moves,
+      recallUserAttempts: [],
+      recallShowHint: false,
+      recallCompleted: false,
+    })
+
+    if (trees && trees.length > 0) {
+      await this.loadGameTrees(trees, {suppressAskForSave: true})
+    }
+
+    this.setMode('recall')
   }
 
   handleRecallMove(vertex) {
-    this.getTrainingStore().submitRecallAnswer(vertex)
+    const {runtimeStore} = this.getTrainingServices()
+    let view = runtimeStore.getState().recallView
+    if (!view || view.completed) return
+
+    let expected = view.expectedMoves[view.moveIndex]
+    if (!expected) return
+
+    // Handle pass moves
+    if (expected.vertex === null) {
+      let attempt = {
+        moveNumber: view.moveIndex,
+        expectedMove: 'pass',
+        userMove: 'pass',
+        isCorrect: true,
+        hintLevelUsed: 0,
+      }
+      let newAttempts = [...view.userAttempts, attempt]
+      let newIndex = view.moveIndex + 1
+      this.recallNavigateNext()
+
+      let completed = newIndex >= view.expectedMoves.length
+      runtimeStore.setRecallView({
+        ...view,
+        moveIndex: newIndex,
+        userAttempts: newAttempts,
+        showHint: false,
+        completed,
+      })
+      // Legacy compat
+      this.setState({
+        recallMoveIndex: newIndex,
+        recallUserAttempts: newAttempts,
+        recallShowHint: false,
+        recallCompleted: completed,
+      })
+      return
+    }
+
+    let expectedCoord = sgf.parseVertex(expected.vertex)
+    let isCorrect = helper.vertexEquals(vertex, expectedCoord)
+
+    let attempt = {
+      moveNumber: view.moveIndex,
+      expectedMove: expected.vertex,
+      userMove: sgf.stringifyVertex(vertex),
+      isCorrect,
+      hintLevelUsed: view.showHint ? 1 : 0,
+    }
+    let newAttempts = [...view.userAttempts, attempt]
+
+    if (isCorrect) {
+      this.recallNavigateNext()
+      let newIndex = view.moveIndex + 1
+      let completed = newIndex >= view.expectedMoves.length
+      runtimeStore.setRecallView({
+        ...view,
+        moveIndex: newIndex,
+        userAttempts: newAttempts,
+        showHint: false,
+        completed,
+      })
+      this.setState({
+        recallMoveIndex: newIndex,
+        recallUserAttempts: newAttempts,
+        recallShowHint: false,
+        recallCompleted: completed,
+      })
+    } else {
+      sound.playError()
+      runtimeStore.setRecallView({...view, userAttempts: newAttempts})
+      this.setState({recallUserAttempts: newAttempts})
+    }
   }
 
   recallNavigateNext() {
@@ -654,22 +800,83 @@ class Sabaki extends EventEmitter {
   }
 
   checkRecallComplete() {
-    let {recallMoveIndex, recallExpectedMoves} = this.state
-    if (recallMoveIndex >= recallExpectedMoves.length) {
+    const {runtimeStore} = this.getTrainingServices()
+    let view = runtimeStore.getState().recallView
+    if (view && view.moveIndex >= view.expectedMoves.length) {
+      runtimeStore.setRecallView({...view, completed: true})
       this.setState({recallCompleted: true})
     }
   }
 
   async endRecallSession() {
-    return this.getTrainingStore().endRecallSession()
+    const {runtimeStore} = this.getTrainingServices()
+    let view = runtimeStore.getState().recallView
+    if (!view) return
+
+    let session = this.state.recallSession
+    if (session) {
+      let completedSession = {
+        ...session,
+        completedAt: new Date().toISOString(),
+      }
+      await window.sabaki.db.saveRecallSession(completedSession)
+
+      if (view.userAttempts.length > 0) {
+        await window.sabaki.db.saveRecallAttempts(
+          view.userAttempts.map((a) => ({
+            ...a,
+            sessionId: session.id,
+          })),
+        )
+      }
+    }
+
+    runtimeStore.setRecallView(null)
+    this.setMode('analysis')
   }
 
   skipRecallMove() {
-    this.getTrainingStore().skipRecallMove()
+    const {runtimeStore} = this.getTrainingServices()
+    let view = runtimeStore.getState().recallView
+    if (!view) return
+
+    let expected = view.expectedMoves[view.moveIndex]
+    if (!expected) return
+
+    let attempt = {
+      moveNumber: view.moveIndex,
+      expectedMove: expected.vertex || 'pass',
+      userMove: 'skip',
+      isCorrect: false,
+      hintLevelUsed: 0,
+    }
+    let newAttempts = [...view.userAttempts, attempt]
+    this.recallNavigateNext()
+    let newIndex = view.moveIndex + 1
+    let completed = newIndex >= view.expectedMoves.length
+
+    runtimeStore.setRecallView({
+      ...view,
+      moveIndex: newIndex,
+      userAttempts: newAttempts,
+      showHint: false,
+      completed,
+    })
+    this.setState({
+      recallMoveIndex: newIndex,
+      recallUserAttempts: newAttempts,
+      recallShowHint: false,
+      recallCompleted: completed,
+    })
   }
 
   showRecallHint() {
-    this.getTrainingStore().showRecallHint()
+    const {runtimeStore} = this.getTrainingServices()
+    let view = runtimeStore.getState().recallView
+    if (!view) return
+
+    runtimeStore.setRecallView({...view, showHint: true})
+    this.setState({recallShowHint: true})
   }
 
   async saveCurrentGame() {
@@ -1297,15 +1504,42 @@ class Sabaki extends EventEmitter {
   getTrainingServices() {
     if (this._trainingServices == null) {
       const workbenchStore = createWorkbenchStore()
+      const runtimeStore = createTrainingRuntimeStore()
       const repository = createTrainingRepository(window.sabaki.db)
       const legacyAdapter = createLegacySabakiAdapter(this)
 
+      const analysisResultAdapter = createAnalysisResultAdapter(this)
+      const positionSnapshotAdapter = createPositionSnapshotAdapter(this)
+
+      const tabService = createWorkbenchTabService({ workbenchStore, repository, legacyAdapter, sgfParser: fileformats.sgf, logger })
+      const phaseService = createWorkbenchPhaseService({ workbenchStore, logger })
+      const attemptService = createAttemptService({ repository, runtimeStore, logger })
+      const monitor = createPlayTrainingMonitor({ attemptService, analysisResultAdapter, repository, runtimeStore, logger })
+      const checkpointService = createRecallCheckpointService({ repository, runtimeStore, logger })
+      const recallService = createRecallService({ repository, runtimeStore, checkpointService, logger })
+      const snapshotService = createSnapshotService({ repository, positionSnapshotAdapter, workbenchStore, logger })
+      const reviewService = createReviewService({ repository, workbenchTabService: tabService, logger })
+      const problemService = createProblemService({ repository, reviewService, logger })
+
       this._trainingServices = {
         workbenchStore,
+        runtimeStore,
         repository,
         legacyAdapter,
-        tabService: createWorkbenchTabService({ workbenchStore, repository, legacyAdapter, sgfParser: fileformats.sgf, logger }),
-        phaseService: createWorkbenchPhaseService({ workbenchStore, logger }),
+        tabService,
+        phaseService,
+        attemptService,
+        monitor,
+        recallService,
+        checkpointService,
+        snapshotService,
+        reviewService,
+        problemService,
+        projectTrainingState: () => projectTrainingState({
+          legacyTrainingState: this.state,
+          workbenchState: workbenchStore.getState(),
+          trainingRuntimeState: runtimeStore.getState(),
+        }),
       }
     }
     return this._trainingServices

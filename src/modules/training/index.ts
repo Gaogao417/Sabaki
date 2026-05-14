@@ -31,4 +31,16 @@ export {
   createSnapshotService,
 } from './analysis/index'
 
+export {
+  createReviewService,
+} from './review/reviewService'
+
+export {
+  createProblemService,
+} from './problem/problemService'
+
+export {
+  projectTrainingState,
+} from './adapter/trainingStateProjection'
+
 export type * from './types/index'
