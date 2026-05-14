@@ -15,17 +15,15 @@ export default class WorkspaceDock extends Component {
         ? '对局工作区'
         : mode === 'recall'
           ? '回忆工作区'
-          : mode === 'problem'
-            ? '当前题目'
-            : mode === 'find'
-                ? t('Find')
-                : mode === 'guess'
-                  ? t('Guess')
-                  : mode === 'autoplay'
-                    ? t('Autoplay')
-                    : ['scoring', 'estimator'].includes(mode)
-                      ? t('Scoring')
-                      : '棋盘工作区'
+          : mode === 'find'
+              ? t('Find')
+              : mode === 'guess'
+                ? t('Guess')
+                : mode === 'autoplay'
+                  ? t('Autoplay')
+                  : ['scoring', 'estimator'].includes(mode)
+                    ? t('Scoring')
+                    : '棋盘工作区'
 
     let shouldShowContent = isReviewDock || !isPassiveDock
     let simpleTools =

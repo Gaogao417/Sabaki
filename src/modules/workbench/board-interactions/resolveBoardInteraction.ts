@@ -294,12 +294,6 @@ export function resolveBoardInteraction(
     return legacy(BOARD_INTENTS.LEGACY_FIND_MOVE, input, 'find mode')
   }
 
-  // Problem
-  if (mode === 'problem') {
-    if (input.event.button !== 0) return noop('problem: non-left button', input)
-    return legacy(BOARD_INTENTS.LEGACY_PROBLEM_MOVE, input, 'problem mode')
-  }
-
   // Guess
   if (mode === 'guess') {
     if (input.event.button !== 0) return noop('guess: non-left button', input)

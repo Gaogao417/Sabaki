@@ -585,10 +585,6 @@ class Sabaki extends EventEmitter {
     } else if (mode === 'recall') {
       const {runtimeStore} = this.getTrainingServices()
       if (!runtimeStore.getState().recallView && !this.state.recallSession) return
-    } else if (mode === 'problem') {
-      const {runtimeStore} = this.getTrainingServices()
-      if (!runtimeStore.getState().problemView && !this.state.problemSession) return
-      this.getPlayServices().engineService.ensureAnalyzerForProblemMode()
     }
     // mode='review' is no longer a board mode — review items open as problem tabs
 
@@ -2722,6 +2718,15 @@ class Sabaki extends EventEmitter {
     let [vx, vy] = vertex
 
     if (['play', 'autoplay'].includes(this.state.mode)) {
+      // Problem tab intercept: if problemView is active, route to problem move handler
+      if (this.state.mode === 'play' && button === 0) {
+        let pv = this.getTrainingServices().runtimeStore.getState().problemView
+        if (pv && !pv.submitted && board.get(vertex) === 0) {
+          this.handleProblemMove(vertex)
+          return
+        }
+      }
+
       // Phase 8: async play router for play mode left-click empty point
       if (this.state.mode === 'play') {
         let playCtx = createBoardInteractionContext({
@@ -2924,13 +2929,6 @@ class Sabaki extends EventEmitter {
       if (button !== 0) return
       if (board.get(vertex) === 0) {
         this.handleRecallMove(vertex)
-      }
-    } else if (this.state.mode === 'problem') {
-      if (button !== 0) return
-
-      let board = gametree.getBoard(tree, treePosition)
-      if (board.get(vertex) === 0) {
-        this.handleProblemMove(vertex)
       }
     } else if (this.state.mode === 'guess') {
       if (button !== 0) return

@@ -122,7 +122,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
 
     await legacyAdapter.loadGameTrees([tree])
     legacyAdapter.setCurrentTreePosition(tree, (tree as { root: { id: string } }).root.id)
-    legacyAdapter.getSabaki().setMode('problem')
+    legacyAdapter.getSabaki().setMode('play')
     legacyAdapter.startAnalysisIfEngineReady((tree as { root: { id: string } }).root.id)
   }
 
