@@ -37,13 +37,13 @@ export function createTrainingStore(sabaki, deps = {}) {
     let fileformats = await import('../fileformats/index.js')
     let game = await db.getGame(gameId)
     if (!game) {
-      logger?.log('warn', 'system', 'system.recall_game_not_found', 'Recall: game not found', {gameId})
+      logger?.warn('recall.game_not_found', 'Recall: game not found', {gameId})
       return
     }
 
     let trees = fileformats.sgf.parse(game.sgf)
     if (!trees || trees.length === 0) {
-      logger?.log('warn', 'system', 'system.sgf_parse_failed', 'Recall: no trees from SGF parse', {gameId})
+      logger?.warn('recall.sgf_parse_failed', 'Recall: no trees from SGF parse', {gameId})
       return
     }
     let tree = trees[0]
@@ -51,7 +51,7 @@ export function createTrainingStore(sabaki, deps = {}) {
     let moves = []
     let nodeId = tree.root.id
     if (nodeId == null) {
-      logger?.log('error', 'system', 'system.sgf_parse_failed', 'tree.root.id is null', {gameId})
+      logger?.error('recall.sgf_parse_failed', 'tree.root.id is null', {gameId})
     }
     let innerTree = tree
     while (true) {
@@ -88,6 +88,13 @@ export function createTrainingStore(sabaki, deps = {}) {
       recallUserAttempts: [],
       recallShowHint: false,
       recallCompleted: false,
+    })
+
+    logger?.info('recall.session_started', 'Recall session started', {
+      gameId,
+      sessionId: session.id,
+      totalMoves: moves.length,
+      mode: session.mode,
     })
 
     if (trees && trees.length > 0) {
@@ -166,6 +173,12 @@ export function createTrainingStore(sabaki, deps = {}) {
       })
       let completed = checkComplete(newIndex)
 
+      logger?.info('recall.answer_correct', 'Recall answer correct', {
+        moveIndex: recallMoveIndex,
+        newIndex,
+        completed,
+      })
+
       return {
         handled: true,
         changed: true,
@@ -177,6 +190,12 @@ export function createTrainingStore(sabaki, deps = {}) {
     } else {
       playErrorSound()
       setState({recallUserAttempts})
+
+      logger?.info('recall.answer_wrong', 'Recall answer wrong', {
+        moveIndex: recallMoveIndex,
+        expected: expected.vertex,
+        userMove: sgf.stringifyVertex(vertex),
+      })
 
       return {
         handled: true,
@@ -193,6 +212,11 @@ export function createTrainingStore(sabaki, deps = {}) {
     let {recallMoveIndex, recallExpectedMoves, recallUserAttempts} = getState()
     let expected = recallExpectedMoves[recallMoveIndex]
     if (!expected) return
+
+    logger?.info('recall.move_skipped', 'Recall move skipped', {
+      moveIndex: recallMoveIndex,
+      expectedMove: expected.vertex,
+    })
 
     recallUserAttempts.push({
       moveNumber: recallMoveIndex,
@@ -214,11 +238,20 @@ export function createTrainingStore(sabaki, deps = {}) {
 
   function showRecallHint() {
     setState({recallShowHint: true})
+    logger?.info('recall.hint_shown', 'Recall hint shown', {
+      moveIndex: getState().recallMoveIndex,
+    })
   }
 
   async function endRecallSession() {
     let {recallSession, recallUserAttempts} = getState()
     if (!recallSession) return
+
+    logger?.info('recall.session_ended', 'Recall session ended', {
+      sessionId: recallSession.id,
+      totalAttempts: recallUserAttempts.length,
+      correctCount: recallUserAttempts.filter((a) => a.isCorrect).length,
+    })
 
     let completedSession = {
       ...recallSession,

@@ -1,6 +1,7 @@
 import {h, Component} from 'preact'
 import sabaki from '../../modules/sabaki.js'
 import i18n from '../../i18n.js'
+import {logger} from '../../modules/logger/index.js'
 
 const t = i18n.context('TrainingDashboard')
 
@@ -22,7 +23,7 @@ class TrainingDashboardDrawer extends Component {
         let inboxProblems = await window.sabaki.db.getProblemsByStatus('inbox', 10)
         this.setState({summary, inboxProblems, loading: false})
       } catch (err) {
-        console.error('Failed to load dashboard:', err)
+        logger.error('dashboard.load_failed', 'Failed to load dashboard', {error: err?.message})
         this.setState({loading: false})
       }
     }

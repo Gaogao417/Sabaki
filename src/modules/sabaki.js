@@ -265,6 +265,12 @@ class Sabaki extends EventEmitter {
     })
 
     this.updateSettingState()
+
+    logger.info('state.created', 'Application state initialized', {
+      mode: this.state.mode,
+      gameCount: this.state.gameTrees.length,
+      treePosition: this.state.treePosition,
+    })
   }
 
   async _initAppInfo() {
@@ -297,7 +303,30 @@ class Sabaki extends EventEmitter {
       change = change(this.state)
     }
 
+    let changedKeys = Object.keys(change).filter(
+      (k) => change[k] !== this.state[k],
+    )
+
     Object.assign(this.state, change)
+
+    if (changedKeys.length > 0) {
+      let summary = {}
+      for (let k of changedKeys) {
+        let val = change[k]
+        if (k === 'gameTrees') {
+          summary[k] = `[${val.length} trees]`
+        } else if (k === 'gameCurrents') {
+          summary[k] = `[${val.length} entries]`
+        } else if (k === 'editWorkspace') {
+          summary[k] = val ? `{workspaceKind: ${val.workspaceKind}}` : null
+        } else if (typeof val === 'function') {
+          summary[k] = '[function]'
+        } else {
+          summary[k] = val
+        }
+      }
+      logger.debug('state.changed', 'State updated', summary)
+    }
 
     this.emit('change', {change, callback})
   }
@@ -668,6 +697,12 @@ class Sabaki extends EventEmitter {
     let problem = await window.sabaki.db.getProblem(problemId)
     if (!problem) return
 
+    logger.info('problem.start', 'Problem started', {
+      problemId: problem.id,
+      type: problem.type,
+      sideToMove: problem.sideToMove,
+    })
+
     let trees = fileformats.sgf.parse(problem.positionSgf)
     if (!trees || trees.length === 0) return
     let tree = trees[0]
@@ -704,6 +739,12 @@ class Sabaki extends EventEmitter {
     let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} =
       this.state
     if (!problemSession || this.state.problemSubmitted) return
+
+    logger.info('problem.move', 'Problem move', {
+      vertex,
+      problemId: problemSession.id,
+      userLineLength: problemAttempt.userLine?.length ?? 0,
+    })
 
     let {gameTrees, gameIndex, treePosition} = this.state
     let tree = gameTrees[gameIndex]
@@ -813,6 +854,12 @@ class Sabaki extends EventEmitter {
     let {problemSession, problemAttempt, problemEvalCache, problemBadMoves} =
       this.state
     if (!problemSession || this.state.problemSubmitted) return
+
+    logger.info('problem.submit', 'Problem attempt submitted', {
+      problemId: problemSession.id,
+      userLineLength: problemAttempt.userLine?.length ?? 0,
+      badMoveCount: problemBadMoves.length,
+    })
 
     // Determine result
     let result = 'pass'
@@ -1238,6 +1285,7 @@ class Sabaki extends EventEmitter {
         captureEditReference: () => this.captureEditReference(),
         getInfoOverlayDuration: () => setting.get('infooverlay.duration'),
         notifyChange: () => this.setState({}),
+        logger,
       })
     }
     return this._overlayStore
@@ -2055,6 +2103,8 @@ class Sabaki extends EventEmitter {
   } = {}) {
     if (!suppressAskForSave && !(await this.askForSave())) return
 
+    logger.info('file.new', 'New file created')
+
     let [blackName, whiteName] = [
       this.getPlayServices().engineService.getBlackSyncerId(),
       this.getPlayServices().engineService.getWhiteSyncerId(),
@@ -2080,6 +2130,8 @@ class Sabaki extends EventEmitter {
     {suppressAskForSave = false, clearHistory = true} = {},
   ) {
     if (!suppressAskForSave && !(await this.askForSave())) return
+
+    logger.info('file.loading', 'Loading file', {filename})
 
     let t = i18n.context('sabaki.file')
 

@@ -45,6 +45,14 @@ export type OverlayStoreDeps = {
 
   // React notification — triggers App.js setState to re-render
   notifyChange: () => void
+
+  // Logger
+  logger: {
+    debug: (source: string, message: string, data?: any) => void
+    info: (source: string, message: string, data?: any) => void
+    warn: (source: string, message: string, data?: any) => void
+    error: (source: string, message: string, data?: any) => void
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +137,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
   function setTerritoryEnabled(territoryEnabled: boolean): boolean {
     let app = deps.getAppState()
-    console.log('[overlay.setTerritoryEnabled]', {
+    deps.logger.debug('overlay.setTerritoryEnabled', 'Set territory requested', {
       requested: territoryEnabled,
       current: state.territoryEnabled,
       mode: app.mode,
@@ -141,22 +149,18 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
     if (!territoryEnabled) {
       hideInfoOverlay()
       state.territoryEnabled = false
-      console.log('[overlay.setTerritoryEnabled] → disabled', snapshot())
+      deps.logger.info('overlay.territory_disabled', 'Territory overlay disabled')
       emitChange()
       return true
     }
 
     // Reject if current mode doesn't allow territory overlay
     if (!TERRITORY_ALLOWED_MODES.has(app.mode)) {
-      console.warn('[overlay.setTerritoryEnabled] rejected outside analysis', {
+      deps.logger.warn('overlay.territory_rejected', 'Territory rejected outside analysis', {
         requested: territoryEnabled,
         mode: app.mode,
         treePosition: app.treePosition,
       })
-      console.log(
-        '[overlay.setTerritoryEnabled] → rejected (mode not allowed)',
-        app.mode,
-      )
       return false
     }
 
@@ -166,14 +170,14 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
     // Sync: record intent, trigger render (UI shows "pending" via resolveOverlayInput)
     hideInfoOverlay()
     state.territoryEnabled = true
-    console.log('[overlay.setTerritoryEnabled] → enabled (sync)', snapshot())
+    deps.logger.info('overlay.territory_enabled', 'Territory overlay enabled (sync)', snapshot())
     emitChange()
 
     // Async reaction: confirm engine capability
     let gen = ++generation
-    console.log('[overlay.setTerritoryEnabled] awaiting engine, gen=', gen)
+    deps.logger.debug('overlay.territory_awaiting_engine', 'Awaiting engine for territory', {gen})
     deps.ensureAnalysisReady({requireOwnership: true}).then((syncer) => {
-      console.log('[overlay.setTerritoryEnabled] engine resolved', {
+      deps.logger.debug('overlay.territory_engine_resolved', 'Engine resolved for territory', {
         requestedGen: gen,
         currentGen: generation,
         stale: gen !== generation,
@@ -187,17 +191,14 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
       if (syncer == null) {
         state.territoryEnabled = false
-        console.log(
-          '[overlay.setTerritoryEnabled] → rollback (no syncer)',
-          snapshot(),
-        )
+        deps.logger.warn('overlay.territory_rollback', 'Territory rollback (no syncer)', snapshot())
         emitChange()
         return
       }
 
       // Re-read latest external state after await
       let appAfter = deps.getAppState()
-      console.log('[overlay.setTerritoryEnabled] post-await state', {
+      deps.logger.debug('overlay.territory_post_await', 'Post-await state check', {
         mode: appAfter.mode,
         treePosition: appAfter.treePosition,
         analysisTreePosition: appAfter.analysisTreePosition,
@@ -209,15 +210,12 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
         (appAfter.analysisTreePosition !== appAfter.treePosition ||
           appAfter.currentOwnership(syncer) == null)
       ) {
-        console.log(
-          '[overlay.setTerritoryEnabled] → trigger analyzeMove',
-          appAfter.treePosition,
-        )
+        deps.logger.debug('overlay.territory_trigger_analyze', 'Triggering analyzeMove', {
+          treePosition: appAfter.treePosition,
+        })
         deps.analyzeMove(appAfter.treePosition)
       } else if (appAfter.mode === 'analysis') {
-        console.log(
-          '[overlay.setTerritoryEnabled] → trigger scheduleEditAnalysis',
-        )
+        deps.logger.debug('overlay.territory_trigger_edit_analysis', 'Triggering scheduleEditWorkspaceAnalysis')
         deps.scheduleEditWorkspaceAnalysis()
       }
     })
@@ -294,7 +292,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
   function onModeChange(mode: string): void {
     let changed = false
 
-    console.log('[overlay.onModeChange]', {
+    deps.logger.debug('overlay.onModeChange', 'Mode change notification', {
       mode,
       territoryEnabled: state.territoryEnabled,
       territoryCompareEnabled: state.territoryCompareEnabled,
@@ -302,33 +300,25 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
     })
 
     if (!TERRITORY_ALLOWED_MODES.has(mode) && state.territoryEnabled) {
-      console.warn(
-        '[overlay.onModeChange] territory enabled outside analysis; clearing',
-        {
-          mode,
-          territoryEnabled: state.territoryEnabled,
-          territoryCompareEnabled: state.territoryCompareEnabled,
-        },
-      )
+      deps.logger.warn('overlay.mode_clear_territory', 'Clearing territory outside analysis', {
+        mode,
+        territoryEnabled: state.territoryEnabled,
+        territoryCompareEnabled: state.territoryCompareEnabled,
+      })
       state.territoryEnabled = false
       generation++ // invalidate any in-flight async reaction
       changed = true
-      console.log('[overlay.onModeChange] → turned off territoryEnabled')
     }
 
     if (mode !== 'analysis' && state.territoryCompareEnabled) {
-      console.warn(
-        '[overlay.onModeChange] territory compare enabled outside analysis; clearing',
-        {
-          mode,
-          territoryEnabled: state.territoryEnabled,
-          territoryCompareEnabled: state.territoryCompareEnabled,
-        },
-      )
+      deps.logger.warn('overlay.mode_clear_compare', 'Clearing territory compare outside analysis', {
+        mode,
+        territoryEnabled: state.territoryEnabled,
+        territoryCompareEnabled: state.territoryCompareEnabled,
+      })
       state.territoryCompareEnabled = false
       generation++ // invalidate any in-flight async reaction
       changed = true
-      console.log('[overlay.onModeChange] → turned off territoryCompareEnabled')
     }
 
     if (changed) emitChange()

@@ -451,7 +451,7 @@ export async function attachDefaultAnalysisEngine(
   // Auto-detect engines if none configured (transient — not persisted)
   if (engines.length === 0) {
     let detected = deps.detectEngines()
-    console.log('[attach.detect]', {
+    deps.logger.debug('attach.detect', 'Auto-detecting engines', {
       detectedCount: detected.length,
       detectedPaths: detected.map((e: any) => e.path),
     })
@@ -459,7 +459,7 @@ export async function attachDefaultAnalysisEngine(
       engines = detected
     }
   } else {
-    console.log('[attach.configured]', {
+    deps.logger.debug('attach.configured', 'Using configured engines', {
       engineCount: engines.length,
       enginePaths: engines.map((e: any) => e.path),
     })
@@ -511,7 +511,7 @@ export async function ensureAnalysisReady(
   let {requireOwnership = false} = opts
   let syncer = deps.getInferredState().analyzingEngineSyncer
 
-  console.log('[ensure.ready.start]', {
+  deps.logger.debug('ensure.ready.start', 'Ensuring analysis engine ready', {
     hasSyncer: syncer != null,
     requireOwnership,
     syncerId: syncer?.id,
@@ -523,14 +523,14 @@ export async function ensureAnalysisReady(
     syncer != null &&
     (!requireOwnership || deps.engineService.engineSupportsOwnership(syncer))
   ) {
-    console.log('[ensure.ready.reuse]', {syncerId: syncer.id})
+    deps.logger.debug('ensure.ready.reuse', 'Reusing existing engine', {syncerId: syncer.id})
     return syncer
   }
 
   let syncerId = getAnalysisSyncerId(deps, {requireOwnership})
 
   if (syncerId == null) {
-    console.log('[ensure.ready.attach]', {requireOwnership})
+    deps.logger.debug('ensure.ready.attach', 'Attaching new engine', {requireOwnership})
     syncer = await attachDefaultAnalysisEngine(deps, {requireOwnership})
     syncerId = syncer?.id ?? null
   }

@@ -104,6 +104,14 @@ export function createDocumentStore(sabaki, deps = {}) {
 
     let navigated = treePosition !== sabaki.state.treePosition
 
+    if (navigated) {
+      logger.debug('doc.navigate', 'Tree position changed', {
+        from: sabaki.state.treePosition,
+        to: treePosition,
+        mode: sabaki.state.mode,
+      })
+    }
+
     if (navigated && sabaki.state.mode === 'analysis') {
       clearTimeout(sabaki.editAnalysisId)
     }
@@ -185,6 +193,12 @@ export function createDocumentStore(sabaki, deps = {}) {
       if (entry == null) return
 
       let gameTree = entry.gameTrees[entry.gameIndex]
+
+      logger.debug('doc.checkout_history', 'History checkout', {
+        from: sabaki.historyPointer,
+        to: historyPointer,
+        treePosition: entry.treePosition,
+      })
 
       sabaki.historyPointer = historyPointer
       sabaki.setState({
@@ -384,6 +398,12 @@ export function createDocumentStore(sabaki, deps = {}) {
       let {gameTrees, gameIndex, treePosition} = sabaki.state
       let tree = gameTrees[gameIndex]
       let board = gametree.getBoard(tree, treePosition)
+
+      logger.info('doc.play_move', 'Play move requested', {
+        vertex,
+        player: player || sabaki.getPlayer(treePosition),
+        treePosition,
+      })
 
       if (!player) player = sabaki.getPlayer(treePosition)
 
@@ -737,6 +757,8 @@ export function createDocumentStore(sabaki, deps = {}) {
       ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
       ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
 
+      logger.info('doc.flatten_variation', 'Flatten variation', {treePosition})
+
       let {gameTrees} = sabaki.state
       let {tree} = getCurrent()
       let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
@@ -780,6 +802,8 @@ export function createDocumentStore(sabaki, deps = {}) {
 
     snapshotAsNewGame() {
       ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
+
+      logger.info('doc.snapshot_as_new_game', 'Snapshot as new game')
 
       let board
       let playerSign
@@ -849,6 +873,8 @@ export function createDocumentStore(sabaki, deps = {}) {
       ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
       ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
 
+      logger.info('doc.make_main_variation', 'Make main variation', {treePosition})
+
       let {gameCurrents, gameTrees} = sabaki.state
       let {tree} = getCurrent()
       let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
@@ -871,6 +897,8 @@ export function createDocumentStore(sabaki, deps = {}) {
     shiftVariation(treePosition, step) {
       ;(deps.closeDrawer ?? (() => sabaki.closeDrawer()))()
       ;(deps.setMode ?? ((m) => sabaki.setMode(m)))('play')
+
+      logger.info('doc.shift_variation', 'Shift variation', {treePosition, step})
 
       let shiftNode = null
       let {tree} = getCurrent()
@@ -898,6 +926,12 @@ export function createDocumentStore(sabaki, deps = {}) {
       let {tree} = getCurrent()
       let node = tree.get(treePosition)
       let noParent = node.parentId == null
+
+      logger.info('doc.remove_node', 'Remove node', {
+        treePosition,
+        noParent,
+        childCount: node.children.length,
+      })
 
       if (
         suppressConfirmation !== true &&
@@ -949,6 +983,8 @@ export function createDocumentStore(sabaki, deps = {}) {
       {suppressConfirmation = false} = {},
     ) {
       let t = i18n.context('sabaki.node')
+
+      logger.info('doc.remove_other_variations', 'Remove other variations', {treePosition})
 
       if (
         suppressConfirmation !== true &&

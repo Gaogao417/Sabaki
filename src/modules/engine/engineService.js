@@ -554,7 +554,7 @@ export function createEngineService(deps) {
         continue
       }
 
-      console.log('[engine.creating]', {
+      logger.debug('engine.creating', 'Creating engine', {
         name: engine.name,
         path: engine.path,
         args: engine.args,
@@ -747,7 +747,7 @@ export function createEngineService(deps) {
         })
       })
 
-      console.log('[engine.starting]', {
+      logger.debug('engine.starting', 'Starting engine', {
         name: engine.name,
         syncerId: syncer.id,
       })
@@ -1106,7 +1106,7 @@ export function createEngineService(deps) {
   // ── Analysis control ────────────────────────────────────────────
 
   async function startAnalysis(syncerId) {
-    console.log('[analysis.start]', {
+    logger.debug('analysis.start', 'Starting analysis', {
       syncerId,
       currentAnalyzingId: state.analyzingEngineSyncerId,
       match: state.analyzingEngineSyncerId === syncerId,
