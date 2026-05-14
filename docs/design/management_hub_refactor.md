@@ -271,7 +271,9 @@ State ownership:
 
 ## 8. Integration Points
 
-Update existing open actions so they target the Hub:
+Do not update existing open actions until the entry-point audit is complete. The first task is to classify each button/menu item as runtime control, configuration/management, or contextual deep link.
+
+Target mapping after audit:
 
 - Preferences/settings action -> `ManagementHub` with `activeSection = "general"` or `"advanced"`.
 - Engine management action -> `activeSection = "engine"`.
@@ -280,6 +282,8 @@ Update existing open actions so they target the Hub:
 - 101 Weiqi sync/settings entry -> `activeSection = "oneOhOneWeiqi"`.
 
 `DrawerManager.js` should keep legacy drawers during migration, then remove only after equivalent Hub panes are complete and tested.
+
+The audit checklist and current findings live in `docs/design/management_hub_entrypoint_audit.md`.
 
 ## 9. Responsive Behavior
 
@@ -291,15 +295,21 @@ Update existing open actions so they target the Hub:
 
 ## 10. Development Strategy
 
-Development should happen in two steps:
+Development should happen in three steps:
 
-1. **Freeze the frontend shell first.**
+1. **Audit entry points first.**
+   - Inventory all buttons, menu items, drawers, popup menus, and helper methods that open settings, engine management, game history, or related management surfaces.
+   - Decide which actions stay near the board because they are runtime controls.
+   - Decide which actions become Management Hub deep links.
+   - Decide which old drawers remain transient dialogs.
+
+2. **Freeze the frontend shell.**
    - Build the Management Hub shell, sidebar, page templates, and static panes for Fox Games and 101 Weiqi before either network feature is implemented.
    - Lock the component names, props, empty/loading/error states, table columns, action bar placement, and visual behavior.
    - Use mock data for Fox Games and 101 Weiqi so the UI can be reviewed independently from scraping/API risk.
    - This becomes the shared merge base for both feature worktrees.
 
-2. **Split new feature implementation into two worktrees.**
+3. **Split new feature implementation into two worktrees.**
    - `fox_game_import` worktree owns FoxWQ services, store, SGF import path, and integration with `FoxGamePane`.
    - `101weiqi` worktree owns 101 Weiqi auth, wrong-problem-book scraping, decoding, local cache, and integration with `OneOhOneWeiqiSettingsPane`.
    - Both worktrees should treat the Management Hub components as a fixed frontend contract unless a deliberate contract change is agreed first.
@@ -317,11 +327,18 @@ The `management-hub-ui-contract` work should merge before the two feature branch
 
 ## 11. Implementation Phases
 
+0. **Entry-point and button audit**
+   - Produce or update `docs/design/management_hub_entrypoint_audit.md`.
+   - Review `src/menu.js`, `src/components/BoardToolbar.js`, `src/components/drawers/InfoDrawer.js`, `src/components/sidebars/PeerList.js`, `src/components/DrawerManager.js`, and `src/modules/sabaki.js`.
+   - Classify each relevant action as runtime control, Hub deep link, or legacy transient dialog.
+   - Define the public API for Hub deep links, e.g. `openHub(section, navigationParams)`.
+   - Do not wire Preferences to the Hub until this classification is reviewed.
+
 1. **Frontend contract**
    - Add `ManagementHub`, sidebar, active section state, and placeholder panes.
    - Implement the final static layout for Fox Games and 101 Weiqi using mock data.
    - Define stable props/events for pane-to-store integration.
-   - Wire one existing entry point to open the Hub.
+   - Wire only the audited and approved entry points to open the Hub.
 
 2. **Settings migration**
    - Move `GeneralTab` into `GeneralSettingsPane`.
@@ -350,6 +367,7 @@ The `management-hub-ui-contract` work should merge before the two feature branch
 
 ## 12. Acceptance Criteria
 
+- `docs/design/management_hub_entrypoint_audit.md` exists and classifies the affected buttons/menu items before Hub wiring begins.
 - All settings and management entry points open the same Management Hub shell.
 - Sidebar navigation works without closing the Hub.
 - General, Board, Engine, Fox Games, 101 Weiqi, History, and Settings sections are reachable.
