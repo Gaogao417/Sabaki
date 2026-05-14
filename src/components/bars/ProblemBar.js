@@ -1,12 +1,16 @@
 import {h, Component} from 'preact'
 import Bar from './Bar.js'
-import sabaki from '../../modules/sabaki.js'
 
 class ProblemBar extends Component {
-  render({mode, problemSession, problemSubmitted, problemResult, problemBadMoves, problemAttempt, reviewQueue, reviewCurrentIndex, reviewTotalDue}) {
+  render({
+    mode, problemSession, problemSubmitted, problemResult,
+    problemBadMoves, problemAttempt, reviewQueue, reviewCurrentIndex,
+    reviewTotalDue,
+    onUndo, onSubmit, onExit, onNextReview,
+  }) {
     if (!problemSession) return null
 
-    let isReview = mode === 'review'
+    let isReview = reviewQueue && reviewQueue.length > 0
     let moveCount = (problemAttempt?.userLine || []).length
     let badMoveCount = problemBadMoves.length
     let resultLabel =
@@ -51,24 +55,24 @@ class ProblemBar extends Component {
         h('div', {class: 'problem-actions'},
           !problemSubmitted && h('button', {
             class: 'problem-undo-btn',
-            onClick: () => sabaki.undoProblemMove(),
+            onClick: onUndo,
             disabled: moveCount === 0,
           }, '撤销'),
           !problemSubmitted && h('button', {
             class: 'problem-submit-btn',
-            onClick: () => sabaki.submitProblemAttempt(),
+            onClick: onSubmit,
           }, '提交答案'),
           problemSubmitted && !isReview && h('button', {
             class: 'problem-exit-btn',
-            onClick: () => sabaki.exitProblemMode(),
+            onClick: onExit,
           }, '退出'),
           problemSubmitted && isReview && h('button', {
             class: 'problem-next-btn',
-            onClick: () => sabaki.advanceReview(),
+            onClick: onNextReview,
           }, '下一题'),
           !problemSubmitted && h('button', {
             class: 'problem-exit-btn',
-            onClick: () => sabaki.exitProblemMode(),
+            onClick: onExit,
           }, '退出'),
         ),
       ),

@@ -97,7 +97,7 @@ export default class WorkbenchShell extends Component {
         : mode === 'play'
           ? `当前第 ${gameTree.getLevel(treePosition)} 手 | ${engineStatusText}`
           : mode === 'recall'
-            ? `当前进度 ${sabaki.state.recallMoveIndex}/${sabaki.state.recallExpectedMoves.length} | 等待输入下一手`
+            ? `当前进度 ${props.recallMoveIndex}/${props.recallExpectedMoves.length} | 等待输入下一手`
             : ''
 
     let komi = +gametree.getRootProperty(gameTree, 'KM', 0)
@@ -188,23 +188,30 @@ export default class WorkbenchShell extends Component {
 
             h(RecallBar, {
               mode,
-              recallMoveIndex: sabaki.state.recallMoveIndex,
-              recallExpectedMoves: sabaki.state.recallExpectedMoves,
-              recallCompleted: sabaki.state.recallCompleted,
-              recallUserAttempts: sabaki.state.recallUserAttempts,
-              recallShowHint: sabaki.state.recallShowHint,
+              recallMoveIndex: props.recallMoveIndex,
+              recallExpectedMoves: props.recallExpectedMoves,
+              recallCompleted: props.recallCompleted,
+              recallUserAttempts: props.recallUserAttempts,
+              recallShowHint: props.recallShowHint,
+              onHint: () => sabaki.showRecallHint(),
+              onSkip: () => sabaki.skipRecallMove(),
+              onComplete: () => sabaki.endRecallSession(),
             }),
 
             h(ProblemBar, {
               mode,
-              problemSession: sabaki.state.problemSession,
-              problemAttempt: sabaki.state.problemAttempt,
-              problemSubmitted: sabaki.state.problemSubmitted,
-              problemResult: sabaki.state.problemResult,
-              problemBadMoves: sabaki.state.problemBadMoves,
-              reviewQueue: sabaki.state.reviewQueue,
-              reviewCurrentIndex: sabaki.state.reviewCurrentIndex,
-              reviewTotalDue: sabaki.state.reviewTotalDue,
+              problemSession: props.problemSession,
+              problemAttempt: props.problemAttempt,
+              problemSubmitted: props.problemSubmitted,
+              problemResult: props.problemResult,
+              problemBadMoves: props.problemBadMoves,
+              reviewQueue: props.reviewQueue,
+              reviewCurrentIndex: props.reviewCurrentIndex,
+              reviewTotalDue: props.reviewTotalDue,
+              onUndo: () => sabaki.undoProblemMove(),
+              onSubmit: () => sabaki.submitProblemAttempt(),
+              onExit: () => sabaki.exitProblemMode(),
+              onNextReview: () => sabaki.advanceReview(),
             }),
 
             h(AutoplayBar, {

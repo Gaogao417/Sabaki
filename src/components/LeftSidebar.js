@@ -250,7 +250,7 @@ export default class LeftSidebar extends Component {
               {
                 variant: 'primary',
                 disabled: recallCompleted,
-                onClick: () => sabaki.skipRecallMove(),
+                onClick: () => this.props.onSkipRecallMove?.() ?? sabaki.skipRecallMove(),
               },
               '校对 / 跳过',
             ),
@@ -258,7 +258,7 @@ export default class LeftSidebar extends Component {
               PanelButton,
               {
                 disabled: recallCompleted || recallShowHint,
-                onClick: () => sabaki.showRecallHint(),
+                onClick: () => this.props.onShowRecallHint?.() ?? sabaki.showRecallHint(),
               },
               '提示',
             ),
@@ -266,7 +266,7 @@ export default class LeftSidebar extends Component {
               PanelButton,
               {
                 variant: 'danger',
-                onClick: () => sabaki.endRecallSession(),
+                onClick: () => this.props.onEndRecallSession?.() ?? sabaki.endRecallSession(),
               },
               recallCompleted ? '进入复盘' : '结束回忆',
             ),

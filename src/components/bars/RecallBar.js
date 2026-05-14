@@ -1,9 +1,12 @@
 import {h, Component} from 'preact'
 import Bar from './Bar.js'
-import sabaki from '../../modules/sabaki.js'
 
 class RecallBar extends Component {
-  render({mode, recallMoveIndex, recallExpectedMoves, recallCompleted, recallUserAttempts, recallShowHint}) {
+  render({
+    mode, recallMoveIndex, recallExpectedMoves, recallCompleted,
+    recallUserAttempts, recallShowHint,
+    onHint, onSkip, onComplete,
+  }) {
     let total = recallExpectedMoves.length
     let current = recallMoveIndex
     let lastAttempt = recallUserAttempts.length > 0 ? recallUserAttempts[recallUserAttempts.length - 1] : null
@@ -31,16 +34,16 @@ class RecallBar extends Component {
         h('div', {class: 'recall-actions'},
           !recallCompleted && h('button', {
             class: 'recall-hint-btn',
-            onClick: () => sabaki.showRecallHint(),
+            onClick: onHint,
             disabled: recallShowHint,
           }, '提示'),
           !recallCompleted && h('button', {
             class: 'recall-skip-btn',
-            onClick: () => sabaki.skipRecallMove(),
+            onClick: onSkip,
           }, '跳过'),
           h('button', {
             class: 'recall-end-btn',
-            onClick: () => sabaki.endRecallSession(),
+            onClick: onComplete,
           }, recallCompleted ? '进入复盘' : '结束回忆'),
         ),
       ),

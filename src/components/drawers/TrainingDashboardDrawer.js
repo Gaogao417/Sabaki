@@ -29,9 +29,13 @@ class TrainingDashboardDrawer extends Component {
     }
   }
 
-  render({show}) {
+  render({show, onStartReview, onStartProblem, onStartRecall}) {
     if (!show) return null
     let {summary, loading, inboxProblems} = this.state
+
+    let startReview = onStartReview || (() => { sabaki.closeDrawer(); sabaki.startReviewSession() })
+    let startProblem = onStartProblem || ((id) => { sabaki.closeDrawer(); sabaki.startProblem(id) })
+    let startRecall = onStartRecall || ((gameId) => { sabaki.closeDrawer(); sabaki.startRecallSession(gameId) })
 
     if (loading || !summary) {
       return h('div', {class: 'drawer training-dashboard'},
@@ -66,13 +70,10 @@ class TrainingDashboardDrawer extends Component {
           h('div', {class: 'dashboard-actions'},
             summary.dueCount > 0 && h('button', {
               class: 'primary',
-              onClick: () => { sabaki.closeDrawer(); sabaki.startReviewSession() },
+              onClick: startReview,
             }, t('Start Review')),
             inboxProblems.length > 0 && h('button', {
-              onClick: () => {
-                sabaki.closeDrawer()
-                sabaki.startProblem(inboxProblems[0].id)
-              },
+              onClick: () => startProblem(inboxProblems[0].id),
             }, t('Start Inbox Problem')),
           ),
         ),
@@ -84,10 +85,7 @@ class TrainingDashboardDrawer extends Component {
                 h('span', {class: 'game-title'}, game.title || `Game ${game.id.slice(0, 8)}`),
                 h('span', {class: 'game-date'}, new Date(game.createdAt).toLocaleDateString()),
                 h('button', {
-                  onClick: () => {
-                    sabaki.closeDrawer()
-                    sabaki.startRecallSession(game.id)
-                  },
+                  onClick: () => startRecall(game.id),
                 }, t('Recall')),
               ),
             ),
@@ -101,7 +99,7 @@ class TrainingDashboardDrawer extends Component {
                 h('span', {class: 'problem-type-badge', 'data-type': p.type}, p.type),
                 h('span', {class: 'problem-title'}, p.title || p.id.slice(0, 8)),
                 h('button', {
-                  onClick: () => { sabaki.closeDrawer(); sabaki.startProblem(p.id) },
+                  onClick: () => startProblem(p.id),
                 }, t('Solve')),
               ),
             ),
