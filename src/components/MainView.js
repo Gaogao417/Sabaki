@@ -594,9 +594,9 @@ export default class MainView extends Component {
             recallCompleted: this.props.recallCompleted,
             recallUserAttempts: this.props.recallUserAttempts,
             recallShowHint: this.props.recallShowHint,
-            onHint: () => sabaki.showRecallHint(),
-            onSkip: () => sabaki.skipRecallMove(),
-            onComplete: () => sabaki.endRecallSession(),
+            onHint: this.props.onShowRecallHint,
+            onSkip: this.props.onSkipRecallMove,
+            onComplete: this.props.onEndRecallSession,
           }),
 
           h(ProblemBar, {
@@ -609,10 +609,10 @@ export default class MainView extends Component {
             reviewQueue: this.props.reviewQueue,
             reviewCurrentIndex: this.props.reviewCurrentIndex,
             reviewTotalDue: this.props.reviewTotalDue,
-            onUndo: () => sabaki.undoProblemMove(),
-            onSubmit: () => sabaki.submitProblemAttempt(),
-            onExit: () => sabaki.exitProblemMode(),
-            onNextReview: () => sabaki.advanceReview(),
+            onUndo: this.props.onUndoProblemMove,
+            onSubmit: this.props.onSubmitProblemAttempt,
+            onExit: this.props.onExitProblemMode,
+            onNextReview: this.props.onAdvanceReview,
           }),
 
           h(AutoplayBar, {

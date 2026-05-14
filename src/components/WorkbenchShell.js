@@ -193,9 +193,9 @@ export default class WorkbenchShell extends Component {
               recallCompleted: props.recallCompleted,
               recallUserAttempts: props.recallUserAttempts,
               recallShowHint: props.recallShowHint,
-              onHint: () => sabaki.showRecallHint(),
-              onSkip: () => sabaki.skipRecallMove(),
-              onComplete: () => sabaki.endRecallSession(),
+              onHint: props.onShowRecallHint,
+              onSkip: props.onSkipRecallMove,
+              onComplete: props.onEndRecallSession,
             }),
 
             h(ProblemBar, {
@@ -208,10 +208,10 @@ export default class WorkbenchShell extends Component {
               reviewQueue: props.reviewQueue,
               reviewCurrentIndex: props.reviewCurrentIndex,
               reviewTotalDue: props.reviewTotalDue,
-              onUndo: () => sabaki.undoProblemMove(),
-              onSubmit: () => sabaki.submitProblemAttempt(),
-              onExit: () => sabaki.exitProblemMode(),
-              onNextReview: () => sabaki.advanceReview(),
+              onUndo: props.onUndoProblemMove,
+              onSubmit: props.onSubmitProblemAttempt,
+              onExit: props.onExitProblemMode,
+              onNextReview: props.onAdvanceReview,
             }),
 
             h(AutoplayBar, {

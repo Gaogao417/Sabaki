@@ -8,6 +8,7 @@ import fs from 'fs'
 import influence from '@sabaki/influence'
 
 import TripleSplitContainer from './helpers/TripleSplitContainer.js'
+import TrainingWorkbenchContainer from './TrainingWorkbenchContainer.js'
 import WorkbenchShell from './WorkbenchShell.js'
 import ThemeManager from './ThemeManager.js'
 import MainMenu from './MainMenu.js'
@@ -681,7 +682,8 @@ class App extends Component {
       }),
 
       workbenchMode
-        ? h(WorkbenchShell, {
+        ? h(TrainingWorkbenchContainer, {
+            sabaki,
             ...state,
             attachedEngineSyncers: engineService.getAttachedSyncers(),
             blackEngineSyncerId: engineService.getBlackSyncerId(),

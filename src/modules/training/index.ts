@@ -47,4 +47,8 @@ export {
   projectTrainingState,
 } from './adapter/trainingStateProjection'
 
+export {
+  createLegacyTrainingFlowController,
+} from './controller/legacyTrainingFlowController'
+
 export type * from './types/index'

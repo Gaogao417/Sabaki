@@ -6,17 +6,17 @@
 
 ## 总览
 
-| 目标模块 | 字段数 | 职责 |
-| --- | --- | --- |
-| `documentStore` | 4 | Game Tree 状态与导航 |
-| `engineService` | 11 | 引擎附加/同步/分析/genmove |
-| `analysisService` | 8 | 分析请求生命周期与缓存 |
-| `overlayStore` | 4 | Overlay 可见性与合成 |
-| `workbenchStore` | 6 | Workspace 状态、工具选择、编辑工作区 |
-| `trainingStore` | 15 | Recall/Problem/Review 会话与答题 |
-| `uiStore` | 20 | 抽屉、侧栏、布局、状态覆盖 |
-| `sabaki.js (facade)` | 12 | 设置驱动字段、棋盘渲染配置、文件名 |
-| Legacy 冻结 | 4 | `find`/`scoring`/`guess` 旧分支 |
+| 目标模块 | 字段数 | 迁移状态 | 职责 |
+| --- | --- | --- | --- |
+| `documentStore` | 4 | 待迁移 | Game Tree 状态与导航 |
+| `engineService` | 15 | ✅ 已完成 | 引擎附加/同步/分析结果/genmove/HumanSL/控制台 |
+| `analysisService` | 4 | 待迁移 | 分析区域选择与类型 |
+| `overlayStore` | 4 | 待迁移 | Overlay 可见性与合成 |
+| `workbenchStore` | 6 | 待迁移 | Workspace 状态、工具选择、编辑工作区 |
+| `trainingStore` | 15 | 待迁移 | Recall/Problem/Review 会话与答题 |
+| `uiStore` | 22 | 待迁移 | 抽屉、侧栏、布局、第三方面板、状态覆盖 |
+| `sabaki.js (facade)` | 12 | 保留 | 设置驱动字段、棋盘渲染配置、文件名 |
+| Legacy 冻结 | 4 | 冻结 | `find`/`scoring`/`guess` 旧分支 |
 
 ---
 
@@ -35,23 +35,47 @@
 
 ---
 
-## 2. engineService — 引擎服务
+## 2. engineService — 引擎服务 ✅ 已完成
+
+> 迁移完成：全部 15 个字段已从 `sabaki.state` 迁入 `engineService` 内部状态。
+> `sabaki.state` 仅保留 `engines: null` 占位符（标注注释 "state owned by engineService"）。
+> 外部通过 `engineService` 方法访问（如 `getAttachedSyncers()`, `getAnalysisForPosition()`, `getConsoleLog()`）。
+
+### 2.1 引擎连接状态
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `engines` | `array\|null` | `null` | 引擎配置列表 |
+| `engines` | `array\|null` | `null` | 引擎配置列表（sabaki.state 保留占位） |
 | `attachedEngineSyncers` | `array` | `[]` | 已附加的引擎同步器 |
 | `analyzingEngineSyncerId` | `string\|null` | `null` | 分析引擎同步器 ID |
 | `blackEngineSyncerId` | `string\|null` | `null` | 黑方引擎 ID |
 | `whiteEngineSyncerId` | `string\|null` | `null` | 白方引擎 ID |
 | `engineGameOngoing` | `object\|null` | `null` | 引擎对战状态 |
+
+### 2.2 分析结果（从 analysisService 划入）
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `analysis` | `object\|null` | `null` | 当前分析结果 |
+| `analysisTreePosition` | `string\|null` | `null` | 分析对应的树位置 |
+| `quickAnalysisId` | `number\|null` | `null` | 快速分析 ID |
+| `quickAnalysisSyncerId` | `string\|null` | `null` | 快速分析同步器 ID |
+
+### 2.3 HumanSL 状态
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
 | `humanSLAvailable` | `boolean` | `false` | HumanSL 是否可用 |
 | `humanSLModelLoaded` | `boolean` | `false` | HumanSL 模型是否加载 |
 | `humanSLProfile` | `string` | `'rank_1d'` | HumanSL 配置文件 |
 | `humanSLPendingProfile` | `string\|null` | `null` | 等待切换的 HumanSL 配置 |
 | `humanSLError` | `string\|null` | `null` | HumanSL 错误信息 |
 
-**迁移阶段**: Phase 12B
+### 2.4 控制台（从 uiStore 划入）
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `consoleLog` | `array` | `[]` | GTP 命令/响应历史 |
 
 **迁移策略**: `engineService` 接管 attach/detach/sync/genmove、engine game、HumanSL 和 GTP log wiring。engine 回调通过 `analysisService`/`documentStore` 公开入口写入。
 
@@ -61,10 +85,6 @@
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `analysis` | `object\|null` | `null` | 当前分析结果 |
-| `analysisTreePosition` | `string\|null` | `null` | 分析对应的树位置 |
-| `quickAnalysisId` | `number\|null` | `null` | 快速分析 ID |
-| `quickAnalysisSyncerId` | `string\|null` | `null` | 快速分析同步器 ID |
 | `selectedAnalysisVertex` | `number[]\|null` | `null` | 选中的分析顶点 |
 | `analysisAreaRects` | `array\|null` | `null` | 分析区域矩形 |
 | `analysisAreaVertices` | `array\|null` | `null` | 分析区域顶点 |
@@ -72,7 +92,7 @@
 
 **迁移阶段**: Phase 12C
 
-**迁移策略**: `analysisService` 拥有 board/ownership 分析请求生命周期、quick analysis、cache lookup/writeback 和 game-tree vs scratch vs variation targets。可调用 `documentStore`/`engineService`，但不直接持有 document state。
+**迁移策略**: `analysisService` 拥有分析区域/类型选择、board/ownership 分析请求生命周期协调和 cache lookup/writeback。分析结果数据（`analysis`, `analysisTreePosition`, `quickAnalysisId`, `quickAnalysisSyncerId`）已迁入 `engineService`（见 §2.2）。`analysisService` 可调用 `documentStore`/`engineService`，但不直接持有 document state。
 
 ---
 
@@ -156,7 +176,6 @@
 | `fullScreen` | `boolean` | `false` | 全屏状态 |
 | `showMenuBar` | `boolean\|null` | `null` | 菜单栏显示 |
 | `zoomFactor` | `number\|null` | `null` | 缩放因子 |
-| `consoleLog` | `array` | `[]` | 控制台日志 |
 | `showLeftSidebar` | `boolean` | setting | 左侧栏显示 |
 | `leftSidebarWidth` | `number` | setting | 左侧栏宽度 |
 | `showWinrateGraph` | `boolean` | setting | 胜率图显示 |
@@ -172,10 +191,13 @@
 | `inputBoxText` | `string` | `''` | 输入框文字 |
 | `onInputBoxSubmit` | `function` | `noop` | 输入框提交回调 |
 | `onInputBoxCancel` | `function` | `noop` | 输入框取消回调 |
+| `showThirdPartyPanel` | `boolean` | `false` | 第三方面板显示 |
+| `thirdPartyPanelTab` | `string` | `'fox'` | 第三方面板标签页 |
+| `weiqi101Connected` | `boolean` | `false` | 101Weiqi 连接状态 |
 
 **迁移阶段**: Phase 12D
 
-**迁移策略**: 迁出 drawer/busy/info overlay 等 UI-only state。`uiStore` 不拥有棋局、analysis、engine 或训练状态。
+**迁移策略**: 迁出 drawer/busy/info overlay 等 UI-only state。`uiStore` 不拥有棋局、analysis、engine 或训练状态。`consoleLog` 已迁入 `engineService`（见 §2.4）。新增 3 个第三方面板字段随 uiStore 一起迁移。
 
 ---
 
@@ -218,16 +240,25 @@
 按 `sabaki-function-module-mapping.md` 的建议，迁移串行执行：
 
 ```
+Phase 12B: engineService ✅ 已完成
+    引擎连接（engines, attachedEngineSyncers, black/whiteEngineSyncerId, engineGameOngoing）
+    分析结果（analysis, analysisTreePosition, quickAnalysisId, quickAnalysisSyncerId）
+    HumanSL（humanSLAvailable, humanSLModelLoaded, humanSLProfile, humanSLPendingProfile, humanSLError）
+    控制台（consoleLog）
+    ↓
 Phase 12A: documentStore（gameTrees, treePosition, gameCurrents, gameIndex）
     ↓
-Phase 12B: engineService（engines, attachedEngineSyncers, humanSL*, engineGameOngoing, ...）
-    ↓
-Phase 12C: analysisService（analysis, analysisTreePosition, quickAnalysis*, analysisArea*, ...）
+Phase 12C: analysisService（selectedAnalysisVertex, analysisAreaRects, analysisAreaVertices, analysisType）
     ↓
 Phase 12D: workbenchStore + uiStore + legacy 冻结
            workbenchStore（mode, selectedTool, editWorkspace, areaSelectMode, ...）
-           uiStore（openDrawer, busy, fullScreen, consoleLog, sidebar*, infoOverlay*, ...）
+           uiStore（openDrawer, busy, fullScreen, sidebar*, infoOverlay*, third-party*, ...）
            Legacy 冻结（findText, findVertex, deadStones, blockedGuesses）
 ```
 
 迁移期 `sabaki.state` 仍作为 `App.js` 的兼容镜像和 change event 发布源。先收紧写入入口（某领域状态只能通过对应 store 写入），等写入入口稳定后再把内部存储从 `sabaki.state` 迁到独立 store。
+
+### 迁移变更记录
+
+- **engineService 完成**: 15 个字段已迁入 `engineService` 内部状态（含从 analysisService 划入的 4 个分析结果字段和从 uiStore 划入的 consoleLog）。`sabaki.state` 仅保留 `engines: null` 占位符。
+- **新增字段**: `showThirdPartyPanel`、`thirdPartyPanelTab`、`weiqi101Connected` 归入 `uiStore` 目标。
