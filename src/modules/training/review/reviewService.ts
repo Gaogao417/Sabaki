@@ -11,6 +11,10 @@ export type ReviewService = {
     itemType: ReviewItemType
     result: TrainingAttemptResult
   }): Promise<void>
+  addToReviewQueue(input: {
+    itemId: string
+    itemType: ReviewItemType
+  }): Promise<ReviewSchedule>
 }
 
 export type ReviewServiceDeps = {
@@ -34,9 +38,8 @@ export type CalculateNextDueResult = {
   totalFailDelta: number
 }
 
-export function calculateNextDue(input: CalculateNextDueInput): CalculateNextDueResult {
+export function calculateNextDue(input: CalculateNextDueInput, now: Date = new Date()): CalculateNextDueResult {
   const { lastResult, intervalDays, consecutivePassCount } = input
-  const now = new Date()
   let nextInterval: number
   let nextConsecutive: number
   let failDelta = 0
@@ -108,8 +111,7 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     itemType: ReviewItemType
     result: TrainingAttemptResult
   }): Promise<void> {
-    const items = await repository.listDueReviewItems(new Date().toISOString())
-    const schedule = items.find(s => s.itemId === input.itemId && s.itemType === input.itemType)
+    const schedule = await repository.findReviewScheduleByItem(input.itemId, input.itemType)
 
     if (!schedule) {
       logger?.info('review.update', 'Creating new review schedule', {
@@ -163,9 +165,51 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     })
   }
 
+  async function addToReviewQueue(input: {
+    itemId: string
+    itemType: ReviewItemType
+  }): Promise<ReviewSchedule> {
+    const existing = await repository.findReviewScheduleByItem(input.itemId, input.itemType)
+    if (existing) {
+      logger?.info('review.add', 'Item already in review queue', {
+        itemId: input.itemId,
+        itemType: input.itemType,
+        scheduleId: existing.id,
+      })
+      return existing
+    }
+
+    const now = new Date()
+    const schedule: ReviewSchedule = {
+      id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      itemId: input.itemId,
+      itemType: input.itemType,
+      dueAt: now.toISOString(),
+      intervalDays: 1,
+      easeFactor: undefined,
+      lastResult: undefined,
+      consecutivePassCount: 0,
+      totalFailCount: 0,
+      lastReviewedAt: undefined,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    }
+
+    const saved = await repository.createReviewSchedule(schedule)
+
+    logger?.info('review.add', 'Added item to review queue', {
+      scheduleId: saved.id,
+      itemId: input.itemId,
+      itemType: input.itemType,
+    })
+
+    return saved
+  }
+
   return {
     getDueItems,
     openDueItem,
     updateScheduleAfterResult,
+    addToReviewQueue,
   }
 }

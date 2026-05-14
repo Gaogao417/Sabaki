@@ -96,6 +96,7 @@ export type TrainingRepository = {
 
   // Review (new)
   createReviewSchedule(schedule: ReviewSchedule): Promise<ReviewSchedule>
+  findReviewScheduleByItem(itemId: string, itemType: string): Promise<ReviewSchedule | null>
   listDueReviewItems(now: string): Promise<ReviewSchedule[]>
   updateReviewSchedule(id: string, patch: Partial<ReviewSchedule>): Promise<void>
 
@@ -442,6 +443,11 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     return mapReviewScheduleRow(row)
   }
 
+  async function findReviewScheduleByItem(itemId: string, itemType: string): Promise<ReviewSchedule | null> {
+    const row = await db.findReviewScheduleByItem(itemId, itemType)
+    return row ? mapReviewScheduleRow(row) : null
+  }
+
   async function listDueReviewItems(_now: string): Promise<ReviewSchedule[]> {
     const rows = await db.getDueReviews()
     return rows.map(mapReviewScheduleRow)
@@ -670,7 +676,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     createRecallCheckpoint, loadRecallCheckpoint, updateRecallCheckpoint, listCheckpointsByRecallSession,
     createProblem, loadProblem, updateProblem, archiveProblem,
     createMoveComment, loadMoveComment, updateMoveComment,
-    createReviewSchedule, listDueReviewItems, updateReviewSchedule,
+    createReviewSchedule, findReviewScheduleByItem, listDueReviewItems, updateReviewSchedule,
     listIncompleteAttempts, listIncompleteRecallSessions, listExpiredPendingMoveEvaluations,
     transaction,
   }

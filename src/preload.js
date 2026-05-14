@@ -164,6 +164,8 @@ window.sabaki = {
         problemId,
       ),
     getDueReviews: () => ipcRenderer.invoke('db:getDueReviews'),
+    findReviewScheduleByItem: (itemId, itemType) =>
+      ipcRenderer.invoke('db:findReviewScheduleByItem', itemId, itemType),
     upsertReviewSchedule: (item) =>
       ipcRenderer.invoke('db:upsertReviewSchedule', item),
     getDashboardSummary: () => ipcRenderer.invoke('db:getDashboardSummary'),

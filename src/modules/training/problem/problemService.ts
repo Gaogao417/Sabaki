@@ -1,12 +1,13 @@
 import type { Problem, BadMove } from '../types/index'
 import type { TrainingRepository } from '../repository/trainingRepository'
+import type { ReviewService } from '../review/reviewService'
 
 export type ProblemService = {
   createProblem(input: CreateProblemInput): Promise<Problem>
   loadProblem(problemId: string): Promise<Problem | null>
   updateProblem(problemId: string, patch: Partial<Problem>): Promise<void>
   archiveProblem(problemId: string): Promise<void>
-  createPunishmentProblemFromBadMove(badMoveId: string): Promise<Problem>
+  createPunishmentProblemFromBadMove(badMoveId: string): Promise<PunishmentResult>
 }
 
 export type CreateProblemInput = {
@@ -24,8 +25,14 @@ export type CreateProblemInput = {
   sourceMoveIndex?: number
 }
 
+export type PunishmentResult = {
+  problem: Problem
+  reviewScheduleId?: string
+}
+
 export type ProblemServiceDeps = {
   repository: TrainingRepository
+  reviewService?: ReviewService
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
 }
 
@@ -34,7 +41,7 @@ function generateId(): string {
 }
 
 export function createProblemService(deps: ProblemServiceDeps): ProblemService {
-  const { repository, logger } = deps
+  const { repository, reviewService, logger } = deps
 
   async function createProblem(input: CreateProblemInput): Promise<Problem> {
     const now = new Date().toISOString()
@@ -82,7 +89,7 @@ export function createProblemService(deps: ProblemServiceDeps): ProblemService {
     await repository.archiveProblem(problemId)
   }
 
-  async function createPunishmentProblemFromBadMove(badMoveId: string): Promise<Problem> {
+  async function createPunishmentProblemFromBadMove(badMoveId: string): Promise<PunishmentResult> {
     const badMove = await repository.loadBadMove(badMoveId)
     if (!badMove) {
       throw new Error(`problemService.createPunishmentProblemFromBadMove: bad move not found (id=${badMoveId})`)
@@ -100,7 +107,7 @@ export function createProblemService(deps: ProblemServiceDeps): ProblemService {
     const scoreDrop = Math.round(evaluation?.scoreDrop ?? 0)
     const description =
       `Auto-generated punishment problem. ` +
-      `The solver played ${badMove.move ?? evaluation?.move ?? '?'}, causing a ${badMove.severity} loss of ~${scoreDrop} points. ` +
+      `The solver played ${evaluation?.move ?? '?'}, causing a ${badMove.severity} loss of ~${scoreDrop} points. ` +
       `Find the punishment move.`
 
     const problem = await createProblem({
@@ -118,14 +125,24 @@ export function createProblemService(deps: ProblemServiceDeps): ProblemService {
 
     await repository.updateBadMove(badMoveId, { generatedProblemId: problem.id })
 
+    let reviewScheduleId: string | undefined
+    if (reviewService) {
+      const schedule = await reviewService.addToReviewQueue({
+        itemId: problem.id,
+        itemType: 'problem',
+      })
+      reviewScheduleId = schedule.id
+    }
+
     logger?.info('problem.punishment', 'Punishment problem created from bad move', {
       problemId: problem.id,
       badMoveId,
       severity: badMove.severity,
       moveIndex: badMove.moveIndex,
+      reviewScheduleId,
     })
 
-    return problem
+    return { problem, reviewScheduleId }
   }
 
   return {

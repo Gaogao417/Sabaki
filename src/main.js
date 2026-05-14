@@ -626,6 +626,10 @@ function setupIpcHandlers() {
     await dbInit
     return db.getDueReviews()
   })
+  ipcMain.handle('db:findReviewScheduleByItem', async (_, itemId, itemType) => {
+    await dbInit
+    return db.findReviewScheduleByItem(itemId, itemType)
+  })
   ipcMain.handle('db:upsertReviewSchedule', async (_, item) => {
     await dbInit
     return db.upsertReviewSchedule(item)

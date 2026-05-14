@@ -353,6 +353,10 @@ function upsertReviewSchedule(item) {
   return {...item, id}
 }
 
+function findReviewScheduleByItem(itemId, itemType) {
+  return queryOne('SELECT * FROM review_schedule WHERE item_id = ? AND item_type = ?', [itemId, itemType])
+}
+
 function updateReviewSchedule(id, patch) {
   const now = new Date().toISOString()
   const sets = ['updated_at = ?']
@@ -749,4 +753,4 @@ function createTrainingMoveComment(comment) { return trainingApi.createTrainingM
 function loadTrainingMoveComment(commentId) { return trainingApi.loadTrainingMoveComment(commentId) }
 function updateTrainingMoveComment(commentId, patch) { return trainingApi.updateTrainingMoveComment(commentId, patch) }
 
-module.exports = {init, save, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, updateProblem, archiveProblem, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, upsertReviewSchedule, updateReviewSchedule, getDashboardSummary, saveWeiqi101Problem, getWeiqi101Problem, getWeiqi101Problems, getWeiqi101ProblemCount, deleteAllWeiqi101Problems, createTrainingTask, loadTrainingTask, findTrainingTaskBySource, updateTrainingTask, createTrainingAttempt, loadTrainingAttempt, listTrainingAttemptsByTask, updateTrainingAttempt, listIncompleteTrainingAttempts, createMoveEvaluation, updateMoveEvaluation, listMoveEvaluationsByAttempt, listExpiredPendingMoveEvaluations, createTrainingBadMove, loadTrainingBadMove, listTrainingBadMovesByAttempt, listTrainingBadMovesByTask, markTrainingBadMoveAsNotBad, updateTrainingBadMove, createTrainingRecallSession, loadTrainingRecallSession, updateTrainingRecallSession, listIncompleteTrainingRecallSessions, createTrainingRecallAttempt, listTrainingRecallAttemptsBySession, createTrainingRecallCheckpoint, loadTrainingRecallCheckpoint, updateTrainingRecallCheckpoint, listTrainingRecallCheckpointsBySession, createTrainingMoveComment, loadTrainingMoveComment, updateTrainingMoveComment, transaction}
+module.exports = {init, save, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, updateProblem, archiveProblem, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, findReviewScheduleByItem, upsertReviewSchedule, updateReviewSchedule, getDashboardSummary, saveWeiqi101Problem, getWeiqi101Problem, getWeiqi101Problems, getWeiqi101ProblemCount, deleteAllWeiqi101Problems, createTrainingTask, loadTrainingTask, findTrainingTaskBySource, updateTrainingTask, createTrainingAttempt, loadTrainingAttempt, listTrainingAttemptsByTask, updateTrainingAttempt, listIncompleteTrainingAttempts, createMoveEvaluation, updateMoveEvaluation, listMoveEvaluationsByAttempt, listExpiredPendingMoveEvaluations, createTrainingBadMove, loadTrainingBadMove, listTrainingBadMovesByAttempt, listTrainingBadMovesByTask, markTrainingBadMoveAsNotBad, updateTrainingBadMove, createTrainingRecallSession, loadTrainingRecallSession, updateTrainingRecallSession, listIncompleteTrainingRecallSessions, createTrainingRecallAttempt, listTrainingRecallAttemptsBySession, createTrainingRecallCheckpoint, loadTrainingRecallCheckpoint, updateTrainingRecallCheckpoint, listTrainingRecallCheckpointsBySession, createTrainingMoveComment, loadTrainingMoveComment, updateTrainingMoveComment, transaction}
