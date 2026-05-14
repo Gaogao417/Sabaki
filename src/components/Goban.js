@@ -696,47 +696,61 @@ export default class Goban extends Component {
 
     let heatMap = []
 
-    if (drawHeatMap && analysis?.variations?.length > 0) {
-      let maxVisitsWin = Math.max(
-        ...analysis.variations.map((x) => x.visits * x.winrate),
-      )
+    let hasAIVariations = drawHeatMap && analysis?.variations?.length > 0
+    let hasHumanPrior =
+      drawHeatMap && showHumanPreference && analysis?.humanPolicyMap != null
+
+    if (hasAIVariations || hasHumanPrior) {
+      let maxVisitsWin = hasAIVariations
+        ? Math.max(
+            ...analysis.variations.map((x) => x.visits * x.winrate),
+          )
+        : 0
+
       heatMap = board.signMap.map((row) => row.map((_) => null))
 
-      for (let {
-        vertex: [x, y],
-        visits,
-        winrate,
-        scoreLead,
-      } of analysis.variations) {
-        let strength = Math.round((visits * winrate * 8) / maxVisitsWin) + 1
+      // AI variations heatmap
+      if (hasAIVariations) {
+        for (let {
+          vertex: [x, y],
+          visits,
+          winrate,
+          scoreLead,
+        } of analysis.variations) {
+          let strength = Math.round((visits * winrate * 8) / maxVisitsWin) + 1
 
-        winrate =
-          strength <= 3 ? Math.floor(winrate) : Math.floor(winrate * 10) / 10
-        scoreLead = scoreLead == null ? null : Math.round(scoreLead * 10) / 10
-        if (scoreLead === 0) scoreLead = 0 // Avoid -0
+          winrate =
+            strength <= 3
+              ? Math.floor(winrate)
+              : Math.floor(winrate * 10) / 10
+          scoreLead =
+            scoreLead == null ? null : Math.round(scoreLead * 10) / 10
+          if (scoreLead === 0) scoreLead = 0 // Avoid -0
 
-        heatMap[y][x] = {
-          strength,
-          text:
-            visits < 10
-              ? ''
-              : [
-                  analysisType === 'winrate'
-                    ? i18n.formatNumber(winrate) +
-                      (Math.floor(winrate) === winrate ? '%' : '')
-                    : analysisType === 'scoreLead' && scoreLead != null
-                      ? (scoreLead >= 0 ? '+' : '') +
-                        i18n.formatNumber(scoreLead)
-                      : '–',
-                  visits < 1000
-                    ? i18n.formatNumber(visits)
-                    : i18n.formatNumber(Math.round(visits / 100) / 10) + 'k',
-                ].join('\n'),
+          heatMap[y][x] = {
+            strength,
+            text:
+              visits < 10
+                ? ''
+                : [
+                    analysisType === 'winrate'
+                      ? i18n.formatNumber(winrate) +
+                        (Math.floor(winrate) === winrate ? '%' : '')
+                      : analysisType === 'scoreLead' && scoreLead != null
+                        ? (scoreLead >= 0 ? '+' : '') +
+                          i18n.formatNumber(scoreLead)
+                        : '–',
+                    visits < 1000
+                      ? i18n.formatNumber(visits)
+                      : i18n.formatNumber(Math.round(visits / 100) / 10) +
+                        'k',
+                  ].join('\n'),
+          }
         }
       }
 
       // Mark top human prior moves with humanPrior flag (only affects border)
-      if (showHumanPreference && analysis.humanPolicyMap != null) {
+      if (hasHumanPrior) {
         let policy = analysis.humanPolicyMap
         let width = board.width
 
@@ -749,12 +763,9 @@ export default class Goban extends Component {
           .sort((a, b) => b.humanPrior - a.humanPrior)
           .slice(0, 5)
 
-        let maxVisits = analysis.variations.length
-          ? Math.max(...analysis.variations.map((x) => x.visits))
-          : 0
-
         for (let {
           vertex: [x, y],
+          humanPrior,
         } of topHuman) {
           if (heatMap[y] == null) continue
           if (board.signMap[y][x] !== 0) continue
@@ -762,35 +773,12 @@ export default class Goban extends Component {
           if (heatMap[y][x] != null) {
             heatMap[y][x].humanPrior = true
           } else {
-            // Not in AI variations — use max visits to match AI display format
-            let visits = maxVisits
-            let winrate = analysis.winrate ?? 50
-            let scoreLead = analysis.scoreLead ?? 0
-            let strength =
-              maxVisitsWin > 0
-                ? Math.round((visits * winrate * 8) / maxVisitsWin) + 1
-                : 9
-            strength = Math.max(1, Math.min(9, strength))
-
-            winrate =
-              strength <= 3
-                ? Math.floor(winrate)
-                : Math.floor(winrate * 10) / 10
-
+            // Not in AI variations — use human prior value for strength
+            let strength = Math.max(1, Math.min(9, Math.round(humanPrior * 9)))
             heatMap[y][x] = {
               strength,
               humanPrior: true,
-              text: [
-                analysisType === 'winrate'
-                  ? i18n.formatNumber(winrate) +
-                    (Math.floor(winrate) === winrate ? '%' : '')
-                  : analysisType === 'scoreLead'
-                    ? (scoreLead >= 0 ? '+' : '') + i18n.formatNumber(scoreLead)
-                    : '–',
-                visits < 1000
-                  ? i18n.formatNumber(visits)
-                  : i18n.formatNumber(Math.round(visits / 100) / 10) + 'k',
-              ].join('\n'),
+              text: '',
             }
           }
         }

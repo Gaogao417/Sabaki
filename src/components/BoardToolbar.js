@@ -403,8 +403,7 @@ export default class BoardToolbar extends Component {
               accent: territoryEnabled,
               onClick: () => sabaki.toggleTerritoryEnabled(),
             }),
-            territoryEnabled &&
-              editWorkspaceActive &&
+            editWorkspaceActive &&
               h(ToolbarButton, {
                 icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
                 label: t('Territory Compare'),

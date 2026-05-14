@@ -160,6 +160,9 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
       return false
     }
 
+    // Mutually exclusive: disable compare when enabling territory
+    state.territoryCompareEnabled = false
+
     // Sync: record intent, trigger render (UI shows "pending" via resolveOverlayInput)
     hideInfoOverlay()
     state.territoryEnabled = true
@@ -184,7 +187,6 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
       if (syncer == null) {
         state.territoryEnabled = false
-        state.territoryCompareEnabled = false
         console.log(
           '[overlay.setTerritoryEnabled] → rollback (no syncer)',
           snapshot(),
@@ -249,6 +251,9 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
     if (app.editWorkspace.referenceSnapshot == null) {
       deps.captureEditReference()
     }
+
+    // Mutually exclusive: disable territory when enabling compare
+    state.territoryEnabled = false
 
     hideInfoOverlay()
 
