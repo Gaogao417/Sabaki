@@ -98,6 +98,14 @@ function extractSgf(raw) {
   return {success: true, data: text, parseUncertain: true}
 }
 
+// 野狐段位编码: 1-18 = 18级~1级, 19-27 = 1段~9段
+function foxDanLabel(code) {
+  let n = Number(code)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  if (n <= 18) return `${18 - n}级`
+  return `${n - 17}段`
+}
+
 exports.queryUserByName = async function (username) {
   if (!username || typeof username !== 'string' || !username.trim()) {
     return {success: false, error: 'Please enter a FoxWQ ID', code: 'EMPTY_INPUT'}
@@ -170,6 +178,11 @@ exports.fetchGameList = async function (uid, lastcode = '') {
   if (last && last.chessid != null) {
     nextLastcode = String(last.chessid)
   }
+
+  games.forEach((g) => {
+    g.blackdanLabel = foxDanLabel(g.blackdan)
+    g.whitedanLabel = foxDanLabel(g.whitedan)
+  })
 
   return {success: true, games, nextLastcode, raw: parsed}
 }

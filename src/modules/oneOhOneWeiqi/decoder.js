@@ -157,6 +157,8 @@ export function coordToSgf(coord, boardSize) {
 
 /**
  * Generate an SGF string from decoded 101weiqi question data.
+ * Uses the XOR-decoded `c` field as authoritative stone data;
+ * falls back to `prepos` if decryption fails.
  * @param {object} qdata - Decoded question data object
  * @returns {string|null} SGF string, or null if data is insufficient
  */
@@ -170,13 +172,30 @@ export function questionToSgf(qdata) {
   if (qdata.desc) sgf += `PB[${qdata.desc}]`
   if (qdata.qtypename) sgf += `RE[${qdata.qtypename}]`
 
-  // Pre-position stones
-  if (qdata.prepos && qdata.prepos.length >= 2) {
-    const blacks = qdata.prepos[0] || []
-    const whites = qdata.prepos[1] || []
-    if (blacks.length > 0) sgf += `AB${blacks.map(p => `[${coordToSgf(p, lu)}]`).join('')}`
-    if (whites.length > 0) sgf += `AW${whites.map(p => `[${coordToSgf(p, lu)}]`).join('')}`
+  // Try decoded payload (c + r) first — authoritative stone data
+  let blacks = []
+  let whites = []
+  if (qdata.c && typeof qdata.r === 'number') {
+    try {
+      const decoded = decodePayload(qdata.c, qdata.r)
+      const positions = JSON.parse(decoded)
+      if (Array.isArray(positions) && positions.length >= 2) {
+        blacks = positions[0] || []
+        whites = positions[1] || []
+      }
+    } catch { /* fall through to prepos */ }
   }
+
+  // Fallback to prepos if decoded payload didn't yield stones
+  if (blacks.length === 0 && whites.length === 0 && qdata.prepos && qdata.prepos.length >= 2) {
+    blacks = qdata.prepos[0] || []
+    whites = qdata.prepos[1] || []
+  }
+
+  if (blacks.length > 0) sgf += `AB${blacks.map(p => `[${coordToSgf(p, lu)}]`).join('')}`
+  if (whites.length > 0) sgf += `AW${whites.map(p => `[${coordToSgf(p, lu)}]`).join('')}`
+
+  if (qdata.blackfirst === false) sgf += 'PL[W]'
 
   sgf += ')'
   return sgf

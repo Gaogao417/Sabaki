@@ -179,6 +179,11 @@ class Sabaki extends EventEmitter {
 
       infoOverlayText: '',
       showInfoOverlay: false,
+
+      // Third-party Panel
+      showThirdPartyPanel: false,
+      thirdPartyPanelTab: 'fox',
+      weiqi101Connected: false,
     }
 
     this.events = new EventEmitter()
@@ -608,6 +613,17 @@ class Sabaki extends EventEmitter {
 
   closeDrawer() {
     this.openDrawer(null)
+  }
+
+  setThirdPartyPanelState(change) {
+    this.setState(change)
+  }
+
+  toggleThirdPartyPanel(tab = null) {
+    this.setState((state) => ({
+      showThirdPartyPanel: tab !== null ? true : !state.showThirdPartyPanel,
+      thirdPartyPanelTab: tab !== null ? tab : state.thirdPartyPanelTab,
+    }))
   }
 
   // Recall Mode
