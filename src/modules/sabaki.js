@@ -617,15 +617,82 @@ class Sabaki extends EventEmitter {
     }))
   }
 
+  // Engine Game Training Integration
+
+  async startEngineGameTraining() {
+    const {attemptService, monitor, repository} = this.getTrainingServices()
+
+    let {gameTrees, gameIndex} = this.state
+    let tree = gameTrees[gameIndex]
+
+    let task = {
+      id: `task_game_${Date.now()}`,
+      kind: 'game',
+      source: {kind: 'game'},
+      rootPositionSgf: sgf.stringify([tree]),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    let savedTask = await repository.createTask(task)
+
+    let attempt = await attemptService.createAttempt({
+      taskId: savedTask.id,
+      rootPositionSgf: task.rootPositionSgf,
+    })
+
+    monitor.startForAttempt({attemptId: attempt.id, taskId: savedTask.id})
+
+    this._engineGameTraining = {
+      taskId: savedTask.id,
+      attemptId: attempt.id,
+      humanMoveIndex: 0,
+    }
+
+    logger.info('engineGame.training', 'Training started for engine game', {
+      taskId: savedTask.id,
+      attemptId: attempt.id,
+    })
+  }
+
+  async stopEngineGameTraining() {
+    let training = this._engineGameTraining
+    if (!training) return
+
+    const {attemptService, monitor} = this.getTrainingServices()
+    monitor.stopForAttempt(training.attemptId)
+
+    try {
+      await attemptService.freezeAttempt(training.attemptId)
+      logger.info('engineGame.training.freeze', 'Training attempt frozen', {
+        attemptId: training.attemptId,
+        humanMoveCount: training.humanMoveIndex,
+      })
+    } catch (err) {
+      logger.info('engineGame.training.freeze.error', 'Failed to freeze attempt', {
+        error: String(err),
+      })
+    }
+
+    this._engineGameTraining = null
+  }
+
+  _engineGameTraining = null
+
   // Recall Mode
 
   async startRecallSession(gameId, options = {}) {
     let fileformats = await import('./fileformats/index.js')
     let game = await window.sabaki.db.getGame(gameId)
-    if (!game) return
+    if (!game) {
+      logger.info('recall.start.skip', 'No game found for recall', {gameId})
+      return
+    }
 
     let trees = fileformats.sgf.parse(game.sgf)
-    if (!trees || trees.length === 0) return
+    if (!trees || trees.length === 0) {
+      logger.info('recall.start.skip', 'No SGF trees parsed for recall', {gameId})
+      return
+    }
 
     // Extract expected moves from SGF
     let tree = trees[0]
@@ -657,6 +724,13 @@ class Sabaki extends EventEmitter {
       startMove: options.startMove || 0,
     }
     session = await window.sabaki.db.saveRecallSession(session)
+
+    logger.info('recall.start', 'Recall session created', {
+      gameId,
+      sessionId: session.id,
+      expectedMoveCount: moves.length,
+      mode: options.mode || 'full_game',
+    })
 
     // Update runtime store (new path) and legacy state (compat)
     const {runtimeStore} = this.getTrainingServices()
@@ -695,6 +769,16 @@ class Sabaki extends EventEmitter {
     let expected = view.expectedMoves[view.moveIndex]
     if (!expected) return
 
+    let expectedCoord = sgf.parseVertex(expected.vertex)
+    let isCorrect = helper.vertexEquals(vertex, expectedCoord)
+
+    logger.info('recall.move', 'Recall attempt', {
+      moveIndex: view.moveIndex,
+      expectedMove: expected.vertex,
+      userMove: sgf.stringifyVertex(vertex),
+      isCorrect,
+    })
+
     // Handle pass moves
     if (expected.vertex === null) {
       let attempt = {
@@ -725,9 +809,6 @@ class Sabaki extends EventEmitter {
       })
       return
     }
-
-    let expectedCoord = sgf.parseVertex(expected.vertex)
-    let isCorrect = helper.vertexEquals(vertex, expectedCoord)
 
     let attempt = {
       moveNumber: view.moveIndex,
@@ -793,6 +874,14 @@ class Sabaki extends EventEmitter {
         completedAt: new Date().toISOString(),
       }
       await window.sabaki.db.saveRecallSession(completedSession)
+
+      let correctCount = view.userAttempts.filter((a) => a.isCorrect).length
+      logger.info('recall.end', 'Recall session ended', {
+        sessionId: session.id,
+        totalMoves: view.expectedMoves.length,
+        correctCount,
+        wrongCount: view.userAttempts.length - correctCount,
+      })
 
       if (view.userAttempts.length > 0) {
         await window.sabaki.db.saveRecallAttempts(
@@ -947,6 +1036,13 @@ class Sabaki extends EventEmitter {
 
     let moveStr = board.stringifyVertex(vertex)
 
+    logger.info('problem.move', 'Problem move played', {
+      vertex: moveStr,
+      player: player > 0 ? 'B' : 'W',
+      hasPreMoveAnalysis: !!preMoveAnalysis,
+      evalCacheSize: pv?.evalCache?.length ?? 0,
+    })
+
     let result
     try {
       result = await problemFlowService.appendProblemMove({
@@ -983,8 +1079,17 @@ class Sabaki extends EventEmitter {
   async submitProblemAttempt() {
     const {problemFlowService} = this.getTrainingServices()
 
+    logger.info('problem.submit', 'Problem submit requested')
     const submitResult = await problemFlowService.submitActiveProblem()
-    if (!submitResult) return
+    if (!submitResult) {
+      logger.info('problem.submit.skip', 'Submit returned no result')
+      return
+    }
+
+    logger.info('problem.submit.done', 'Problem submitted', {
+      result: submitResult.result,
+      attemptId: submitResult.attempt?.id,
+    })
 
     // Legacy compat
     this.setState({
@@ -1389,6 +1494,7 @@ class Sabaki extends EventEmitter {
         runtimeStore,
         repository,
         legacyAdapter,
+        analysisResultAdapter,
         tabService,
         phaseService,
         attemptService,
@@ -1490,12 +1596,17 @@ class Sabaki extends EventEmitter {
           analysisService.cacheOwnership(syncerId, tree, tp, ownership),
         saveCurrentGame: () => this.saveCurrentGame(),
         startRecallSession: (gameId) => this.startRecallSession(gameId),
+        stopEngineGameTraining: () => this.stopEngineGameTraining(),
         setBusy: (busy) => this.setBusy(busy),
         showInfoOverlay: (text) => this.showInfoOverlay(text),
         hideInfoOverlay: () => this.hideInfoOverlay(),
         showMessageBox: (msg, type) => dialog.showMessageBox(msg, type),
         notifyChange: () => this.setState({}),
         getUserDataDirectory: () => window.sabaki.setting.userDataDirectory,
+        notifyAnalysisUpdate: (positionKey) => {
+          let adapter = this._trainingServices?.analysisResultAdapter
+          adapter?.notifyAnalysisUpdate(positionKey)
+        },
       })
 
       // Late-bind engineService into analysisService (breaks circular creation ordering).
@@ -1509,8 +1620,32 @@ class Sabaki extends EventEmitter {
   async executePlayMove(result) {
     let services = this.getPlayServices()
     let currentPlayer = this.getPlayer(this.state.treePosition)
+    let training = this._engineGameTraining
+    let positionBefore = training ? this.state.treePosition : null
 
-    await executePlayInteraction(result, {player: currentPlayer}, services)
+    let playResult = await executePlayInteraction(result, {player: currentPlayer}, services)
+
+    // Training: notify monitor of human move in engine games
+    if (training && playResult?.changed && !playResult?.pass) {
+      let {monitor} = this.getTrainingServices()
+      let moveIndex = training.humanMoveIndex++
+      let move = result.payload?.vertex
+        ? sgf.stringifyVertex(result.payload.vertex)
+        : ''
+
+      monitor.onUserMove({
+        attemptId: training.attemptId,
+        moveIndex,
+        move,
+        positionBeforeHash: positionBefore,
+        positionAfterHash: playResult.treePosition,
+      }).catch((err) => {
+        logger.info('engineGame.training.moveError', 'Error in onUserMove', {
+          error: String(err),
+          moveIndex,
+        })
+      })
+    }
   }
 
   // Phase 5: Edit-Analysis Click Redirect
@@ -2265,6 +2400,15 @@ class Sabaki extends EventEmitter {
       white: whiteSyncer?.engine.name || 'Human',
       boardSize,
     })
+
+    // Start training monitor when playing against an engine
+    if (blackSyncer != null || whiteSyncer != null) {
+      this.startEngineGameTraining().catch((err) => {
+        logger.info('engineGame.training.start.error', 'Failed to start training', {
+          error: String(err),
+        })
+      })
+    }
   }
 
   async newFile({
@@ -3074,6 +3218,7 @@ class Sabaki extends EventEmitter {
           'Double pass detected, saving and entering recall',
         )
         this.stopEngineGame()
+        await this.stopEngineGameTraining()
         let saved = await this.saveCurrentGame()
         if (saved?.id) {
           this.startRecallSession(saved.id)
@@ -3119,6 +3264,7 @@ class Sabaki extends EventEmitter {
 
     this.events.emit('resign', {player})
 
+    await this.stopEngineGameTraining()
     let saved = await this.saveCurrentGame()
     if (saved?.id) {
       this.startRecallSession(saved.id)

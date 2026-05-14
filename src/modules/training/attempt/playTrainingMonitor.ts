@@ -137,7 +137,13 @@ export function createPlayTrainingMonitor(
     if (pendingForAttempt.length === 0) return
 
     const afterEval = analysisResultAdapter.getAnalysisForPosition(positionKey)
-    if (!afterEval) return
+    if (!afterEval) {
+      logger?.info('monitor.analysisUpdate.skip', 'No afterEval for positionKey', {
+        positionKey,
+        pendingCount: pendingForAttempt.length,
+      })
+      return
+    }
 
     for (const evalRecord of pendingForAttempt) {
       const beforeEval = analysisResultAdapter.getAnalysisForPosition(
@@ -145,7 +151,13 @@ export function createPlayTrainingMonitor(
       )
 
       // Only process if we have a before eval to compare
-      if (!beforeEval) continue
+      if (!beforeEval) {
+        logger?.info('monitor.analysisUpdate.skip_no_before', 'No beforeEval for pending evaluation', {
+          evaluationId: evalRecord.id,
+          moveIndex: evalRecord.moveIndex,
+        })
+        continue
+      }
 
       const evaluated = evaluateMove({
         beforeEval,
@@ -164,6 +176,17 @@ export function createPlayTrainingMonitor(
         status: 'evaluated',
         evaluatedAt: new Date().toISOString(),
       }
+
+      logger?.info('monitor.evaluated', 'MoveEvaluation updated', {
+        evaluationId: evalRecord.id,
+        moveIndex: evalRecord.moveIndex,
+        move: evalRecord.move,
+        scoreDrop: updatedEval.scoreDrop,
+        winrateDrop: updatedEval.winrateDrop,
+        engineSuggestedMove: updatedEval.engineSuggestedMove,
+        beforeScoreLead: updatedEval.beforeScoreLead,
+        afterScoreLead: updatedEval.afterScoreLead,
+      })
 
       await repository.updateMoveEvaluation(evalRecord.id, {
         status: 'evaluated',
@@ -199,6 +222,14 @@ export function createPlayTrainingMonitor(
         }
 
         await attemptService.saveBadMove(badMove)
+
+        logger?.info('monitor.badMove', 'BadMove created', {
+          badMoveId: badMove.id,
+          moveIndex: evalRecord.moveIndex,
+          severity,
+          scoreDrop: updatedEval.scoreDrop,
+          engineSuggestedMove: updatedEval.engineSuggestedMove,
+        })
 
         // Update visible bad moves in runtime store
         const currentBadMoveIds = runtimeStore.getState().visibleBadMoveIds

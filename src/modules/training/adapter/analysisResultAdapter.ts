@@ -29,6 +29,7 @@ type SabakiLike = {
 export type AnalysisResultAdapter = {
   getAnalysisForPosition(positionKey: string): NormalizedAnalysisResult | null
   subscribeToAnalysisUpdates(callback: (positionKey: string) => void): () => void
+  notifyAnalysisUpdate(positionKey: string): void
 }
 
 export function createAnalysisResultAdapter(sabaki: SabakiLike): AnalysisResultAdapter {
@@ -81,6 +82,12 @@ export function createAnalysisResultAdapter(sabaki: SabakiLike): AnalysisResultA
       listeners.add(callback)
       return () => {
         listeners.delete(callback)
+      }
+    },
+
+    notifyAnalysisUpdate(positionKey: string) {
+      for (const cb of listeners) {
+        cb(positionKey)
       }
     },
   }

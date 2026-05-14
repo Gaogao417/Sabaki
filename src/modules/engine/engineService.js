@@ -36,6 +36,8 @@ import * as sound from '../sound.js'
  * @property {(syncerId: string, tree: any, tp: string, ownership: any) => void} cacheOwnership
  * @property {() => Promise} saveCurrentGame
  * @property {(gameId: string) => Promise} startRecallSession
+ * @property {() => Promise<void>} stopEngineGameTraining
+ * @property {(positionKey: string) => void} notifyAnalysisUpdate
  * @property {(busy: boolean) => void} setBusy
  * @property {(text: string) => void} showInfoOverlay
  * @property {() => void} hideInfoOverlay
@@ -98,12 +100,14 @@ export function createEngineService(deps) {
     cacheOwnership,
     saveCurrentGame,
     startRecallSession,
+    stopEngineGameTraining,
     setBusy,
     showInfoOverlay,
     hideInfoOverlay,
     showMessageBox,
     notifyChange,
     getUserDataDirectory,
+    notifyAnalysisUpdate,
   } = deps
 
   // ── Owned state ──────────────────────────────────────────────────
@@ -614,6 +618,11 @@ export function createEngineService(deps) {
               analysis: syncer.analysis,
               analysisTreePosition: syncer.treePosition,
             })
+
+            // Notify training monitor so pending MoveEvaluations can be resolved
+            if (syncer.treePosition != null && notifyAnalysisUpdate) {
+              notifyAnalysisUpdate(syncer.treePosition)
+            }
           }
 
           if (syncer.analysis != null && syncer.treePosition != null) {
@@ -1085,6 +1094,7 @@ export function createEngineService(deps) {
       if (prevPass) {
         syncer.treePosition = newTreePosition
         stopEngineGame()
+        await stopEngineGameTraining()
         let saved = await saveCurrentGame()
         if (saved?.id) {
           startRecallSession(saved.id)
