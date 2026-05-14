@@ -11,6 +11,9 @@ export type BadMove = {
 
   punishSide: 'black' | 'white'
 
+  positionBeforeSgf?: string
+  positionAfterSgf?: string
+
   userMarkedAsNotBad?: boolean
 
   generatedProblemId?: string

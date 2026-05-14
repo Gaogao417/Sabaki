@@ -162,6 +162,89 @@ function migrate(db) {
   db.run('CREATE INDEX IF NOT EXISTS idx_bad_moves_attempt ON bad_moves(attempt_id)')
   db.run('CREATE INDEX IF NOT EXISTS idx_weiqi101_hash ON weiqi101_problems(content_hash)')
 
+  // --- New training domain tables (Phase 2) ---
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS training_tasks (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      source_json TEXT NOT NULL,
+      root_position_sgf TEXT NOT NULL,
+      side_to_move TEXT,
+      title TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS training_attempts (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL REFERENCES training_tasks(id),
+      tab_id TEXT,
+      started_at TEXT NOT NULL,
+      submitted_at TEXT,
+      completed_at TEXT,
+      root_position_sgf TEXT NOT NULL,
+      user_line_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'playing',
+      result TEXT NOT NULL DEFAULT 'pending',
+      hint_level_used INTEGER NOT NULL DEFAULT 0,
+      recall_completed INTEGER NOT NULL DEFAULT 0,
+      analysis_opened INTEGER NOT NULL DEFAULT 0
+    );
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS move_evaluations (
+      id TEXT PRIMARY KEY,
+      attempt_id TEXT NOT NULL REFERENCES training_attempts(id),
+      move_index INTEGER NOT NULL,
+      move TEXT NOT NULL,
+      position_before_hash TEXT,
+      position_after_hash TEXT,
+      position_before_sgf TEXT,
+      position_after_sgf TEXT,
+      before_score_lead REAL,
+      after_score_lead REAL,
+      score_drop REAL,
+      before_winrate REAL,
+      after_winrate REAL,
+      winrate_drop REAL,
+      engine_suggested_move TEXT,
+      engine_suggested_line_json TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      evaluated_at TEXT
+    );
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS training_bad_moves (
+      id TEXT PRIMARY KEY,
+      move_evaluation_id TEXT NOT NULL REFERENCES move_evaluations(id),
+      attempt_id TEXT NOT NULL REFERENCES training_attempts(id),
+      task_id TEXT NOT NULL REFERENCES training_tasks(id),
+      move_index INTEGER NOT NULL,
+      severity TEXT NOT NULL,
+      punish_side TEXT NOT NULL,
+      position_before_sgf TEXT,
+      position_after_sgf TEXT,
+      user_marked_as_not_bad INTEGER NOT NULL DEFAULT 0,
+      generated_problem_id TEXT,
+      recall_checkpoint_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+
+  db.run('CREATE INDEX IF NOT EXISTS idx_training_tasks_kind ON training_tasks(kind)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_training_attempts_task ON training_attempts(task_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_training_attempts_status ON training_attempts(status)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_move_evaluations_attempt ON move_evaluations(attempt_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_move_evaluations_status ON move_evaluations(status)')
+  db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_move_evaluations_attempt_move ON move_evaluations(attempt_id, move_index)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_attempt ON training_bad_moves(attempt_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_task ON training_bad_moves(task_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_evaluation ON training_bad_moves(move_evaluation_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_training_bad_moves_severity ON training_bad_moves(severity)')
+
   save()
 }
 
@@ -517,4 +600,259 @@ function rowToWeiqi101Problem(row) {
   }
 }
 
-module.exports = {init, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, upsertReviewSchedule, getDashboardSummary, saveWeiqi101Problem, getWeiqi101Problem, getWeiqi101Problems, getWeiqi101ProblemCount, deleteAllWeiqi101Problems}
+// --- Training Tasks ---
+
+function createTrainingTask(task) {
+  const id = task.id || uuid()
+  const now = new Date().toISOString()
+  run(`INSERT INTO training_tasks (id, kind, source_json, root_position_sgf, side_to_move, title, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, task.kind, JSON.stringify(task.source), task.rootPositionSgf,
+    task.sideToMove || null, task.title || null, now, now,
+  ])
+  save()
+  return {...rowToTrainingTask(queryOne('SELECT * FROM training_tasks WHERE id = ?', [id])), id}
+}
+
+function loadTrainingTask(taskId) {
+  const row = queryOne('SELECT * FROM training_tasks WHERE id = ?', [taskId])
+  return row ? rowToTrainingTask(row) : null
+}
+
+function findTrainingTaskBySource(source) {
+  const sourceJson = JSON.stringify(source)
+  const row = queryOne('SELECT * FROM training_tasks WHERE source_json = ? LIMIT 1', [sourceJson])
+  return row ? rowToTrainingTask(row) : null
+}
+
+function updateTrainingTask(taskId, patch) {
+  const now = new Date().toISOString()
+  const sets = []
+  const params = []
+  if (patch.kind !== undefined) { sets.push('kind = ?'); params.push(patch.kind) }
+  if (patch.source !== undefined) { sets.push('source_json = ?'); params.push(JSON.stringify(patch.source)) }
+  if (patch.rootPositionSgf !== undefined) { sets.push('root_position_sgf = ?'); params.push(patch.rootPositionSgf) }
+  if (patch.sideToMove !== undefined) { sets.push('side_to_move = ?'); params.push(patch.sideToMove) }
+  if (patch.title !== undefined) { sets.push('title = ?'); params.push(patch.title) }
+  sets.push('updated_at = ?'); params.push(now)
+  params.push(taskId)
+  run(`UPDATE training_tasks SET ${sets.join(', ')} WHERE id = ?`, params)
+  save()
+}
+
+function rowToTrainingTask(row) {
+  return {
+    id: row.id,
+    kind: row.kind,
+    source: JSON.parse(row.source_json || '{}'),
+    rootPositionSgf: row.root_position_sgf,
+    sideToMove: row.side_to_move,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+// --- Training Attempts ---
+
+function createTrainingAttempt(attempt) {
+  const id = attempt.id || uuid()
+  run(`INSERT INTO training_attempts (id, task_id, tab_id, started_at, submitted_at, completed_at,
+    root_position_sgf, user_line_json, status, result, hint_level_used, recall_completed, analysis_opened)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, attempt.taskId, attempt.tabId || null,
+    attempt.startedAt, attempt.submittedAt || null, attempt.completedAt || null,
+    attempt.rootPositionSgf, JSON.stringify(attempt.userLine || []),
+    attempt.status || 'playing', attempt.result || 'pending',
+    attempt.hintLevelUsed || 0, attempt.recallCompleted ? 1 : 0,
+    attempt.analysisOpened ? 1 : 0,
+  ])
+  save()
+  return {...rowToTrainingAttempt(queryOne('SELECT * FROM training_attempts WHERE id = ?', [id])), id}
+}
+
+function loadTrainingAttempt(attemptId) {
+  const row = queryOne('SELECT * FROM training_attempts WHERE id = ?', [attemptId])
+  return row ? rowToTrainingAttempt(row) : null
+}
+
+function listTrainingAttemptsByTask(taskId) {
+  return queryAll('SELECT * FROM training_attempts WHERE task_id = ? ORDER BY started_at ASC', [taskId]).map(rowToTrainingAttempt)
+}
+
+function updateTrainingAttempt(attemptId, patch) {
+  const sets = []
+  const params = []
+  if (patch.tabId !== undefined) { sets.push('tab_id = ?'); params.push(patch.tabId) }
+  if (patch.submittedAt !== undefined) { sets.push('submitted_at = ?'); params.push(patch.submittedAt) }
+  if (patch.completedAt !== undefined) { sets.push('completed_at = ?'); params.push(patch.completedAt) }
+  if (patch.userLine !== undefined) { sets.push('user_line_json = ?'); params.push(JSON.stringify(patch.userLine)) }
+  if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status) }
+  if (patch.result !== undefined) { sets.push('result = ?'); params.push(patch.result) }
+  if (patch.hintLevelUsed !== undefined) { sets.push('hint_level_used = ?'); params.push(patch.hintLevelUsed) }
+  if (patch.recallCompleted !== undefined) { sets.push('recall_completed = ?'); params.push(patch.recallCompleted ? 1 : 0) }
+  if (patch.analysisOpened !== undefined) { sets.push('analysis_opened = ?'); params.push(patch.analysisOpened ? 1 : 0) }
+  params.push(attemptId)
+  run(`UPDATE training_attempts SET ${sets.join(', ')} WHERE id = ?`, params)
+  save()
+}
+
+function listIncompleteTrainingAttempts() {
+  return queryAll(`SELECT * FROM training_attempts WHERE status IN ('playing', 'submitted', 'recalling', 'analyzing')`)
+    .map(rowToTrainingAttempt)
+}
+
+function rowToTrainingAttempt(row) {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    tabId: row.tab_id,
+    startedAt: row.started_at,
+    submittedAt: row.submitted_at,
+    completedAt: row.completed_at,
+    rootPositionSgf: row.root_position_sgf,
+    userLine: JSON.parse(row.user_line_json || '[]'),
+    status: row.status,
+    result: row.result,
+    hintLevelUsed: row.hint_level_used,
+    recallCompleted: !!row.recall_completed,
+    analysisOpened: !!row.analysis_opened,
+  }
+}
+
+// --- Move Evaluations ---
+
+function createMoveEvaluation(evaluation) {
+  const id = evaluation.id || uuid()
+  run(`INSERT INTO move_evaluations (id, attempt_id, move_index, move,
+    position_before_hash, position_after_hash, position_before_sgf, position_after_sgf,
+    before_score_lead, after_score_lead, score_drop,
+    before_winrate, after_winrate, winrate_drop,
+    engine_suggested_move, engine_suggested_line_json, status, created_at, evaluated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, evaluation.attemptId, evaluation.moveIndex, evaluation.move,
+    evaluation.positionBeforeHash || null, evaluation.positionAfterHash || null,
+    evaluation.positionBeforeSgf || null, evaluation.positionAfterSgf || null,
+    evaluation.beforeScoreLead ?? null, evaluation.afterScoreLead ?? null, evaluation.scoreDrop ?? null,
+    evaluation.beforeWinrate ?? null, evaluation.afterWinrate ?? null, evaluation.winrateDrop ?? null,
+    evaluation.engineSuggestedMove || null,
+    evaluation.engineSuggestedLine ? JSON.stringify(evaluation.engineSuggestedLine) : null,
+    evaluation.status || 'pending', evaluation.createdAt || new Date().toISOString(),
+    evaluation.evaluatedAt || null,
+  ])
+  save()
+  return {...rowToMoveEvaluation(queryOne('SELECT * FROM move_evaluations WHERE id = ?', [id])), id}
+}
+
+function updateMoveEvaluation(evaluationId, patch) {
+  const sets = []
+  const params = []
+  if (patch.positionBeforeSgf !== undefined) { sets.push('position_before_sgf = ?'); params.push(patch.positionBeforeSgf) }
+  if (patch.positionAfterSgf !== undefined) { sets.push('position_after_sgf = ?'); params.push(patch.positionAfterSgf) }
+  if (patch.beforeScoreLead !== undefined) { sets.push('before_score_lead = ?'); params.push(patch.beforeScoreLead) }
+  if (patch.afterScoreLead !== undefined) { sets.push('after_score_lead = ?'); params.push(patch.afterScoreLead) }
+  if (patch.scoreDrop !== undefined) { sets.push('score_drop = ?'); params.push(patch.scoreDrop) }
+  if (patch.beforeWinrate !== undefined) { sets.push('before_winrate = ?'); params.push(patch.beforeWinrate) }
+  if (patch.afterWinrate !== undefined) { sets.push('after_winrate = ?'); params.push(patch.afterWinrate) }
+  if (patch.winrateDrop !== undefined) { sets.push('winrate_drop = ?'); params.push(patch.winrateDrop) }
+  if (patch.engineSuggestedMove !== undefined) { sets.push('engine_suggested_move = ?'); params.push(patch.engineSuggestedMove) }
+  if (patch.engineSuggestedLine !== undefined) { sets.push('engine_suggested_line_json = ?'); params.push(JSON.stringify(patch.engineSuggestedLine)) }
+  if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status) }
+  if (patch.evaluatedAt !== undefined) { sets.push('evaluated_at = ?'); params.push(patch.evaluatedAt) }
+  params.push(evaluationId)
+  run(`UPDATE move_evaluations SET ${sets.join(', ')} WHERE id = ?`, params)
+  save()
+}
+
+function listMoveEvaluationsByAttempt(attemptId) {
+  return queryAll('SELECT * FROM move_evaluations WHERE attempt_id = ? ORDER BY move_index ASC', [attemptId])
+    .map(rowToMoveEvaluation)
+}
+
+function listExpiredPendingMoveEvaluations(now) {
+  return queryAll(`SELECT * FROM move_evaluations WHERE status = 'pending' AND created_at < ?`, [now])
+    .map(rowToMoveEvaluation)
+}
+
+function rowToMoveEvaluation(row) {
+  return {
+    id: row.id,
+    attemptId: row.attempt_id,
+    moveIndex: row.move_index,
+    move: row.move,
+    positionBeforeHash: row.position_before_hash,
+    positionAfterHash: row.position_after_hash,
+    positionBeforeSgf: row.position_before_sgf,
+    positionAfterSgf: row.position_after_sgf,
+    beforeScoreLead: row.before_score_lead,
+    afterScoreLead: row.after_score_lead,
+    scoreDrop: row.score_drop,
+    beforeWinrate: row.before_winrate,
+    afterWinrate: row.after_winrate,
+    winrateDrop: row.winrate_drop,
+    engineSuggestedMove: row.engine_suggested_move,
+    engineSuggestedLine: row.engine_suggested_line_json ? JSON.parse(row.engine_suggested_line_json) : undefined,
+    status: row.status,
+    createdAt: row.created_at,
+    evaluatedAt: row.evaluated_at,
+  }
+}
+
+// --- Training Bad Moves (Phase 2) ---
+
+function createTrainingBadMove(badMove) {
+  const id = badMove.id || uuid()
+  run(`INSERT INTO training_bad_moves (id, move_evaluation_id, attempt_id, task_id,
+    move_index, severity, punish_side, position_before_sgf, position_after_sgf,
+    user_marked_as_not_bad, generated_problem_id, recall_checkpoint_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, badMove.moveEvaluationId, badMove.attemptId, badMove.taskId,
+    badMove.moveIndex, badMove.severity, badMove.punishSide,
+    badMove.positionBeforeSgf || null, badMove.positionAfterSgf || null,
+    badMove.userMarkedAsNotBad ? 1 : 0,
+    badMove.generatedProblemId || null, badMove.recallCheckpointId || null,
+    new Date().toISOString(),
+  ])
+  save()
+  return {...rowToTrainingBadMove(queryOne('SELECT * FROM training_bad_moves WHERE id = ?', [id])), id}
+}
+
+function loadTrainingBadMove(badMoveId) {
+  const row = queryOne('SELECT * FROM training_bad_moves WHERE id = ?', [badMoveId])
+  return row ? rowToTrainingBadMove(row) : null
+}
+
+function listTrainingBadMovesByAttempt(attemptId) {
+  return queryAll('SELECT * FROM training_bad_moves WHERE attempt_id = ? ORDER BY move_index ASC', [attemptId])
+    .map(rowToTrainingBadMove)
+}
+
+function listTrainingBadMovesByTask(taskId) {
+  return queryAll('SELECT * FROM training_bad_moves WHERE task_id = ? ORDER BY move_index ASC', [taskId])
+    .map(rowToTrainingBadMove)
+}
+
+function markTrainingBadMoveAsNotBad(badMoveId) {
+  run('UPDATE training_bad_moves SET user_marked_as_not_bad = 1 WHERE id = ?', [badMoveId])
+  save()
+}
+
+function rowToTrainingBadMove(row) {
+  return {
+    id: row.id,
+    moveEvaluationId: row.move_evaluation_id,
+    attemptId: row.attempt_id,
+    taskId: row.task_id,
+    moveIndex: row.move_index,
+    severity: row.severity,
+    punishSide: row.punish_side,
+    positionBeforeSgf: row.position_before_sgf,
+    positionAfterSgf: row.position_after_sgf,
+    userMarkedAsNotBad: !!row.user_marked_as_not_bad,
+    generatedProblemId: row.generated_problem_id,
+    recallCheckpointId: row.recall_checkpoint_id,
+    createdAt: row.created_at,
+  }
+}
+
+module.exports = {init, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, upsertReviewSchedule, getDashboardSummary, saveWeiqi101Problem, getWeiqi101Problem, getWeiqi101Problems, getWeiqi101ProblemCount, deleteAllWeiqi101Problems, createTrainingTask, loadTrainingTask, findTrainingTaskBySource, updateTrainingTask, createTrainingAttempt, loadTrainingAttempt, listTrainingAttemptsByTask, updateTrainingAttempt, listIncompleteTrainingAttempts, createMoveEvaluation, updateMoveEvaluation, listMoveEvaluationsByAttempt, listExpiredPendingMoveEvaluations, createTrainingBadMove, loadTrainingBadMove, listTrainingBadMovesByAttempt, listTrainingBadMovesByTask, markTrainingBadMoveAsNotBad}

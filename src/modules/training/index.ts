@@ -3,6 +3,7 @@ export { createTrainingRuntimeStore } from './store/trainingRuntimeStore'
 export { createTrainingRepository } from './repository/trainingRepository'
 export { createLegacySabakiAdapter } from './adapter/legacySabakiAdapter'
 export { createPositionSnapshotAdapter } from './adapter/positionSnapshotAdapter'
+export { createAnalysisResultAdapter } from './adapter/analysisResultAdapter'
 
 export {
   createWorkbenchTabService,
@@ -11,5 +12,14 @@ export {
   PHASE_TRANSITION_RESULT,
   InvalidPhaseTransitionError,
 } from './workbench/index'
+
+export {
+  createAttemptService,
+  createPlayTrainingMonitor,
+  evaluateMove,
+  classifySeverity,
+  evaluateAttempt,
+  shouldCreateBadMove,
+} from './attempt/index'
 
 export type * from './types/index'

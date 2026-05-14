@@ -172,6 +172,26 @@ window.sabaki = {
     getWeiqi101Problems: () => ipcRenderer.invoke('db:getWeiqi101Problems'),
     getWeiqi101ProblemCount: () => ipcRenderer.invoke('db:getWeiqi101ProblemCount'),
     deleteAllWeiqi101Problems: () => ipcRenderer.invoke('db:deleteAllWeiqi101Problems'),
+
+    // Training domain (Phase 2)
+    createTrainingTask: (task) => ipcRenderer.invoke('db:createTrainingTask', task),
+    loadTrainingTask: (taskId) => ipcRenderer.invoke('db:loadTrainingTask', taskId),
+    findTrainingTaskBySource: (source) => ipcRenderer.invoke('db:findTrainingTaskBySource', source),
+    updateTrainingTask: (taskId, patch) => ipcRenderer.invoke('db:updateTrainingTask', taskId, patch),
+    createTrainingAttempt: (attempt) => ipcRenderer.invoke('db:createTrainingAttempt', attempt),
+    loadTrainingAttempt: (attemptId) => ipcRenderer.invoke('db:loadTrainingAttempt', attemptId),
+    listTrainingAttemptsByTask: (taskId) => ipcRenderer.invoke('db:listTrainingAttemptsByTask', taskId),
+    updateTrainingAttempt: (attemptId, patch) => ipcRenderer.invoke('db:updateTrainingAttempt', attemptId, patch),
+    listIncompleteTrainingAttempts: () => ipcRenderer.invoke('db:listIncompleteTrainingAttempts'),
+    createMoveEvaluation: (evaluation) => ipcRenderer.invoke('db:createMoveEvaluation', evaluation),
+    updateMoveEvaluation: (evaluationId, patch) => ipcRenderer.invoke('db:updateMoveEvaluation', evaluationId, patch),
+    listMoveEvaluationsByAttempt: (attemptId) => ipcRenderer.invoke('db:listMoveEvaluationsByAttempt', attemptId),
+    listExpiredPendingMoveEvaluations: (now) => ipcRenderer.invoke('db:listExpiredPendingMoveEvaluations', now),
+    createTrainingBadMove: (badMove) => ipcRenderer.invoke('db:createTrainingBadMove', badMove),
+    loadTrainingBadMove: (badMoveId) => ipcRenderer.invoke('db:loadTrainingBadMove', badMoveId),
+    listTrainingBadMovesByAttempt: (attemptId) => ipcRenderer.invoke('db:listTrainingBadMovesByAttempt', attemptId),
+    listTrainingBadMovesByTask: (taskId) => ipcRenderer.invoke('db:listTrainingBadMovesByTask', taskId),
+    markTrainingBadMoveAsNotBad: (badMoveId) => ipcRenderer.invoke('db:markTrainingBadMoveAsNotBad', badMoveId),
   },
 
   // File path helper for Electron 32+ (File.path was removed)

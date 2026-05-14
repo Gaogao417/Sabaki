@@ -657,6 +657,80 @@ function setupIpcHandlers() {
     return db.deleteAllWeiqi101Problems()
   })
 
+  // Training domain (Phase 2)
+  ipcMain.handle('db:createTrainingTask', async (_, task) => {
+    await dbInit
+    return db.createTrainingTask(task)
+  })
+  ipcMain.handle('db:loadTrainingTask', async (_, taskId) => {
+    await dbInit
+    return db.loadTrainingTask(taskId)
+  })
+  ipcMain.handle('db:findTrainingTaskBySource', async (_, source) => {
+    await dbInit
+    return db.findTrainingTaskBySource(source)
+  })
+  ipcMain.handle('db:updateTrainingTask', async (_, taskId, patch) => {
+    await dbInit
+    return db.updateTrainingTask(taskId, patch)
+  })
+  ipcMain.handle('db:createTrainingAttempt', async (_, attempt) => {
+    await dbInit
+    return db.createTrainingAttempt(attempt)
+  })
+  ipcMain.handle('db:loadTrainingAttempt', async (_, attemptId) => {
+    await dbInit
+    return db.loadTrainingAttempt(attemptId)
+  })
+  ipcMain.handle('db:listTrainingAttemptsByTask', async (_, taskId) => {
+    await dbInit
+    return db.listTrainingAttemptsByTask(taskId)
+  })
+  ipcMain.handle('db:updateTrainingAttempt', async (_, attemptId, patch) => {
+    await dbInit
+    return db.updateTrainingAttempt(attemptId, patch)
+  })
+  ipcMain.handle('db:listIncompleteTrainingAttempts', async () => {
+    await dbInit
+    return db.listIncompleteTrainingAttempts()
+  })
+  ipcMain.handle('db:createMoveEvaluation', async (_, evaluation) => {
+    await dbInit
+    return db.createMoveEvaluation(evaluation)
+  })
+  ipcMain.handle('db:updateMoveEvaluation', async (_, evaluationId, patch) => {
+    await dbInit
+    return db.updateMoveEvaluation(evaluationId, patch)
+  })
+  ipcMain.handle('db:listMoveEvaluationsByAttempt', async (_, attemptId) => {
+    await dbInit
+    return db.listMoveEvaluationsByAttempt(attemptId)
+  })
+  ipcMain.handle('db:listExpiredPendingMoveEvaluations', async (_, now) => {
+    await dbInit
+    return db.listExpiredPendingMoveEvaluations(now)
+  })
+  ipcMain.handle('db:createTrainingBadMove', async (_, badMove) => {
+    await dbInit
+    return db.createTrainingBadMove(badMove)
+  })
+  ipcMain.handle('db:loadTrainingBadMove', async (_, badMoveId) => {
+    await dbInit
+    return db.loadTrainingBadMove(badMoveId)
+  })
+  ipcMain.handle('db:listTrainingBadMovesByAttempt', async (_, attemptId) => {
+    await dbInit
+    return db.listTrainingBadMovesByAttempt(attemptId)
+  })
+  ipcMain.handle('db:listTrainingBadMovesByTask', async (_, taskId) => {
+    await dbInit
+    return db.listTrainingBadMovesByTask(taskId)
+  })
+  ipcMain.handle('db:markTrainingBadMoveAsNotBad', async (_, badMoveId) => {
+    await dbInit
+    return db.markTrainingBadMoveAsNotBad(badMoveId)
+  })
+
   ipcMain.on('setting:getPathsSync', (e) => {
     try {
       e.returnValue = {

@@ -10,7 +10,7 @@ import {
   createSnapshotFromBoard,
   serializeSnapshot,
   getSnapshotSignature,
-} from '../study.js'
+} from '../../study.js'
 import sgf from '@sabaki/sgf'
 
 export type PositionSnapshot = {
@@ -72,7 +72,7 @@ export function createPositionSnapshotAdapter(sabaki: SabakiLike): PositionSnaps
     let snapshot = createSnapshotFromBoard(board, board?.nextPlayer ?? 1)
 
     let positionSgf = snapshot ? boardToSgf(snapshot) : ''
-    let positionHash = snapshot ? getSnapshotSignature(snapshot) : ''
+    let positionHash = snapshot ? (getSnapshotSignature(snapshot) ?? '') : ''
 
     return {
       positionSgf,

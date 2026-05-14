@@ -2,7 +2,6 @@ import type {
   TrainingTask,
   TrainingTaskSource,
   TrainingAttempt,
-  TrainingAttemptResult,
   MoveEvaluation,
   BadMove,
   RecallSession,
@@ -44,7 +43,7 @@ export type TrainingRepository = {
   upsertReviewSchedule(item: Record<string, unknown>): Promise<void>
   getDashboardSummary(): Promise<Record<string, unknown>>
 
-  // --- New training domain tables (stubs for Phase 0) ---
+  // --- New training domain tables ---
 
   // Task
   createTask(task: TrainingTask): Promise<TrainingTask>
@@ -52,13 +51,13 @@ export type TrainingRepository = {
   findTaskBySource(source: TrainingTaskSource): Promise<TrainingTask | null>
   updateTask(taskId: string, patch: Partial<TrainingTask>): Promise<void>
 
-  // Attempt (new)
+  // Attempt
   createAttempt(attempt: TrainingAttempt): Promise<TrainingAttempt>
   loadAttempt(attemptId: string): Promise<TrainingAttempt | null>
   listAttemptsByTask(taskId: string): Promise<TrainingAttempt[]>
   updateAttempt(attemptId: string, patch: Partial<TrainingAttempt>): Promise<void>
 
-  // MoveEvaluation (new)
+  // MoveEvaluation
   createMoveEvaluation(evaluation: MoveEvaluation): Promise<MoveEvaluation>
   updateMoveEvaluation(evaluationId: string, patch: Partial<MoveEvaluation>): Promise<void>
   listMoveEvaluationsByAttempt(attemptId: string): Promise<MoveEvaluation[]>
@@ -77,7 +76,7 @@ export type TrainingRepository = {
   createRecallAttempt(attempt: RecallAttempt): Promise<RecallAttempt>
   listRecallAttempts(sessionId: string): Promise<RecallAttempt[]>
 
-  // Checkpoint (new)
+  // Checkpoint
   createRecallCheckpoint(checkpoint: RecallCheckpoint): Promise<RecallCheckpoint>
   loadRecallCheckpoint(checkpointId: string): Promise<RecallCheckpoint | null>
   updateRecallCheckpoint(checkpointId: string, patch: Partial<RecallCheckpoint>): Promise<void>
@@ -88,7 +87,7 @@ export type TrainingRepository = {
   loadProblem(problemId: string): Promise<Problem | null>
   updateProblem(problemId: string, patch: Partial<Problem>): Promise<void>
 
-  // Comment (new)
+  // Comment
   createMoveComment(comment: MoveComment): Promise<MoveComment>
   loadMoveComment(commentId: string): Promise<MoveComment | null>
   updateMoveComment(commentId: string, patch: Partial<MoveComment>): Promise<void>
@@ -98,7 +97,7 @@ export type TrainingRepository = {
   listDueReviewItems(now: string): Promise<ReviewSchedule[]>
   updateReviewSchedule(id: string, patch: Partial<ReviewSchedule>): Promise<void>
 
-  // Recovery (new)
+  // Recovery
   listIncompleteAttempts(): Promise<TrainingAttempt[]>
   listIncompleteRecallSessions(): Promise<RecallSession[]>
   listExpiredPendingMoveEvaluations(now: string): Promise<MoveEvaluation[]>
@@ -107,136 +106,177 @@ export type TrainingRepository = {
   transaction<T>(fn: () => Promise<T>): Promise<T>
 }
 
-export function createTrainingRepository(db?: Db): TrainingRepository {
-  const _db = db ?? window?.sabaki?.db
+export function createTrainingRepository(db: Db): TrainingRepository {
+  if (!db) throw new Error('createTrainingRepository requires db')
 
   // --- Existing legacy table wrappers ---
 
   async function saveGame(game: Record<string, unknown>) {
-    return _db.saveGame(game)
+    return db.saveGame(game)
   }
 
   async function getGame(id: string) {
-    return _db.getGame(id)
+    return db.getGame(id)
   }
 
   async function getRecentGames(limit = 20) {
-    return _db.getRecentGames(limit)
+    return db.getRecentGames(limit)
   }
 
   async function saveRecallSession(session: Record<string, unknown>) {
-    return _db.saveRecallSession(session)
+    return db.saveRecallSession(session)
   }
 
   async function saveRecallAttempts(attempts: Record<string, unknown>[]) {
-    await _db.saveRecallAttempts(attempts)
+    await db.saveRecallAttempts(attempts)
   }
 
   async function saveProblem(problem: Record<string, unknown>) {
-    return _db.saveProblem(problem)
+    return db.saveProblem(problem)
   }
 
   async function getProblem(id: string) {
-    return _db.getProblem(id)
+    return db.getProblem(id)
   }
 
   async function getProblemsByStatus(status: string, limit = 50) {
-    return _db.getProblemsByStatus(status, limit)
+    return db.getProblemsByStatus(status, limit)
   }
 
   async function saveProblemAttempt(attempt: Record<string, unknown>) {
-    return _db.saveProblemAttempt(attempt)
+    return db.saveProblemAttempt(attempt)
   }
 
   async function saveBadMove(badMove: Record<string, unknown>) {
-    return _db.saveBadMove(badMove)
+    return db.saveBadMove(badMove)
   }
 
   async function updateBadMoveGeneratedProblem(badMoveId: string, problemId: string) {
-    await _db.updateBadMoveGeneratedProblem(badMoveId, problemId)
+    await db.updateBadMoveGeneratedProblem(badMoveId, problemId)
   }
 
   async function getDueReviews() {
-    return _db.getDueReviews()
+    return db.getDueReviews()
   }
 
   async function upsertReviewSchedule(item: Record<string, unknown>) {
-    await _db.upsertReviewSchedule(item)
+    await db.upsertReviewSchedule(item)
   }
 
   async function getDashboardSummary() {
-    return _db.getDashboardSummary()
+    return db.getDashboardSummary()
   }
 
-  // --- New training domain stubs ---
-  // These will be connected to new DB tables in later phases.
+  // --- New training domain (Phase 2: connected to DB) ---
+
+  async function createTask(task: TrainingTask): Promise<TrainingTask> {
+    const row = await db.createTrainingTask(task)
+    return mapTaskRow(row)
+  }
+
+  async function loadTask(taskId: string): Promise<TrainingTask | null> {
+    const row = await db.loadTrainingTask(taskId)
+    return row ? mapTaskRow(row) : null
+  }
+
+  async function findTaskBySource(source: TrainingTaskSource): Promise<TrainingTask | null> {
+    const row = await db.findTrainingTaskBySource(source)
+    return row ? mapTaskRow(row) : null
+  }
+
+  async function updateTask(taskId: string, patch: Partial<TrainingTask>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.kind !== undefined) mapped.kind = patch.kind
+    if (patch.source !== undefined) mapped.source = patch.source
+    if (patch.rootPositionSgf !== undefined) mapped.rootPositionSgf = patch.rootPositionSgf
+    if (patch.sideToMove !== undefined) mapped.sideToMove = patch.sideToMove
+    if (patch.title !== undefined) mapped.title = patch.title
+    await db.updateTrainingTask(taskId, mapped)
+  }
+
+  async function createAttempt(attempt: TrainingAttempt): Promise<TrainingAttempt> {
+    const row = await db.createTrainingAttempt(attempt)
+    return mapAttemptRow(row)
+  }
+
+  async function loadAttempt(attemptId: string): Promise<TrainingAttempt | null> {
+    const row = await db.loadTrainingAttempt(attemptId)
+    return row ? mapAttemptRow(row) : null
+  }
+
+  async function listAttemptsByTask(taskId: string): Promise<TrainingAttempt[]> {
+    const rows = await db.listTrainingAttemptsByTask(taskId)
+    return rows.map(mapAttemptRow)
+  }
+
+  async function updateAttempt(attemptId: string, patch: Partial<TrainingAttempt>): Promise<void> {
+    const mapped: Record<string, unknown> = {}
+    if (patch.tabId !== undefined) mapped.tabId = patch.tabId
+    if (patch.submittedAt !== undefined) mapped.submittedAt = patch.submittedAt
+    if (patch.completedAt !== undefined) mapped.completedAt = patch.completedAt
+    if (patch.userLine !== undefined) mapped.userLine = patch.userLine
+    if (patch.status !== undefined) mapped.status = patch.status
+    if (patch.result !== undefined) mapped.result = patch.result
+    if (patch.hintLevelUsed !== undefined) mapped.hintLevelUsed = patch.hintLevelUsed
+    if (patch.recallCompleted !== undefined) mapped.recallCompleted = patch.recallCompleted
+    if (patch.analysisOpened !== undefined) mapped.analysisOpened = patch.analysisOpened
+    await db.updateTrainingAttempt(attemptId, mapped)
+  }
+
+  async function createMoveEvaluation(evaluation: MoveEvaluation): Promise<MoveEvaluation> {
+    const row = await db.createMoveEvaluation(evaluation)
+    return mapEvaluationRow(row)
+  }
+
+  async function updateMoveEvaluation(evaluationId: string, patch: Partial<MoveEvaluation>): Promise<void> {
+    await db.updateMoveEvaluation(evaluationId, patch as Record<string, unknown>)
+  }
+
+  async function listMoveEvaluationsByAttempt(attemptId: string): Promise<MoveEvaluation[]> {
+    const rows = await db.listMoveEvaluationsByAttempt(attemptId)
+    return rows.map(mapEvaluationRow)
+  }
+
+  // --- BadMove (new domain) ---
+
+  async function createBadMove(badMove: BadMove): Promise<BadMove> {
+    const row = await db.createTrainingBadMove({
+      id: badMove.id,
+      moveEvaluationId: badMove.moveEvaluationId,
+      attemptId: badMove.attemptId,
+      taskId: badMove.taskId,
+      moveIndex: badMove.moveIndex,
+      severity: badMove.severity,
+      punishSide: badMove.punishSide,
+      positionBeforeSgf: undefined,
+      positionAfterSgf: undefined,
+    })
+    return mapBadMoveRow(row)
+  }
+
+  async function loadBadMove(badMoveId: string): Promise<BadMove | null> {
+    const row = await db.loadTrainingBadMove(badMoveId)
+    return row ? mapBadMoveRow(row) : null
+  }
+
+  async function listBadMovesByAttempt(attemptId: string): Promise<BadMove[]> {
+    const rows = await db.listTrainingBadMovesByAttempt(attemptId)
+    return rows.map(mapBadMoveRow)
+  }
+
+  async function listBadMovesByTask(taskId: string): Promise<BadMove[]> {
+    const rows = await db.listTrainingBadMovesByTask(taskId)
+    return rows.map(mapBadMoveRow)
+  }
+
+  async function markBadMoveAsNotBad(badMoveId: string): Promise<void> {
+    await db.markTrainingBadMoveAsNotBad(badMoveId)
+  }
+
+  // --- Remaining stubs (Phase 3+) ---
 
   function _notImplemented(method: string): never {
-    throw new Error(`trainingRepository.${method}: not yet implemented (Phase 0 stub)`)
-  }
-
-  function createTask(task: TrainingTask): Promise<TrainingTask> {
-    _notImplemented('createTask')
-  }
-
-  function loadTask(taskId: string): Promise<TrainingTask | null> {
-    _notImplemented('loadTask')
-  }
-
-  function findTaskBySource(source: TrainingTaskSource): Promise<TrainingTask | null> {
-    _notImplemented('findTaskBySource')
-  }
-
-  function updateTask(taskId: string, patch: Partial<TrainingTask>): Promise<void> {
-    _notImplemented('updateTask')
-  }
-
-  function createAttempt(attempt: TrainingAttempt): Promise<TrainingAttempt> {
-    _notImplemented('createAttempt')
-  }
-
-  function loadAttempt(attemptId: string): Promise<TrainingAttempt | null> {
-    _notImplemented('loadAttempt')
-  }
-
-  function listAttemptsByTask(taskId: string): Promise<TrainingAttempt[]> {
-    _notImplemented('listAttemptsByTask')
-  }
-
-  function updateAttempt(attemptId: string, patch: Partial<TrainingAttempt>): Promise<void> {
-    _notImplemented('updateAttempt')
-  }
-
-  function createMoveEvaluation(evaluation: MoveEvaluation): Promise<MoveEvaluation> {
-    _notImplemented('createMoveEvaluation')
-  }
-
-  function updateMoveEvaluation(evaluationId: string, patch: Partial<MoveEvaluation>): Promise<void> {
-    _notImplemented('updateMoveEvaluation')
-  }
-
-  function listMoveEvaluationsByAttempt(attemptId: string): Promise<MoveEvaluation[]> {
-    _notImplemented('listMoveEvaluationsByAttempt')
-  }
-
-  function createBadMove(badMove: BadMove): Promise<BadMove> {
-    _notImplemented('createBadMove')
-  }
-
-  function loadBadMove(badMoveId: string): Promise<BadMove | null> {
-    _notImplemented('loadBadMove')
-  }
-
-  function listBadMovesByAttempt(attemptId: string): Promise<BadMove[]> {
-    _notImplemented('listBadMovesByAttempt')
-  }
-
-  function listBadMovesByTask(taskId: string): Promise<BadMove[]> {
-    _notImplemented('listBadMovesByTask')
-  }
-
-  function markBadMoveAsNotBad(badMoveId: string): Promise<void> {
-    _notImplemented('markBadMoveAsNotBad')
+    throw new Error(`trainingRepository.${method}: not yet implemented (post-Phase 2 stub)`)
   }
 
   function createRecallSession(session: RecallSession): Promise<RecallSession> {
@@ -311,21 +351,100 @@ export function createTrainingRepository(db?: Db): TrainingRepository {
     _notImplemented('updateReviewSchedule')
   }
 
-  function listIncompleteAttempts(): Promise<TrainingAttempt[]> {
-    _notImplemented('listIncompleteAttempts')
+  async function listIncompleteAttempts(): Promise<TrainingAttempt[]> {
+    const rows = await db.listIncompleteTrainingAttempts()
+    return rows.map(mapAttemptRow)
   }
 
   function listIncompleteRecallSessions(): Promise<RecallSession[]> {
     _notImplemented('listIncompleteRecallSessions')
   }
 
-  function listExpiredPendingMoveEvaluations(now: string): Promise<MoveEvaluation[]> {
-    _notImplemented('listExpiredPendingMoveEvaluations')
+  async function listExpiredPendingMoveEvaluations(now: string): Promise<MoveEvaluation[]> {
+    const rows = await db.listExpiredPendingMoveEvaluations(now)
+    return rows.map(mapEvaluationRow)
   }
 
   async function transaction<T>(fn: () => Promise<T>): Promise<T> {
-    // Phase 0: no real transaction support over IPC yet
+    // IPC does not support real transactions; sequential execution is safe for MVP
     return fn()
+  }
+
+  // --- Row mappers ---
+
+  function mapTaskRow(row: Record<string, unknown>): TrainingTask {
+    return {
+      id: row.id as string,
+      kind: row.kind as TrainingTask['kind'],
+      source: typeof row.source === 'string' ? JSON.parse(row.source) : row.source,
+      rootPositionSgf: row.rootPositionSgf as string,
+      sideToMove: row.sideToMove as 'black' | 'white' | undefined,
+      title: row.title as string | undefined,
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string,
+    }
+  }
+
+  function mapAttemptRow(row: Record<string, unknown>): TrainingAttempt {
+    return {
+      id: row.id as string,
+      taskId: row.taskId as string,
+      tabId: row.tabId as string | undefined,
+      startedAt: row.startedAt as string,
+      submittedAt: row.submittedAt as string | undefined,
+      completedAt: row.completedAt as string | undefined,
+      rootPositionSgf: row.rootPositionSgf as string,
+      userLine: typeof row.userLine === 'string' ? JSON.parse(row.userLine) : (row.userLine as string[]),
+      status: row.status as TrainingAttempt['status'],
+      result: row.result as TrainingAttempt['result'],
+      hintLevelUsed: (row.hintLevelUsed as number) ?? 0,
+      recallCompleted: !!row.recallCompleted,
+      analysisOpened: !!row.analysisOpened,
+    }
+  }
+
+  function mapEvaluationRow(row: Record<string, unknown>): MoveEvaluation {
+    return {
+      id: row.id as string,
+      attemptId: row.attemptId as string,
+      moveIndex: row.moveIndex as number,
+      move: row.move as string,
+      positionBeforeHash: row.positionBeforeHash as string | undefined,
+      positionAfterHash: row.positionAfterHash as string | undefined,
+      positionBeforeSgf: row.positionBeforeSgf as string | undefined,
+      positionAfterSgf: row.positionAfterSgf as string | undefined,
+      beforeScoreLead: row.beforeScoreLead as number | undefined,
+      afterScoreLead: row.afterScoreLead as number | undefined,
+      scoreDrop: row.scoreDrop as number | undefined,
+      beforeWinrate: row.beforeWinrate as number | undefined,
+      afterWinrate: row.afterWinrate as number | undefined,
+      winrateDrop: row.winrateDrop as number | undefined,
+      engineSuggestedMove: row.engineSuggestedMove as string | undefined,
+      engineSuggestedLine: typeof row.engineSuggestedLine === 'string'
+        ? JSON.parse(row.engineSuggestedLine)
+        : (row.engineSuggestedLine as string[] | undefined),
+      status: row.status as MoveEvaluation['status'],
+      createdAt: row.createdAt as string,
+      evaluatedAt: row.evaluatedAt as string | undefined,
+    }
+  }
+
+  function mapBadMoveRow(row: Record<string, unknown>): BadMove {
+    return {
+      id: row.id as string,
+      moveEvaluationId: row.moveEvaluationId as string,
+      attemptId: row.attemptId as string,
+      taskId: row.taskId as string,
+      moveIndex: row.moveIndex as number,
+      severity: row.severity as BadMove['severity'],
+      punishSide: row.punishSide as 'black' | 'white',
+      positionBeforeSgf: row.positionBeforeSgf as string | undefined,
+      positionAfterSgf: row.positionAfterSgf as string | undefined,
+      userMarkedAsNotBad: row.userMarkedAsNotBad as boolean | undefined,
+      generatedProblemId: row.generatedProblemId as string | undefined,
+      recallCheckpointId: row.recallCheckpointId as string | undefined,
+      createdAt: row.createdAt as string,
+    }
   }
 
   return {
