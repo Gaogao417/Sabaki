@@ -15,6 +15,7 @@ const i18n = require('./i18n')
 const setting = require('./setting')
 const updater = require('./updater')
 const db = require('./modules/db')
+const foxGameFetchService = require('./modules/foxGameFetchService')
 
 let windows = []
 let openfile = null
@@ -497,6 +498,25 @@ function setupIpcHandlers() {
 
   ipcMain.handle('humansl:ensureModel', async () => {
     return await ensureHumanSLModel()
+  })
+
+  // FoxWQ game import
+  ipcMain.handle('fox:queryUserByName', async (_, username) => {
+    return foxGameFetchService.queryUserByName(username)
+  })
+
+  ipcMain.handle('fox:fetchGameList', async (_, uid, lastcode) => {
+    if (!/^\d+$/.test(String(uid))) {
+      return {success: false, error: 'Invalid FoxWQ ID', code: 'INVALID_UID'}
+    }
+    return foxGameFetchService.fetchGameList(uid, lastcode)
+  })
+
+  ipcMain.handle('fox:fetchSgf', async (_, chessid) => {
+    if (!/^\d+$/.test(String(chessid))) {
+      return {success: false, error: 'Invalid chessid', code: 'INVALID_CHESSID'}
+    }
+    return foxGameFetchService.fetchSgf(chessid)
   })
 
   // Settings - for renderer access

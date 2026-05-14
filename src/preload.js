@@ -169,6 +169,15 @@ window.sabaki = {
     getDashboardSummary: () => ipcRenderer.invoke('db:getDashboardSummary'),
   },
 
+  // FoxWQ game import
+  fox: {
+    queryUserByName: (username) =>
+      ipcRenderer.invoke('fox:queryUserByName', username),
+    fetchGameList: (uid, lastcode) =>
+      ipcRenderer.invoke('fox:fetchGameList', uid, lastcode),
+    fetchSgf: (chessid) => ipcRenderer.invoke('fox:fetchSgf', chessid),
+  },
+
   // File path helper for Electron 32+ (File.path was removed)
   getPathForFile: (file) => {
     if (webUtils && webUtils.getPathForFile) {
