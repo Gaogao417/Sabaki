@@ -62,6 +62,19 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
   let generation = 0
   let hideInfoOverlayTimer: ReturnType<typeof setTimeout> | null = null
 
+  // Observer pattern: local subscribers notified on every state change
+  let listeners = new Set<() => void>()
+
+  function subscribe(listener: () => void): () => void {
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
+  }
+
+  function emitChange() {
+    deps.notifyChange()
+    for (let listener of listeners) listener()
+  }
+
   function snapshot() {
     return {
       territoryEnabled: state.territoryEnabled,
@@ -93,12 +106,12 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
   function showInfoOverlay(text: string): void {
     state.showInfoOverlay = true
     state.infoOverlayText = text
-    deps.notifyChange()
+    emitChange()
   }
 
   function hideInfoOverlay(): void {
     state.showInfoOverlay = false
-    deps.notifyChange()
+    emitChange()
   }
 
   function flashInfoOverlay(text: string, duration?: number): void {
@@ -129,7 +142,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
       hideInfoOverlay()
       state.territoryEnabled = false
       console.log('[overlay.setTerritoryEnabled] → disabled', snapshot())
-      deps.notifyChange()
+      emitChange()
       return true
     }
 
@@ -151,7 +164,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
     hideInfoOverlay()
     state.territoryEnabled = true
     console.log('[overlay.setTerritoryEnabled] → enabled (sync)', snapshot())
-    deps.notifyChange()
+    emitChange()
 
     // Async reaction: confirm engine capability
     let gen = ++generation
@@ -176,7 +189,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
           '[overlay.setTerritoryEnabled] → rollback (no syncer)',
           snapshot(),
         )
-        deps.notifyChange()
+        emitChange()
         return
       }
 
@@ -225,7 +238,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
     if (!territoryCompareEnabled) {
       state.territoryCompareEnabled = false
-      deps.notifyChange()
+      emitChange()
       return true
     }
 
@@ -245,7 +258,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
       if (syncer == null) {
         state.territoryCompareEnabled = false
-        deps.notifyChange()
+        emitChange()
         return
       }
 
@@ -255,7 +268,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
       deps.scheduleEditWorkspaceAnalysis()
       state.territoryCompareEnabled = true
-      deps.notifyChange()
+      emitChange()
     })
 
     return true
@@ -313,7 +326,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
       console.log('[overlay.onModeChange] → turned off territoryCompareEnabled')
     }
 
-    if (changed) deps.notifyChange()
+    if (changed) emitChange()
   }
 
   /** Called after tree position changes. Turns off territoryCompareEnabled if
@@ -321,7 +334,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
   function onNavigation(): void {
     if (state.territoryCompareEnabled && !getTerritoryCompareAvailable()) {
       state.territoryCompareEnabled = false
-      deps.notifyChange()
+      emitChange()
     }
   }
 
@@ -331,6 +344,7 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
   return {
     getState,
+    subscribe,
     getTerritoryCompareAvailable,
     showInfoOverlay,
     hideInfoOverlay,

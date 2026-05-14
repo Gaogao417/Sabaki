@@ -597,6 +597,10 @@ class App extends Component {
       inspectorSummary,
       enginePanelOpen: this.state.enginePanelOpen,
       onEnginePanelToggle: this.handleEnginePanelToggle,
+      boardServices: {
+        overlayStore: sabaki.getOverlayStore(),
+        engineService,
+      },
     }
 
     let workbenchMode = ['play', 'recall', 'analysis'].includes(state.mode)

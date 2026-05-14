@@ -346,6 +346,7 @@ export default class MainView extends Component {
       findText,
       findVertex,
       editWorkspace: editWs,
+      boardServices,
     },
     {gobanCrosshair, areaModifierActive},
   ) {
@@ -486,9 +487,9 @@ export default class MainView extends Component {
         h(BoardToolbar, {
           mode,
           editWorkspaceActive,
-          territoryEnabled: territoryMode,
+          territoryEnabled: (boardServices?.overlayStore?.getState()?.territoryEnabled || boardServices?.overlayStore?.getState()?.territoryCompareEnabled) ?? false,
           territoryCompareEnabled,
-          territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
+          territoryCompareAvailable: boardServices?.overlayStore?.getTerritoryCompareAvailable?.() ?? false,
           currentPlayer,
           playerNames: gameInfo.playerNames,
           playerRanks: gameInfo.playerRanks,

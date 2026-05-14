@@ -6,8 +6,43 @@ import * as helper from '../../modules/helper.js'
 import {resolveOverlayInput} from '../../modules/overlays/resolveOverlayInput.ts'
 import {composeWorkbenchOverlays} from '../../modules/overlays/composeWorkbenchOverlays.ts'
 
+/**
+ * Derive overlay toggle state from the injected overlayStore subscription.
+ * Falls back to deriving from props for backwards compatibility.
+ */
+function getOverlaySnapshot({props, state}) {
+  let overlayState = state.overlayState
+  if (overlayState != null) {
+    let territoryMode = overlayState.territoryEnabled || overlayState.territoryCompareEnabled
+    let territoryCompareActive = overlayState.territoryCompareEnabled && (props.editWorkspaceActive ?? false)
+    return {territoryMode, territoryCompareActive}
+  }
+  return {
+    territoryMode: props.territoryMode ?? false,
+    territoryCompareActive: props.territoryCompareActive ?? false,
+  }
+}
+
 export default class BoardOverlayStack extends Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      hoveredVertex: null,
+      hoveredAnalysisVertex: null,
+      hoveredVariation: null,
+      hoverOwnership: null,
+      hoverPending: false,
+      overlayState: props.boardServices?.overlayStore?.getState() ?? null,
+    }
+  }
+
   componentDidMount() {
+    const {overlayStore} = this.props.boardServices || {}
+    if (overlayStore?.subscribe) {
+      this.unsubscribeOverlay = overlayStore.subscribe(() => {
+        this.setState({overlayState: overlayStore.getState()})
+      })
+    }
     this.reportStatus()
   }
 
@@ -16,6 +51,7 @@ export default class BoardOverlayStack extends Component {
   }
 
   componentWillUnmount() {
+    this.unsubscribeOverlay?.()
     this.props.onStatusChange?.(null)
   }
 
@@ -59,10 +95,8 @@ export default class BoardOverlayStack extends Component {
 
   render(
     {
-      territoryMode,
       appMode,
       editWorkspaceActive,
-      territoryCompareActive,
       editActiveTab,
       analysisPending,
       engineSyncerAvailable,
@@ -87,11 +121,13 @@ export default class BoardOverlayStack extends Component {
       hoverPending = false,
     },
   ) {
+    let {territoryMode, territoryCompareActive} = getOverlaySnapshot({props: this.props, state: this.state})
+
     let resolved = resolveOverlayInput({
       territoryMode,
       appMode: appMode ?? 'analysis',
       editWorkspaceActive: editWorkspaceActive ?? false,
-      territoryCompareActive: territoryCompareActive ?? false,
+      territoryCompareActive,
       editActiveTab: editActiveTab ?? null,
       analysisPending: analysisPending ?? false,
       engineSyncerAvailable: engineSyncerAvailable ?? false,
