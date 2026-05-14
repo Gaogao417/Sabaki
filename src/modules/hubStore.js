@@ -1,4 +1,3 @@
-
 import EventEmitter from 'events'
 
 class HubStore extends EventEmitter {
@@ -6,8 +5,8 @@ class HubStore extends EventEmitter {
     super()
     this.state = {
       isOpen: false,
-      activeSection: 'general',
-      navigationParams: null
+      activeSection: 'foxGames',
+      navigationParams: null,
     }
   }
 
@@ -15,7 +14,7 @@ class HubStore extends EventEmitter {
     return this.state
   }
 
-  open(section = 'general', params = null) {
+  open(section = 'foxGames', params = null) {
     this.state.isOpen = true
     this.state.activeSection = section
     this.state.navigationParams = params

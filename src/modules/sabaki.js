@@ -599,16 +599,6 @@ class Sabaki extends EventEmitter {
   }
 
   openDrawer(drawer) {
-    if (drawer === 'preferences') {
-      this.openHub('general')
-      return
-    } else if (drawer === 'enginemanagement') {
-      this.openHub('engine')
-      return
-    } else if (drawer === 'gamechooser') {
-      this.openHub('history')
-      return
-    }
     this.setState({openDrawer: drawer})
   }
 
