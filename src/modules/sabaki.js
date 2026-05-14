@@ -1550,13 +1550,28 @@ class Sabaki extends EventEmitter {
       const analysisResultAdapter = createAnalysisResultAdapter(this)
       const positionSnapshotAdapter = createPositionSnapshotAdapter(this)
 
-      const tabService = createWorkbenchTabService({ workbenchStore, repository, legacyAdapter, sgfParser: fileformats.sgf, logger })
-      const phaseService = createWorkbenchPhaseService({ workbenchStore, logger })
       const attemptService = createAttemptService({ repository, runtimeStore, logger })
       const monitor = createPlayTrainingMonitor({ attemptService, analysisResultAdapter, repository, runtimeStore, logger })
+      const tabService = createWorkbenchTabService({
+        workbenchStore,
+        repository,
+        legacyAdapter,
+        sgfParser: fileformats.sgf,
+        runtimeStore,
+        attemptService,
+        monitor,
+        logger,
+      })
       const checkpointService = createRecallCheckpointService({ repository, runtimeStore, logger })
       const recallService = createRecallService({ repository, runtimeStore, checkpointService, logger })
       const snapshotService = createSnapshotService({ repository, positionSnapshotAdapter, workbenchStore, logger })
+      const phaseService = createWorkbenchPhaseService({
+        workbenchStore,
+        repository,
+        snapshotService,
+        tabService,
+        logger,
+      })
       const reviewService = createReviewService({ repository, workbenchTabService: tabService, logger })
       const problemService = createProblemService({ repository, reviewService, logger })
 

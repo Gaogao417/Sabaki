@@ -1,7 +1,10 @@
 import type { WorkbenchTab, WorkbenchPhase, TrainingTask } from '../types/index'
 import type { WorkbenchStore } from '../store/workbenchStore'
+import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { LegacySabakiAdapter } from '../adapter/legacySabakiAdapter'
+import type { AttemptService } from '../attempt/attemptService'
+import type { PlayTrainingMonitor } from '../attempt/playTrainingMonitor'
 
 export type SgfParser = {
   parse(sgf: string): unknown[]
@@ -25,11 +28,23 @@ export type WorkbenchTabServiceDeps = {
   repository: TrainingRepository
   legacyAdapter: LegacySabakiAdapter
   sgfParser: SgfParser
+  runtimeStore?: TrainingRuntimeStore
+  attemptService?: AttemptService
+  monitor?: PlayTrainingMonitor
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
 }
 
 export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): WorkbenchTabService {
-  const { workbenchStore, repository, legacyAdapter, sgfParser, logger } = deps
+  const {
+    workbenchStore,
+    repository,
+    legacyAdapter,
+    sgfParser,
+    runtimeStore,
+    attemptService,
+    monitor,
+    logger,
+  } = deps
 
   function generateId(): string {
     return `tab_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
@@ -123,11 +138,6 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
       sideToMove: problem.sideToMove,
     })
 
-    // Legacy compatibility: run legacy mode setup if requested
-    if (options?.legacyCompatibility !== false) {
-      await setupLegacyCompatibility(problem, problemId)
-    }
-
     // Create new-system Task + Tab
     const task = createTaskFromProblem(problemId, problem)
     const tab = createTabForTask(task, options)
@@ -140,6 +150,40 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
       }
       workbenchStore.updateTab(options.parentTabId, {
         childTabIds: [...parent.childTabIds, tab.id],
+      })
+    }
+
+    // Legacy setup can still fail on bad SGF. Keep it before DB writes so
+    // opening a legacy problem remains all-or-nothing during migration.
+    if (options?.legacyCompatibility !== false) {
+      await setupLegacyCompatibility(problem, problemId)
+    }
+
+    const savedTask = await repository.createTask(task)
+    const attempt = attemptService
+      ? await attemptService.createAttempt({
+        taskId: savedTask.id,
+        tabId: tab.id,
+        rootPositionSgf: savedTask.rootPositionSgf,
+      })
+      : null
+
+    if (attempt && runtimeStore) {
+      runtimeStore.setProblemView({
+        taskId: savedTask.id,
+        tabId: tab.id,
+        attemptId: attempt.id,
+        problemId,
+        legacyProblemSession: problem,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+
+      monitor?.startForAttempt({
+        attemptId: attempt.id,
+        taskId: savedTask.id,
       })
     }
 
