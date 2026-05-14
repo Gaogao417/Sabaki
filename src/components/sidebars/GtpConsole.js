@@ -89,13 +89,15 @@ class ConsoleResponseEntry extends Component {
   }
 }
 
+import {logger} from '../../modules/logger/index.js'
+
 class AppLogEntry extends Component {
   shouldComponentUpdate({entry}) {
     return entry !== this.props.entry
   }
 
   render({entry}) {
-    let time = formatTimestamp(entry.timestamp)
+    let time = formatTimestamp(entry.time || Date.now())
 
     return h(
       'li',
@@ -105,7 +107,7 @@ class AppLogEntry extends Component {
         ' ',
         h('span', {class: `app-log-level app-log-level-${entry.level}`}, entry.level.toUpperCase()),
         ' ',
-        h('span', {class: 'app-log-category'}, entry.category),
+        h('span', {class: 'app-log-category'}, entry.source || entry.category),
         ' ',
         h('span', {class: 'app-log-message'}, entry.message),
       ]),
@@ -253,6 +255,7 @@ export default class GtpConsole extends Component {
 
     this.state = {
       logFilter: 'gtp',
+      appLogs: logger.getEntries(),
     }
 
     this.scrollToBottom = true
@@ -277,8 +280,20 @@ export default class GtpConsole extends Component {
     }
   }
 
+  componentDidMount() {
+    this._loggerUnsubscribe = logger.subscribe(() => {
+      this.setState({appLogs: logger.getEntries()})
+    })
+  }
+
   componentWillReceiveProps({consoleLog}) {
     this.inputPointer = consoleLog.length
+  }
+
+  componentWillUnmount() {
+    if (this._loggerUnsubscribe) {
+      this._loggerUnsubscribe()
+    }
   }
 
   componentWillUpdate() {
@@ -307,12 +322,20 @@ export default class GtpConsole extends Component {
     return 0
   }
 
-  render({consoleLog, attachedEngine}, {logFilter}) {
-    let filteredLog = consoleLog.filter((entry) => {
-      if (logFilter === 'all') return true
-      if (logFilter === 'gtp') return !entry.appLog
-      return entry.appLog === true
-    })
+  render({consoleLog, attachedEngine}, {logFilter, appLogs}) {
+    let combinedLog = []
+    
+    if (logFilter === 'all' || logFilter === 'gtp') {
+      combinedLog.push(...consoleLog.map(entry => ({...entry, appLog: false})))
+    }
+    
+    if (logFilter === 'all' || logFilter === 'app') {
+      combinedLog.push(...appLogs.map(entry => ({...entry, appLog: true})))
+    }
+
+    combinedLog.sort((a, b) => (a.time || 0) - (b.time || 0))
+
+    let filteredLog = combinedLog
 
     let filters = [
       {id: 'gtp', label: 'GTP'},

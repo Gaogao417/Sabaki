@@ -9,6 +9,10 @@ export {formatTimestamp, toSource} from './logFormatting.js'
 export {createWinstonWriter} from './winstonWriter.js'
 export {safeSerialize} from './safeSerialize.js'
 
+import {createLoggerService} from './LoggerService.js'
+export const logger = createLoggerService({bufferSize: 500})
+
+
 /**
  * @typedef {Object} LogEntry
  * @property {number} time     — epoch ms

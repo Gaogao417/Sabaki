@@ -103,6 +103,13 @@ export function createLoggerService(config = {}) {
     if (next.writers != null) writers = next.writers
   }
 
+  function clear() {
+    buffer = []
+    for (let sub of subscribers) {
+      try { sub(null) } catch (_) {}
+    }
+  }
+
   return {
     debug,
     info,
@@ -111,6 +118,7 @@ export function createLoggerService(config = {}) {
     log: append,
     subscribe,
     getEntries,
+    clear,
     close,
     reconfigure,
   }
