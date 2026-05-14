@@ -971,6 +971,302 @@ class EnginesTab extends Component {
   }
 }
 
+class AccountsTab extends Component {
+  constructor(props) {
+    super(props)
+
+    // Migrate legacy fox.account → fox.accounts
+    let accounts = setting.get('fox.accounts') || []
+    if (accounts.length === 0) {
+      let legacy = setting.get('fox.account')
+      if (legacy) {
+        accounts = [{id: uuid(), account: legacy, alias: ''}]
+        setting.set('fox.accounts', accounts)
+      }
+    }
+
+    this.state = {
+      foxAccounts: accounts,
+      defaultAccount: setting.get('fox.default_account'),
+      weiqi101Username: setting.get('weiqi101.username'),
+      weiqi101Password: '',
+      showPassword: false,
+      is101Testing: false,
+      test101Result: null,
+    }
+
+    this.handleAccountChange = (id, field, evt) => {
+      let accounts = this.state.foxAccounts.slice()
+      let entry = accounts.find((a) => a.id === id)
+      if (!entry) return
+      entry[field] = evt.currentTarget.value
+      setting.set('fox.accounts', accounts)
+      this.setState({foxAccounts: accounts})
+    }
+
+    this.handleAddAccount = () => {
+      let accounts = [
+        ...this.state.foxAccounts,
+        {id: uuid(), account: '', alias: ''},
+      ]
+      setting.set('fox.accounts', accounts)
+      this.setState({foxAccounts: accounts})
+    }
+
+    this.handleRemoveAccount = (id) => {
+      let accounts = this.state.foxAccounts.filter((a) => a.id !== id)
+      setting.set('fox.accounts', accounts)
+      if (this.state.defaultAccount === id) {
+        setting.set('fox.default_account', null)
+        this.setState({foxAccounts: accounts, defaultAccount: null})
+      } else {
+        this.setState({foxAccounts: accounts})
+      }
+    }
+
+    this.handleDefaultChange = (evt) => {
+      let val = evt.currentTarget.value || null
+      setting.set('fox.default_account', val)
+      this.setState({defaultAccount: val})
+    }
+
+    this.handle101UsernameChange = (evt) => {
+      const val = evt.currentTarget.value
+      setting.set('weiqi101.username', val)
+      this.setState({weiqi101Username: val})
+    }
+
+    this.handle101PasswordChange = (evt) => {
+      this.setState({weiqi101Password: evt.currentTarget.value})
+    }
+
+    this.togglePassword = () => {
+      this.setState(({showPassword}) => ({showPassword: !showPassword}))
+    }
+
+    this.test101Login = async () => {
+      this.setState({is101Testing: true, test101Result: null})
+      const result = await window.sabaki.weiqi101.login(
+        this.state.weiqi101Username,
+        this.state.weiqi101Password,
+      )
+
+      if (result.success) {
+        await window.sabaki.crypto.encryptString(this.state.weiqi101Password)
+        sabaki.setState({weiqi101Connected: true})
+      }
+
+      this.setState({
+        is101Testing: false,
+        test101Result: result.success ? 'success' : result.error,
+      })
+    }
+  }
+
+  renderFoxCard() {
+    let {foxAccounts, defaultAccount} = this.state
+
+    return h(
+      'section',
+      {class: 'account-card'},
+      h(
+        'div',
+        {class: 'account-card__header'},
+        h('div', {class: 'account-card__icon', 'aria-hidden': 'true'}, '狐'),
+        h('h2', {class: 'account-card__title'}, '野狐围棋 (FoxWQ)'),
+      ),
+      h(
+        'p',
+        {class: 'account-card__desc'},
+        '常用账号列表（支持 UID 或用户名，格式：账号:别名）',
+      ),
+      h(
+        'div',
+        {class: 'account-list'},
+        ...foxAccounts.map((entry) =>
+          h(
+            'div',
+            {class: 'account-row', key: entry.id},
+            h('div', {class: 'drag-handle', title: '拖动排序'}),
+            h('input', {
+              class: 'field',
+              type: 'text',
+              value: entry.alias ? `${entry.account}:${entry.alias}` : entry.account,
+              placeholder: '用户名或UID:别名',
+              onChange: (evt) => {
+                let raw = evt.currentTarget.value
+                let colonIdx = raw.indexOf(':')
+                if (colonIdx >= 0) {
+                  this.handleAccountChange(entry.id, 'account', {
+                    currentTarget: {value: raw.slice(0, colonIdx)},
+                  })
+                  this.handleAccountChange(entry.id, 'alias', {
+                    currentTarget: {value: raw.slice(colonIdx + 1)},
+                  })
+                } else {
+                  this.handleAccountChange(entry.id, 'account', {
+                    currentTarget: {value: raw},
+                  })
+                }
+              },
+            }),
+            h(
+              'button',
+              {
+                class: 'icon-button',
+                type: 'button',
+                'aria-label': '删除账号',
+                onClick: () => this.handleRemoveAccount(entry.id),
+              },
+              '⌫',
+            ),
+          ),
+        ),
+      ),
+      h(
+        'div',
+        {class: 'button-row'},
+        h(
+          'button',
+          {class: 'ghost-button', type: 'button', onClick: this.handleAddAccount},
+          h('span', {'aria-hidden': 'true'}, '＋'),
+          ' 添加账号',
+        ),
+      ),
+      h('div', {class: 'divider'}),
+      h(
+        'div',
+        {class: 'setting-row'},
+        h('label', {class: 'setting-label', for: 'default-fox-account'}, '默认账号'),
+        h(
+          'select',
+          {
+            id: 'default-fox-account',
+            class: 'field select-field',
+            value: defaultAccount || '',
+            onChange: this.handleDefaultChange,
+          },
+          h('option', {value: ''}, '-- 请选择 --'),
+          ...foxAccounts.map((entry) =>
+            h(
+              'option',
+              {
+                key: entry.id,
+                value: entry.id,
+                selected: defaultAccount === entry.id,
+              },
+              entry.alias ? `${entry.account}:${entry.alias}` : entry.account,
+            ),
+          ),
+        ),
+      ),
+    )
+  }
+
+  render101Card() {
+    let {weiqi101Username, weiqi101Password, showPassword, is101Testing, test101Result} = this.state
+
+    return h(
+      'section',
+      {class: 'account-card'},
+      h(
+        'div',
+        {class: 'account-card__header'},
+        h('div', {class: 'account-card__icon', 'aria-hidden': 'true'}, '101'),
+        h('h2', {class: 'account-card__title'}, '101 围棋'),
+      ),
+      h(
+        'div',
+        {class: 'login-form'},
+        h(
+          'div',
+          {class: 'setting-row'},
+          h('label', {class: 'setting-label', for: 'weiqi101-username'}, '用户名/手机号'),
+          h('input', {
+            id: 'weiqi101-username',
+            class: 'field',
+            type: 'text',
+            placeholder: '请输入用户名或手机号',
+            value: weiqi101Username || '',
+            onChange: this.handle101UsernameChange,
+          }),
+        ),
+        h(
+          'div',
+          {class: 'setting-row'},
+          h('label', {class: 'setting-label', for: 'weiqi101-password'}, '密码'),
+          h(
+            'div',
+            {class: 'password-wrap'},
+            h('input', {
+              id: 'weiqi101-password',
+              class: 'field',
+              type: showPassword ? 'text' : 'password',
+              placeholder: '请输入密码',
+              value: weiqi101Password,
+              onChange: this.handle101PasswordChange,
+            }),
+            h(
+              'button',
+              {
+                class: 'password-toggle',
+                type: 'button',
+                'aria-label': showPassword ? '隐藏密码' : '显示密码',
+                onClick: this.togglePassword,
+              },
+              showPassword ? '◎' : '◉',
+            ),
+          ),
+        ),
+        h(
+          'div',
+          {class: 'setting-row'},
+          h('span'),
+          h(
+            'div',
+            {class: 'button-row'},
+            h(
+              'button',
+              {
+                class: 'secondary-button',
+                type: 'button',
+                disabled: is101Testing,
+                onClick: this.test101Login,
+              },
+              h('span', {'aria-hidden': 'true'}, '▱'),
+              ' 测试登录',
+            ),
+            test101Result &&
+              h(
+                'span',
+                {
+                  class: classNames('test-result', {
+                    success: test101Result === 'success',
+                    error: test101Result !== 'success',
+                  }),
+                },
+                test101Result === 'success'
+                  ? ' ✓ 登录成功'
+                  : ` ✗ ${test101Result}`,
+              ),
+            !test101Result &&
+              h('span', {class: 'helper-text'}, '点击测试登录以验证账号是否可用'),
+          ),
+        ),
+      ),
+    )
+  }
+
+  render() {
+    return h(
+      'div',
+      {class: 'prefs-dialog__section accounts-tab'},
+      this.renderFoxCard(),
+      this.render101Card(),
+    )
+  }
+}
+
 export default class PreferencesDrawer extends Component {
   constructor() {
     super()
@@ -980,7 +1276,7 @@ export default class PreferencesDrawer extends Component {
     }
 
     this.handleTabClick = (evt) => {
-      let tabs = ['general', 'themes', 'engines']
+      let tabs = ['general', 'themes', 'engines', 'accounts']
       let tab = tabs.find((x) => evt.currentTarget.classList.contains(x))
 
       sabaki.setState({preferencesTab: tab})
@@ -1062,6 +1358,17 @@ export default class PreferencesDrawer extends Component {
           },
           t('Engines'),
         ),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: classNames('prefs-dialog__tab', 'accounts', {
+              active: tab === 'accounts',
+            }),
+            onClick: this.handleTabClick,
+          },
+          '账号管理'
+        ),
       ),
 
       h(
@@ -1070,6 +1377,7 @@ export default class PreferencesDrawer extends Component {
         tab === 'general' && h(GeneralTab, {graphGridSize}),
         tab === 'themes' && h(ThemesTab),
         tab === 'engines' && h(EnginesTab, {engines}),
+        tab === 'accounts' && h(AccountsTab),
       ),
 
       h(

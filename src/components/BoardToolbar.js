@@ -184,7 +184,7 @@ export default class BoardToolbar extends Component {
             class: 'name',
             title: syncer != null ? t('Engine') : player,
           },
-          sign > 0 ? '黑棋' : '白棋',
+          player || (sign > 0 ? '黑棋' : '白棋'),
         ),
         h('span', {class: 'captures'}, `提子 ${captures}`),
       ),
