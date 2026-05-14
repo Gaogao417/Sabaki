@@ -15,7 +15,6 @@ const i18n = require('./i18n')
 const setting = require('./setting')
 const updater = require('./updater')
 const db = require('./modules/db')
-const foxGameFetchService = require('./modules/foxGameFetchService')
 
 let windows = []
 let openfile = null
@@ -196,6 +195,7 @@ const settingsKeys = [
   'theme.custom_background',
   'window.width',
   'window.height',
+  '101weiqi.session',
   'app.always_show_result',
 ]
 
@@ -500,25 +500,6 @@ function setupIpcHandlers() {
     return await ensureHumanSLModel()
   })
 
-  // FoxWQ game import
-  ipcMain.handle('fox:queryUserByName', async (_, username) => {
-    return foxGameFetchService.queryUserByName(username)
-  })
-
-  ipcMain.handle('fox:fetchGameList', async (_, uid, lastcode) => {
-    if (!/^\d+$/.test(String(uid))) {
-      return {success: false, error: 'Invalid FoxWQ ID', code: 'INVALID_UID'}
-    }
-    return foxGameFetchService.fetchGameList(uid, lastcode)
-  })
-
-  ipcMain.handle('fox:fetchSgf', async (_, chessid) => {
-    if (!/^\d+$/.test(String(chessid))) {
-      return {success: false, error: 'Invalid chessid', code: 'INVALID_CHESSID'}
-    }
-    return foxGameFetchService.fetchSgf(chessid)
-  })
-
   // Settings - for renderer access
   ipcMain.handle('setting:set', (e, key, value) => {
     setting.set(key, value)
@@ -611,6 +592,28 @@ function setupIpcHandlers() {
   ipcMain.handle('db:getDashboardSummary', async (_) => {
     await dbInit
     return db.getDashboardSummary()
+  })
+
+  // 101weiqi cached problems
+  ipcMain.handle('db:saveWeiqi101Problem', async (_, problem) => {
+    await dbInit
+    return db.saveWeiqi101Problem(problem)
+  })
+  ipcMain.handle('db:getWeiqi101Problem', async (_, problemId) => {
+    await dbInit
+    return db.getWeiqi101Problem(problemId)
+  })
+  ipcMain.handle('db:getWeiqi101Problems', async () => {
+    await dbInit
+    return db.getWeiqi101Problems()
+  })
+  ipcMain.handle('db:getWeiqi101ProblemCount', async () => {
+    await dbInit
+    return db.getWeiqi101ProblemCount()
+  })
+  ipcMain.handle('db:deleteAllWeiqi101Problems', async () => {
+    await dbInit
+    return db.deleteAllWeiqi101Problems()
   })
 
   ipcMain.on('setting:getPathsSync', (e) => {

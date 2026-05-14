@@ -167,15 +167,11 @@ window.sabaki = {
     upsertReviewSchedule: (item) =>
       ipcRenderer.invoke('db:upsertReviewSchedule', item),
     getDashboardSummary: () => ipcRenderer.invoke('db:getDashboardSummary'),
-  },
-
-  // FoxWQ game import
-  fox: {
-    queryUserByName: (username) =>
-      ipcRenderer.invoke('fox:queryUserByName', username),
-    fetchGameList: (uid, lastcode) =>
-      ipcRenderer.invoke('fox:fetchGameList', uid, lastcode),
-    fetchSgf: (chessid) => ipcRenderer.invoke('fox:fetchSgf', chessid),
+    saveWeiqi101Problem: (problem) => ipcRenderer.invoke('db:saveWeiqi101Problem', problem),
+    getWeiqi101Problem: (problemId) => ipcRenderer.invoke('db:getWeiqi101Problem', problemId),
+    getWeiqi101Problems: () => ipcRenderer.invoke('db:getWeiqi101Problems'),
+    getWeiqi101ProblemCount: () => ipcRenderer.invoke('db:getWeiqi101ProblemCount'),
+    deleteAllWeiqi101Problems: () => ipcRenderer.invoke('db:deleteAllWeiqi101Problems'),
   },
 
   // File path helper for Electron 32+ (File.path was removed)

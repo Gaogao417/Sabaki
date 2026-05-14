@@ -139,11 +139,28 @@ function migrate(db) {
     );
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS weiqi101_problems (
+      problem_id TEXT PRIMARY KEY,
+      problem_code TEXT NOT NULL DEFAULT '',
+      rank TEXT,
+      problem_url TEXT NOT NULL DEFAULT '',
+      thumbnail_url TEXT,
+      correct_count INTEGER,
+      wrong_count INTEGER,
+      decoded_payload TEXT NOT NULL DEFAULT '',
+      sgf TEXT NOT NULL DEFAULT '',
+      synced_at TEXT NOT NULL DEFAULT (datetime('now')),
+      content_hash TEXT NOT NULL DEFAULT ''
+    );
+  `)
+
   db.run('CREATE INDEX IF NOT EXISTS idx_problems_status ON problems(status)')
   db.run('CREATE INDEX IF NOT EXISTS idx_review_schedule_due ON review_schedule(due_at)')
   db.run('CREATE INDEX IF NOT EXISTS idx_recall_sessions_game ON recall_sessions(game_id)')
   db.run('CREATE INDEX IF NOT EXISTS idx_problem_attempts_problem ON problem_attempts(problem_id)')
   db.run('CREATE INDEX IF NOT EXISTS idx_bad_moves_attempt ON bad_moves(attempt_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_weiqi101_hash ON weiqi101_problems(content_hash)')
 
   save()
 }
@@ -434,4 +451,70 @@ function getDashboardSummary() {
   }
 }
 
-module.exports = {init, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, upsertReviewSchedule, getDashboardSummary}
+// --- 101weiqi Cached Problems ---
+
+function saveWeiqi101Problem(problem) {
+  const now = new Date().toISOString()
+  const existing = queryOne('SELECT problem_id FROM weiqi101_problems WHERE problem_id = ?', [problem.problemId])
+
+  if (existing) {
+    run(`UPDATE weiqi101_problems SET problem_code = ?, rank = ?, problem_url = ?,
+      thumbnail_url = ?, correct_count = ?, wrong_count = ?, decoded_payload = ?,
+      sgf = ?, synced_at = ?, content_hash = ? WHERE problem_id = ?`, [
+      problem.problemCode || '', problem.rank || null, problem.problemUrl || '',
+      problem.thumbnailUrl || null, problem.correctCount || null,
+      problem.wrongCount || null, problem.decodedPayload || '',
+      problem.sgf || '', problem.syncedAt || now, problem.contentHash || '',
+      problem.problemId,
+    ])
+  } else {
+    run(`INSERT INTO weiqi101_problems (problem_id, problem_code, rank, problem_url,
+      thumbnail_url, correct_count, wrong_count, decoded_payload, sgf, synced_at, content_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      problem.problemId, problem.problemCode || '', problem.rank || null,
+      problem.problemUrl || '', problem.thumbnailUrl || null,
+      problem.correctCount || null, problem.wrongCount || null,
+      problem.decodedPayload || '', problem.sgf || '',
+      problem.syncedAt || now, problem.contentHash || '',
+    ])
+  }
+  save()
+  return problem
+}
+
+function getWeiqi101Problem(problemId) {
+  const row = queryOne('SELECT * FROM weiqi101_problems WHERE problem_id = ?', [problemId])
+  return row ? rowToWeiqi101Problem(row) : null
+}
+
+function getWeiqi101Problems() {
+  return queryAll('SELECT * FROM weiqi101_problems ORDER BY synced_at DESC').map(rowToWeiqi101Problem)
+}
+
+function getWeiqi101ProblemCount() {
+  const row = queryOne('SELECT COUNT(*) as cnt FROM weiqi101_problems')
+  return (row && row.cnt) || 0
+}
+
+function deleteAllWeiqi101Problems() {
+  run('DELETE FROM weiqi101_problems')
+  save()
+}
+
+function rowToWeiqi101Problem(row) {
+  return {
+    problemId: row.problem_id,
+    problemCode: row.problem_code,
+    rank: row.rank,
+    problemUrl: row.problem_url,
+    thumbnailUrl: row.thumbnail_url,
+    correctCount: row.correct_count,
+    wrongCount: row.wrong_count,
+    decodedPayload: row.decoded_payload,
+    sgf: row.sgf,
+    syncedAt: row.synced_at,
+    contentHash: row.content_hash,
+  }
+}
+
+module.exports = {init, saveGame, getGame, getRecentGames, saveRecallSession, saveRecallAttempts, saveProblem, getProblem, getProblemsByStatus, saveProblemAttempt, saveBadMove, updateBadMoveGeneratedProblem, getDueReviews, upsertReviewSchedule, getDashboardSummary, saveWeiqi101Problem, getWeiqi101Problem, getWeiqi101Problems, getWeiqi101ProblemCount, deleteAllWeiqi101Problems}
