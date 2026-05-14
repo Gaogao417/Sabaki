@@ -49,6 +49,7 @@ import {
   snapshotToGameTree,
 } from './study.js'
 import * as sound from './sound.js'
+import hubStore from './hubStore.js'
 
 deadstones.useFetch('./node_modules/@sabaki/deadstones/wasm/deadstones_bg.wasm')
 
@@ -388,7 +389,10 @@ class Sabaki extends EventEmitter {
         return gametree.getBoard(this.gameTree, state.treePosition)
       },
       get analyzingEngineSyncer() {
-        return self._playServices?.engineService?.getAnalyzingEngineSyncer() ?? undefined
+        return (
+          self._playServices?.engineService?.getAnalyzingEngineSyncer() ??
+          undefined
+        )
       },
       get winrateData() {
         return [
@@ -512,8 +516,7 @@ class Sabaki extends EventEmitter {
       () => this.scheduleEditWorkspaceAnalysis(),
     )
     this.events.emit('modeChange')
-    logger.info('analysis.workspace_reset', 'Analysis workspace reset',
-    )
+    logger.info('analysis.workspace_reset', 'Analysis workspace reset')
   }
 
   setMode(mode) {
@@ -571,7 +574,9 @@ class Sabaki extends EventEmitter {
     // Let overlayStore react to mode change (clear territory when leaving analysis)
     this.getOverlayStore().onModeChange(mode)
 
-    logger.info('mode.changed', 'Mode changed',
+    logger.info(
+      'mode.changed',
+      'Mode changed',
       {from: oldMode, to: mode},
       {mode},
     )
@@ -589,8 +594,26 @@ class Sabaki extends EventEmitter {
     }
   }
 
+  openHub(section, params) {
+    hubStore.open(section, params)
+  }
+
   openDrawer(drawer) {
+    if (drawer === 'preferences') {
+      this.openHub('general')
+      return
+    } else if (drawer === 'enginemanagement') {
+      this.openHub('engine')
+      return
+    } else if (drawer === 'gamechooser') {
+      this.openHub('history')
+      return
+    }
     this.setState({openDrawer: drawer})
+  }
+
+  getHubStore() {
+    return hubStore
   }
 
   closeDrawer() {
@@ -756,7 +779,8 @@ class Sabaki extends EventEmitter {
     let currentPlayer = this.getPlayer(treePosition)
 
     // Capture pre-move analysis before modifying the tree
-    let preMoveAnalysis = this.getPlayServices().engineService.getAnalysisForPosition(treePosition)
+    let preMoveAnalysis =
+      this.getPlayServices().engineService.getAnalysisForPosition(treePosition)
 
     // Place the stone
     let newTree = tree.mutate((draft) => {
@@ -1096,11 +1120,20 @@ class Sabaki extends EventEmitter {
   }
 
   cacheOwnership(syncerId, tree, treePosition, ownership) {
-    return this.getPlayServices().analysisService.cacheOwnership(syncerId, tree, treePosition, ownership)
+    return this.getPlayServices().analysisService.cacheOwnership(
+      syncerId,
+      tree,
+      treePosition,
+      ownership,
+    )
   }
 
   getCachedOwnership(syncerId, tree, treePosition) {
-    return this.getPlayServices().analysisService.getCachedOwnership(syncerId, tree, treePosition)
+    return this.getPlayServices().analysisService.getCachedOwnership(
+      syncerId,
+      tree,
+      treePosition,
+    )
   }
 
   cacheScratchOwnership(syncerId, snapshot, ownership) {
@@ -1119,11 +1152,22 @@ class Sabaki extends EventEmitter {
   }
 
   cachePreviewOwnership(syncerId, tree, treePosition, moves, ownership) {
-    return this.getPlayServices().analysisService.cachePreviewOwnership(syncerId, tree, treePosition, moves, ownership)
+    return this.getPlayServices().analysisService.cachePreviewOwnership(
+      syncerId,
+      tree,
+      treePosition,
+      moves,
+      ownership,
+    )
   }
 
   getCachedPreviewOwnership(syncerId, tree, treePosition, moves) {
-    return this.getPlayServices().analysisService.getCachedPreviewOwnership(syncerId, tree, treePosition, moves)
+    return this.getPlayServices().analysisService.getCachedPreviewOwnership(
+      syncerId,
+      tree,
+      treePosition,
+      moves,
+    )
   }
 
   getCurrentOwnership(syncer = this.inferredState.analyzingEngineSyncer) {
@@ -1196,11 +1240,15 @@ class Sabaki extends EventEmitter {
   }
 
   async ensureAnalysisReady({requireOwnership = false} = {}) {
-    return this.getPlayServices().analysisService.ensureAnalysisReady({requireOwnership})
+    return this.getPlayServices().analysisService.ensureAnalysisReady({
+      requireOwnership,
+    })
   }
 
   async attachDefaultAnalysisEngine({requireOwnership = false} = {}) {
-    return this.getPlayServices().analysisService.attachDefaultAnalysisEngine({requireOwnership})
+    return this.getPlayServices().analysisService.attachDefaultAnalysisEngine({
+      requireOwnership,
+    })
   }
 
   waitForEngineCommands(syncer, {timeout = 10000} = {}) {
@@ -1317,11 +1365,13 @@ class Sabaki extends EventEmitter {
         showInfoOverlay: (text) => this.showInfoOverlay(text),
         hideInfoOverlay: () => this.hideInfoOverlay(),
         detectEngines: () => detectEngines(),
-        waitForEngineCommands: (syncer, opts) => this.waitForEngineCommands(syncer, opts),
+        waitForEngineCommands: (syncer, opts) =>
+          this.waitForEngineCommands(syncer, opts),
         showMessageBox: (msg, type) => dialog.showMessageBox(msg, type),
         logger,
         getSetting: (key) => setting.get(key),
-        scheduleEditWorkspaceAnalysis: (tab) => this.scheduleEditWorkspaceAnalysis(tab),
+        scheduleEditWorkspaceAnalysis: (tab) =>
+          this.scheduleEditWorkspaceAnalysis(tab),
         i18n,
       })
 
@@ -1337,8 +1387,10 @@ class Sabaki extends EventEmitter {
         setCurrentTreePosition: (tree, pos, opts) =>
           documentStore.setCurrentTreePosition(tree, pos, opts),
         analyzeMove: (tp) => analysisService.analyzeGameTreePosition(tp),
-        scheduleEditWorkspaceAnalysis: (tab) => this.scheduleEditWorkspaceAnalysis(tab),
-        scheduleLiveAnalysis: (tp) => analysisService.scheduleGameTreeAnalysis(tp),
+        scheduleEditWorkspaceAnalysis: (tab) =>
+          this.scheduleEditWorkspaceAnalysis(tab),
+        scheduleLiveAnalysis: (tp) =>
+          analysisService.scheduleGameTreeAnalysis(tp),
         syncEditWorkspaceToCurrentPosition: () =>
           this.syncEditWorkspaceToCurrentPosition(),
         cacheOwnership: (syncerId, tree, tp, ownership) =>
@@ -1407,7 +1459,15 @@ class Sabaki extends EventEmitter {
     return true
   }
 
-  commitEditResult({tab, snapshot, markerMap, lines, lineFirstVertex, newTab, capturedSnapshot}) {
+  commitEditResult({
+    tab,
+    snapshot,
+    markerMap,
+    lines,
+    lineFirstVertex,
+    newTab,
+    capturedSnapshot,
+  }) {
     let ws = this.state.editWorkspace
     if (ws == null) return
 
@@ -1449,7 +1509,8 @@ class Sabaki extends EventEmitter {
     if (lines != null || lineFirstVertex !== undefined) {
       let updates = {...ws}
       if (lines != null) updates[linesKey] = lines
-      if (lineFirstVertex !== undefined) updates.lineFirstVertex = lineFirstVertex
+      if (lineFirstVertex !== undefined)
+        updates.lineFirstVertex = lineFirstVertex
       this.setState({editWorkspace: updates})
       return
     }
@@ -1469,7 +1530,8 @@ class Sabaki extends EventEmitter {
     // Capture reference
     if (capturedSnapshot != null) {
       let targetTab = effectiveTab
-      let targetSnapshotKey = this.getEditWorkspaceTabKeys(targetTab).snapshotKey
+      let targetSnapshotKey =
+        this.getEditWorkspaceTabKeys(targetTab).snapshotKey
       // Phase 10: generation tracking moved into scratchAnalysis.ts
       this.setState({
         editWorkspace: {
@@ -1571,9 +1633,11 @@ class Sabaki extends EventEmitter {
         },
       })
       this.scheduleEditWorkspaceAnalysis(tab)
-      logger.debug('analysis.stone_toggled', 'Stone toggled',
-        {sign, vertex, tab},
-      )
+      logger.debug('analysis.stone_toggled', 'Stone toggled', {
+        sign,
+        vertex,
+        tab,
+      })
     } else if (tool === 'play') {
       let sign = snapshot.nextPlayer
       let current = snapshot.signMap[vy]?.[vx] ?? 0
@@ -1614,9 +1678,11 @@ class Sabaki extends EventEmitter {
         },
       })
       this.scheduleEditWorkspaceAnalysis(tab)
-      logger.debug('analysis.play_move', 'Play move in analysis',
-        {sign, vertex, tab},
-      )
+      logger.debug('analysis.play_move', 'Play move in analysis', {
+        sign,
+        vertex,
+        tab,
+      })
     } else if (tool === 'eraser') {
       let nextSnapshot = cloneSnapshot(snapshot)
       nextSnapshot.signMap[vy][vx] = 0
@@ -1754,9 +1820,10 @@ class Sabaki extends EventEmitter {
       },
     })
     this.scheduleEditWorkspaceAnalysis()
-    logger.debug('analysis.reference_captured', 'Reference captured',
-      {sourceTab, targetTab},
-    )
+    logger.debug('analysis.reference_captured', 'Reference captured', {
+      sourceTab,
+      targetTab,
+    })
   }
 
   toggleEditTab(tab) {
@@ -1828,7 +1895,9 @@ class Sabaki extends EventEmitter {
   }
 
   async refreshEditWorkspaceAnalysis(targetTab = null) {
-    return this.getPlayServices().analysisService.refreshScratchAnalysis(targetTab)
+    return this.getPlayServices().analysisService.refreshScratchAnalysis(
+      targetTab,
+    )
   }
 
   handleEditDragEnd({source, target}) {
@@ -1865,7 +1934,6 @@ class Sabaki extends EventEmitter {
     }
   }
 
-
   async runBoardAnalysis(opts) {
     return this.getPlayServices().analysisService.runBoardAnalysis(opts)
   }
@@ -1875,7 +1943,9 @@ class Sabaki extends EventEmitter {
   }
 
   getAnalysisSyncerId({requireOwnership = false} = {}) {
-    return this.getPlayServices().analysisService.getAnalysisSyncerId({requireOwnership})
+    return this.getPlayServices().analysisService.getAnalysisSyncerId({
+      requireOwnership,
+    })
   }
 
   toggleTerritoryEnabled() {
@@ -1887,7 +1957,10 @@ class Sabaki extends EventEmitter {
   }
 
   getOwnershipForTreePosition(syncer, treePosition) {
-    return this.getPlayServices().analysisService.getOwnershipForTreePosition(syncer, treePosition)
+    return this.getPlayServices().analysisService.getOwnershipForTreePosition(
+      syncer,
+      treePosition,
+    )
   }
 
   // History Management
@@ -1960,7 +2033,10 @@ class Sabaki extends EventEmitter {
   }
 
   normalizeEngineConfig(engine, index = 0) {
-    return this.getPlayServices().engineService.normalizeEngineConfig(engine, index)
+    return this.getPlayServices().engineService.normalizeEngineConfig(
+      engine,
+      index,
+    )
   }
 
   getConfiguredEngine(engineIndex) {
@@ -2042,13 +2118,11 @@ class Sabaki extends EventEmitter {
     )
 
     if (blackSyncer != null || whiteSyncer != null) {
-      logger.info('engine.waiting', 'Waiting for engines to be ready',
-        {
-          engines: [blackSyncer, whiteSyncer]
-            .filter((s) => s != null)
-            .map((s) => ({name: s.engine.name, commands: s.commands.length})),
-        },
-      )
+      logger.info('engine.waiting', 'Waiting for engines to be ready', {
+        engines: [blackSyncer, whiteSyncer]
+          .filter((s) => s != null)
+          .map((s) => ({name: s.engine.name, commands: s.commands.length})),
+      })
 
       let results = await Promise.all(
         [blackSyncer, whiteSyncer]
@@ -2056,19 +2130,17 @@ class Sabaki extends EventEmitter {
           .map((syncer) => this.waitForEngineCommands(syncer, {timeout: 5000})),
       )
 
-      logger.info('engine.ready_results', 'Engine readiness results',
-        {
-          results,
-          engines: [blackSyncer, whiteSyncer]
-            .filter((s) => s != null)
-            .map((s) => ({
-              name: s.engine.name,
-              commands: s.commands.length,
-              busy: s.busy,
-              suspended: s._suspended,
-            })),
-        },
-      )
+      logger.info('engine.ready_results', 'Engine readiness results', {
+        results,
+        engines: [blackSyncer, whiteSyncer]
+          .filter((s) => s != null)
+          .map((s) => ({
+            name: s.engine.name,
+            commands: s.commands.length,
+            busy: s.busy,
+            suspended: s._suspended,
+          })),
+      })
     }
 
     let treePosition = this.state.treePosition
@@ -2083,9 +2155,15 @@ class Sabaki extends EventEmitter {
     if (blackSyncer != null && whiteSyncer != null) {
       this.getPlayServices().engineService.startEngineGame(treePosition)
     } else if (nextPlayer > 0 && blackSyncer != null) {
-      this.getPlayServices().engineService.generateMove(blackSyncer.id, treePosition)
+      this.getPlayServices().engineService.generateMove(
+        blackSyncer.id,
+        treePosition,
+      )
     } else if (nextPlayer < 0 && whiteSyncer != null) {
-      this.getPlayServices().engineService.generateMove(whiteSyncer.id, treePosition)
+      this.getPlayServices().engineService.generateMove(
+        whiteSyncer.id,
+        treePosition,
+      )
     }
 
     sound.playNewGame()
@@ -2110,7 +2188,9 @@ class Sabaki extends EventEmitter {
       this.getPlayServices().engineService.getWhiteSyncerId(),
     ]
       .map((id) =>
-        this.getPlayServices().engineService.getAttachedSyncers().find((syncer) => syncer.id === id),
+        this.getPlayServices()
+          .engineService.getAttachedSyncers()
+          .find((syncer) => syncer.id === id),
       )
       .map((syncer) => (syncer == null ? null : syncer.engine.name))
 
@@ -2550,7 +2630,8 @@ class Sabaki extends EventEmitter {
       if (button === 0 && !(helper.isMac && ctrlKey)) {
         if (board.get(vertex) === 0) {
           this.playMove(vertex, {
-            generateEngineMove: !this.getPlayServices().engineService.isEngineGameRunning(),
+            generateEngineMove:
+              !this.getPlayServices().engineService.isEngineGameRunning(),
           })
         } else if (
           board.markers[vy][vx] != null &&
@@ -2568,11 +2649,16 @@ class Sabaki extends EventEmitter {
 
           this.openCommentMenu(treePosition, {x, y})
         } else if (
-          this.getPlayServices().engineService.getAnalysisForPosition(this.state.treePosition) != null
+          this.getPlayServices().engineService.getAnalysisForPosition(
+            this.state.treePosition,
+          ) != null
         ) {
           // Show analysis context menu
 
-          let {sign, variations} = this.getPlayServices().engineService.getAnalysisForPosition(this.state.treePosition)
+          let {sign, variations} =
+            this.getPlayServices().engineService.getAnalysisForPosition(
+              this.state.treePosition,
+            )
           let variation = variations.find((x) =>
             helper.vertexEquals(x.vertex, vertex),
           )
@@ -2811,7 +2897,8 @@ class Sabaki extends EventEmitter {
     }
 
     if (generateEngineMove == null) {
-      generateEngineMove = !this.getPlayServices().engineService.isEngineGameRunning()
+      generateEngineMove =
+        !this.getPlayServices().engineService.isEngineGameRunning()
     }
 
     let t = i18n.context('sabaki.play')
@@ -2910,7 +2997,9 @@ class Sabaki extends EventEmitter {
 
       if (prevPass) {
         enterScoring = false
-        logger.info('game.double_pass', 'Double pass detected, saving and entering recall',
+        logger.info(
+          'game.double_pass',
+          'Double pass detected, saving and entering recall',
         )
         this.stopEngineGame()
         let saved = await this.saveCurrentGame()
@@ -3170,7 +3259,11 @@ class Sabaki extends EventEmitter {
   // Navigation
 
   setCurrentTreePosition(tree, treePosition, options) {
-    this.getPlayServices().documentStore.setCurrentTreePosition(tree, treePosition, options)
+    this.getPlayServices().documentStore.setCurrentTreePosition(
+      tree,
+      treePosition,
+      options,
+    )
   }
 
   goStep(step) {
@@ -3235,7 +3328,9 @@ class Sabaki extends EventEmitter {
   }
 
   scheduleLiveAnalysis(treePosition) {
-    this.getPlayServices().analysisService.scheduleGameTreeAnalysis(treePosition)
+    this.getPlayServices().analysisService.scheduleGameTreeAnalysis(
+      treePosition,
+    )
   }
 
   async quickAnalyzeAllNodes() {
@@ -3370,10 +3465,11 @@ class Sabaki extends EventEmitter {
 
     let value = !this.state.showAISuggestions
     setting.set('board.show_ai_suggestions', value)
-    setting.set('board.show_analysis', value)
+    let analysisValue = value || this.state.showHumanPreference
+    setting.set('board.show_analysis', analysisValue)
     this.setState({
       showAISuggestions: value,
-      showAnalysis: value,
+      showAnalysis: analysisValue,
     })
 
     if (value) {
@@ -3386,7 +3482,12 @@ class Sabaki extends EventEmitter {
 
     let value = !this.state.showHumanPreference
     setting.set('board.show_human_preference', value)
-    this.setState({showHumanPreference: value})
+    let analysisValue = value || this.state.showAISuggestions
+    setting.set('board.show_analysis', analysisValue)
+    this.setState({
+      showHumanPreference: value,
+      showAnalysis: analysisValue,
+    })
 
     if (value) {
       await this.ensureAnalysisReady()
@@ -3398,7 +3499,10 @@ class Sabaki extends EventEmitter {
   }
 
   playAnalysisVariation(sign, moves) {
-    return this.getPlayServices().documentStore.playAnalysisVariation(sign, moves)
+    return this.getPlayServices().documentStore.playAnalysisVariation(
+      sign,
+      moves,
+    )
   }
 
   setPlayer(treePosition, sign) {
@@ -3438,7 +3542,10 @@ class Sabaki extends EventEmitter {
   }
 
   shiftVariation(treePosition, step) {
-    return this.getPlayServices().documentStore.shiftVariation(treePosition, step)
+    return this.getPlayServices().documentStore.shiftVariation(
+      treePosition,
+      step,
+    )
   }
 
   async removeNode(treePosition, opts) {
@@ -3446,7 +3553,10 @@ class Sabaki extends EventEmitter {
   }
 
   async removeOtherVariations(treePosition, opts) {
-    return this.getPlayServices().documentStore.removeOtherVariations(treePosition, opts)
+    return this.getPlayServices().documentStore.removeOtherVariations(
+      treePosition,
+      opts,
+    )
   }
 
   // Menus
@@ -3648,7 +3758,9 @@ class Sabaki extends EventEmitter {
         ...engines.map((engine, i) => ({
           label: engine.name || t('(Unnamed Engine)'),
           click: () => {
-            this.getPlayServices().engineService.attachEngines([this.normalizeEngineConfig(engine, i)])
+            this.getPlayServices().engineService.attachEngines([
+              this.normalizeEngineConfig(engine, i),
+            ])
           },
         })),
         engines.length > 0 && {type: 'separator'},
@@ -3666,10 +3778,9 @@ class Sabaki extends EventEmitter {
 
   openEngineActionMenu(syncerId, {x, y} = {}) {
     let t = i18n.context('menu.engineAction')
-    let attachedSyncers = this.getPlayServices().engineService.getAttachedSyncers()
-    let syncer = attachedSyncers.find(
-      (syncer) => syncer.id === syncerId,
-    )
+    let attachedSyncers =
+      this.getPlayServices().engineService.getAttachedSyncers()
+    let syncer = attachedSyncers.find((syncer) => syncer.id === syncerId)
     if (syncer == null) return
 
     helper.popupMenu(
@@ -3691,17 +3802,25 @@ class Sabaki extends EventEmitter {
         {
           label: t('S&ynchronize'),
           click: () => {
-            this.getPlayServices().engineService.syncEngine(syncerId, this.state.treePosition)
+            this.getPlayServices().engineService.syncEngine(
+              syncerId,
+              this.state.treePosition,
+            )
           },
         },
         {
           label: t('&Generate Move'),
           enabled:
             !this.getPlayServices().engineService.isEngineGameRunning() ||
-            (this.getPlayServices().engineService.getBlackSyncerId() !== syncerId &&
-              this.getPlayServices().engineService.getWhiteSyncerId() !== syncerId),
+            (this.getPlayServices().engineService.getBlackSyncerId() !==
+              syncerId &&
+              this.getPlayServices().engineService.getWhiteSyncerId() !==
+                syncerId),
           click: async () => {
-            this.getPlayServices().engineService.generateMove(syncerId, this.state.treePosition)
+            this.getPlayServices().engineService.generateMove(
+              syncerId,
+              this.state.treePosition,
+            )
           },
         },
         {type: 'separator'},
@@ -3720,7 +3839,9 @@ class Sabaki extends EventEmitter {
         {
           label: t('Set as &Black Player'),
           type: 'checkbox',
-          checked: this.getPlayServices().engineService.getBlackSyncerId() === syncerId,
+          checked:
+            this.getPlayServices().engineService.getBlackSyncerId() ===
+            syncerId,
           click: () => {
             let es = this.getPlayServices().engineService
             es.setBlackWhiteSyncerIds(
@@ -3732,7 +3853,9 @@ class Sabaki extends EventEmitter {
         {
           label: t('Set as &White Player'),
           type: 'checkbox',
-          checked: this.getPlayServices().engineService.getWhiteSyncerId() === syncerId,
+          checked:
+            this.getPlayServices().engineService.getWhiteSyncerId() ===
+            syncerId,
           click: () => {
             let es = this.getPlayServices().engineService
             es.setBlackWhiteSyncerIds(

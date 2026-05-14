@@ -325,9 +325,11 @@ class App extends Component {
 
       setTimeout(async () => {
         if (await sabaki.askForSave()) {
-          sabaki.getPlayServices().engineService.detachEngines(
-            sabaki.getPlayServices().engineService.getAttachedSyncerIds(),
-          )
+          sabaki
+            .getPlayServices()
+            .engineService.detachEngines(
+              sabaki.getPlayServices().engineService.getAttachedSyncerIds(),
+            )
 
           gtplogger.close()
           this.closeWindow = true
@@ -413,7 +415,10 @@ class App extends Component {
 
     // Clear overlay status when territory mode turns off
 
-    if (prevState.territoryEnabled && !sabaki.getOverlayStore().getState().territoryEnabled) {
+    if (
+      prevState.territoryEnabled &&
+      !sabaki.getOverlayStore().getState().territoryEnabled
+    ) {
       this.setState({overlayStatusProps: null})
     }
   }
@@ -499,7 +504,9 @@ class App extends Component {
       editPreviewKeys == null ? null : editWs[editPreviewKeys.ownershipKey]
     let scoreBoard, areaMap
     let overlayStoreState = sabaki.getOverlayStore().getState()
-    let territoryMode = overlayStoreState.territoryEnabled || overlayStoreState.territoryCompareEnabled
+    let territoryMode =
+      overlayStoreState.territoryEnabled ||
+      overlayStoreState.territoryCompareEnabled
     let territoryCompareActive =
       overlayStoreState.territoryCompareEnabled && editWorkspaceActive
     let engineService = sabaki.getPlayServices().engineService
@@ -586,9 +593,12 @@ class App extends Component {
       appMode: state.mode,
       engineSyncerAvailable: engineSyncer != null,
       analysisPending: editWs?.analysisPending ?? false,
-      analysisTreePositionMatches: engineService.isAnalysisAtPosition(state.treePosition),
+      analysisTreePositionMatches: engineService.isAnalysisAtPosition(
+        state.treePosition,
+      ),
       gameTreeOwnership,
-      editCurrentOwnership: editActiveKeys != null ? editWs[editActiveKeys.ownershipKey] : null,
+      editCurrentOwnership:
+        editActiveKeys != null ? editWs[editActiveKeys.ownershipKey] : null,
       editReferenceOwnership: editWs?.referenceOwnership ?? null,
       editWorkspaceCurrentOwnership: editWs?.currentOwnership ?? null,
       editWorkspaceReferenceOwnership: editWs?.referenceOwnership ?? null,
@@ -628,9 +638,13 @@ class App extends Component {
         showMenuBar: state.showMenuBar,
         disableAll: state.busy > 0,
         analysisType: state.analysisType,
-        showAnalysis: state.mode === 'analysis' && state.showAnalysis && state.showAISuggestions,
+        showAnalysis:
+          state.mode === 'analysis' &&
+          state.showAnalysis &&
+          (state.showAISuggestions || state.showHumanPreference),
         showAISuggestions: state.mode === 'analysis' && state.showAISuggestions,
-        showHumanPreference: state.mode === 'analysis' && state.showHumanPreference,
+        showHumanPreference:
+          state.mode === 'analysis' && state.showHumanPreference,
         selectedAnalysisVertex: state.selectedAnalysisVertex,
         showCoordinates: state.showCoordinates,
         coordinatesType: state.coordinatesType,
@@ -651,13 +665,13 @@ class App extends Component {
 
       workbenchMode
         ? h(WorkbenchShell, {
-          ...state,
-          attachedEngineSyncers: engineService.getAttachedSyncers(),
-          blackEngineSyncerId: engineService.getBlackSyncerId(),
-          whiteEngineSyncerId: engineService.getWhiteSyncerId(),
-          engineGameOngoing: engineService.isEngineGameRunning(),
-          quickAnalysisId: engineService.getQuickAnalysisId(),
-        })
+            ...state,
+            attachedEngineSyncers: engineService.getAttachedSyncers(),
+            blackEngineSyncerId: engineService.getBlackSyncerId(),
+            whiteEngineSyncerId: engineService.getWhiteSyncerId(),
+            engineGameOngoing: engineService.isEngineGameRunning(),
+            quickAnalysisId: engineService.getQuickAnalysisId(),
+          })
         : h(TripleSplitContainer, {
             id: 'mainlayout',
 

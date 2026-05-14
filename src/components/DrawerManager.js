@@ -12,6 +12,7 @@ import AdvancedPropertiesDrawer from './drawers/AdvancedPropertiesDrawer.js'
 import ProblemEditorDrawer from './drawers/ProblemEditorDrawer.js'
 import TrainingDashboardDrawer from './drawers/TrainingDashboardDrawer.js'
 import NewGameDialog from './drawers/NewGameDialog.js'
+import ManagementHub from './ManagementHub.js'
 
 export default class DrawerManager extends Component {
   constructor() {
@@ -166,6 +167,8 @@ export default class DrawerManager extends Component {
       h(TrainingDashboardDrawer, {
         show: openDrawer === 'training',
       }),
+
+      h(ManagementHub, {}),
     )
   }
 }

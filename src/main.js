@@ -225,6 +225,7 @@ function newWindow(path) {
 
   window.once('ready-to-show', () => {
     window.show()
+    window.webContents.openDevTools()
   })
 
   if (setting.get('window.maximized') === true) {

@@ -255,9 +255,13 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
 
     hideInfoOverlay()
 
+    // Set synchronously so UI reflects immediately and toggle works correctly
+    state.territoryCompareEnabled = true
+    emitChange()
+
     let gen = ++generation
     deps.ensureAnalysisReady({requireOwnership: true}).then((syncer) => {
-      if (gen !== generation) return
+      if (gen !== generation || !state.territoryCompareEnabled) return
 
       if (syncer == null) {
         state.territoryCompareEnabled = false
@@ -266,12 +270,12 @@ export function createOverlayStore(deps: OverlayStoreDeps) {
       }
 
       if (!getTerritoryCompareAvailable()) {
+        state.territoryCompareEnabled = false
+        emitChange()
         return
       }
 
       deps.scheduleEditWorkspaceAnalysis()
-      state.territoryCompareEnabled = true
-      emitChange()
     })
 
     return true

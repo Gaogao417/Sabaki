@@ -28,4 +28,10 @@ ChatGPT Image 2026年5月8日 15_25_16 (1).png
 ChatGPT Image 2026年5月8日 15_25_17 (2).png
 ChatGPT Image 2026年5月8日 15_25_17 (4).png
 use-node20.ps1
+
+# 101weiqi crawler output
+101weiqi-data/
+101weiqi-test/
 # PRD：Sabaki 魔改 — KataGo HumanSL 常驻加载与运行.md
+scripts/crawl-101weiqi.mjs
+ChatGPT Image 2026年5月14日 13_38_57.png
