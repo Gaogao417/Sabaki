@@ -13,6 +13,7 @@
 import * as sgf from '@sabaki/sgf'
 import * as helper from '../../helper.js'
 import * as sound from '../../sound.js'
+import * as gametree from '../../gametree.js'
 import {logger} from '../../logger/index.js'
 
 type ExpectedMove = {
@@ -61,16 +62,29 @@ type SabakiLike = {
   [key: string]: unknown
 }
 
+export type EngineGameTrainingState = {
+  taskId: string
+  attemptId: string
+  humanMoveIndex: number
+}
+
 export type TrainingFlowController = {
   startRecallSession(gameId: string, options?: Record<string, unknown>): Promise<void>
   handleRecallMove(vertex: number[]): void
   skipRecallMove(): void
   showRecallHint(): void
   endRecallSession(): Promise<void>
+  checkRecallComplete(): void
+  handleProblemMove(vertex: number[]): Promise<void>
   submitProblemAttempt(): Promise<void>
   undoProblemMove(): void
   exitProblemMode(): void
-  advanceReview(): void
+  startReviewSession(): Promise<void>
+  advanceReview(): Promise<void>
+  startEngineGameTraining(): Promise<void>
+  stopEngineGameTraining(): Promise<void>
+  getEngineGameTraining(): EngineGameTrainingState | null
+  notifyEngineGamePlayMove(positionBefore: string, positionAfter: string, move: string): void
 }
 
 // --- Internal helpers ---
@@ -119,19 +133,22 @@ function recallNavigateNext(sabaki: SabakiLike) {
 export function createLegacyTrainingFlowController(deps: {
   sabaki: SabakiLike
   db: DbLike
-  getTrainingServices: () => Record<string, unknown>
+  getTrainingContext: () => Record<string, unknown>
 }): TrainingFlowController {
   const {sabaki, db} = deps
 
   // Held in closure — written by startRecallSession, read by endRecallSession
   let currentSession: Record<string, unknown> | null = null
 
-  // ⚠️ Do NOT call getTrainingServices() at create time.
+  // Held in closure — engine game training state
+  let engineGameTraining: EngineGameTrainingState | null = null
+
+  // ⚠️ Do NOT call getTrainingContext() at create time.
   // All service access must be lazy (inside method bodies) to avoid
-  // circular init between sabaki.getTrainingServices() and controller.
+  // circular init between sabaki.getTrainingContext() and this controller.
 
   function getRuntimeStore(): any {
-    return (deps.getTrainingServices() as any).runtimeStore
+    return (deps.getTrainingContext() as any).runtimeStore
   }
 
   // --- Recall methods ---
@@ -337,22 +354,284 @@ export function createLegacyTrainingFlowController(deps: {
     sabaki.setMode('analysis')
   }
 
-  // --- Problem / Review — LEGACY-FREEZE: delegates to sabaki facade until problemService/reviewService migration ---
+  // --- Problem orchestration ---
+
+  async function handleProblemMove(vertex: number[]): Promise<void> {
+    const services = deps.getTrainingContext() as any
+    const {runtimeStore, problemFlowService} = services
+    let pv = runtimeStore.getState().problemView
+    let problemSession = pv ? pv.legacyProblemSession : sabaki.state.problemSession
+    if (!problemSession || (pv && pv.submitted) || sabaki.state.problemSubmitted) return
+
+    let {gameTrees, gameIndex, treePosition} = sabaki.state
+    let positionBeforeHash = treePosition
+    let tree = gameTrees[gameIndex] as any
+    let board = gametree.getBoard(tree, treePosition)
+
+    if (board.get(vertex) !== 0) return
+
+    let player = problemSession.sideToMove === 'black' ? 1 : -1
+
+    let preMoveAnalysis =
+      (sabaki as any).getPlayServices().engineService.getAnalysisForPosition(treePosition)
+
+    let newTree = tree.mutate((draft: any) => {
+      draft.appendNode(treePosition, {
+        [player > 0 ? 'B' : 'W']: [sgf.stringifyVertex(vertex)],
+      })
+    })
+
+    let nextId = newTree.get(treePosition).children[0]?.id
+    if (nextId) {
+      sabaki.setCurrentTreePosition(newTree, nextId)
+    }
+
+    let moveStr = board.stringifyVertex(vertex)
+
+    logger.info('problem.move', 'Problem move played', {
+      vertex: moveStr,
+      player: player > 0 ? 'B' : 'W',
+      hasPreMoveAnalysis: !!preMoveAnalysis,
+      evalCacheSize: pv?.evalCache?.length ?? 0,
+    })
+
+    let result
+    try {
+      result = await problemFlowService.appendProblemMove({
+        move: moveStr,
+        vertex,
+        playerSign: player,
+        positionBeforeHash,
+        positionAfterHash: nextId,
+        preMoveAnalysis,
+      })
+    } catch (err) {
+      logger.info('problem.move.error', 'Problem move flow failed', {
+        move: moveStr,
+        positionBeforeHash,
+        positionAfterHash: nextId,
+        error: String(err),
+      })
+      return
+    }
+    if (!result) return
+
+    sabaki.setState({
+      problemEvalCache: result.evalCache,
+      problemBadMoves: result.badMoves,
+      problemAttempt: {
+        ...(sabaki.state.problemAttempt || {}),
+        userLine: result.evalCache.map((e: any) => e.move),
+        moveEvaluations: result.evalCache,
+      },
+    })
+  }
 
   async function submitProblemAttempt(): Promise<void> {
-    return (sabaki as any).submitProblemAttempt()
+    const services = deps.getTrainingContext() as any
+    const {problemFlowService} = services
+
+    logger.info('problem.submit', 'Problem submit requested')
+    const submitResult = await problemFlowService.submitActiveProblem()
+    if (!submitResult) {
+      logger.info('problem.submit.skip', 'Submit returned no result')
+      return
+    }
+
+    logger.info('problem.submit.done', 'Problem submitted', {
+      result: submitResult.result,
+      attemptId: submitResult.attempt?.id,
+    })
+
+    sabaki.setState({
+      problemSubmitted: true,
+      problemResult: submitResult.result,
+      problemAttempt: submitResult.attempt,
+    })
   }
 
   function undoProblemMove(): void {
-    return (sabaki as any).undoProblemMove()
+    const services = deps.getTrainingContext() as any
+    const {problemFlowService} = services
+
+    const result = problemFlowService.undoProblemMove()
+    if (!result) return
+
+    let {gameTrees, gameIndex, treePosition} = sabaki.state
+    let tree = gameTrees[gameIndex] as any
+    let node = tree.get(treePosition)
+    if (node.parentId) {
+      sabaki.setCurrentTreePosition(tree, node.parentId)
+    }
+
+    sabaki.setState({
+      problemAttempt: {...(sabaki.state.problemAttempt || {}), userLine: result.userLine},
+      problemEvalCache: result.evalCache,
+      problemBadMoves: result.badMoves,
+    })
   }
 
   function exitProblemMode(): void {
-    return (sabaki as any).exitProblemMode()
+    const services = deps.getTrainingContext() as any
+    const {runtimeStore} = services
+
+    runtimeStore.setProblemView(null)
+
+    sabaki.setState({
+      problemSession: null,
+      problemAttempt: null,
+      problemSubmitted: false,
+      problemResult: null,
+    })
+    sabaki.setMode('play')
   }
 
-  function advanceReview(): void {
-    return (sabaki as any).advanceReview()
+  // --- Review orchestration ---
+
+  async function startReviewSession(): Promise<void> {
+    const services = deps.getTrainingContext() as any
+    const {runtimeStore, tabService} = services
+    let dueItems = await (sabaki as any).db.getDueReviews()
+    if (dueItems.length === 0) return
+
+    let queue = dueItems.map((item: any) => item.item_id)
+
+    runtimeStore.setReviewQueueView({
+      queue,
+      currentIndex: 0,
+      totalDue: queue.length,
+    })
+
+    sabaki.setState({
+      reviewQueue: queue,
+      reviewCurrentIndex: 0,
+      reviewTotalDue: queue.length,
+    })
+
+    await tabService.openProblemTab(queue[0], {legacyCompatibility: true})
+  }
+
+  async function advanceReview(): Promise<void> {
+    const services = deps.getTrainingContext() as any
+    const {runtimeStore, tabService} = services
+    let rv = runtimeStore.getState().reviewQueueView
+    let queue = rv ? rv.queue : sabaki.state.reviewQueue
+    let currentIndex = rv ? rv.currentIndex : sabaki.state.reviewCurrentIndex
+    let nextIndex = currentIndex + 1
+
+    if (nextIndex >= queue.length) {
+      runtimeStore.setReviewQueueView(null)
+      exitProblemMode()
+      return
+    }
+
+    if (rv) {
+      runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
+    }
+    sabaki.setState({reviewCurrentIndex: nextIndex})
+
+    await tabService.openProblemTab(queue[nextIndex], {legacyCompatibility: true})
+  }
+
+  // --- Recall state check ---
+
+  function checkRecallComplete(): void {
+    const runtimeStore = getRuntimeStore()
+    let view: RecallView | null = runtimeStore.getState().recallView
+    if (view && view.moveIndex >= view.expectedMoves.length) {
+      runtimeStore.setRecallView({...view, completed: true})
+      sabaki.setState({recallCompleted: true})
+    }
+  }
+
+  // --- Engine game training ---
+
+  async function startEngineGameTraining(): Promise<void> {
+    const services = deps.getTrainingContext() as any
+    const {attemptService, monitor, repository} = services
+
+    let {gameTrees, gameIndex} = sabaki.state
+    let tree = gameTrees[gameIndex]
+
+    let task = {
+      id: `task_game_${Date.now()}`,
+      kind: 'game',
+      source: {kind: 'game'},
+      rootPositionSgf: sgf.stringify([tree]),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    let savedTask = await repository.createTask(task)
+
+    let attempt = await attemptService.createAttempt({
+      taskId: savedTask.id,
+      rootPositionSgf: task.rootPositionSgf,
+    })
+
+    monitor.startForAttempt({attemptId: attempt.id, taskId: savedTask.id})
+
+    engineGameTraining = {
+      taskId: savedTask.id,
+      attemptId: attempt.id,
+      humanMoveIndex: 0,
+    }
+
+    logger.info('engineGame.training', 'Training started for engine game', {
+      taskId: savedTask.id,
+      attemptId: attempt.id,
+    })
+  }
+
+  async function stopEngineGameTraining(): Promise<void> {
+    let training = engineGameTraining
+    if (!training) return
+
+    const services = deps.getTrainingContext() as any
+    const {attemptService, monitor} = services
+    monitor.stopForAttempt(training.attemptId)
+
+    try {
+      await attemptService.freezeAttempt(training.attemptId)
+      logger.info('engineGame.training.freeze', 'Training attempt frozen', {
+        attemptId: training.attemptId,
+        humanMoveCount: training.humanMoveIndex,
+      })
+    } catch (err) {
+      logger.info('engineGame.training.freeze.error', 'Failed to freeze attempt', {
+        error: String(err),
+      })
+    }
+
+    engineGameTraining = null
+  }
+
+  function getEngineGameTraining(): EngineGameTrainingState | null {
+    return engineGameTraining
+  }
+
+  function notifyEngineGamePlayMove(
+    positionBefore: string,
+    positionAfter: string,
+    move: string,
+  ): void {
+    let training = engineGameTraining
+    if (!training) return
+
+    const services = deps.getTrainingContext() as any
+    const {monitor} = services
+    let moveIndex = training.humanMoveIndex++
+    monitor.onUserMove({
+      attemptId: training.attemptId,
+      moveIndex,
+      move,
+      positionBeforeHash: positionBefore,
+      positionAfterHash: positionAfter,
+    }).catch((err: unknown) => {
+      logger.info('engineGame.training.moveError', 'Error in onUserMove', {
+        error: String(err),
+        moveIndex,
+      })
+    })
   }
 
   return {
@@ -361,9 +640,16 @@ export function createLegacyTrainingFlowController(deps: {
     skipRecallMove,
     showRecallHint,
     endRecallSession,
+    handleProblemMove,
     submitProblemAttempt,
     undoProblemMove,
     exitProblemMode,
+    startReviewSession,
     advanceReview,
+    checkRecallComplete,
+    startEngineGameTraining,
+    stopEngineGameTraining,
+    getEngineGameTraining,
+    notifyEngineGamePlayMove,
   }
 }

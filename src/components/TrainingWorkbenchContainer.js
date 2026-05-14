@@ -5,7 +5,7 @@ import WorkbenchShell from './WorkbenchShell.js'
 class TrainingWorkbenchContainer extends Component {
   componentDidMount() {
     const {runtimeStore, workbenchStore} =
-      this.props.sabaki.getTrainingServices()
+      this.props.sabaki.getTrainingContext()
 
     this._unsubRuntime = runtimeStore.subscribe(() => this.forceUpdate())
     this._unsubWorkbench = workbenchStore.subscribe(() => this.forceUpdate())
@@ -18,22 +18,25 @@ class TrainingWorkbenchContainer extends Component {
 
   render() {
     const {sabaki, ...shellProps} = this.props
-    const {runtimeStore} = sabaki.getTrainingServices()
+    const {
+      runtimeStore,
+      legacyTrainingFlowController,
+    } = sabaki.getTrainingContext()
     const rt = runtimeStore.getState()
 
     // Project runtimeStore view models into legacy prop shapes
     // that WorkbenchShell/RecallBar/ProblemBar expect.
     const projected = projectFromRuntime(rt)
 
-    const {controller} = sabaki.getTrainingServices()
     const handlers = {
-      onShowRecallHint: () => controller.showRecallHint(),
-      onSkipRecallMove: () => controller.skipRecallMove(),
-      onEndRecallSession: () => controller.endRecallSession(),
-      onUndoProblemMove: () => controller.undoProblemMove(),
-      onSubmitProblemAttempt: () => controller.submitProblemAttempt(),
-      onExitProblemMode: () => controller.exitProblemMode(),
-      onAdvanceReview: () => controller.advanceReview(),
+      onShowRecallHint: () => legacyTrainingFlowController.showRecallHint(),
+      onSkipRecallMove: () => legacyTrainingFlowController.skipRecallMove(),
+      onEndRecallSession: () => legacyTrainingFlowController.endRecallSession(),
+      onUndoProblemMove: () => legacyTrainingFlowController.undoProblemMove(),
+      onSubmitProblemAttempt: () =>
+        legacyTrainingFlowController.submitProblemAttempt(),
+      onExitProblemMode: () => legacyTrainingFlowController.exitProblemMode(),
+      onAdvanceReview: () => legacyTrainingFlowController.advanceReview(),
     }
 
     return h(WorkbenchShell, {

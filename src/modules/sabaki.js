@@ -560,7 +560,7 @@ class Sabaki extends EventEmitter {
         textarea.focus()
       })
     } else if (mode === 'recall') {
-      const {runtimeStore} = this.getTrainingServices()
+      const {runtimeStore} = this.getTrainingContext()
       if (!runtimeStore.getState().recallView) return
     }
     // mode='review' is no longer a board mode — review items open as problem tabs
@@ -621,84 +621,35 @@ class Sabaki extends EventEmitter {
   // Engine Game Training Integration
 
   async startEngineGameTraining() {
-    const {attemptService, monitor, repository} = this.getTrainingServices()
-
-    let {gameTrees, gameIndex} = this.state
-    let tree = gameTrees[gameIndex]
-
-    let task = {
-      id: `task_game_${Date.now()}`,
-      kind: 'game',
-      source: {kind: 'game'},
-      rootPositionSgf: sgf.stringify([tree]),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    let savedTask = await repository.createTask(task)
-
-    let attempt = await attemptService.createAttempt({
-      taskId: savedTask.id,
-      rootPositionSgf: task.rootPositionSgf,
-    })
-
-    monitor.startForAttempt({attemptId: attempt.id, taskId: savedTask.id})
-
-    this._engineGameTraining = {
-      taskId: savedTask.id,
-      attemptId: attempt.id,
-      humanMoveIndex: 0,
-    }
-
-    logger.info('engineGame.training', 'Training started for engine game', {
-      taskId: savedTask.id,
-      attemptId: attempt.id,
-    })
+    return this.getTrainingContext().legacyTrainingFlowController.startEngineGameTraining()
   }
 
   async stopEngineGameTraining() {
-    let training = this._engineGameTraining
-    if (!training) return
-
-    const {attemptService, monitor} = this.getTrainingServices()
-    monitor.stopForAttempt(training.attemptId)
-
-    try {
-      await attemptService.freezeAttempt(training.attemptId)
-      logger.info('engineGame.training.freeze', 'Training attempt frozen', {
-        attemptId: training.attemptId,
-        humanMoveCount: training.humanMoveIndex,
-      })
-    } catch (err) {
-      logger.info('engineGame.training.freeze.error', 'Failed to freeze attempt', {
-        error: String(err),
-      })
-    }
-
-    this._engineGameTraining = null
+    return this.getTrainingContext().legacyTrainingFlowController.stopEngineGameTraining()
   }
-
-  _engineGameTraining = null
 
   // Recall Mode
 
   async startRecallSession(gameId, options = {}) {
-    return this.getTrainingServices().controller.startRecallSession(gameId, options)
+    return this.getTrainingContext()
+      .legacyTrainingFlowController.startRecallSession(gameId, options)
   }
 
   handleRecallMove(vertex) {
-    return this.getTrainingServices().controller.handleRecallMove(vertex)
+    return this.getTrainingContext()
+      .legacyTrainingFlowController.handleRecallMove(vertex)
   }
 
   skipRecallMove() {
-    return this.getTrainingServices().controller.skipRecallMove()
+    return this.getTrainingContext().legacyTrainingFlowController.skipRecallMove()
   }
 
   showRecallHint() {
-    return this.getTrainingServices().controller.showRecallHint()
+    return this.getTrainingContext().legacyTrainingFlowController.showRecallHint()
   }
 
   async endRecallSession() {
-    return this.getTrainingServices().controller.endRecallSession()
+    return this.getTrainingContext().legacyTrainingFlowController.endRecallSession()
   }
 
   recallNavigateNext() {
@@ -712,12 +663,7 @@ class Sabaki extends EventEmitter {
   }
 
   checkRecallComplete() {
-    const {runtimeStore} = this.getTrainingServices()
-    let view = runtimeStore.getState().recallView
-    if (view && view.moveIndex >= view.expectedMoves.length) {
-      runtimeStore.setRecallView({...view, completed: true})
-      this.setState({recallCompleted: true})
-    }
+    return this.getTrainingContext().legacyTrainingFlowController.checkRecallComplete()
   }
 
   async saveCurrentGame() {
@@ -778,227 +724,38 @@ class Sabaki extends EventEmitter {
   // Problem Mode — thin proxy to workbenchTabService
 
   async startProblem(problemId) {
-    return this.getTrainingServices().tabService.openProblemTab(problemId, {
+    return this.getTrainingContext().tabService.openProblemTab(problemId, {
       legacyCompatibility: true,
     })
   }
 
   async handleProblemMove(vertex) {
-    const {runtimeStore, problemFlowService} = this.getTrainingServices()
-    let pv = runtimeStore.getState().problemView
-    let problemSession = pv ? pv.legacyProblemSession : this.state.problemSession
-    if (!problemSession || (pv && pv.submitted) || this.state.problemSubmitted) return
-
-    let {gameTrees, gameIndex, treePosition} = this.state
-    let positionBeforeHash = treePosition
-    let tree = gameTrees[gameIndex]
-    let board = gametree.getBoard(tree, treePosition)
-
-    if (board.get(vertex) !== 0) return
-
-    let player = problemSession.sideToMove === 'black' ? 1 : -1
-
-    let preMoveAnalysis =
-      this.getPlayServices().engineService.getAnalysisForPosition(treePosition)
-
-    // Place the stone (board infrastructure)
-    let newTree = tree.mutate((draft) => {
-      draft.appendNode(treePosition, {
-        [player > 0 ? 'B' : 'W']: [sgf.stringifyVertex(vertex)],
-      })
-    })
-
-    let nextId = newTree.get(treePosition).children[0]?.id
-    if (nextId) {
-      this.setCurrentTreePosition(newTree, nextId)
-    }
-
-    let moveStr = board.stringifyVertex(vertex)
-
-    logger.info('problem.move', 'Problem move played', {
-      vertex: moveStr,
-      player: player > 0 ? 'B' : 'W',
-      hasPreMoveAnalysis: !!preMoveAnalysis,
-      evalCacheSize: pv?.evalCache?.length ?? 0,
-    })
-
-    let result
-    try {
-      result = await problemFlowService.appendProblemMove({
-        move: moveStr,
-        vertex,
-        playerSign: player,
-        positionBeforeHash,
-        positionAfterHash: nextId,
-        preMoveAnalysis,
-      })
-    } catch (err) {
-      logger.info('problem.move.error', 'Problem move flow failed', {
-        move: moveStr,
-        positionBeforeHash,
-        positionAfterHash: nextId,
-        error: String(err),
-      })
-      return
-    }
-    if (!result) return
-
-    // Legacy compat
-    this.setState({
-      problemEvalCache: result.evalCache,
-      problemBadMoves: result.badMoves,
-      problemAttempt: {
-        ...(this.state.problemAttempt || {}),
-        userLine: result.evalCache.map((e) => e.move),
-        moveEvaluations: result.evalCache,
-      },
-    })
+    return this.getTrainingContext()
+      .legacyTrainingFlowController.handleProblemMove(vertex)
   }
 
   async submitProblemAttempt() {
-    const {problemFlowService} = this.getTrainingServices()
-
-    logger.info('problem.submit', 'Problem submit requested')
-    const submitResult = await problemFlowService.submitActiveProblem()
-    if (!submitResult) {
-      logger.info('problem.submit.skip', 'Submit returned no result')
-      return
-    }
-
-    logger.info('problem.submit.done', 'Problem submitted', {
-      result: submitResult.result,
-      attemptId: submitResult.attempt?.id,
-    })
-
-    // Legacy compat
-    this.setState({
-      problemSubmitted: true,
-      problemResult: submitResult.result,
-      problemAttempt: submitResult.attempt,
-    })
-  }
-
-  async generatePunishmentProblem(
-    badMove,
-    parentProblem,
-    parentAttempt,
-    punishSide,
-  ) {
-    let {gameTrees, gameIndex, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let board = gametree.getBoard(tree, treePosition)
-    let snapshot = createSnapshotFromBoard(
-      board,
-      punishSide === 'black' ? 1 : -1,
-    )
-    let positionSgf = sgf.stringify([
-      snapshotToGameTree(snapshot, {moveNumber: 0}),
-    ])
-
-    let description =
-      `Auto-generated from "${parentProblem.title || 'untitled'}". ` +
-      `The solver played ${badMove.move}, causing a ${badMove.severity} loss of ~${Math.round(badMove.scoreDrop || 0)} points. ` +
-      `Now it is ${punishSide}'s turn. Find the key punishment move.`
-
-    let problem = {
-      sourceProblemId: parentProblem.id,
-      type: 'punishment',
-      positionSgf,
-      sideToMove: punishSide,
-      title: `Punishment: ${parentProblem.title || 'Untitled'}`,
-      positionDescription: description,
-      taskGoal: `Find the punishment move after ${badMove.move}.`,
-      status: 'inbox',
-    }
-
-    let saved = await window.sabaki.db.saveProblem(problem)
-    return saved
+    return this.getTrainingContext()
+      .legacyTrainingFlowController.submitProblemAttempt()
   }
 
   undoProblemMove() {
-    const {problemFlowService} = this.getTrainingServices()
-
-    const result = problemFlowService.undoProblemMove()
-    if (!result) return
-
-    // Navigate back in tree (board infrastructure)
-    let {gameTrees, gameIndex, treePosition} = this.state
-    let tree = gameTrees[gameIndex]
-    let node = tree.get(treePosition)
-    if (node.parentId) {
-      this.setCurrentTreePosition(tree, node.parentId)
-    }
-
-    // Legacy compat
-    this.setState({
-      problemAttempt: {...(this.state.problemAttempt || {}), userLine: result.userLine},
-      problemEvalCache: result.evalCache,
-      problemBadMoves: result.badMoves,
-    })
+    return this.getTrainingContext().legacyTrainingFlowController.undoProblemMove()
   }
 
   exitProblemMode() {
-    const {runtimeStore} = this.getTrainingServices()
-
-    // Clear runtime store
-    runtimeStore.setProblemView(null)
-
-    // Legacy compat
-    this.setState({
-      problemSession: null,
-      problemAttempt: null,
-      problemSubmitted: false,
-      problemResult: null,
-    })
-    this.setMode('play')
+    return this.getTrainingContext().legacyTrainingFlowController.exitProblemMode()
   }
 
   // Review Mode — queue/inbox only, NOT a board mode
 
   async startReviewSession() {
-    const {runtimeStore} = this.getTrainingServices()
-    let dueItems = await window.sabaki.db.getDueReviews()
-    if (dueItems.length === 0) return
-
-    let queue = dueItems.map((item) => item.item_id)
-
-    // Update runtime store (dashboard state)
-    runtimeStore.setReviewQueueView({
-      queue,
-      currentIndex: 0,
-      totalDue: queue.length,
-    })
-
-    // Legacy compat
-    this.setState({
-      reviewQueue: queue,
-      reviewCurrentIndex: 0,
-      reviewTotalDue: queue.length,
-    })
-
-    // Open first item as normal problem tab (NOT mode='review')
-    await this.startProblem(queue[0])
+    return this.getTrainingContext()
+      .legacyTrainingFlowController.startReviewSession()
   }
 
   async advanceReview() {
-    const {runtimeStore} = this.getTrainingServices()
-    let rv = runtimeStore.getState().reviewQueueView
-    let queue = rv ? rv.queue : this.state.reviewQueue
-    let currentIndex = rv ? rv.currentIndex : this.state.reviewCurrentIndex
-    let nextIndex = currentIndex + 1
-
-    if (nextIndex >= queue.length) {
-      runtimeStore.setReviewQueueView(null)
-      this.exitProblemMode()
-      return
-    }
-
-    if (rv) {
-      runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
-    }
-    this.setState({reviewCurrentIndex: nextIndex})
-
-    await this.startProblem(queue[nextIndex])
+    return this.getTrainingContext().legacyTrainingFlowController.advanceReview()
   }
 
   setBusy(busy) {
@@ -1224,7 +981,7 @@ class Sabaki extends EventEmitter {
   _overlayStore = null
   _trainingServices = null
 
-  getTrainingServices() {
+  getTrainingContext() {
     if (this._trainingServices == null) {
       const workbenchStore = createWorkbenchStore()
       const runtimeStore = createTrainingRuntimeStore()
@@ -1292,14 +1049,22 @@ class Sabaki extends EventEmitter {
       }
 
       // Controller must be created after all other services are set,
-      // but does NOT call getTrainingServices() at create time.
-      this._trainingServices.controller = createLegacyTrainingFlowController({
+      // but does NOT call getTrainingContext() at create time.
+      const legacyTrainingFlowController = createLegacyTrainingFlowController({
         sabaki: this,
         db: window.sabaki.db,
-        getTrainingServices: () => this._trainingServices,
+        getTrainingContext: () => this._trainingServices,
       })
+      this._trainingServices.legacyTrainingFlowController =
+        legacyTrainingFlowController
+      // Compatibility alias for call sites that have not been renamed yet.
+      this._trainingServices.controller = legacyTrainingFlowController
     }
     return this._trainingServices
+  }
+
+  getTrainingServices() {
+    return this.getTrainingContext()
   }
 
   getOverlayStore() {
@@ -1407,31 +1172,18 @@ class Sabaki extends EventEmitter {
   async executePlayMove(result) {
     let services = this.getPlayServices()
     let currentPlayer = this.getPlayer(this.state.treePosition)
-    let training = this._engineGameTraining
+    let controller = this.getTrainingContext().legacyTrainingFlowController
+    let training = controller.getEngineGameTraining()
     let positionBefore = training ? this.state.treePosition : null
 
     let playResult = await executePlayInteraction(result, {player: currentPlayer}, services)
 
     // Training: notify monitor of human move in engine games
     if (training && playResult?.changed && !playResult?.pass) {
-      let {monitor} = this.getTrainingServices()
-      let moveIndex = training.humanMoveIndex++
       let move = result.payload?.vertex
         ? sgf.stringifyVertex(result.payload.vertex)
         : ''
-
-      monitor.onUserMove({
-        attemptId: training.attemptId,
-        moveIndex,
-        move,
-        positionBeforeHash: positionBefore,
-        positionAfterHash: playResult.treePosition,
-      }).catch((err) => {
-        logger.info('engineGame.training.moveError', 'Error in onUserMove', {
-          error: String(err),
-          moveIndex,
-        })
-      })
+      controller.notifyEngineGamePlayMove(positionBefore, playResult.treePosition, move)
     }
   }
 
@@ -2627,7 +2379,7 @@ class Sabaki extends EventEmitter {
     if (['play', 'autoplay'].includes(this.state.mode)) {
       // Problem tab intercept: if problemView is active, route to problem move handler
       if (this.state.mode === 'play' && button === 0) {
-        let pv = this.getTrainingServices().runtimeStore.getState().problemView
+        let pv = this.getTrainingContext().runtimeStore.getState().problemView
         if (pv && !pv.submitted && board.get(vertex) === 0) {
           this.handleProblemMove(vertex)
           return
