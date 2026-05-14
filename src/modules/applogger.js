@@ -127,10 +127,12 @@ export function log(level, category, event, message, data = null, options = {}) 
   let fileLevel = setting.get('app.logging_level') || 'info'
   let fileLevelIndex = LEVELS.indexOf(fileLevel)
 
+  // Always output to console regardless of settings
+  try {
+    console.log(`[applogger] [${level}] ${category}.${event}: ${message}`, data ?? '')
+  } catch (e) {}
+
   if (!loggingEnabled && !fileEnabled) {
-    try {
-      console.log(`[applogger] [${level}] ${category}.${event}: ${message}`, data ?? '')
-    } catch (e) {}
     return
   }
 

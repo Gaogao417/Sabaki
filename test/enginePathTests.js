@@ -159,7 +159,7 @@ describe('engine path handling', () => {
 
       assert.equal(result.variations.length, 2)
       assert.equal(result.variations[0].aiPolicy, 0.031)
-      assert.equal(result.variations[0].humanPolicy, 0.124)
+      assert.equal(result.variations[0].humanPrior, 0.124)
       assert.equal(result.variations[0].aiRank, 1)
       assert.equal(result.variations[0].humanRank, 1)
       assert.equal(result.variations[1].aiRank, 2)

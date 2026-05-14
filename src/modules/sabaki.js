@@ -532,6 +532,9 @@ class Sabaki extends EventEmitter {
     this.setState(stateChange)
     this.events.emit('modeChange')
 
+    // Let overlayStore react to mode change (clear territory when leaving analysis)
+    this.getOverlayStore().onModeChange(mode)
+
     applogger.log(
       'info',
       'user',
@@ -543,6 +546,8 @@ class Sabaki extends EventEmitter {
 
     if (mode === 'analysis') {
       this.scheduleEditWorkspaceAnalysis()
+      // Auto-enable territory overlay when entering analysis mode
+      this.getOverlayStore().setTerritoryEnabled(true)
     } else if (
       mode !== 'analysis' &&
       this.state.territoryCompareEnabled &&

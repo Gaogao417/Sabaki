@@ -247,9 +247,8 @@ export function parseAnalysis(line, board, sign = 1, rawHumanPolicy = null) {
       board.height,
     )
 
-    if (ownership != null && sign !== 1) {
-      ownership = ownership.map((row) => row.map((value) => value * sign))
-    }
+    // Ownership is always from Black's perspective per GTP standard
+    // Do NOT flip based on sign — territory colors must not change with current player
   }
 
   let variations = line
