@@ -110,6 +110,7 @@ class AppLogEntry extends Component {
         h('span', {class: 'app-log-category'}, entry.source || entry.category),
         ' ',
         h('span', {class: 'app-log-message'}, entry.message),
+        entry.data ? ` ${JSON.stringify(entry.data)}` : '',
       ]),
     )
   }
