@@ -51,4 +51,15 @@ export {
   createLegacyTrainingFlowController,
 } from './controller/legacyTrainingFlowController'
 
+export {
+  createPlayPhaseController,
+} from './controller/playPhaseController'
+export type {
+  PlayPhaseController,
+  PlayPhaseControllerDeps,
+  PlayMoveInput,
+  PlayMoveResult,
+  PlayServices,
+} from './controller/playPhaseController'
+
 export type * from './types/index'

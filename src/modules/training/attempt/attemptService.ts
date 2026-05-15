@@ -15,6 +15,7 @@ export type AttemptService = {
     rootPositionSgf: string
   }): Promise<TrainingAttempt>
   appendMove(attemptId: string, move: string): Promise<void>
+  undoLastMove(attemptId: string): Promise<void>
   freezeAttempt(attemptId: string): Promise<TrainingAttempt>
   saveMoveEvaluation(evaluation: MoveEvaluation): Promise<void>
   saveBadMove(badMove: BadMove): Promise<void>
@@ -83,6 +84,22 @@ export function createAttemptService(deps: AttemptServiceDeps): AttemptService {
     await repository.updateAttempt(attemptId, { userLine: updatedLine })
   }
 
+  async function undoLastMove(attemptId: string): Promise<void> {
+    const attempt = await repository.loadAttempt(attemptId)
+    if (!attempt) {
+      throw new Error(`attemptService.undoLastMove: attempt not found (id=${attemptId})`)
+    }
+    if (attempt.status !== 'playing') {
+      throw new Error(
+        `attemptService.undoLastMove: attempt not in playing state (status=${attempt.status})`,
+      )
+    }
+    if (attempt.userLine.length === 0) return
+
+    const updatedLine = attempt.userLine.slice(0, -1)
+    await repository.updateAttempt(attemptId, { userLine: updatedLine })
+  }
+
   async function freezeAttempt(attemptId: string): Promise<TrainingAttempt> {
     const attempt = await repository.loadAttempt(attemptId)
     if (!attempt) {
@@ -147,6 +164,7 @@ export function createAttemptService(deps: AttemptServiceDeps): AttemptService {
   return {
     createAttempt,
     appendMove,
+    undoLastMove,
     freezeAttempt,
     saveMoveEvaluation,
     saveBadMove,
