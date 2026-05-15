@@ -14,6 +14,11 @@ import {
   shouldCreateBadMove,
 } from './evaluationRules'
 
+export type FinalizedAttemptSummary = {
+  moveEvaluations: MoveEvaluation[]
+  badMoves: BadMove[]
+}
+
 export type PlayTrainingMonitor = {
   startForAttempt(input: { attemptId: string; taskId: string }): void
   stopForAttempt(attemptId: string): void
@@ -24,8 +29,10 @@ export type PlayTrainingMonitor = {
     positionBeforeHash?: string
     positionAfterHash?: string
   }): Promise<void>
+  onUndoMove(input: { attemptId: string; moveIndex: number }): Promise<void>
   onAnalysisUpdated(input: { positionKey: string }): Promise<void>
   failExpiredPendingEvaluations(now?: string): Promise<void>
+  finalizeAttempt(attemptId: string): Promise<FinalizedAttemptSummary>
 }
 
 const PENDING_TIMEOUT_MS = 30_000
@@ -238,6 +245,58 @@ export function createPlayTrainingMonitor(
     }
   }
 
+  async function onUndoMove(input: {
+    attemptId: string
+    moveIndex: number
+  }): Promise<void> {
+    const { attemptId, moveIndex } = input
+    const pending = runtimeStore.getState().pendingMoveEvaluations
+
+    // Remove the pending evaluation for this move
+    const evalForMove = Object.values(pending).find(
+      (e) => e.attemptId === attemptId && e.moveIndex === moveIndex,
+    )
+
+    if (evalForMove) {
+      runtimeStore.removePendingMoveEvaluation(evalForMove.id)
+      await repository.updateMoveEvaluation(evalForMove.id, {
+        status: 'failed',
+      })
+    }
+
+    // Remove bad moves visible in UI for this move index
+    const badMoves = await repository.listBadMovesByAttempt(attemptId)
+    const toRemove = badMoves.filter((bm) => bm.moveIndex === moveIndex)
+    for (const bm of toRemove) {
+      runtimeStore.setVisibleBadMoveIds(
+        runtimeStore.getState().visibleBadMoveIds.filter((id) => id !== bm.id),
+      )
+    }
+
+    logger?.info('monitor.undoMove', 'Undo move processed', {
+      attemptId,
+      moveIndex,
+      pendingRemoved: !!evalForMove,
+      badMovesRemoved: toRemove.length,
+    })
+  }
+
+  async function finalizeAttempt(attemptId: string): Promise<FinalizedAttemptSummary> {
+    // Fail any remaining pending evaluations
+    await failExpiredPendingEvaluations()
+
+    const moveEvaluations = await repository.listMoveEvaluationsByAttempt(attemptId)
+    const badMoves = await repository.listBadMovesByAttempt(attemptId)
+
+    logger?.info('monitor.finalize', 'Attempt finalized', {
+      attemptId,
+      evaluationCount: moveEvaluations.length,
+      badMoveCount: badMoves.length,
+    })
+
+    return { moveEvaluations, badMoves }
+  }
+
   async function failExpiredPendingEvaluations(now?: string): Promise<void> {
     if (!activeMonitor) return
 
@@ -273,7 +332,9 @@ export function createPlayTrainingMonitor(
     startForAttempt,
     stopForAttempt,
     onUserMove,
+    onUndoMove,
     onAnalysisUpdated,
     failExpiredPendingEvaluations,
+    finalizeAttempt,
   }
 }

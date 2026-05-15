@@ -8,6 +8,7 @@
  *   Container / clickVertex → PlayPhaseController → board-interaction (lower)
  *                                                 → attemptService / monitor (upper)
  *                                                 → phaseService (phase transition)
+ *                                                 → recallService (submit → recall init)
  */
 
 import {resolveBoardInteraction} from '../../workbench/board-interactions/resolveBoardInteraction'
@@ -18,6 +19,7 @@ import * as sgf from '@sabaki/sgf'
 
 import type {AttemptService} from '../attempt/attemptService'
 import type {PlayTrainingMonitor} from '../attempt/playTrainingMonitor'
+import type {RecallService} from '../recall/recallService'
 import type {TrainingRuntimeStore} from '../store/trainingRuntimeStore'
 import type {WorkbenchStore} from '../store/workbenchStore'
 import type {PhaseTransition} from '../workbench/workbenchPhaseService'
@@ -62,6 +64,9 @@ export type PlayPhaseControllerDeps = {
   attemptService: AttemptService
   playTrainingMonitor: PlayTrainingMonitor
 
+  // Recall (created on submit)
+  recallService: RecallService
+
   // Phase transition
   phaseTransition(tabId: string, transition: PhaseTransition): void
 
@@ -93,17 +98,19 @@ export function createPlayPhaseController(
     navigateToParent,
     attemptService,
     playTrainingMonitor,
+    recallService,
     phaseTransition,
     runtimeStore,
     workbenchStore,
     logger,
   } = deps
 
-  // Track move index across handleMove calls
-  let moveCounter = 0
-
   function getActiveTabId(): string | null {
     return workbenchStore.getState().activeTabId
+  }
+
+  function getActiveAttemptId(): string | undefined {
+    return runtimeStore.getState().activeAttemptId
   }
 
   // --- Lifecycle ---
@@ -115,12 +122,13 @@ export function createPlayPhaseController(
       rootPositionSgf: input.rootPositionSgf,
     })
 
+    // Explicitly set active attempt in runtime store
+    runtimeStore.setActiveAttempt(attempt.id)
+
     playTrainingMonitor.startForAttempt({
       attemptId: attempt.id,
       taskId: input.taskId,
     })
-
-    moveCounter = 0
 
     logger?.info('playPhase.start', 'Play session started', {
       taskId: input.taskId,
@@ -132,6 +140,17 @@ export function createPlayPhaseController(
   // --- Move ---
 
   async function handleMove(input: PlayMoveInput): Promise<PlayMoveResult> {
+    // State guard: must have an active attempt in play phase
+    let activeAttemptId = getActiveAttemptId()
+    if (!activeAttemptId) {
+      return {handled: false, changed: false, reason: 'no active attempt'}
+    }
+
+    let attempt = await attemptService.loadAttempt(activeAttemptId)
+    if (!attempt || attempt.status !== 'playing') {
+      return {handled: false, changed: false, reason: `attempt not playing (status=${attempt?.status})`}
+    }
+
     let {vertex, state, board, event, sourceVertex, isMac} = input
 
     let ctx = createBoardInteractionContext({
@@ -175,27 +194,24 @@ export function createPlayPhaseController(
       return {handled: true, changed: false, reason: playResult.reason}
     }
 
-    // Training tracking
-    let activeAttemptId = runtimeStore.getState().activeAttemptId
-
-    if (activeAttemptId && playResult.changed && !playResult.pass) {
+    // Training tracking — derive moveIndex from userLine (fact source)
+    if (playResult.changed && !playResult.pass) {
       let move = sgf.stringifyVertex(vertex)
+      let moveIndex = attempt.userLine.length
 
       try {
         await attemptService.appendMove(activeAttemptId, move)
         await playTrainingMonitor.onUserMove({
           attemptId: activeAttemptId,
-          moveIndex: moveCounter,
+          moveIndex,
           move,
           positionBeforeHash: positionBefore,
           positionAfterHash: playResult.treePosition,
         })
 
-        moveCounter++
-
         logger?.info('playPhase.move', 'Move tracked', {
           attemptId: activeAttemptId,
-          moveIndex: moveCounter - 1,
+          moveIndex,
           move,
         })
       } catch (err) {
@@ -217,8 +233,13 @@ export function createPlayPhaseController(
   // --- Undo ---
 
   async function undo(): Promise<void> {
-    let activeAttemptId = runtimeStore.getState().activeAttemptId
+    let activeAttemptId = getActiveAttemptId()
     if (!activeAttemptId) return
+
+    let attempt = await attemptService.loadAttempt(activeAttemptId)
+    if (!attempt || attempt.status !== 'playing' || attempt.userLine.length === 0) return
+
+    let moveIndex = attempt.userLine.length - 1
 
     // Navigate tree back to parent node
     let newPosition = navigateToParent()
@@ -227,32 +248,29 @@ export function createPlayPhaseController(
     // Pop last move from attempt's userLine
     await attemptService.undoLastMove(activeAttemptId)
 
-    // Remove the most recent pending evaluation for this attempt
-    let pending = runtimeStore.getState().pendingMoveEvaluations
-    let lastEval = Object.values(pending)
-      .filter(e => e.attemptId === activeAttemptId)
-      .sort((a, b) => b.moveIndex - a.moveIndex)[0]
-
-    if (lastEval) {
-      runtimeStore.removePendingMoveEvaluation(lastEval.id)
-    }
-
-    moveCounter = Math.max(0, moveCounter - 1)
+    // Let monitor clean up evaluation + bad move for this move index
+    await playTrainingMonitor.onUndoMove({
+      attemptId: activeAttemptId,
+      moveIndex,
+    })
 
     logger?.info('playPhase.undo', 'Move undone', {
       attemptId: activeAttemptId,
-      moveIndex: moveCounter,
+      moveIndex,
     })
   }
 
   // --- Submit ---
 
   async function submitPlay(): Promise<void> {
-    let activeAttemptId = runtimeStore.getState().activeAttemptId
+    let activeAttemptId = getActiveAttemptId()
     if (!activeAttemptId) return
 
     let tabId = getActiveTabId()
     if (!tabId) return
+
+    // Finalize: fail expired pending evals, gather summary
+    let summary = await playTrainingMonitor.finalizeAttempt(activeAttemptId)
 
     // Freeze attempt (no more moves allowed)
     await attemptService.freezeAttempt(activeAttemptId)
@@ -260,35 +278,44 @@ export function createPlayPhaseController(
     // Stop monitoring
     playTrainingMonitor.stopForAttempt(activeAttemptId)
 
+    // Create recall session from this attempt
+    await recallService.createRecallFromAttempt(activeAttemptId)
+
     // Transition to recall phase
     phaseTransition(tabId, 'submit')
 
     logger?.info('playPhase.submit', 'Play submitted, transitioning to recall', {
       attemptId: activeAttemptId,
       tabId,
+      evaluationCount: summary.moveEvaluations.length,
+      badMoveCount: summary.badMoves.length,
     })
   }
 
   // --- Exit ---
 
   function exit(): void {
-    let activeAttemptId = runtimeStore.getState().activeAttemptId
+    let activeAttemptId = getActiveAttemptId()
 
     if (activeAttemptId) {
       playTrainingMonitor.stopForAttempt(activeAttemptId)
+
+      // Only clean up state belonging to this attempt
+      let pending = runtimeStore.getState().pendingMoveEvaluations
+      for (let [id, evaluation] of Object.entries(pending)) {
+        if (evaluation.attemptId === activeAttemptId) {
+          runtimeStore.removePendingMoveEvaluation(id)
+        }
+      }
+
+      let badMoveIds = runtimeStore.getState().visibleBadMoveIds
+      if (badMoveIds.length > 0) {
+        runtimeStore.setVisibleBadMoveIds([])
+      }
     }
 
-    // Clear play-phase runtime state
     runtimeStore.setActiveAttempt(undefined)
     runtimeStore.setProblemView(null)
-
-    let pending = runtimeStore.getState().pendingMoveEvaluations
-    for (let id of Object.keys(pending)) {
-      runtimeStore.removePendingMoveEvaluation(id)
-    }
-    runtimeStore.setVisibleBadMoveIds([])
-
-    moveCounter = 0
 
     logger?.info('playPhase.exit', 'Play session exited', {
       attemptId: activeAttemptId ?? 'none',

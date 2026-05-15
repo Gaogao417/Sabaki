@@ -14,6 +14,7 @@ export type AttemptService = {
     tabId?: string
     rootPositionSgf: string
   }): Promise<TrainingAttempt>
+  loadAttempt(attemptId: string): Promise<TrainingAttempt | null>
   appendMove(attemptId: string, move: string): Promise<void>
   undoLastMove(attemptId: string): Promise<void>
   freezeAttempt(attemptId: string): Promise<TrainingAttempt>
@@ -67,6 +68,10 @@ export function createAttemptService(deps: AttemptServiceDeps): AttemptService {
     })
 
     return attempt
+  }
+
+  async function loadAttempt(attemptId: string): Promise<TrainingAttempt | null> {
+    return repository.loadAttempt(attemptId)
   }
 
   async function appendMove(attemptId: string, move: string): Promise<void> {
@@ -163,6 +168,7 @@ export function createAttemptService(deps: AttemptServiceDeps): AttemptService {
 
   return {
     createAttempt,
+    loadAttempt,
     appendMove,
     undoLastMove,
     freezeAttempt,
