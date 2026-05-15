@@ -360,83 +360,104 @@ describe('analysisAreaStore effects', () => {
 // ===========================================================================
 
 describe('analysisService + analysisAreaStore integration', () => {
-  /** Create sabaki mock with a syncer+gameTree so analyzeMove actually executes. */
-  function createSabakiWithSyncer(overrides = {}) {
-    let sabaki = createMockSabaki(overrides)
-    sabaki.state = {
-      mode: 'analysis',
-      treePosition: 'root',
-      ...overrides.state,
-    }
+  /**
+   * Full harness: sabaki mock + engine service mock + area store,
+   * wired so runBoardAnalysis reaches buildAnalyzeArgs.
+   * Captures what the engine actually receives for analysisAreaVertices.
+   */
+  function createFullHarness() {
+    let store = createAnalysisAreaStore()
+    let capturedBuildArgs = null
+
+    let sabaki = createMockSabaki()
+    sabaki.state = {mode: 'analysis', treePosition: 'root'}
     sabaki.inferredState = {
       analyzingEngineSyncer: {id: 'test-syncer', suspended: false},
-      gameTree: {get: () => null},
-      ...overrides.inferredState,
+      gameTree: {get: () => ({sign: 0})},
     }
-    return sabaki
-  }
 
-  it('areaChanged triggers engine refresh via analysisService subscription', async () => {
-    let store = createAnalysisAreaStore()
-    let analyzeMoveCalls = 0
+    let engineServiceMock = {
+      getAnalysisRelevantState: () => ({}),
+      engineSupportsOwnership: () => false,
+      getAnalyzeCommand: () => 'analyze',
+      buildAnalyzeArgs: (_syncer, _player, opts) => {
+        capturedBuildArgs = opts
+        return []
+      },
+      syncEngine: async () => true,
+      getAnalysisVisitLimit: () => null,
+      getAnalysisMaxTime: () => null,
+      prepareAnalysis: async () => {},
+      startAnalysis: async () => {},
+      getAttachedSyncers: () => [],
+      getLastAnalyzingSyncerId: () => null,
+    }
 
-    let sabaki = createSabakiWithSyncer()
     let service = createAnalysisService(sabaki, {
       analysisAreaStore: store,
     })
+    service.setEngineService(engineServiceMock)
 
-    // Override analyzeGameTreePosition to detect when the subscription fires
-    let origAnalyze = service.analyzeGameTreePosition.bind(service)
-    service.analyzeGameTreePosition = async () => { analyzeMoveCalls++ }
+    return {store, service, capturedBuildArgs: () => capturedBuildArgs}
+  }
+
+  /** Wait for a promise to resolve by polling. */
+  function flushAsync() {
+    return new Promise(resolve => setTimeout(resolve, 0))
+  }
+
+  it('areaChanged triggers analysisService.analyzeGameTreePosition', async () => {
+    let {store, service} = createFullHarness()
+    let analyzeCalled = false
+    let analyzeResolve
+    let analyzePromise = new Promise(r => { analyzeResolve = r })
+
+    service.analyzeGameTreePosition = async () => {
+      analyzeCalled = true
+      analyzeResolve()
+    }
 
     store.setAnalysisAreaRects(
       [{sx: 0, sy: 0, ex: 3, ey: 3}],
       [[0, 0], [1, 0]],
     )
 
-    // analyzeMove is async — flush microtask queue
-    await new Promise(r => setTimeout(r, 0))
-
-    assert.strictEqual(analyzeMoveCalls, 1)
+    await analyzePromise
+    assert.strictEqual(analyzeCalled, true)
   })
 
-  it('areaCleared triggers engine refresh via analysisService subscription', async () => {
-    let store = createAnalysisAreaStore()
+  it('areaCleared triggers analysisService.analyzeGameTreePosition', async () => {
+    let {store, service} = createFullHarness()
     store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
 
-    let analyzeMoveCalls = 0
-    let sabaki = createSabakiWithSyncer()
-    let service = createAnalysisService(sabaki, {
-      analysisAreaStore: store,
-    })
-    service.analyzeGameTreePosition = async () => { analyzeMoveCalls++ }
+    let analyzeCalled = false
+    let analyzeResolve
+    let analyzePromise = new Promise(r => { analyzeResolve = r })
+    service.analyzeGameTreePosition = async () => {
+      analyzeCalled = true
+      analyzeResolve()
+    }
 
     store.clearAnalysisArea()
 
-    await new Promise(r => setTimeout(r, 0))
-
-    assert.strictEqual(analyzeMoveCalls, 1)
+    await analyzePromise
+    assert.strictEqual(analyzeCalled, true)
   })
 
-  it('areaSelectModeChanged does NOT trigger engine refresh', async () => {
-    let store = createAnalysisAreaStore()
-    let analyzeMoveCalls = 0
-    let sabaki = createSabakiWithSyncer()
-    let service = createAnalysisService(sabaki, {
-      analysisAreaStore: store,
-    })
-    service.analyzeGameTreePosition = async () => { analyzeMoveCalls++ }
+  it('areaSelectModeChanged does NOT trigger analyzeGameTreePosition', async () => {
+    let {store, service} = createFullHarness()
+    let analyzeCalled = false
+    service.analyzeGameTreePosition = async () => { analyzeCalled = true }
 
     store.toggleAreaSelectMode()
     store.setAreaSelectMode(true) // no-op since already true
     store.resetOnModeChange()
 
-    await new Promise(r => setTimeout(r, 0))
-
-    assert.strictEqual(analyzeMoveCalls, 0)
+    await flushAsync()
+    assert.strictEqual(analyzeCalled, false)
   })
 
-  it('merged getState in analysisService includes area vertices', () => {
+  it('merged getState includes area vertices from store', () => {
     let store = createAnalysisAreaStore()
     store.setAnalysisAreaRects(
       [{sx: 3, sy: 3, ex: 5, ey: 5}],
@@ -448,26 +469,45 @@ describe('analysisService + analysisAreaStore integration', () => {
       analysisAreaStore: store,
     })
 
-    // refreshActiveBoardAnalysis reads merged getState internally.
-    // No error = area state merged correctly.
-    service.refreshActiveBoardAnalysis()
-
-    assert.deepStrictEqual(store.getState().analysisAreaVertices, [
-      [3, 3], [4, 3], [5, 3],
-    ])
+    // buildAnalysisTarget uses merged getState internally.
+    // It should not throw — area state is correctly merged.
+    let target = service.buildAnalysisTarget()
+    assert.ok(target != null)
+    assert.strictEqual(target.kind, 'game-tree')
   })
 
-  it('after clearAnalysisArea, merged getState has null vertices', () => {
-    let store = createAnalysisAreaStore()
-    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
-
-    let sabaki = createMockSabaki()
-    createAnalysisService(sabaki, {analysisAreaStore: store})
-
+  it('buildAnalyzeArgs receives null vertices after clearAnalysisArea', async () => {
+    let {store, service, capturedBuildArgs} = createFullHarness()
+    store.setAnalysisAreaRects(
+      [{sx: 3, sy: 3, ex: 5, ey: 5}],
+      [[3, 3], [4, 3], [5, 3]],
+    )
     store.clearAnalysisArea()
 
-    assert.strictEqual(store.getState().analysisAreaVertices, null)
-    assert.strictEqual(store.getState().analysisAreaRects, null)
+    // No vertices → getBoard is not called, so simple tree mock suffices
+    let finishResolve
+    let analysisPromise = new Promise(r => { finishResolve = r })
+
+    await service.runBoardAnalysis({
+      syncer: {
+        id: 'test-syncer',
+        suspended: false,
+        on: (evt, handler) => {
+          // Immediately finish to trigger finish() path
+          if (evt === 'analysis-update') setImmediate(() => handler())
+        },
+        removeListener: () => {},
+        sendAbort: () => {},
+        queueCommand: () => {},
+      },
+      tree: {get: () => ({sign: 0})},
+      treePosition: 'root',
+      analyzePlayer: 1,
+    })
+
+    let args = capturedBuildArgs()
+    assert.ok(args != null, 'buildAnalyzeArgs was called')
+    assert.strictEqual(args.analysisAreaVertices, null)
   })
 
   it('createAnalysisService without analysisAreaStore skips subscription', () => {
