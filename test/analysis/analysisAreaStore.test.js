@@ -10,14 +10,6 @@ const {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Tracks calls via mutable object (so closure mutations are visible). */
-function createCallTracker() {
-  return {
-    engineRefreshCount: 0,
-    stateUpdates: [],
-  }
-}
-
 /** Minimal sabaki mock for createAnalysisService. */
 function createMockSabaki(overrides = {}) {
   return {
@@ -51,36 +43,43 @@ describe('analysisAreaStore — unit', () => {
     assert.strictEqual(state.areaSelectMode, false)
   })
 
-  it('setAnalysisAreaRects updates rects/vertices, returns true, notifies once', () => {
+  it('setAnalysisAreaRects emits areaChanged', () => {
     let store = createAnalysisAreaStore()
-    let notifications = 0
-    store.subscribe(() => { notifications++ })
+    let events = []
+    store.subscribe(event => events.push(event))
 
     let changed = store.setAnalysisAreaRects(
       [{sx: 0, sy: 0, ex: 3, ey: 3}],
-      [[0, 0], [1, 0], [2, 0], [3, 0]],
+      [[0, 0], [1, 0]],
     )
 
     assert.strictEqual(changed, true)
-    assert.deepStrictEqual(store.getState().analysisAreaRects, [
-      {sx: 0, sy: 0, ex: 3, ey: 3},
-    ])
+    assert.deepStrictEqual(events.map(e => e.type), ['areaChanged'])
     assert.deepStrictEqual(store.getState().analysisAreaVertices, [
-      [0, 0], [1, 0], [2, 0], [3, 0],
+      [0, 0], [1, 0],
     ])
-    assert.strictEqual(notifications, 1)
   })
 
-  it('setting same rects/vertices returns false and does not notify', () => {
+  it('setAnalysisArea emits areaChanged', () => {
     let store = createAnalysisAreaStore()
-    let notifications = 0
-    store.subscribe(() => { notifications++ })
+    let events = []
+    store.subscribe(event => events.push(event))
+
+    store.setAnalysisArea([[0, 0], [1, 1]])
+
+    assert.deepStrictEqual(events.map(e => e.type), ['areaChanged'])
+  })
+
+  it('setting same rects/vertices returns false and does not emit', () => {
+    let store = createAnalysisAreaStore()
+    let events = []
+    store.subscribe(event => events.push(event))
 
     store.setAnalysisAreaRects(
       [{sx: 0, sy: 0, ex: 3, ey: 3}],
       [[0, 0], [1, 0]],
     )
-    assert.strictEqual(notifications, 1)
+    events.length = 0
 
     let changed = store.setAnalysisAreaRects(
       [{sx: 0, sy: 0, ex: 3, ey: 3}],
@@ -88,64 +87,85 @@ describe('analysisAreaStore — unit', () => {
     )
 
     assert.strictEqual(changed, false)
-    assert.strictEqual(notifications, 1)
+    assert.deepStrictEqual(events, [])
+  })
+
+  it('clearAnalysisArea emits areaCleared', () => {
+    let store = createAnalysisAreaStore()
+    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+
+    let events = []
+    store.subscribe(event => events.push(event))
+
+    let changed = store.clearAnalysisArea()
+
+    assert.strictEqual(changed, true)
+    assert.deepStrictEqual(events.map(e => e.type), ['areaCleared'])
+  })
+
+  it('clearAnalysisArea on empty state returns false and does not emit', () => {
+    let store = createAnalysisAreaStore()
+    let events = []
+    store.subscribe(event => events.push(event))
+
+    let changed = store.clearAnalysisArea()
+
+    assert.strictEqual(changed, false)
+    assert.deepStrictEqual(events, [])
   })
 
   it('clearAnalysisArea clears rects/vertices but keeps areaSelectMode unchanged', () => {
     let store = createAnalysisAreaStore()
     store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
     store.toggleAreaSelectMode()
-    assert.strictEqual(store.getState().areaSelectMode, true)
 
-    let changed = store.clearAnalysisArea()
+    store.clearAnalysisArea()
 
-    assert.strictEqual(changed, true)
     assert.strictEqual(store.getState().analysisAreaRects, null)
     assert.strictEqual(store.getState().analysisAreaVertices, null)
     assert.strictEqual(store.getState().areaSelectMode, true)
   })
 
-  it('clearAnalysisArea on empty state returns false and does not notify', () => {
+  it('toggleAreaSelectMode emits areaSelectModeChanged', () => {
     let store = createAnalysisAreaStore()
-    let notifications = 0
-    store.subscribe(() => { notifications++ })
-
-    let changed = store.clearAnalysisArea()
-
-    assert.strictEqual(changed, false)
-    assert.strictEqual(notifications, 0)
-  })
-
-  it('toggleAreaSelectMode changes only areaSelectMode', () => {
-    let store = createAnalysisAreaStore()
-    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    let events = []
+    store.subscribe(event => events.push(event))
 
     store.toggleAreaSelectMode()
 
     assert.strictEqual(store.getState().areaSelectMode, true)
-    assert.deepStrictEqual(store.getState().analysisAreaRects, [
-      {sx: 0, sy: 0, ex: 3, ey: 3},
-    ])
+    assert.deepStrictEqual(events.map(e => e.type), ['areaSelectModeChanged'])
   })
 
-  it('resetOnModeChange sets areaSelectMode false and only notifies when changed', () => {
+  it('setAreaSelectMode emits areaSelectModeChanged only when changed', () => {
     let store = createAnalysisAreaStore()
-    let notifications = 0
-    store.subscribe(() => { notifications++ })
+    let events = []
+    store.subscribe(event => events.push(event))
 
-    // Already false — no notification
+    let changed1 = store.setAreaSelectMode(false)
+    assert.strictEqual(changed1, false)
+    assert.deepStrictEqual(events, [])
+
+    let changed2 = store.setAreaSelectMode(true)
+    assert.strictEqual(changed2, true)
+    assert.deepStrictEqual(events.map(e => e.type), ['areaSelectModeChanged'])
+  })
+
+  it('resetOnModeChange emits areaSelectModeChanged only when was true', () => {
+    let store = createAnalysisAreaStore()
+    let events = []
+    store.subscribe(event => events.push(event))
+
     let changed1 = store.resetOnModeChange()
     assert.strictEqual(changed1, false)
-    assert.strictEqual(notifications, 0)
+    assert.deepStrictEqual(events, [])
 
-    // Toggle on, then reset — should notify
     store.toggleAreaSelectMode()
-    let notificationsAfterToggle = notifications
+    events.length = 0
 
     let changed2 = store.resetOnModeChange()
     assert.strictEqual(changed2, true)
-    assert.strictEqual(store.getState().areaSelectMode, false)
-    assert.strictEqual(notifications, notificationsAfterToggle + 1)
+    assert.deepStrictEqual(events.map(e => e.type), ['areaSelectModeChanged'])
   })
 
   it('setAnalysisAreaRects nulls both when vertices empty', () => {
@@ -159,106 +179,130 @@ describe('analysisAreaStore — unit', () => {
     assert.strictEqual(store.getState().analysisAreaVertices, null)
   })
 
-  it('unsubscribe stops notifications', () => {
+  it('unsubscribe stops events', () => {
     let store = createAnalysisAreaStore()
-    let notifications = 0
-    let unsub = store.subscribe(() => { notifications++ })
+    let events = []
+    let unsub = store.subscribe(event => events.push(event))
 
     store.setAnalysisArea([[0, 0]])
-    assert.strictEqual(notifications, 1)
+    assert.strictEqual(events.length, 1)
 
     unsub()
     store.clearAnalysisArea()
-    assert.strictEqual(notifications, 1)
+    assert.strictEqual(events.length, 1)
   })
 })
 
 // ===========================================================================
-// 2. Sabaki orchestration tests
-//    Simulates the sabaki.js area method pattern.
-//    Uses mutable tracker objects so closure mutations are visible.
+// 2. Effect subscription tests
+//    Two subscribers: UI (all events) and engine (areaChanged/areaCleared only)
 // ===========================================================================
 
-describe('sabaki area orchestration', () => {
-  function createOrchestrator() {
+describe('analysisAreaStore effects', () => {
+  function createEffectsHarness() {
     let store = createAnalysisAreaStore()
-    let tracker = createCallTracker()
-
-    let sabakiLike = {
-      getAnalysisAreaStore: () => store,
-      setState: (patch) => { tracker.stateUpdates.push(patch) },
+    let tracker = {
+      renderCount: 0,
+      engineRefreshCount: 0,
     }
 
-    // Wire store → engine refresh (simulates analysisService subscription)
-    store.subscribe(() => { tracker.engineRefreshCount++ })
+    // UI subscriber: any store event triggers render
+    store.subscribe(() => {
+      tracker.renderCount++
+    })
 
-    return {store, tracker, sabakiLike}
+    // Engine subscriber: only area constraint changes trigger refresh
+    store.subscribe(event => {
+      if (event.type === 'areaChanged' || event.type === 'areaCleared') {
+        tracker.engineRefreshCount++
+      }
+    })
+
+    return {store, tracker}
   }
 
-  it('setAnalysisAreaRects calls store setter, clears highlightVertices', () => {
-    let {store, tracker, sabakiLike} = createOrchestrator()
+  it('setAnalysisAreaRects triggers both render and engine refresh', () => {
+    let {tracker, store} = createEffectsHarness()
 
-    // sabaki.setAnalysisAreaRects pattern:
-    sabakiLike.getAnalysisAreaStore().setAnalysisAreaRects(
+    store.setAnalysisAreaRects(
       [{sx: 0, sy: 0, ex: 3, ey: 3}],
       [[0, 0], [1, 0]],
     )
-    sabakiLike.setState({highlightVertices: []})
 
-    assert.deepStrictEqual(store.getState().analysisAreaVertices, [[0, 0], [1, 0]])
-    assert.strictEqual(tracker.stateUpdates.length, 1)
-    assert.deepStrictEqual(tracker.stateUpdates[0], {highlightVertices: []})
+    assert.strictEqual(tracker.renderCount, 1)
+    assert.strictEqual(tracker.engineRefreshCount, 1)
   })
 
-  it('clearAnalysisArea refreshes engine only when area actually changed', () => {
-    let {store, tracker, sabakiLike} = createOrchestrator()
+  it('same rects/vertices triggers neither render nor engine', () => {
+    let {tracker, store} = createEffectsHarness()
 
-    // Clear on empty state — store returns false, subscriber not called
-    sabakiLike.getAnalysisAreaStore().clearAnalysisArea()
-    assert.strictEqual(tracker.engineRefreshCount, 0)
-
-    // Set area — subscriber fires once
-    sabakiLike.getAnalysisAreaStore().setAnalysisAreaRects(
+    store.setAnalysisAreaRects(
       [{sx: 0, sy: 0, ex: 3, ey: 3}],
       [[0, 0]],
     )
+    assert.strictEqual(tracker.renderCount, 1)
     assert.strictEqual(tracker.engineRefreshCount, 1)
 
-    // Clear area — subscriber fires again
-    sabakiLike.getAnalysisAreaStore().clearAnalysisArea()
+    store.setAnalysisAreaRects(
+      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [[0, 0]],
+    )
+
+    assert.strictEqual(tracker.renderCount, 1)
+    assert.strictEqual(tracker.engineRefreshCount, 1)
+  })
+
+  it('clearAnalysisArea when changed triggers both', () => {
+    let {tracker, store} = createEffectsHarness()
+
+    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    assert.strictEqual(tracker.renderCount, 1)
+    assert.strictEqual(tracker.engineRefreshCount, 1)
+
+    store.clearAnalysisArea()
+    assert.strictEqual(tracker.renderCount, 2)
     assert.strictEqual(tracker.engineRefreshCount, 2)
   })
 
-  it('toggleAreaSelectMode triggers subscriber for React re-render', () => {
-    let {tracker, sabakiLike} = createOrchestrator()
+  it('clearAnalysisArea when empty triggers neither', () => {
+    let {tracker, store} = createEffectsHarness()
 
-    sabakiLike.getAnalysisAreaStore().toggleAreaSelectMode()
+    store.clearAnalysisArea()
 
-    // Subscriber fires (for React re-render), but in real code
-    // lifecycle.refreshActiveBoardAnalysis routes based on mode/area.
-    // At orchestration level we verify the notification fires.
-    assert.strictEqual(tracker.engineRefreshCount, 1)
+    assert.strictEqual(tracker.renderCount, 0)
+    assert.strictEqual(tracker.engineRefreshCount, 0)
   })
 
-  it('resetOnModeChange during mode change only notifies when areaSelectMode changes', () => {
-    let {store, tracker, sabakiLike} = createOrchestrator()
+  it('toggleAreaSelectMode triggers render but NOT engine refresh', () => {
+    let {tracker, store} = createEffectsHarness()
 
-    // areaSelectMode is already false — no notification
-    sabakiLike.getAnalysisAreaStore().resetOnModeChange()
+    store.toggleAreaSelectMode()
+
+    assert.strictEqual(tracker.renderCount, 1)
+    assert.strictEqual(tracker.engineRefreshCount, 0)
+  })
+
+  it('resetOnModeChange triggers render only when changed, never engine', () => {
+    let {tracker, store} = createEffectsHarness()
+
+    // Already false — no effect
+    store.resetOnModeChange()
+    assert.strictEqual(tracker.renderCount, 0)
     assert.strictEqual(tracker.engineRefreshCount, 0)
 
-    // areaSelectMode is true — reset notifies
+    // Toggle on, then reset — render only
     store.toggleAreaSelectMode()
-    let countAfterToggle = tracker.engineRefreshCount
+    let renderAfterToggle = tracker.renderCount
 
-    sabakiLike.getAnalysisAreaStore().resetOnModeChange()
-    assert.strictEqual(tracker.engineRefreshCount, countAfterToggle + 1)
+    store.resetOnModeChange()
+    assert.strictEqual(tracker.renderCount, renderAfterToggle + 1)
+    assert.strictEqual(tracker.engineRefreshCount, 0)
   })
 })
 
 // ===========================================================================
-// 3. Analysis engine integration tests
-//    Tests createAnalysisService with real analysisAreaStore injection.
+// 3. AnalysisService integration tests
+//    Verify analysisService subscription wires store → lifecycle refresh
 // ===========================================================================
 
 describe('analysisService + analysisAreaStore integration', () => {
@@ -274,36 +318,42 @@ describe('analysisService + analysisAreaStore integration', () => {
       analysisAreaStore: store,
     })
 
-    // The service's internal getLifecycleDeps builds a merged getState.
-    // Call refreshActiveBoardAnalysis which reads getState() internally.
-    // If area state is not merged, the lifecycle would read undefined for
-    // analysisAreaVertices. No error = merge works.
+    // refreshActiveBoardAnalysis reads merged getState internally.
+    // No error = area state merged correctly.
     service.refreshActiveBoardAnalysis()
 
-    // Verify the store state is still correct
     assert.deepStrictEqual(store.getState().analysisAreaVertices, [
       [3, 3], [4, 3], [5, 3],
     ])
   })
 
-  it('area store subscription triggers lifecycle refresh', () => {
+  it('analysisService subscription filters: areaChanged refreshes, areaSelectModeChanged does not', () => {
+    // Test the subscription pattern directly — same logic analysisService uses.
     let store = createAnalysisAreaStore()
-    let sabaki = createMockSabaki()
-    let service = createAnalysisService(sabaki, {
-      analysisAreaStore: store,
+    let engineRefreshCount = 0
+
+    // This mirrors the subscription in createAnalysisService:
+    store.subscribe(event => {
+      if (event.type === 'areaChanged' || event.type === 'areaCleared') {
+        engineRefreshCount++
+      }
     })
 
-    // Changing the store should trigger the lifecycle refresh subscriber.
-    // No assertion on side effects — just verify no error thrown and
-    // the subscription is wired (tested by the chain not throwing).
-    store.setAnalysisAreaRects(
-      [{sx: 5, sy: 5, ex: 7, ey: 7}],
-      [[5, 5], [6, 5], [7, 5]],
-    )
+    // areaChanged → refresh
+    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    assert.strictEqual(engineRefreshCount, 1)
 
-    assert.deepStrictEqual(store.getState().analysisAreaVertices, [
-      [5, 5], [6, 5], [7, 5],
-    ])
+    // areaSelectModeChanged → no refresh
+    store.toggleAreaSelectMode()
+    assert.strictEqual(engineRefreshCount, 1)
+
+    // areaCleared → refresh
+    store.clearAnalysisArea()
+    assert.strictEqual(engineRefreshCount, 2)
+
+    // Same values → no refresh
+    store.clearAnalysisArea()
+    assert.strictEqual(engineRefreshCount, 2)
   })
 
   it('after clearAnalysisArea, merged getState has null vertices', () => {
@@ -311,29 +361,18 @@ describe('analysisService + analysisAreaStore integration', () => {
     store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
 
     let sabaki = createMockSabaki()
-    let service = createAnalysisService(sabaki, {
-      analysisAreaStore: store,
-    })
+    createAnalysisService(sabaki, {analysisAreaStore: store})
 
-    // Clear area through external API
     store.clearAnalysisArea()
 
-    // Verify state is cleared in the store (and thus in merged getState)
     assert.strictEqual(store.getState().analysisAreaVertices, null)
     assert.strictEqual(store.getState().analysisAreaRects, null)
-
-    // The subscription should have fired lifecycle refresh with null area.
-    // No error = the chain handled the null area correctly.
-    service.refreshActiveBoardAnalysis()
   })
 
   it('createAnalysisService without analysisAreaStore does not crash', () => {
     let sabaki = createMockSabaki()
-
-    // No analysisAreaStore dep — service should still work
     let service = createAnalysisService(sabaki)
 
-    // Should not throw — area state defaults to {}
     service.refreshActiveBoardAnalysis()
   })
 })

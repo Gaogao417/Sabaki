@@ -3,8 +3,19 @@
  *
  * This module OWNS its state. Zero deps, zero engine references.
  * Setters return `changed: boolean` so callers decide side effects.
- * Subscribers are notified on every state change.
+ * Subscribers receive typed events so they can filter by concern:
+ *   - UI subscriber: reacts to all events (re-render)
+ *   - Engine subscriber: reacts only to areaChanged / areaCleared
  */
+
+// ---------------------------------------------------------------------------
+// Event types
+// ---------------------------------------------------------------------------
+
+export type AnalysisAreaStoreEvent =
+  | {type: 'areaChanged'}
+  | {type: 'areaCleared'}
+  | {type: 'areaSelectModeChanged'}
 
 // ---------------------------------------------------------------------------
 // State type
@@ -29,17 +40,19 @@ export function createAnalysisAreaStore() {
     areaSelectMode: false,
   }
 
-  let listeners = new Set<() => void>()
+  let listeners = new Set<(event: AnalysisAreaStoreEvent) => void>()
 
-  function subscribe(listener: () => void): () => void {
+  function subscribe(
+    listener: (event: AnalysisAreaStoreEvent) => void,
+  ): () => void {
     listeners.add(listener)
     return () => {
       listeners.delete(listener)
     }
   }
 
-  function notify() {
-    for (let listener of listeners) listener()
+  function emit(event: AnalysisAreaStoreEvent) {
+    for (let listener of listeners) listener(event)
   }
 
   function getState(): Readonly<AnalysisAreaState> {
@@ -92,7 +105,7 @@ export function createAnalysisAreaStore() {
       return false
     }
     state = {...state, analysisAreaRects: nextRects, analysisAreaVertices: nextVertices}
-    notify()
+    emit({type: 'areaChanged'})
     return true
   }
 
@@ -114,7 +127,7 @@ export function createAnalysisAreaStore() {
       analysisAreaRects: nextRects,
       analysisAreaVertices: nextVertices,
     }
-    notify()
+    emit({type: 'areaChanged'})
     return true
   }
 
@@ -130,27 +143,27 @@ export function createAnalysisAreaStore() {
       analysisAreaRects: null,
       analysisAreaVertices: null,
     }
-    notify()
+    emit({type: 'areaCleared'})
     return true
   }
 
   function toggleAreaSelectMode(): boolean {
     state = {...state, areaSelectMode: !state.areaSelectMode}
-    notify()
+    emit({type: 'areaSelectModeChanged'})
     return true
   }
 
   function setAreaSelectMode(enabled: boolean): boolean {
     if (state.areaSelectMode === enabled) return false
     state = {...state, areaSelectMode: enabled}
-    notify()
+    emit({type: 'areaSelectModeChanged'})
     return true
   }
 
   function resetOnModeChange(): boolean {
     if (!state.areaSelectMode) return false
     state = {...state, areaSelectMode: false}
-    notify()
+    emit({type: 'areaSelectModeChanged'})
     return true
   }
 
