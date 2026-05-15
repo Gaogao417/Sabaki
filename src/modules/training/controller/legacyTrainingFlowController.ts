@@ -360,8 +360,7 @@ export function createLegacyTrainingFlowController(deps: {
     const services = deps.getTrainingContext() as any
     const {runtimeStore, problemFlowService} = services
     let pv = runtimeStore.getState().problemView
-    let problemSession = pv ? pv.legacyProblemSession : sabaki.state.problemSession
-    if (!problemSession || (pv && pv.submitted) || sabaki.state.problemSubmitted) return
+    if (!pv || !pv.legacyProblemSession || pv.submitted) return
 
     let {gameTrees, gameIndex, treePosition} = sabaki.state
     let positionBeforeHash = treePosition
@@ -370,7 +369,7 @@ export function createLegacyTrainingFlowController(deps: {
 
     if (board.get(vertex) !== 0) return
 
-    let player = problemSession.sideToMove === 'black' ? 1 : -1
+    let player = (pv.legacyProblemSession as any).sideToMove === 'black' ? 1 : -1
 
     let preMoveAnalysis =
       (sabaki as any).getPlayServices().engineService.getAnalysisForPosition(treePosition)
@@ -416,14 +415,10 @@ export function createLegacyTrainingFlowController(deps: {
     }
     if (!result) return
 
-    sabaki.setState({
-      problemEvalCache: result.evalCache,
-      problemBadMoves: result.badMoves,
-      problemAttempt: {
-        ...(sabaki.state.problemAttempt || {}),
-        userLine: result.evalCache.map((e: any) => e.move),
-        moveEvaluations: result.evalCache,
-      },
+    runtimeStore.setProblemView({
+      ...pv,
+      evalCache: result.evalCache,
+      badMoves: result.badMoves,
     })
   }
 
@@ -443,11 +438,15 @@ export function createLegacyTrainingFlowController(deps: {
       attemptId: submitResult.attempt?.id,
     })
 
-    sabaki.setState({
-      problemSubmitted: true,
-      problemResult: submitResult.result,
-      problemAttempt: submitResult.attempt,
-    })
+    const {runtimeStore} = services
+    const currentPv = runtimeStore.getState().problemView
+    if (currentPv) {
+      runtimeStore.setProblemView({
+        ...currentPv,
+        submitted: true,
+        result: submitResult.result,
+      })
+    }
   }
 
   function undoProblemMove(): void {
@@ -464,11 +463,15 @@ export function createLegacyTrainingFlowController(deps: {
       sabaki.setCurrentTreePosition(tree, node.parentId)
     }
 
-    sabaki.setState({
-      problemAttempt: {...(sabaki.state.problemAttempt || {}), userLine: result.userLine},
-      problemEvalCache: result.evalCache,
-      problemBadMoves: result.badMoves,
-    })
+    const {runtimeStore} = services
+    const currentPv = runtimeStore.getState().problemView
+    if (currentPv) {
+      runtimeStore.setProblemView({
+        ...currentPv,
+        evalCache: result.evalCache,
+        badMoves: result.badMoves,
+      })
+    }
   }
 
   function exitProblemMode(): void {
@@ -477,12 +480,6 @@ export function createLegacyTrainingFlowController(deps: {
 
     runtimeStore.setProblemView(null)
 
-    sabaki.setState({
-      problemSession: null,
-      problemAttempt: null,
-      problemSubmitted: false,
-      problemResult: null,
-    })
     sabaki.setMode('play')
   }
 
@@ -502,12 +499,6 @@ export function createLegacyTrainingFlowController(deps: {
       totalDue: queue.length,
     })
 
-    sabaki.setState({
-      reviewQueue: queue,
-      reviewCurrentIndex: 0,
-      reviewTotalDue: queue.length,
-    })
-
     await tabService.openProblemTab(queue[0], {legacyCompatibility: true})
   }
 
@@ -515,22 +506,18 @@ export function createLegacyTrainingFlowController(deps: {
     const services = deps.getTrainingContext() as any
     const {runtimeStore, tabService} = services
     let rv = runtimeStore.getState().reviewQueueView
-    let queue = rv ? rv.queue : sabaki.state.reviewQueue
-    let currentIndex = rv ? rv.currentIndex : sabaki.state.reviewCurrentIndex
-    let nextIndex = currentIndex + 1
+    if (!rv) return
+    let nextIndex = rv.currentIndex + 1
 
-    if (nextIndex >= queue.length) {
+    if (nextIndex >= rv.queue.length) {
       runtimeStore.setReviewQueueView(null)
       exitProblemMode()
       return
     }
 
-    if (rv) {
-      runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
-    }
-    sabaki.setState({reviewCurrentIndex: nextIndex})
+    runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
 
-    await tabService.openProblemTab(queue[nextIndex], {legacyCompatibility: true})
+    await tabService.openProblemTab(rv.queue[nextIndex], {legacyCompatibility: true})
   }
 
   // --- Recall state check ---
@@ -540,7 +527,6 @@ export function createLegacyTrainingFlowController(deps: {
     let view: RecallView | null = runtimeStore.getState().recallView
     if (view && view.moveIndex >= view.expectedMoves.length) {
       runtimeStore.setRecallView({...view, completed: true})
-      sabaki.setState({recallCompleted: true})
     }
   }
 

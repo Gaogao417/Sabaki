@@ -117,7 +117,6 @@ class Sabaki extends EventEmitter {
       findText: '',
       findVertex: null,
       deadStones: [],
-      blockedGuesses: [],
 
       // Goban
 
@@ -175,22 +174,6 @@ class Sabaki extends EventEmitter {
       recallUserAttempts: [],
       recallShowHint: false,
       recallCompleted: false,
-
-      // Problem Mode (LEGACY-FREEZE: stays on sabaki.state until problemService migration)
-
-      problemSession: null,
-      problemAttempt: null,
-      problemWorkspace: null,
-      problemEvalCache: [],
-      problemBadMoves: [],
-      problemSubmitted: false,
-      problemResult: null,
-
-      // Review Mode (LEGACY-FREEZE: stays on sabaki.state until reviewService migration)
-
-      reviewQueue: [],
-      reviewCurrentIndex: 0,
-      reviewTotalDue: 0,
 
       // Info Overlay
 
@@ -2596,64 +2579,13 @@ class Sabaki extends EventEmitter {
       if (board.get(vertex) === 0) {
         this.handleRecallMove(vertex)
       }
-    } else if (this.state.mode === 'guess') {
-      if (button !== 0) return
-
-      let nextNode = tree.navigate(treePosition, 1, gameCurrents[gameIndex])
-      if (
-        nextNode == null ||
-        (nextNode.data.B == null && nextNode.data.W == null)
-      ) {
-        return this.setMode('play')
-      }
-
-      let nextVertex = sgf.parseVertex(
-        nextNode.data[nextNode.data.B != null ? 'B' : 'W'][0],
-      )
-      let board = gametree.getBoard(tree, treePosition)
-      if (!board.has(nextVertex)) {
-        return this.setMode('play')
-      }
-
-      if (helper.vertexEquals(vertex, nextVertex)) {
-        this.makeMove(vertex, {
-          player: nextNode.data.B != null ? 1 : -1,
-          generateEngineMove: false,
-        })
-      } else {
-        if (
-          board.get(vertex) !== 0 ||
-          this.state.blockedGuesses.some((v) => helper.vertexEquals(v, vertex))
-        )
-          return
-
-        let blocked = []
-        let [, i] = vertex
-          .map((x, i) => Math.abs(x - nextVertex[i]))
-          .reduce(
-            ([max, i], x, j) => (x > max ? [x, j] : [max, i]),
-            [-Infinity, -1],
-          )
-
-        for (let x = 0; x < board.width; x++) {
-          for (let y = 0; y < board.height; y++) {
-            let z = i === 0 ? x : y
-            if (Math.abs(z - vertex[i]) < Math.abs(z - nextVertex[i]))
-              blocked.push([x, y])
-          }
-        }
-
-        let {blockedGuesses} = this.state
-        blockedGuesses.push(...blocked)
-        this.setState({blockedGuesses})
-      }
     }
 
     this.events.emit('vertexClick')
   }
 
   async makeMove(vertex, {player = null, generateEngineMove = null} = {}) {
-    if (!['play', 'autoplay', 'guess'].includes(this.state.mode)) {
+    if (!['play', 'autoplay'].includes(this.state.mode)) {
       this.closeDrawer()
       this.setMode('play')
     }

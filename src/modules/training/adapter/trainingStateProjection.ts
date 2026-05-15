@@ -73,7 +73,7 @@ export function projectTrainingState(deps: {
     result.recallCompleted = (ls.recallCompleted as boolean) ?? EMPTY_RECALL.recallCompleted
   }
 
-  // Problem: if problemView is populated, use it; otherwise fall back to legacy
+  // Problem: projected from runtime store only
   if (problemView) {
     result.problemSession = problemView.legacyProblemSession
     result.problemAttempt = {
@@ -85,25 +85,23 @@ export function projectTrainingState(deps: {
     result.problemSubmitted = problemView.submitted
     result.problemResult = problemView.result
   } else {
-    const ls = legacyTrainingState
-    result.problemSession = (ls.problemSession as LegacyTrainingState['problemSession']) ?? EMPTY_PROBLEM.problemSession
-    result.problemAttempt = (ls.problemAttempt as LegacyTrainingState['problemAttempt']) ?? EMPTY_PROBLEM.problemAttempt
-    result.problemEvalCache = (ls.problemEvalCache as LegacyTrainingState['problemEvalCache']) ?? EMPTY_PROBLEM.problemEvalCache
-    result.problemBadMoves = (ls.problemBadMoves as LegacyTrainingState['problemBadMoves']) ?? EMPTY_PROBLEM.problemBadMoves
-    result.problemSubmitted = (ls.problemSubmitted as boolean) ?? EMPTY_PROBLEM.problemSubmitted
-    result.problemResult = (ls.problemResult as string) ?? EMPTY_PROBLEM.problemResult
+    result.problemSession = EMPTY_PROBLEM.problemSession
+    result.problemAttempt = EMPTY_PROBLEM.problemAttempt
+    result.problemEvalCache = EMPTY_PROBLEM.problemEvalCache
+    result.problemBadMoves = EMPTY_PROBLEM.problemBadMoves
+    result.problemSubmitted = EMPTY_PROBLEM.problemSubmitted
+    result.problemResult = EMPTY_PROBLEM.problemResult
   }
 
-  // Review queue: dashboard-only state, not board mode
+  // Review queue: projected from runtime store only
   if (reviewQueueView) {
     result.reviewQueue = reviewQueueView.queue
     result.reviewCurrentIndex = reviewQueueView.currentIndex
     result.reviewTotalDue = reviewQueueView.totalDue
   } else {
-    const ls = legacyTrainingState
-    result.reviewQueue = (ls.reviewQueue as string[]) ?? EMPTY_REVIEW.reviewQueue
-    result.reviewCurrentIndex = (ls.reviewCurrentIndex as number) ?? EMPTY_REVIEW.reviewCurrentIndex
-    result.reviewTotalDue = (ls.reviewTotalDue as number) ?? EMPTY_REVIEW.reviewTotalDue
+    result.reviewQueue = EMPTY_REVIEW.reviewQueue
+    result.reviewCurrentIndex = EMPTY_REVIEW.reviewCurrentIndex
+    result.reviewTotalDue = EMPTY_REVIEW.reviewTotalDue
   }
 
   return result
