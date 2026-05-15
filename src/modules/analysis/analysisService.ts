@@ -73,7 +73,7 @@ export type AnalysisServiceDeps = {
   engineService?: any
   analysisAreaStore?: {
     getState(): {analysisAreaRects: any; analysisAreaVertices: any; areaSelectMode: boolean}
-    subscribe(listener: () => void): () => void
+    subscribe(listener: (event: {type: 'areaChanged' | 'areaCleared' | 'areaSelectModeChanged'}) => void): () => void
   }
   showInfoOverlay?: (text: string) => void
   hideInfoOverlay?: () => void
@@ -425,10 +425,13 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
 
   facade = service
 
-  // Subscribe to area selection changes → auto-refresh analysis
+  // Subscribe to area constraint changes → auto-refresh analysis.
+  // areaSelectModeChanged does NOT trigger engine refresh (UI-only state).
   if (serviceDeps.analysisAreaStore != null) {
-    serviceDeps.analysisAreaStore.subscribe(() => {
-      lifecycle.refreshActiveBoardAnalysis()
+    serviceDeps.analysisAreaStore.subscribe((event) => {
+      if (event.type === 'areaChanged' || event.type === 'areaCleared') {
+        lifecycle.refreshActiveBoardAnalysis()
+      }
     })
   }
 

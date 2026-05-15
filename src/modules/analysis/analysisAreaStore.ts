@@ -55,8 +55,22 @@ export function createAnalysisAreaStore() {
     for (let listener of listeners) listener(event)
   }
 
+  function cloneRects(rects: AnalysisAreaRect[] | null): AnalysisAreaRect[] | null {
+    if (rects == null) return null
+    return rects.map(r => ({sx: r.sx, sy: r.sy, ex: r.ex, ey: r.ey}))
+  }
+
+  function cloneVertices(vertices: [number, number][] | null): [number, number][] | null {
+    if (vertices == null) return null
+    return vertices.map(v => [v[0], v[1]] as [number, number])
+  }
+
   function getState(): Readonly<AnalysisAreaState> {
-    return state
+    return {
+      analysisAreaRects: cloneRects(state.analysisAreaRects),
+      analysisAreaVertices: cloneVertices(state.analysisAreaVertices),
+      areaSelectMode: state.areaSelectMode,
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -97,7 +111,7 @@ export function createAnalysisAreaStore() {
     vertices: [number, number][] | null,
   ): boolean {
     let nextRects: AnalysisAreaRect[] | null = null
-    let nextVertices = vertices
+    let nextVertices = cloneVertices(vertices)
     if (
       rectsEqual(state.analysisAreaRects, nextRects) &&
       verticesEqual(state.analysisAreaVertices, nextVertices)
@@ -114,8 +128,8 @@ export function createAnalysisAreaStore() {
     vertices: [number, number][] | null,
   ): boolean {
     let hasVertices = vertices != null && vertices.length > 0
-    let nextRects = hasVertices && rects != null ? rects : null
-    let nextVertices = hasVertices ? vertices : null
+    let nextRects = hasVertices && rects != null ? cloneRects(rects) : null
+    let nextVertices = hasVertices ? cloneVertices(vertices) : null
     if (
       rectsEqual(state.analysisAreaRects, nextRects) &&
       verticesEqual(state.analysisAreaVertices, nextVertices)
