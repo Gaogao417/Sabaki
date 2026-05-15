@@ -59,6 +59,7 @@ import {
   createProblemService,
   createProblemFlowService,
   createLegacyTrainingFlowController,
+  createPlayPhaseController,
   projectTrainingState,
 } from './training/index.ts'
 import {
@@ -1059,6 +1060,29 @@ class Sabaki extends EventEmitter {
         legacyTrainingFlowController
       // Compatibility alias for call sites that have not been renamed yet.
       this._trainingServices.controller = legacyTrainingFlowController
+
+      const playPhaseController = createPlayPhaseController({
+        getPlayServices: () => this.getPlayServices(),
+        getPlayer: (pos) => this.getPlayer(pos),
+        navigateToParent: () => {
+          let {gameTrees, gameIndex, treePosition} = this.state
+          let tree = gameTrees[gameIndex]
+          let node = tree.get(treePosition)
+          if (node?.parentId) {
+            this.setCurrentTreePosition(tree, node.parentId)
+            return node.parentId
+          }
+          return null
+        },
+        attemptService,
+        playTrainingMonitor: monitor,
+        recallService,
+        phaseTransition: (tabId, transition) => phaseService.transition(tabId, transition),
+        runtimeStore,
+        workbenchStore,
+        logger,
+      })
+      this._trainingServices.playPhaseController = playPhaseController
     }
     return this._trainingServices
   }
@@ -2404,6 +2428,21 @@ class Sabaki extends EventEmitter {
             playResult.intent === 'play-stone' &&
             playResult.mutationContract === 'playMove'
           ) {
+            // Delegate to PlayPhaseController when training is active
+            let {runtimeStore, playPhaseController} = this.getTrainingContext()
+            let activeAttemptId = runtimeStore.getState().activeAttemptId
+
+            if (activeAttemptId) {
+              playPhaseController.handleMove({
+                vertex,
+                state: this.state,
+                board,
+                event: {button, ctrlKey, metaKey},
+                isMac: helper.isMac,
+              })
+              return
+            }
+
             this.executePlayMove(playResult)
             return
           }
