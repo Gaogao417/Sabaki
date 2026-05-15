@@ -20,9 +20,12 @@ class TrainingWorkbenchContainer extends Component {
     const {sabaki, ...shellProps} = this.props
     const {
       runtimeStore,
+      workbenchStore,
+      tabService,
       legacyTrainingFlowController,
     } = sabaki.getTrainingContext()
     const rt = runtimeStore.getState()
+    const ws = workbenchStore.getState()
 
     // Project runtimeStore view models into legacy prop shapes
     // that WorkbenchShell/RecallBar/ProblemBar expect.
@@ -37,6 +40,11 @@ class TrainingWorkbenchContainer extends Component {
         legacyTrainingFlowController.submitProblemAttempt(),
       onExitProblemMode: () => legacyTrainingFlowController.exitProblemMode(),
       onAdvanceReview: () => legacyTrainingFlowController.advanceReview(),
+
+      workbenchTabs: ws.tabs,
+      activeTabId: ws.activeTabId,
+      onSwitchTab: (id) => tabService.switchTab(id),
+      onCloseTab: (id) => tabService.closeTab(id),
     }
 
     return h(WorkbenchShell, {

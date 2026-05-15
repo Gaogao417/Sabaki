@@ -84,6 +84,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
       id: generateId(),
       taskId: task.id,
       phase: 'play' as WorkbenchPhase,
+      sourceKind: task.kind,
       childTabIds: [],
       parentTabId: options?.parentTabId,
       createdAt: now,

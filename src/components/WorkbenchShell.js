@@ -5,6 +5,7 @@ import MainView from './MainView.js'
 import LeftSidebar from './LeftSidebar.js'
 import Sidebar from './Sidebar.js'
 import WorkspaceDock from './WorkspaceDock.js'
+import WorkbenchTabBar from './WorkbenchTabBar.js'
 import EditBar from './bars/EditBar.js'
 import GuessBar from './bars/GuessBar.js'
 import RecallBar from './bars/RecallBar.js'
@@ -110,6 +111,13 @@ export default class WorkbenchShell extends Component {
       h(
         'div',
         {class: 'workbench-shell__inner'},
+
+        h(WorkbenchTabBar, {
+          tabs: props.workbenchTabs,
+          activeTabId: props.activeTabId,
+          onSwitchTab: props.onSwitchTab,
+          onCloseTab: props.onCloseTab,
+        }),
 
         h(
           'div',

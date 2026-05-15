@@ -1934,6 +1934,69 @@ button:active {
   color: white;
 }
 
+/* Workbench Tab Bar */
+
+.workbench-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.035);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.workbench-tab-bar__tab {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 5px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.workbench-tab-bar__tab:hover {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ui-text);
+}
+
+.workbench-tab-bar__tab.active {
+  background: var(--ui-blue, #2563eb);
+  color: white;
+}
+
+.workbench-tab-bar__label {
+  pointer-events: none;
+}
+
+.workbench-tab-bar__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.5;
+  pointer-events: auto;
+}
+
+.workbench-tab-bar__close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.workbench-tab-bar__tab.active .workbench-tab-bar__close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .inspectorShell .mode-actions {
   display: flex;
   align-items: center;
