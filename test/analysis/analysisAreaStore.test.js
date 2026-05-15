@@ -49,7 +49,7 @@ describe('analysisAreaStore — unit', () => {
     store.subscribe(event => events.push(event))
 
     let changed = store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0], [1, 0]],
     )
 
@@ -76,13 +76,13 @@ describe('analysisAreaStore — unit', () => {
     store.subscribe(event => events.push(event))
 
     store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0], [1, 0]],
     )
     events.length = 0
 
     let changed = store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0], [1, 0]],
     )
 
@@ -92,7 +92,7 @@ describe('analysisAreaStore — unit', () => {
 
   it('clearAnalysisArea emits areaCleared', () => {
     let store = createAnalysisAreaStore()
-    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    store.setAnalysisAreaRects([{start: [0, 0], end: [3, 3]}], [[0, 0]])
 
     let events = []
     store.subscribe(event => events.push(event))
@@ -116,7 +116,7 @@ describe('analysisAreaStore — unit', () => {
 
   it('clearAnalysisArea clears rects/vertices but keeps areaSelectMode unchanged', () => {
     let store = createAnalysisAreaStore()
-    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    store.setAnalysisAreaRects([{start: [0, 0], end: [3, 3]}], [[0, 0]])
     store.toggleAreaSelectMode()
 
     store.clearAnalysisArea()
@@ -170,9 +170,9 @@ describe('analysisAreaStore — unit', () => {
 
   it('setAnalysisAreaRects nulls both when vertices empty', () => {
     let store = createAnalysisAreaStore()
-    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    store.setAnalysisAreaRects([{start: [0, 0], end: [3, 3]}], [[0, 0]])
 
-    let changed = store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [])
+    let changed = store.setAnalysisAreaRects([{start: [0, 0], end: [3, 3]}], [])
 
     assert.strictEqual(changed, true)
     assert.strictEqual(store.getState().analysisAreaRects, null)
@@ -201,17 +201,17 @@ describe('analysisAreaStore — unit', () => {
 describe('analysisAreaStore — defensive copy', () => {
   it('mutating input rects after setAnalysisAreaRects does not affect store', () => {
     let store = createAnalysisAreaStore()
-    let rects = [{sx: 0, sy: 0, ex: 3, ey: 3}]
+    let rects = [{start: [0, 0], end: [3, 3]}]
     let vertices = [[0, 0], [1, 0]]
 
     store.setAnalysisAreaRects(rects, vertices)
 
     // Mutate inputs
-    rects[0].ex = 99
+    rects[0].end[0] = 99
     vertices.push([2, 0])
 
     let state = store.getState()
-    assert.strictEqual(state.analysisAreaRects[0].ex, 3)
+    assert.strictEqual(state.analysisAreaRects[0].end[0], 3)
     assert.strictEqual(state.analysisAreaVertices.length, 2)
   })
 
@@ -229,19 +229,19 @@ describe('analysisAreaStore — defensive copy', () => {
   it('mutating getState() return does not affect store', () => {
     let store = createAnalysisAreaStore()
     store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0], [1, 0]],
     )
 
     let state = store.getState()
 
     // Mutate returned state
-    state.analysisAreaRects[0].ex = 99
+    state.analysisAreaRects[0].end[0] = 99
     state.analysisAreaVertices.push([2, 0])
     state.areaSelectMode = true
 
     let fresh = store.getState()
-    assert.strictEqual(fresh.analysisAreaRects[0].ex, 3)
+    assert.strictEqual(fresh.analysisAreaRects[0].end[0], 3)
     assert.strictEqual(fresh.analysisAreaVertices.length, 2)
     assert.strictEqual(fresh.areaSelectMode, false)
   })
@@ -279,7 +279,7 @@ describe('analysisAreaStore effects', () => {
     let {tracker, store} = createEffectsHarness()
 
     store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0], [1, 0]],
     )
 
@@ -291,14 +291,14 @@ describe('analysisAreaStore effects', () => {
     let {tracker, store} = createEffectsHarness()
 
     store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0]],
     )
     assert.strictEqual(tracker.renderCount, 1)
     assert.strictEqual(tracker.engineRefreshCount, 1)
 
     store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0]],
     )
 
@@ -309,7 +309,7 @@ describe('analysisAreaStore effects', () => {
   it('clearAnalysisArea when changed triggers both', () => {
     let {tracker, store} = createEffectsHarness()
 
-    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    store.setAnalysisAreaRects([{start: [0, 0], end: [3, 3]}], [[0, 0]])
     assert.strictEqual(tracker.renderCount, 1)
     assert.strictEqual(tracker.engineRefreshCount, 1)
 
@@ -394,7 +394,7 @@ describe('analysisService + analysisAreaStore integration', () => {
     service.analyzeGameTreePosition = async () => { analyzeResolve() }
 
     store.setAnalysisAreaRects(
-      [{sx: 0, sy: 0, ex: 3, ey: 3}],
+      [{start: [0, 0], end: [3, 3]}],
       [[0, 0], [1, 0]],
     )
 
@@ -403,7 +403,7 @@ describe('analysisService + analysisAreaStore integration', () => {
 
   it('areaCleared triggers analysisService.analyzeGameTreePosition', async () => {
     let {store, service} = createSubscriptionHarness()
-    store.setAnalysisAreaRects([{sx: 0, sy: 0, ex: 3, ey: 3}], [[0, 0]])
+    store.setAnalysisAreaRects([{start: [0, 0], end: [3, 3]}], [[0, 0]])
 
     let analyzeResolve
     let analyzePromise = new Promise(r => { analyzeResolve = r })

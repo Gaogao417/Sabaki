@@ -21,7 +21,7 @@ export type AnalysisAreaStoreEvent =
 // State type
 // ---------------------------------------------------------------------------
 
-export type AnalysisAreaRect = {sx: number; sy: number; ex: number; ey: number}
+export type AnalysisAreaRect = {start: [number, number]; end: [number, number]}
 
 export type AnalysisAreaState = {
   analysisAreaRects: AnalysisAreaRect[] | null
@@ -57,7 +57,10 @@ export function createAnalysisAreaStore() {
 
   function cloneRects(rects: AnalysisAreaRect[] | null): AnalysisAreaRect[] | null {
     if (rects == null) return null
-    return rects.map(r => ({sx: r.sx, sy: r.sy, ex: r.ex, ey: r.ey}))
+    return rects.map(r => ({
+      start: [r.start[0], r.start[1]] as [number, number],
+      end: [r.end[0], r.end[1]] as [number, number],
+    }))
   }
 
   function cloneVertices(vertices: [number, number][] | null): [number, number][] | null {
@@ -86,10 +89,10 @@ export function createAnalysisAreaStore() {
     if (a.length !== b.length) return false
     return a.every(
       (r, i) =>
-        r.sx === b[i].sx &&
-        r.sy === b[i].sy &&
-        r.ex === b[i].ex &&
-        r.ey === b[i].ey,
+        r.start[0] === b[i].start[0] &&
+        r.start[1] === b[i].start[1] &&
+        r.end[0] === b[i].end[0] &&
+        r.end[1] === b[i].end[1],
     )
   }
 
