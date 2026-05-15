@@ -41,6 +41,7 @@ import {createDocumentStore} from './document/documentStore.js'
 import {createEngineService} from './engine/engineService.js'
 import {createAnalysisService} from './analysis/analysisService.ts'
 import {createOverlayStore} from './overlays/overlayStore.ts'
+import {createAnalysisAreaStore} from './analysis/analysisAreaStore.ts'
 import {
   createWorkbenchStore,
   createTrainingRuntimeStore,
@@ -120,9 +121,6 @@ class Sabaki extends EventEmitter {
 
       // Goban
 
-      analysisAreaRects: null,
-      analysisAreaVertices: null,
-      areaSelectMode: false,
       territoryEnabled: false,
       territoryCompareEnabled: false,
       highlightVertices: [],
@@ -529,7 +527,7 @@ class Sabaki extends EventEmitter {
     if (this.state.mode === 'analysis' && mode !== 'analysis') {
       clearTimeout(this.editAnalysisId)
       stateChange.editWorkspace = null
-      stateChange.areaSelectMode = false
+      this.getAnalysisAreaStore().resetOnModeChange()
     }
 
     if (['scoring', 'estimator'].includes(mode)) {
@@ -1090,6 +1088,14 @@ class Sabaki extends EventEmitter {
     return this._overlayStore
   }
 
+  getAnalysisAreaStore() {
+    if (this._analysisAreaStore == null) {
+      this._analysisAreaStore = createAnalysisAreaStore()
+      this._analysisAreaStore.subscribe(() => this.setState({}))
+    }
+    return this._analysisAreaStore
+  }
+
   getPlayServices() {
     if (this._playServices == null) {
       let documentStore = createDocumentStore(this, {
@@ -1113,6 +1119,7 @@ class Sabaki extends EventEmitter {
       // Phase 12C: analysisService created before engineService.
       // engineService is late-bound via setEngineService() after creation.
       let analysisService = createAnalysisService(this, {
+        analysisAreaStore: this.getAnalysisAreaStore(),
         showInfoOverlay: (text) => this.showInfoOverlay(text),
         hideInfoOverlay: () => this.hideInfoOverlay(),
         detectEngines: () => detectEngines(),
@@ -3184,37 +3191,23 @@ class Sabaki extends EventEmitter {
   }
 
   setAnalysisArea(vertices) {
-    this.setState({
-      analysisAreaRects: null,
-      analysisAreaVertices: vertices,
-      highlightVertices: [],
-    })
-    this.refreshActiveBoardAnalysis()
+    this.getAnalysisAreaStore().setAnalysisArea(vertices)
+    this.setState({highlightVertices: []})
   }
 
   setAnalysisAreaRects(rects, vertices) {
-    let hasVertices = vertices != null && vertices.length > 0
-
-    this.setState({
-      analysisAreaRects: hasVertices && rects != null ? rects : null,
-      analysisAreaVertices: hasVertices ? vertices : null,
-      highlightVertices: [],
-    })
-    this.refreshActiveBoardAnalysis()
+    this.getAnalysisAreaStore().setAnalysisAreaRects(rects, vertices)
+    this.setState({highlightVertices: []})
   }
 
   clearAnalysisArea() {
-    this.setState({
-      analysisAreaRects: null,
-      analysisAreaVertices: null,
-      highlightVertices: [],
-    })
-    this.refreshActiveBoardAnalysis()
+    this.getAnalysisAreaStore().clearAnalysisArea()
+    this.setState({highlightVertices: []})
   }
 
   toggleAreaSelectMode() {
     if (this.state.mode !== 'analysis') return
-    this.setState({areaSelectMode: !this.state.areaSelectMode})
+    this.getAnalysisAreaStore().toggleAreaSelectMode()
   }
 
   async toggleShowAISuggestions() {

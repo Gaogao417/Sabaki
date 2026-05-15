@@ -1,6 +1,9 @@
 export {createAnalysisService} from './analysisService.ts'
 export type {AnalysisServiceDeps} from './analysisService.ts'
 
+export {createAnalysisAreaStore} from './analysisAreaStore.ts'
+export type {AnalysisAreaState, AnalysisAreaRect} from './analysisAreaStore.ts'
+
 export {getBoardAnalysisContext} from './boardAnalysisContext.ts'
 export type {BoardAnalysisContextDeps} from './boardAnalysisContext.ts'
 

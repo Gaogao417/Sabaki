@@ -433,7 +433,7 @@ test.describe('Renderer Integration Tests', () => {
         clientY: box.y + box.height / 2,
       })
       await page.waitForFunction(
-        () => window.__sabaki.state.analysisAreaVertices?.length === 1,
+        () => window.__sabaki.getAnalysisAreaStore().getState().analysisAreaVertices?.length === 1,
       )
 
       const stonesAfterControl = await page.evaluate(() => {
@@ -456,7 +456,7 @@ test.describe('Renderer Integration Tests', () => {
         clientY: box.y + box.height / 2,
       })
       await page.waitForFunction(
-        () => window.__sabaki.state.analysisAreaVertices == null,
+        () => window.__sabaki.getAnalysisAreaStore().getState().analysisAreaVertices == null,
       )
 
       const boardVertices = page.locator('main.board-stage .shudan-vertex')
@@ -489,7 +489,7 @@ test.describe('Renderer Integration Tests', () => {
       })
 
       await page.waitForFunction(
-        () => window.__sabaki.state.analysisAreaVertices?.length > 1,
+        () => window.__sabaki.getAnalysisAreaStore().getState().analysisAreaVertices?.length > 1,
       )
 
       await startVertex.dispatchEvent('mousedown', {
@@ -506,7 +506,7 @@ test.describe('Renderer Integration Tests', () => {
         clientY: start.y + start.height / 2,
       })
       await page.waitForFunction(
-        () => window.__sabaki.state.analysisAreaVertices == null,
+        () => window.__sabaki.getAnalysisAreaStore().getState().analysisAreaVertices == null,
       )
     })
 
@@ -516,7 +516,8 @@ test.describe('Renderer Integration Tests', () => {
       await page.evaluate(async () => {
         await window.__sabaki.newFile({suppressAskForSave: true})
         window.__sabaki.setMode('analysis')
-        window.__sabaki.setState({selectedTool: 'line', areaSelectMode: true})
+        window.__sabaki.setState({selectedTool: 'line'})
+        window.__sabaki.getAnalysisAreaStore().setAreaSelectMode(true)
       })
       await page.waitForFunction(
         () =>
@@ -551,7 +552,7 @@ test.describe('Renderer Integration Tests', () => {
       })
 
       await page.waitForFunction(
-        () => window.__sabaki.state.analysisAreaVertices?.length > 1,
+        () => window.__sabaki.getAnalysisAreaStore().getState().analysisAreaVertices?.length > 1,
       )
 
       const currentLines = await page.evaluate(

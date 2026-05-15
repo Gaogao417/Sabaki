@@ -507,6 +507,7 @@ class App extends Component {
       editPreviewKeys == null ? null : editWs[editPreviewKeys.ownershipKey]
     let scoreBoard, areaMap
     let overlayStoreState = sabaki.getOverlayStore().getState()
+    let areaStoreState = sabaki.getAnalysisAreaStore().getState()
     let territoryMode =
       overlayStoreState.territoryEnabled ||
       overlayStoreState.territoryCompareEnabled
@@ -573,6 +574,9 @@ class App extends Component {
     state = {
       ...state,
       ...inferredState,
+      analysisAreaRects: areaStoreState.analysisAreaRects,
+      analysisAreaVertices: areaStoreState.analysisAreaVertices,
+      areaSelectMode: areaStoreState.areaSelectMode,
       territoryEnabled: overlayStoreState.territoryEnabled,
       territoryCompareEnabled: overlayStoreState.territoryCompareEnabled,
       showInfoOverlay: overlayStoreState.showInfoOverlay,

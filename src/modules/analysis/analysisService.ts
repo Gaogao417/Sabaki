@@ -71,6 +71,10 @@ type SabakiLike = {
 // Phase 12C: additional deps for analysis ownership.
 export type AnalysisServiceDeps = {
   engineService?: any
+  analysisAreaStore?: {
+    getState(): {analysisAreaRects: any; analysisAreaVertices: any; areaSelectMode: boolean}
+    subscribe(listener: () => void): () => void
+  }
   showInfoOverlay?: (text: string) => void
   hideInfoOverlay?: () => void
   detectEngines?: () => any[]
@@ -194,8 +198,13 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
   function getLifecycleDeps(): AnalysisLifecycleDeps {
     let es = resolveEngineService()
     let engineState = es?.getAnalysisRelevantState?.() ?? {}
+    let areaState = serviceDeps.analysisAreaStore?.getState() ?? {}
     return {
-      getState: () => ({...(sabaki.state as Record<string, any>), ...engineState}),
+      getState: () => ({
+        ...(sabaki.state as Record<string, any>),
+        ...engineState,
+        ...areaState,
+      }),
       getInferredState: () => ({
         analyzingEngineSyncer: narrowSyncer(sabaki.inferredState.analyzingEngineSyncer),
         gameTree: narrowGameTree(sabaki.inferredState.gameTree),
@@ -415,5 +424,13 @@ export function createAnalysisService(sabaki: SabakiLike, serviceDeps: AnalysisS
   }
 
   facade = service
+
+  // Subscribe to area selection changes → auto-refresh analysis
+  if (serviceDeps.analysisAreaStore != null) {
+    serviceDeps.analysisAreaStore.subscribe(() => {
+      lifecycle.refreshActiveBoardAnalysis()
+    })
+  }
+
   return service
 }
