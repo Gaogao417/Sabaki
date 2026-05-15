@@ -51,7 +51,6 @@ function createMockRepository(overrides = {}) {
 
 function createMockLegacyAdapter() {
   const calls = {
-    setupProblemLegacyState: [],
     loadGameTrees: [],
     setCurrentTreePosition: [],
     setProblemMode: [],
@@ -61,9 +60,6 @@ function createMockLegacyAdapter() {
 
   return {
     calls,
-    setupProblemLegacyState(patch) {
-      calls.setupProblemLegacyState.push(patch)
-    },
     async loadGameTrees(trees) {
       calls.loadGameTrees.push(trees)
     },
@@ -81,9 +77,6 @@ function createMockLegacyAdapter() {
     },
     getSabaki() {
       return {
-        setState(patch) {
-          calls.setupProblemLegacyState.push(patch)
-        },
         setMode(mode) {
           calls.setProblemMode.push(mode)
         },
@@ -143,7 +136,6 @@ describe('workbenchTabService', () => {
     it('does NOT call legacy adapter', async () => {
       const {tabService, legacyAdapter} = createTestServices()
       await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      assert.strictEqual(legacyAdapter.calls.setupProblemLegacyState.length, 0)
       assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 0)
       assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
     })
@@ -166,14 +158,6 @@ describe('workbenchTabService', () => {
       legacyAdapter = ctx.legacyAdapter
     })
 
-    it('sets up legacy problem state', async () => {
-      await tabService.openProblemTab('prob_1', {legacyCompatibility: true})
-      assert.strictEqual(legacyAdapter.calls.setupProblemLegacyState.length, 1)
-      const patch = legacyAdapter.calls.setupProblemLegacyState[0]
-      assert.strictEqual(patch.problemSession.id, 'prob_1')
-      assert.strictEqual(patch.problemSubmitted, false)
-    })
-
     it('calls legacy adapter to load game trees and set mode', async () => {
       await tabService.openProblemTab('prob_1', {legacyCompatibility: true})
       assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 1)
@@ -183,7 +167,7 @@ describe('workbenchTabService', () => {
 
     it('runs legacy by default when flag not specified', async () => {
       await tabService.openProblemTab('prob_1')
-      assert.strictEqual(legacyAdapter.calls.setupProblemLegacyState.length, 1)
+      assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 1)
     })
   })
 

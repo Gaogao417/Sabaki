@@ -194,8 +194,8 @@ describe('workspace kind mapping', () => {
     )
   })
 
-  it('maps scoring, estimator, find, guess, problem to null (legacy)', () => {
-    for (let mode of ['scoring', 'estimator', 'find', 'guess', 'problem']) {
+  it('maps scoring, estimator, find, problem to null (legacy)', () => {
+    for (let mode of ['scoring', 'estimator', 'find', 'problem']) {
       assert.equal(
         getWorkspaceKindFromState({mode, treePosition: 'n1'}),
         null,

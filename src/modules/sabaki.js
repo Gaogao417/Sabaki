@@ -166,15 +166,6 @@ class Sabaki extends EventEmitter {
       onInputBoxSubmit: helper.noop,
       onInputBoxCancel: helper.noop,
 
-      // Recall Mode
-
-      recallSession: null,
-      recallMoveIndex: 0,
-      recallExpectedMoves: [],
-      recallUserAttempts: [],
-      recallShowHint: false,
-      recallCompleted: false,
-
       // Info Overlay
 
       infoOverlayText: '',
@@ -1023,8 +1014,6 @@ class Sabaki extends EventEmitter {
         problemService,
         problemFlowService,
         projectTrainingState: () => projectTrainingState({
-          legacyTrainingState: this.state,
-          workbenchState: workbenchStore.getState(),
           trainingRuntimeState: runtimeStore.getState(),
         }),
       }

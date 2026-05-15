@@ -129,19 +129,6 @@ describe('resolveAnalysisDisplay', () => {
     })
   })
 
-  describe('guess mode', () => {
-    it('hides analysis', () => {
-      let result = resolveAnalysisDisplay(makeInput({mode: 'guess'}))
-      assert.strictEqual(result.showAnalysis, false)
-    })
-
-    it('hides next moves and siblings', () => {
-      let result = resolveAnalysisDisplay(makeInput({mode: 'guess'}))
-      assert.strictEqual(result.showNextMoves, false)
-      assert.strictEqual(result.showSiblings, false)
-    })
-  })
-
   // --- Edit workspace ---
 
   describe('edit workspace active', () => {

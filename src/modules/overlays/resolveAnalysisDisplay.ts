@@ -37,8 +37,8 @@ export type AnalysisDisplayOutput = {
   showAnalysisSummaryCard: boolean
 }
 
-const ANALYSIS_HIDDEN_MODES = ['guess', 'problem', 'review']
-const NEXT_MOVES_HIDDEN_MODES = ['guess', 'recall', 'problem', 'review']
+const ANALYSIS_HIDDEN_MODES = ['problem', 'review']
+const NEXT_MOVES_HIDDEN_MODES = ['recall', 'problem', 'review']
 
 export function resolveAnalysisDisplay(input: AnalysisDisplayInput): AnalysisDisplayOutput {
   let {

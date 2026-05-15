@@ -120,7 +120,7 @@ export function createDocumentStore(sabaki, deps = {}) {
       sabaki.setState({mode: 'play'})
     }
 
-    let {gameTrees, gameCurrents, blockedGuesses} = sabaki.state
+    let {gameTrees, gameCurrents} = sabaki.state
     let gameIndex = gameTrees.findIndex((t) => t.root.id === tree.root.id)
     let currents = gameCurrents[gameIndex]
 
@@ -135,7 +135,6 @@ export function createDocumentStore(sabaki, deps = {}) {
 
     sabaki.setState({
       playVariation: null,
-      blockedGuesses: navigated ? [] : blockedGuesses,
       gameTrees: gameTrees.map((t, i) => (i !== gameIndex ? t : tree)),
       gameIndex,
       treePosition,

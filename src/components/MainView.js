@@ -4,7 +4,6 @@ import Goban from './Goban.js'
 import BoardToolbar from './BoardToolbar.js'
 import WorkspaceDock from './WorkspaceDock.js'
 import EditBar from './bars/EditBar.js'
-import GuessBar from './bars/GuessBar.js'
 import RecallBar from './bars/RecallBar.js'
 import ProblemBar from './bars/ProblemBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
@@ -324,7 +323,6 @@ export default class MainView extends Component {
       editWorkspaceCurrentOwnership,
       editWorkspaceReferenceOwnership,
       editPreviewOwnership,
-      blockedGuesses,
 
       highlightVertices,
       selectedAnalysisVertex,
@@ -370,12 +368,6 @@ export default class MainView extends Component {
 
     if (['scoring', 'estimator'].includes(mode)) {
       paintMap = areaMap
-    } else if (mode === 'guess') {
-      paintMap = [...Array(board.height)].map((_) => Array(board.width).fill(0))
-
-      for (let [x, y] of blockedGuesses) {
-        paintMap[y][x] = 1
-      }
     }
 
     // Determine base markerMap (edit workspace markers take priority)
@@ -580,11 +572,6 @@ export default class MainView extends Component {
             showHumanPreference,
             areaSelectMode: this.props.areaSelectMode,
             analysisAreaVertices,
-          }),
-
-          h(GuessBar, {
-            mode,
-            treePosition,
           }),
 
           h(RecallBar, {

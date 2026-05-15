@@ -573,11 +573,6 @@ exports.get = function (props = {}) {
               sabaki.state.mode === 'autoplay' ? 'play' : 'autoplay',
             ),
         },
-        {
-          label: i18n.t('menu.tools', 'Toggle &Guess Mode'),
-          click: () =>
-            sabaki.setMode(sabaki.state.mode === 'guess' ? 'play' : 'guess'),
-        },
         {type: 'separator'},
         {
           label: i18n.t('menu.tools', 'Clean &Markup…'),

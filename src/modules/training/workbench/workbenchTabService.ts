@@ -102,24 +102,6 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     }
     const tree = trees[0]
 
-    const attempt = await repository.saveProblemAttempt({
-      problemId: problem.id,
-      userLine: [],
-      moveEvaluations: [],
-      hintLevelUsed: 0,
-      generatedPunishmentProblemIds: [],
-    })
-
-    legacyAdapter.getSabaki().setState({
-      problemSession: problem,
-      problemAttempt: attempt,
-      problemWorkspace: tree,
-      problemEvalCache: [],
-      problemBadMoves: [],
-      problemSubmitted: false,
-      problemResult: null,
-    })
-
     await legacyAdapter.loadGameTrees([tree])
     legacyAdapter.setCurrentTreePosition(tree, (tree as { root: { id: string } }).root.id)
     legacyAdapter.getSabaki().setMode('play')

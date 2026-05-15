@@ -1,4 +1,3 @@
-import type { WorkbenchStoreState } from '../store/workbenchStore'
 import type { TrainingRuntimeState } from '../store/trainingRuntimeStore'
 
 export type LegacyTrainingState = {
@@ -46,16 +45,14 @@ const EMPTY_REVIEW = {
 }
 
 export function projectTrainingState(deps: {
-  legacyTrainingState: Record<string, unknown>
-  workbenchState: WorkbenchStoreState
   trainingRuntimeState: TrainingRuntimeState
 }): Partial<LegacyTrainingState> {
-  const { legacyTrainingState, trainingRuntimeState } = deps
+  const { trainingRuntimeState } = deps
   const { recallView, problemView, reviewQueueView } = trainingRuntimeState
 
   const result: Partial<LegacyTrainingState> = {}
 
-  // Recall: if recallView is populated, use it; otherwise fall back to legacy
+  // Recall: projected from runtime store only
   if (recallView) {
     result.recallSession = { active: true }
     result.recallMoveIndex = recallView.moveIndex
@@ -64,13 +61,12 @@ export function projectTrainingState(deps: {
     result.recallShowHint = recallView.showHint
     result.recallCompleted = recallView.completed
   } else {
-    const ls = legacyTrainingState
-    result.recallSession = (ls.recallSession as LegacyTrainingState['recallSession']) ?? EMPTY_RECALL.recallSession
-    result.recallMoveIndex = (ls.recallMoveIndex as number) ?? EMPTY_RECALL.recallMoveIndex
-    result.recallExpectedMoves = (ls.recallExpectedMoves as LegacyTrainingState['recallExpectedMoves']) ?? EMPTY_RECALL.recallExpectedMoves
-    result.recallUserAttempts = (ls.recallUserAttempts as LegacyTrainingState['recallUserAttempts']) ?? EMPTY_RECALL.recallUserAttempts
-    result.recallShowHint = (ls.recallShowHint as boolean) ?? EMPTY_RECALL.recallShowHint
-    result.recallCompleted = (ls.recallCompleted as boolean) ?? EMPTY_RECALL.recallCompleted
+    result.recallSession = EMPTY_RECALL.recallSession
+    result.recallMoveIndex = EMPTY_RECALL.recallMoveIndex
+    result.recallExpectedMoves = EMPTY_RECALL.recallExpectedMoves
+    result.recallUserAttempts = EMPTY_RECALL.recallUserAttempts
+    result.recallShowHint = EMPTY_RECALL.recallShowHint
+    result.recallCompleted = EMPTY_RECALL.recallCompleted
   }
 
   // Problem: projected from runtime store only

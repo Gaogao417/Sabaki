@@ -386,11 +386,6 @@ describe('board interaction resolver', () => {
       assert.equal(result.intent, BOARD_INTENTS.NOOP)
     })
 
-    it('guess left-click -> legacy-guess-move', () => {
-      let result = resolveBoardInteraction(playInput({mode: 'guess'}))
-      assert.equal(result.intent, BOARD_INTENTS.LEGACY_GUESS_MOVE)
-    })
-
     it('problem left-click -> noop (problem is no longer a board mode)', () => {
       let result = resolveBoardInteraction(playInput({mode: 'problem'}))
       assert.equal(result.intent, BOARD_INTENTS.NOOP)
@@ -454,7 +449,6 @@ describe('board interaction resolver', () => {
       let legacyModes = [
         {mode: 'autoplay', expected: BOARD_INTENTS.LEGACY_AUTOPLAY},
         {mode: 'find', expected: BOARD_INTENTS.LEGACY_FIND_MOVE},
-        {mode: 'guess', expected: BOARD_INTENTS.LEGACY_GUESS_MOVE},
       ]
 
       for (let {mode, expected} of legacyModes) {

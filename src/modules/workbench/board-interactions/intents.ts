@@ -30,7 +30,6 @@ export const BOARD_INTENTS = Object.freeze({
   // distinguish "handled by legacy path" from "unknown".
   LEGACY_TOGGLE_DEAD_STONES: 'legacy-toggle-dead-stones',
   LEGACY_FIND_MOVE: 'legacy-find-move',
-  LEGACY_GUESS_MOVE: 'legacy-guess-move',
   LEGACY_SGF_EDIT: 'legacy-sgf-edit',
   LEGACY_ANALYSIS_FALLBACK: 'legacy-analysis-fallback',
   LEGACY_AUTOPLAY: 'legacy-autoplay',
@@ -53,7 +52,6 @@ export type BoardIntent =
   | 'noop'
   | 'legacy-toggle-dead-stones'
   | 'legacy-find-move'
-  | 'legacy-guess-move'
   | 'legacy-sgf-edit'
   | 'legacy-analysis-fallback'
   | 'legacy-autoplay'

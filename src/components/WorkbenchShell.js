@@ -6,7 +6,6 @@ import LeftSidebar from './LeftSidebar.js'
 import Sidebar from './Sidebar.js'
 import WorkspaceDock from './WorkspaceDock.js'
 import EditBar from './bars/EditBar.js'
-import GuessBar from './bars/GuessBar.js'
 import RecallBar from './bars/RecallBar.js'
 import ProblemBar from './bars/ProblemBar.js'
 import AutoplayBar from './bars/AutoplayBar.js'
@@ -179,11 +178,6 @@ export default class WorkbenchShell extends Component {
               editWorkspaceActive,
               areaSelectMode: props.areaSelectMode,
               analysisAreaVertices: props.analysisAreaVertices,
-            }),
-
-            h(GuessBar, {
-              mode,
-              treePosition,
             }),
 
             h(RecallBar, {

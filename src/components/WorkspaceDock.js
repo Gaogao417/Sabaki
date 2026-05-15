@@ -17,9 +17,7 @@ export default class WorkspaceDock extends Component {
           ? '回忆工作区'
           : mode === 'find'
               ? t('Find')
-              : mode === 'guess'
-                ? t('Guess')
-                : mode === 'autoplay'
+              : mode === 'autoplay'
                   ? t('Autoplay')
                   : ['scoring', 'estimator'].includes(mode)
                     ? t('Scoring')
