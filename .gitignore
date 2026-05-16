@@ -18,8 +18,8 @@ test-results/
 undefined/
 
 gtp.cfg
+!katago_data/gtp.cfg
 gtp_logs/
-katago_data/
 
 .DS_Store
 # PRD：Sabaki 魔改 — KataGo HumanSL 常驻加载与运行.md
