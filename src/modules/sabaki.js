@@ -3466,7 +3466,7 @@ class Sabaki extends EventEmitter {
         {
           label: t('&Detach'),
           click: () => {
-            this.detachEngines([syncerId])
+            this.getPlayServices().engineService.detachEngines([syncerId])
           },
         },
         {type: 'separator'},
