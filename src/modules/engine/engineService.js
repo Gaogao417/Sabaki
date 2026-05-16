@@ -1,6 +1,6 @@
-import { join } from 'path'
-import { h } from 'preact'
-import { v4 as uuid } from 'uuid'
+import {join} from 'path'
+import {h} from 'preact'
+import {v4 as uuid} from 'uuid'
 
 import gtp from '@sabaki/gtp'
 import sgf from '@sabaki/sgf'
@@ -13,6 +13,18 @@ import {logger} from '../logger/index.js'
 import * as gametree from '../gametree.js'
 import * as helper from '../helper.js'
 import * as sound from '../sound.js'
+
+export function quoteCommandLinePart(value) {
+  let text = `${value}`
+  if (text === '') return '""'
+  if (!/[\s"]/.test(text)) return text
+
+  return `"${text.replace(/"/g, '\\"')}"`
+}
+
+export function formatEngineCommandLine(path, args = []) {
+  return [path, ...args].map(quoteCommandLinePart).join(' ')
+}
 
 // ---------------------------------------------------------------------------
 // Deps interface — zero sabaki references. Follows analysisLifecycle.ts pattern.
@@ -153,25 +165,28 @@ export function createEngineService(deps) {
   }
 
   function transaction(checkFn, patchFn) {
-    if (!checkFn(state)) return { committed: false, epoch }
+    if (!checkFn(state)) return {committed: false, epoch}
     epoch++
     let patch = typeof patchFn === 'function' ? patchFn(state) : patchFn
     if (patch != null) Object.assign(state, patch)
     notifyChange()
-    return { committed: true, epoch }
+    return {committed: true, epoch}
   }
 
   function getAnalyzingEngineSyncer() {
-    return state.attachedEngineSyncers.find(
-      (syncer) => syncer.id === state.analyzingEngineSyncerId,
-    ) || null
+    return (
+      state.attachedEngineSyncers.find(
+        (syncer) => syncer.id === state.analyzingEngineSyncerId,
+      ) || null
+    )
   }
 
   // ── Pure config helpers ─────────────────────────────────────────
 
   function getAnalyzeCommand(syncer) {
     if (syncer == null) return null
-    if (!Array.isArray(syncer.commands) || syncer.commands.length === 0) return null
+    if (!Array.isArray(syncer.commands) || syncer.commands.length === 0)
+      return null
 
     let analyzeCommands = getSetting('engines.analyze_commands')
     return analyzeCommands.find((cmd) => syncer.commands.includes(cmd)) || null
@@ -193,7 +208,9 @@ export function createEngineService(deps) {
     let maxVisits = +(
       syncer?.engine.analysis?.visits || getSetting('board.analysis_max_visits')
     )
-    return Number.isFinite(maxVisits) && maxVisits > 0 ? Math.round(maxVisits) : null
+    return Number.isFinite(maxVisits) && maxVisits > 0
+      ? Math.round(maxVisits)
+      : null
   }
 
   function getGenmoveAnalyzeCommand(syncer) {
@@ -205,7 +222,7 @@ export function createEngineService(deps) {
   function buildAnalyzeArgs(
     syncer,
     analyzePlayer,
-    { analysisAreaVertices = null, gameBoard = null } = {},
+    {analysisAreaVertices = null, gameBoard = null} = {},
   ) {
     let commandName = getAnalyzeCommand(syncer)
     if (commandName == null) return null
@@ -240,7 +257,7 @@ export function createEngineService(deps) {
 
   function buildGenmoveAnalyzeArgs(syncer, color) {
     let commandName = getGenmoveAnalyzeCommand(syncer)
-    if (commandName == null) return { commandName: 'genmove', args: null }
+    if (commandName == null) return {commandName: 'genmove', args: null}
 
     let args = [color, getSetting('board.analysis_interval').toString()]
 
@@ -251,12 +268,12 @@ export function createEngineService(deps) {
       }
     }
 
-    return { commandName, args }
+    return {commandName, args}
   }
 
   async function prepareHumanSL(syncer) {
     if (syncer.humanSL?.modelLoaded) {
-      await syncer.updateRawHumanPolicy().catch(() => { })
+      await syncer.updateRawHumanPolicy().catch(() => {})
     }
   }
 
@@ -297,9 +314,7 @@ export function createEngineService(deps) {
         })
       }
 
-      let maxTime = +(
-        analysis.maxTime || getSetting('board.analysis_max_time')
-      )
+      let maxTime = +(analysis.maxTime || getSetting('board.analysis_max_time'))
       if (Number.isFinite(maxTime) && maxTime > 0) {
         await syncer.queueCommand({
           name: 'kata-set-param',
@@ -324,24 +339,20 @@ export function createEngineService(deps) {
           })
         }
       }
-      logger.info('kata.configured', 'KataGo analysis configured',
-        {
-          maxVisits:
-            Number.isFinite(maxVisits) && maxVisits > 0
-              ? Math.round(maxVisits)
-              : null,
-          maxPlayouts:
-            Number.isFinite(maxPlayouts) && maxPlayouts > 0
-              ? Math.round(maxPlayouts)
-              : null,
-          maxTime: Number.isFinite(maxTime) && maxTime > 0 ? maxTime : null,
-          temperature:
-            Number.isFinite(temperature) && temperature > 0
-              ? temperature
-              : null,
-        },
-      )
-    } catch (err) { }
+      logger.info('kata.configured', 'KataGo analysis configured', {
+        maxVisits:
+          Number.isFinite(maxVisits) && maxVisits > 0
+            ? Math.round(maxVisits)
+            : null,
+        maxPlayouts:
+          Number.isFinite(maxPlayouts) && maxPlayouts > 0
+            ? Math.round(maxPlayouts)
+            : null,
+        maxTime: Number.isFinite(maxTime) && maxTime > 0 ? maxTime : null,
+        temperature:
+          Number.isFinite(temperature) && temperature > 0 ? temperature : null,
+      })
+    } catch (err) {}
   }
 
   function normalizeEngineConfig(engine, index = 0) {
@@ -357,21 +368,18 @@ export function createEngineService(deps) {
     let args = engine.args || ''
 
     if (kind === 'katago') {
+      let strippedArgs = args.replace(/^\s*gtp\b\s*/, '')
       let parts = ['gtp']
       if (engine.modelPath) parts.push('-model', `"${engine.modelPath}"`)
       if (engine.configPath) parts.push('-config', `"${engine.configPath}"`)
       if (engine.enableHumanSL === true) {
         let humanSLModelPath =
           engine.humanModelPath ||
-          join(
-            getUserDataDirectory(),
-            'models',
-            humanSLModelFilename,
-          )
+          join(getUserDataDirectory(), 'models', humanSLModelFilename)
         parts.push('-human-model', `"${humanSLModelPath}"`)
       }
 
-      args = `${parts.join(' ')} ${args}`.trim()
+      args = `${parts.join(' ')} ${strippedArgs}`.trim()
     }
 
     return {
@@ -448,7 +456,7 @@ export function createEngineService(deps) {
   function addEngineLogEntry(engineName, response) {
     let maxLength = getSetting('console.max_history_count')
 
-    setState(({ consoleLog }) => {
+    setState(({consoleLog}) => {
       let newLog = consoleLog.slice(
         Math.max(consoleLog.length - maxLength + 1, 0),
       )
@@ -456,34 +464,34 @@ export function createEngineService(deps) {
       newLog.push({
         name: engineName,
         command: null,
-        response: { ...response, internal: response.internal !== false },
+        response: {...response, internal: response.internal !== false},
         waiting: false,
       })
 
-      return { consoleLog: newLog }
+      return {consoleLog: newLog}
     })
   }
 
-  function handleCommandSent({ syncer, command, subscribe, getResponse }) {
+  function handleCommandSent({syncer, command, subscribe, getResponse}) {
     let t = i18n.context('sabaki.engine')
-    let entry = { name: syncer.engine.name, command, waiting: true }
+    let entry = {name: syncer.engine.name, command, waiting: true}
     let maxLength = getSetting('console.max_history_count')
 
-    setState(({ consoleLog }) => {
+    setState(({consoleLog}) => {
       let newLog = consoleLog.slice(
         Math.max(consoleLog.length - maxLength + 1, 0),
       )
       newLog.push(entry)
 
-      return { consoleLog: newLog }
+      return {consoleLog: newLog}
     })
 
     let updateEntry = (update) => {
       Object.assign(entry, update)
-      setState(({ consoleLog }) => ({ consoleLog }))
+      setState(({consoleLog}) => ({consoleLog}))
     }
 
-    subscribe(({ line, response, end }) => {
+    subscribe(({line, response, end}) => {
       updateEntry({
         response,
         waiting: !end,
@@ -539,20 +547,22 @@ export function createEngineService(deps) {
     }
 
     for (let engine of engines) {
-      engine = { ...engine, name: getEngineName(engine.name) }
+      engine = {...engine, name: getEngineName(engine.name)}
 
       let syncer = new EngineSyncer(engine)
 
       if (syncer.pathError) {
         dialog.showMessageBox(syncer.pathError, 'error')
-        logger.error('engine.start_failed', 'Engine path error',
-          { name: engine.name, path: engine.path, error: syncer.pathError },
-        )
+        logger.error('engine.start_failed', 'Engine path error', {
+          name: engine.name,
+          path: engine.path,
+          error: syncer.pathError,
+        })
 
         addEngineLogEntry(engine.name, {
           internal: false,
           error: true,
-          content: syncer.pathError,
+          content: `${syncer.pathError}\nPath: ${engine.path}`,
         })
 
         continue
@@ -566,9 +576,18 @@ export function createEngineService(deps) {
       })
 
       syncer.on('error', (err) => {
-        logger.error('engine.start_failed', 'Engine start failed',
-          { name: engine.name, error: err },
-        )
+        logger.error('engine.start_failed', 'Engine start failed', {
+          name: engine.name,
+          error: err,
+        })
+        let commandLine =
+          syncer.controller != null
+            ? formatEngineCommandLine(
+                syncer.controller.path,
+                syncer.controller.args,
+              )
+            : engine.path
+
         let message
         if (err.code === 'ENOENT') {
           message = t(
@@ -586,7 +605,7 @@ export function createEngineService(deps) {
         addEngineLogEntry(engine.name, {
           internal: false,
           error: true,
-          content: message,
+          content: `${message}\n$ ${commandLine}`,
         })
       })
 
@@ -595,10 +614,7 @@ export function createEngineService(deps) {
 
         if (state.analyzingEngineSyncerId === syncer.id) {
           if (epoch !== handlerEpoch) return
-          if (
-            getMode() === 'analysis' &&
-            getEditWorkspace() != null
-          ) {
+          if (getMode() === 'analysis' && getEditWorkspace() != null) {
             return
           }
 
@@ -610,8 +626,7 @@ export function createEngineService(deps) {
             return
           }
 
-          let currentAnalysisUpdate =
-            syncer.treePosition === getTreePosition()
+          let currentAnalysisUpdate = syncer.treePosition === getTreePosition()
 
           if (currentAnalysisUpdate) {
             setState({
@@ -635,7 +650,7 @@ export function createEngineService(deps) {
               )
             }
 
-            let { sign, winrate, scoreLead } = syncer.analysis
+            let {sign, winrate, scoreLead} = syncer.analysis
             if (sign < 0) winrate = 100 - winrate
             if (scoreLead != null && sign < 0) scoreLead = -scoreLead
 
@@ -653,10 +668,7 @@ export function createEngineService(deps) {
               }
             })
 
-            setCurrentTreePosition(
-              newTree,
-              getTreePosition(),
-            )
+            setCurrentTreePosition(newTree, getTreePosition())
           }
 
           if (
@@ -687,17 +699,17 @@ export function createEngineService(deps) {
           engine: engine.name,
         })
 
-        handleCommandSent({ syncer, ...evt })
+        handleCommandSent({syncer, ...evt})
       })
 
-      syncer.controller.on('stderr', ({ content }) => {
+      syncer.controller.on('stderr', ({content}) => {
         gtplogger.write({
           type: 'stderr',
           message: content,
           engine: engine.name,
         })
 
-        setState(({ consoleLog }) => {
+        setState(({consoleLog}) => {
           let lastIndex = consoleLog.length - 1
           let lastEntry = consoleLog[lastIndex]
 
@@ -714,7 +726,7 @@ export function createEngineService(deps) {
               content: `${lastEntry.response.content}\n${content}`,
             }
 
-            return { consoleLog }
+            return {consoleLog}
           } else {
             return {
               consoleLog: [
@@ -722,7 +734,7 @@ export function createEngineService(deps) {
                 {
                   name: engine.name,
                   command: null,
-                  response: { content, internal: true },
+                  response: {content, internal: true},
                 },
               ],
             }
@@ -730,7 +742,16 @@ export function createEngineService(deps) {
         })
       })
 
+      let startedAt = null
+
       syncer.controller.on('started', () => {
+        startedAt = Date.now()
+
+        let commandLine = formatEngineCommandLine(
+          syncer.controller.path,
+          syncer.controller.args,
+        )
+
         gtplogger.write({
           type: 'meta',
           message: 'Engine Started',
@@ -739,11 +760,14 @@ export function createEngineService(deps) {
 
         addEngineLogEntry(engine.name, {
           internal: true,
-          content: 'Engine Started',
+          content: `Engine Started\n$ ${commandLine}`,
         })
       })
 
       syncer.controller.on('stopped', () => {
+        let uptime =
+          startedAt != null ? ((Date.now() - startedAt) / 1000).toFixed(1) : '?'
+
         gtplogger.write({
           type: 'meta',
           message: 'Engine Stopped',
@@ -752,8 +776,13 @@ export function createEngineService(deps) {
 
         addEngineLogEntry(engine.name, {
           internal: true,
-          content: 'Engine Stopped',
+          content:
+            parseFloat(uptime) < 3
+              ? `Engine Stopped (ran ${uptime}s — likely startup failure; check command above)`
+              : `Engine Stopped (ran ${uptime}s)`,
         })
+
+        startedAt = null
       })
 
       logger.debug('engine.starting', 'Starting engine', {
@@ -770,7 +799,7 @@ export function createEngineService(deps) {
       })
     }
 
-    setState(({ attachedEngineSyncers }) => ({
+    setState(({attachedEngineSyncers}) => ({
       attachedEngineSyncers: [...attachedEngineSyncers, ...attaching],
     }))
 
@@ -778,8 +807,8 @@ export function createEngineService(deps) {
   }
 
   async function detachEngines(syncerIds) {
-    let detachEngineSyncers = state.attachedEngineSyncers.filter(
-      (syncer) => syncerIds.includes(syncer.id),
+    let detachEngineSyncers = state.attachedEngineSyncers.filter((syncer) =>
+      syncerIds.includes(syncer.id),
     )
 
     await Promise.all(
@@ -804,9 +833,7 @@ export function createEngineService(deps) {
           ),
           engineGameOngoing:
             s.engineGameOngoing &&
-              [s.blackEngineSyncerId, s.whiteEngineSyncerId].includes(
-                syncer.id,
-              )
+            [s.blackEngineSyncerId, s.whiteEngineSyncerId].includes(syncer.id)
               ? false
               : s.engineGameOngoing,
           blackEngineSyncerId: unset(s.blackEngineSyncerId),
@@ -820,7 +847,7 @@ export function createEngineService(deps) {
   async function syncEngine(
     syncerId,
     treePosition,
-    { tree = getGameTree() } = {},
+    {tree = getGameTree()} = {},
   ) {
     let syncer = state.attachedEngineSyncers.find(
       (syncer) => syncer.id === syncerId,
@@ -829,17 +856,16 @@ export function createEngineService(deps) {
     if (syncer != null) {
       try {
         await syncer.sync(tree, treePosition)
-        logger.info('sync.success', 'Engine synced successfully',
-          {
-            syncerId,
-            treePosition,
-          },
-        )
+        logger.info('sync.success', 'Engine synced successfully', {
+          syncerId,
+          treePosition,
+        })
         return true
       } catch (err) {
-        logger.warn('engine.sync_failed', 'Engine sync failed',
-          { name: syncer.engine.name, error: err.message },
-        )
+        logger.warn('engine.sync_failed', 'Engine sync failed', {
+          name: syncer.engine.name,
+          error: err.message,
+        })
         await dialog.showMessageBox(err.message, 'error')
       }
     }
@@ -870,7 +896,7 @@ export function createEngineService(deps) {
 
   async function startEngineGame(treePosition) {
     let t = i18n.context('sabaki.engine')
-    let { engineGameOngoing, attachedEngineSyncers } = state
+    let {engineGameOngoing, attachedEngineSyncers} = state
     let engineCount = attachedEngineSyncers.length
     if (engineGameOngoing != null) return
 
@@ -895,7 +921,7 @@ export function createEngineService(deps) {
     }
 
     let gameId = uuid()
-    setState({ engineGameOngoing: gameId })
+    setState({engineGameOngoing: gameId})
 
     let consecutivePasses = 0
 
@@ -958,7 +984,11 @@ export function createEngineService(deps) {
 
   // ── generateMove ────────────────────────────────────────────────
 
-  async function generateMove(syncerId, treePosition, { commit = () => true } = {}) {
+  async function generateMove(
+    syncerId,
+    treePosition,
+    {commit = () => true} = {},
+  ) {
     let t = i18n.context('sabaki.engine')
     let sign = getPlayer(treePosition)
     let color = sign > 0 ? 'B' : 'W'
@@ -966,15 +996,19 @@ export function createEngineService(deps) {
       (syncer) => syncer.id === syncerId,
     )
     if (syncer == null) {
-      logger.warn('generateMove.no_syncer', 'No syncer found for move generation',
-        { syncerId, color },
+      logger.warn(
+        'generateMove.no_syncer',
+        'No syncer found for move generation',
+        {syncerId, color},
       )
       return
     }
 
-    logger.info('generateMove.start', 'Generating engine move',
-      { name: syncer.engine.name, color, commands: syncer.commands.length },
-    )
+    logger.info('generateMove.start', 'Generating engine move', {
+      name: syncer.engine.name,
+      color,
+      commands: syncer.commands.length,
+    })
 
     let synced = await syncEngine(syncerId, treePosition)
     if (!synced) return
@@ -1001,7 +1035,7 @@ export function createEngineService(deps) {
         let args = genmoveResult.args
 
         coord = await new Promise(async (resolve) => {
-          await syncer.queueCommand({ name: commandName, args }, ({ line }) => {
+          await syncer.queueCommand({name: commandName, args}, ({line}) => {
             if (!line.startsWith('play ')) return
             resolve(line.slice('play '.length))
           })
@@ -1050,7 +1084,7 @@ export function createEngineService(deps) {
       currentTree.root.id !== tree.root.id ||
       currentTreePosition !== treePosition
     let resign = coord === 'resign'
-    let { pass, capturing, suicide } = board.analyzeMove(sign, vertex)
+    let {pass, capturing, suicide} = board.analyzeMove(sign, vertex)
 
     let newTreePosition
     let newTree = currentTree.mutate((draft) => {
@@ -1099,7 +1133,7 @@ export function createEngineService(deps) {
         if (saved?.id) {
           startRecallSession(saved.id)
         }
-        return { tree: newTree, treePosition: newTreePosition, resign, pass }
+        return {tree: newTree, treePosition: newTreePosition, resign, pass}
       }
     }
 
@@ -1122,9 +1156,9 @@ export function createEngineService(deps) {
       match: state.analyzingEngineSyncerId === syncerId,
     })
 
-    let { committed } = transaction(
+    let {committed} = transaction(
       (s) => s.analyzingEngineSyncerId !== syncerId,
-      { analyzingEngineSyncerId: syncerId },
+      {analyzingEngineSyncerId: syncerId},
     )
     if (!committed) return
 
@@ -1293,7 +1327,7 @@ export function createEngineService(deps) {
         let node = nodes[i]
         showInfoOverlay(`Analyzing ${i + 1}/${nodes.length}...`)
 
-        let synced = await syncEngine(syncer.id, node.id, { tree })
+        let synced = await syncEngine(syncer.id, node.id, {tree})
         if (!synced || state.quickAnalysisId !== analysisId) break
 
         await prepareHumanSL(syncer)
@@ -1301,7 +1335,7 @@ export function createEngineService(deps) {
         let sign = getPlayer(node.id)
         let args = buildAnalyzeArgs(syncer, sign)
 
-        await syncer.queueCommand({ name: commandName, args })
+        await syncer.queueCommand({name: commandName, args})
 
         let analysis = await waitForQuickAnalysis(
           syncer,
@@ -1319,12 +1353,12 @@ export function createEngineService(deps) {
         if (analysis.sign < 0) winrate = 100 - winrate
         if (analysis.sign < 0 && scoreLead != null) scoreLead = -scoreLead
 
-        results.push({ nodeId: node.id, winrate, scoreLead })
+        results.push({nodeId: node.id, winrate, scoreLead})
       }
 
       if (results.length > 0) {
         let newTree = tree.mutate((draft) => {
-          for (let { nodeId, winrate, scoreLead } of results) {
+          for (let {nodeId, winrate, scoreLead} of results) {
             if (winrate != null) {
               draft.updateProperty(nodeId, 'SBKV', [
                 (Math.round(winrate * 100) / 100).toString(),
@@ -1341,11 +1375,11 @@ export function createEngineService(deps) {
       }
     } finally {
       if (isKata) {
-        await configureKataAnalysis(syncer).catch(() => { })
+        await configureKataAnalysis(syncer).catch(() => {})
       }
 
       hideInfoOverlay()
-      setState({ quickAnalysisId: null, quickAnalysisSyncerId: null })
+      setState({quickAnalysisId: null, quickAnalysisSyncerId: null})
       setBusy(false)
 
       if (state.analyzingEngineSyncerId != null) {
@@ -1363,16 +1397,14 @@ export function createEngineService(deps) {
     }
 
     hideInfoOverlay()
-    setState({ quickAnalysisId: null, quickAnalysisSyncerId: null })
+    setState({quickAnalysisId: null, quickAnalysisSyncerId: null})
   }
 
   // ── generateReply (facade for play interaction) ─────────────────
 
   function generateReply(treePosition, currentPlayer) {
     let syncerId =
-      currentPlayer > 0
-        ? state.whiteEngineSyncerId
-        : state.blackEngineSyncerId
+      currentPlayer > 0 ? state.whiteEngineSyncerId : state.blackEngineSyncerId
 
     if (syncerId == null) return
 
@@ -1387,7 +1419,6 @@ export function createEngineService(deps) {
       whiteEngineSyncerId: whiteId,
     })
   }
-
 
   // ── Purpose-driven query methods ────────────────────────────────
   //
@@ -1404,7 +1435,9 @@ export function createEngineService(deps) {
    * Used by Generate Move and reply logic to pick the correct engine.
    */
   function getEnginePlayerSyncerId(playerSign) {
-    return playerSign > 0 ? state.blackEngineSyncerId : state.whiteEngineSyncerId
+    return playerSign > 0
+      ? state.blackEngineSyncerId
+      : state.whiteEngineSyncerId
   }
 
   /** Whether a syncer is assigned as the analyzer. */
@@ -1498,11 +1531,13 @@ export function createEngineService(deps) {
    */
   function appendConsoleLog(entry) {
     let maxLength = getSetting('console.max_history_count') || 1000
-    let entryWithTime = { time: Date.now(), ...entry }
-    setState(({ consoleLog }) => {
-      let newLog = consoleLog.slice(Math.max(consoleLog.length - maxLength + 1, 0))
+    let entryWithTime = {time: Date.now(), ...entry}
+    setState(({consoleLog}) => {
+      let newLog = consoleLog.slice(
+        Math.max(consoleLog.length - maxLength + 1, 0),
+      )
       newLog.push(entryWithTime)
-      return { consoleLog: newLog }
+      return {consoleLog: newLog}
     })
   }
 
@@ -1523,8 +1558,11 @@ export function createEngineService(deps) {
    * Picks the first attached engine if no analyzer is set.
    */
   function ensureAnalyzerForProblemMode() {
-    if (state.analyzingEngineSyncerId == null && state.attachedEngineSyncers.length > 0) {
-      setState({ analyzingEngineSyncerId: state.attachedEngineSyncers[0].id })
+    if (
+      state.analyzingEngineSyncerId == null &&
+      state.attachedEngineSyncers.length > 0
+    ) {
+      setState({analyzingEngineSyncerId: state.attachedEngineSyncers[0].id})
     }
   }
 
@@ -1540,7 +1578,7 @@ export function createEngineService(deps) {
    * Clear the GTP console log.
    */
   function clearConsoleLog() {
-    setState({ consoleLog: [] })
+    setState({consoleLog: []})
   }
 
   /**
@@ -1651,5 +1689,5 @@ export function createEngineService(deps) {
     setEngineService: noop,
   }
 
-  function noop() { }
+  function noop() {}
 }

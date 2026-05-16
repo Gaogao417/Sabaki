@@ -4,6 +4,7 @@ import {Command} from '@sabaki/gtp'
 
 import sabaki from '../../modules/sabaki.js'
 import {formatTimestamp} from '../../modules/logger/logFormatting.js'
+import {formatGtpConsoleLogs} from '../../modules/gtpConsoleFormat.js'
 import ContentDisplay from '../ContentDisplay.js'
 import TextSpinner from '../TextSpinner.js'
 import {noop, popupMenu} from '../../modules/helper.js'
@@ -105,7 +106,11 @@ class AppLogEntry extends Component {
       h('pre', {}, [
         h('span', {class: 'app-log-time'}, time),
         ' ',
-        h('span', {class: `app-log-level app-log-level-${entry.level}`}, entry.level.toUpperCase()),
+        h(
+          'span',
+          {class: `app-log-level app-log-level-${entry.level}`},
+          entry.level.toUpperCase(),
+        ),
         ' ',
         h('span', {class: 'app-log-category'}, entry.source || entry.category),
         ' ',
@@ -288,41 +293,15 @@ export default class GtpConsole extends Component {
   copyAllLogs() {
     let {consoleLog} = this.props
     let {logFilter, appLogs} = this.state
-    let lines = []
 
-    let combined = []
-    if (logFilter === 'all' || logFilter === 'gtp') {
-      combined.push(...consoleLog.map(e => ({...e, appLog: false})))
-    }
-    if (logFilter === 'all' || logFilter === 'app') {
-      combined.push(...appLogs.map(e => ({...e, appLog: true})))
-    }
-    combined.sort((a, b) => (a.time || 0) - (b.time || 0))
-
-    for (let entry of combined) {
-      if (entry.appLog) {
-        let time = formatTimestamp(entry.time || Date.now())
-        lines.push(
-          `${time} ${entry.level.toUpperCase()} ${entry.source || entry.category} ${entry.message}`,
-        )
-      } else {
-        let {name, command, response} = entry
-        if (command) {
-          let cmdText = command.id != null ? `${command.id} ${command.name}` : command.name
-          let args = (command.args || []).join(' ')
-          if (args) cmdText += ` ${args}`
-          lines.push(`${name}> ${cmdText}`)
-        }
-        if (response) {
-          let prefix = response.error ? '?' : '='
-          let idStr = response.id != null ? response.id : ''
-          let content = typeof response.content === 'string' ? response.content : ''
-          lines.push(`${prefix}${idStr} ${content}`)
-        }
-      }
-    }
-
-    window.sabaki.clipboard.writeText(lines.join('\n'))
+    window.sabaki.clipboard.writeText(
+      formatGtpConsoleLogs({
+        consoleLog,
+        appLogs,
+        logFilter,
+        formatTimestamp,
+      }),
+    )
   }
 
   componentDidMount() {
@@ -369,13 +348,15 @@ export default class GtpConsole extends Component {
 
   render({consoleLog, attachedEngine}, {logFilter, appLogs}) {
     let combinedLog = []
-    
+
     if (logFilter === 'all' || logFilter === 'gtp') {
-      combinedLog.push(...consoleLog.map(entry => ({...entry, appLog: false})))
+      combinedLog.push(
+        ...consoleLog.map((entry) => ({...entry, appLog: false})),
+      )
     }
-    
+
     if (logFilter === 'all' || logFilter === 'app') {
-      combinedLog.push(...appLogs.map(entry => ({...entry, appLog: true})))
+      combinedLog.push(...appLogs.map((entry) => ({...entry, appLog: true})))
     }
 
     combinedLog.sort((a, b) => (a.time || 0) - (b.time || 0))
@@ -431,7 +412,12 @@ export default class GtpConsole extends Component {
                 i === 0 ||
                 filteredLog[i - 1].name !== name ||
                 (sign !== 0 && filteredLog[i - 1].sign !== sign)
-                  ? h(ConsoleCommandEntry, {key: `cmd-${i}`, sign, name, command})
+                  ? h(ConsoleCommandEntry, {
+                      key: `cmd-${i}`,
+                      sign,
+                      name,
+                      command,
+                    })
                   : null,
 
                 h(ConsoleResponseEntry, {

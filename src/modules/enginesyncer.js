@@ -600,7 +600,13 @@ export default class EngineSyncer extends EventEmitter {
       let response = await this.controller.sendCommand({
         name: 'kata-get-models',
       })
-      let modelLoaded = /human/i.test(response.content || '')
+      let models = []
+      try {
+        models = JSON.parse(response.content)
+      } catch {}
+      let modelLoaded = Array.isArray(models)
+        ? models.some((m) => m.usesHumanSLProfile === true)
+        : false
       this.setHumanSLState({
         available: modelLoaded,
         modelLoaded,
