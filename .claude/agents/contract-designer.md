@@ -79,14 +79,18 @@ Given a feature request:
 - MANUAL_ACCEPTANCE
 - DO_NOT_TEST
 
-11. Label every item by type:
+11. Label every item by category tag (these become the `describe` block prefixes
+    in test code — keep in sync with test-writer):
 
-- PURE_LOGIC
-- STATE
-- WIRING
-- SIDE_EFFECT
-- UI_BEHAVIOR
-- ARCHITECTURE_BOUNDARY
+| Tag            | When to use                                          |
+| -------------- | ---------------------------------------------------- |
+| `contract`     | Externally observable input→output behavior          |
+| `pure-logic`   | Side-effect-free function, no store/service involved |
+| `state`        | Store before→after state + subscription events       |
+| `wiring`       | Layer-to-layer connection, correct recipient/intent  |
+| `side-effect`  | Allowed/forbidden mutations (DB, engine, IPC, tree)  |
+| `ui-behavior`  | User-facing behavior only verifiable in browser      |
+| `architecture` | Architecture boundary guard (resolver purity, etc.)  |
 
 12. Identify brittle or over-specified test risks.
 13. End with a human review checklist.
@@ -149,8 +153,8 @@ Use this exact structure:
 
 ## 9. Test / acceptance contract table
 
-| ID  | Type | Classification | Contract | Why it matters | Risk if omitted |
-| --- | ---- | -------------- | -------- | -------------- | --------------- |
+| ID  | Category tag | Classification | Contract | Why it matters | Risk if omitted |
+| --- | ------------ | -------------- | -------- | -------------- | --------------- |
 
 ## 10. Must-automate tests
 

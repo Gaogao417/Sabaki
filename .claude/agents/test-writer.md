@@ -55,13 +55,32 @@ Before writing tests:
    is the single source of truth.
 2. Restate the approved contracts.
 3. List the test files you plan to create or edit.
-4. Separate tests into:
-   - contract tests
-   - pure logic tests
-   - state tests
-   - wiring/integration tests
-   - side-effect tests
-   - architecture boundary tests
+4. Separate tests into categories. Each category MUST use a `describe` block
+   whose title starts with the category tag (exact prefix), and a matching
+   `// TYPE: <tag>` comment line immediately before the describe:
+
+   | Category tag     | Tag string     |
+   | ---------------- | -------------- |
+   | `[contract]`     | `contract`     |
+   | `[pure-logic]`   | `pure-logic`   |
+   | `[state]`        | `state`        |
+   | `[wiring]`       | `wiring`       |
+   | `[side-effect]`  | `side-effect`  |
+   | `[ui-behavior]`  | `ui-behavior`  |
+   | `[architecture]` | `architecture` |
+
+   Example:
+
+   ```
+   // TYPE: state
+   describe('[state] overlayStore — setAnalysisAreaRects', () => { ... })
+
+   // TYPE: architecture
+   describe('[architecture] resolver must not call setState', () => { ... })
+   ```
+
+   This makes every test grep-able by tag or TYPE comment.
+
 5. Identify which tests are long-term contract tests and which are
    migration-period tests.
 6. Warn if any test seems brittle or too tied to implementation details.
@@ -137,8 +156,8 @@ If any invalid test is found, stop and ask for review before proceeding.
 
 ## 3. Tests added
 
-| Test name | Type | Long-term or migration | Contract protected |
-| --------- | ---- | ---------------------- | ------------------ |
+| Test name | Category tag | Long-term or migration | Contract protected |
+| --------- | ------------ | ---------------------- | ------------------ |
 
 ## 4. Tests intentionally not added
 
