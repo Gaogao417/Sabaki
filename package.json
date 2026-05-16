@@ -77,6 +77,12 @@
       "node_modules/dolm/**/*",
       "node_modules/{iconv-lite,safer-buffer}/**/*",
       "node_modules/pikaday/css/*"
+    ],
+    "extraResources": [
+      {
+        "from": "katago_data",
+        "to": "katago_data"
+      }
     ]
   },
   "prettier": {

@@ -1,5 +1,5 @@
 import EventEmitter from 'events'
-import {existsSync, readdirSync} from 'fs'
+import {existsSync, readdirSync, statSync} from 'fs'
 import path from 'path'
 import argvsplit from 'argv-split'
 import {v4 as uuid} from 'uuid'
@@ -11,6 +11,12 @@ import {parseCompressedVertices} from '@sabaki/sgf'
 import i18n from '../i18n.js'
 import {getBoard, getRootProperty} from './gametree.js'
 import {noop, equals, normalizeOwnership} from './helper.js'
+import {
+  getKatagoDataPath,
+  listBundledModels,
+  selectDefaultAnalysisModel,
+  getBundledConfig,
+} from './katago/katagoBundledAssets.js'
 
 const t = i18n.context('EngineSyncer')
 const setting = {
@@ -58,6 +64,18 @@ function findModelFile(engineDir) {
 export function detectEngines() {
   let platform = process.platform
   let searchPaths = engineSearchPaths[platform] || {}
+
+  let isPackaged = !!process.resourcesPath && __dirname.includes('.asar')
+  let katagoDataPath = getKatagoDataPath({
+    isPackaged,
+    resourcesPath: process.resourcesPath || '',
+    appRoot: process.cwd(),
+  })
+
+  let models = listBundledModels(katagoDataPath, {readdirSync, statSync})
+  let config = getBundledConfig(katagoDataPath, {existsSync})
+  let analysisModel = selectDefaultAnalysisModel(models)
+
   let found = []
 
   for (let [engineName, paths] of Object.entries(searchPaths)) {
@@ -72,10 +90,13 @@ export function detectEngines() {
       }
 
       if (engineName === 'katago') {
-        let modelFile = findModelFile(path.dirname(p))
-        if (modelFile == null) continue
+        if (analysisModel == null) continue
 
-        engine.args = `gtp -model "${modelFile}"`
+        let parts = ['gtp', '-model', `"${analysisModel.path}"`]
+        if (config.available) {
+          parts.push('-config', `"${config.path}"`)
+        }
+        engine.args = parts.join(' ')
       } else if (engineName === 'leelaz') {
         let nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null'
         engine.args = `gtp -w ${nullDevice}`
