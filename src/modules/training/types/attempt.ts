@@ -1,3 +1,5 @@
+import type { MoveActor } from './task'
+
 export type TrainingAttemptStatus =
   | 'playing'
   | 'submitted'
@@ -24,6 +26,8 @@ export type TrainingAttempt = {
 
   rootPositionSgf: string
   userLine: string[]
+
+  moveActors?: MoveActor[]
 
   status: TrainingAttemptStatus
   result: TrainingAttemptResult

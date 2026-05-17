@@ -1,5 +1,6 @@
 import type {
   TrainingTask,
+  TrainingTaskKind,
   TrainingTaskSource,
   TrainingAttempt,
   MoveEvaluation,
@@ -173,7 +174,21 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   // --- New training domain (Phase 2: connected to DB) ---
 
   async function createTask(task: TrainingTask): Promise<TrainingTask> {
-    const row = await db.createTrainingTask(task)
+    // Merge origin into task for DB layer; v0.5 fields passed through
+    const dbTask = {
+      ...task,
+      origin: task.origin,
+      initialPositionSgf: task.initialPositionSgf || task.rootPositionSgf,
+      prompt: task.prompt,
+      goal: task.goal,
+      passRule: task.passRule,
+      referenceLines: task.referenceLines,
+      problemArea: task.problemArea,
+      tags: task.tags,
+      difficulty: task.difficulty,
+      status: task.status,
+    }
+    const row = await db.createTrainingTask(dbTask)
     return mapTaskRow(row)
   }
 
@@ -198,7 +213,10 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function createAttempt(attempt: TrainingAttempt): Promise<TrainingAttempt> {
-    const row = await db.createTrainingAttempt(attempt)
+    const row = await db.createTrainingAttempt({
+      ...attempt,
+      moveActors: attempt.moveActors,
+    })
     return mapAttemptRow(row)
   }
 
@@ -280,6 +298,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     const mapped: Record<string, unknown> = {}
     if (patch.recallCheckpointId !== undefined) mapped.recallCheckpointId = patch.recallCheckpointId
     if (patch.generatedProblemId !== undefined) mapped.generatedProblemId = patch.generatedProblemId
+    if (patch.generatedTaskId !== undefined) mapped.generatedTaskId = patch.generatedTaskId
     if (patch.userMarkedAsNotBad !== undefined) mapped.userMarkedAsNotBad = patch.userMarkedAsNotBad
     await db.updateTrainingBadMove(badMoveId, mapped)
   }
@@ -291,6 +310,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
       id: session.id,
       taskId: session.taskId,
       tabId: session.tabId,
+      attemptId: session.attemptId,
       type: session.type,
       source: session.source,
       startMove: session.startMove,
@@ -430,8 +450,9 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   async function createReviewSchedule(schedule: ReviewSchedule): Promise<ReviewSchedule> {
     const row = await db.upsertReviewSchedule({
       id: schedule.id,
-      itemId: schedule.itemId,
-      itemType: schedule.itemType,
+      taskId: schedule.taskId,
+      itemId: schedule.itemId || schedule.taskId,
+      itemType: schedule.itemType || 'task',
       dueAt: schedule.dueAt,
       intervalDays: schedule.intervalDays,
       easeFactor: schedule.easeFactor,
@@ -487,13 +508,43 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   // --- Row mappers ---
 
   function mapTaskRow(row: Record<string, unknown>): TrainingTask {
+    const source = typeof row.source === 'string' ? JSON.parse(row.source as string) : row.source
+    const kind = row.kind as TrainingTask['kind']
+
+    // Build origin: prefer explicit origin_json column, fall back to legacy kind/source
+    let origin: TrainingTask['origin'] | undefined
+    if (row.origin != null) {
+      origin = typeof row.origin === 'string' ? JSON.parse(row.origin as string) : (row.origin as TrainingTask['origin'])
+    } else if (kind && source) {
+      origin = mapSourceToOrigin(source as TrainingTaskSource, kind)
+    }
+
     return {
       id: row.id as string,
-      kind: row.kind as TrainingTask['kind'],
-      source: typeof row.source === 'string' ? JSON.parse(row.source) : row.source,
-      rootPositionSgf: row.rootPositionSgf as string,
+      kind,
+      source,
+      rootPositionSgf: (row.rootPositionSgf as string) || (row.initialPositionSgf as string) || '',
       sideToMove: row.sideToMove as 'black' | 'white' | undefined,
       title: row.title as string | undefined,
+      // v0.5 fields
+      origin,
+      initialPositionSgf: row.initialPositionSgf as string | undefined,
+      prompt: row.prompt as string | undefined,
+      goal: row.goal as string | undefined,
+      passRule: row.passRule != null
+        ? (typeof row.passRule === 'string' ? JSON.parse(row.passRule as string) : row.passRule) as TrainingTask['passRule']
+        : undefined,
+      referenceLines: row.referenceLines != null
+        ? (typeof row.referenceLines === 'string' ? JSON.parse(row.referenceLines as string) : row.referenceLines) as TrainingTask['referenceLines']
+        : undefined,
+      problemArea: row.problemArea != null
+        ? (typeof row.problemArea === 'string' ? JSON.parse(row.problemArea as string) : row.problemArea) as TrainingTask['problemArea']
+        : undefined,
+      tags: row.tags != null
+        ? (typeof row.tags === 'string' ? JSON.parse(row.tags as string) : row.tags) as string[]
+        : undefined,
+      difficulty: row.difficulty as number | undefined,
+      status: row.status as string | undefined,
       createdAt: row.createdAt as string,
       updatedAt: row.updatedAt as string,
     }
@@ -509,6 +560,9 @@ export function createTrainingRepository(db: Db): TrainingRepository {
       completedAt: row.completedAt as string | undefined,
       rootPositionSgf: row.rootPositionSgf as string,
       userLine: typeof row.userLine === 'string' ? JSON.parse(row.userLine) : (row.userLine as string[]),
+      moveActors: row.moveActors != null
+        ? (typeof row.moveActors === 'string' ? JSON.parse(row.moveActors as string) : row.moveActors) as TrainingAttempt['moveActors']
+        : undefined,
       status: row.status as TrainingAttempt['status'],
       result: row.result as TrainingAttempt['result'],
       hintLevelUsed: (row.hintLevelUsed as number) ?? 0,
@@ -544,6 +598,9 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   function mapBadMoveRow(row: Record<string, unknown>): BadMove {
+    // v0.5: prefer generatedTaskId, fall back to generatedProblemId
+    const generatedTaskId = (row.generatedTaskId as string) || (row.generatedProblemId as string) || undefined
+
     return {
       id: row.id as string,
       moveEvaluationId: row.moveEvaluationId as string,
@@ -555,6 +612,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
       positionBeforeSgf: row.positionBeforeSgf as string | undefined,
       positionAfterSgf: row.positionAfterSgf as string | undefined,
       userMarkedAsNotBad: row.userMarkedAsNotBad as boolean | undefined,
+      generatedTaskId,
       generatedProblemId: row.generatedProblemId as string | undefined,
       recallCheckpointId: row.recallCheckpointId as string | undefined,
       createdAt: row.createdAt as string,
@@ -562,15 +620,25 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   function mapRecallSessionRow(row: Record<string, unknown>): RecallSession {
+    // v0.5: prefer attemptId column, fall back to source_json parsing
+    let attemptId: string | undefined = row.attemptId as string | undefined
+    if (!attemptId && row.source) {
+      const source = typeof row.source === 'string' ? JSON.parse(row.source as string) : row.source
+      if (source && source.kind === 'attempt' && source.attemptId) {
+        attemptId = source.attemptId
+      }
+    }
+
     return {
       id: row.id as string,
       taskId: row.taskId as string,
       tabId: (row.tabId as string) ?? undefined,
+      attemptId,
       type: (row.type as 'line_recall') ?? 'line_recall',
-      source: typeof row.source === 'string' ? JSON.parse(row.source) : row.source,
+      source: typeof row.source === 'string' ? JSON.parse(row.source as string) : row.source as RecallSession['source'],
       startMove: (row.startMove as number) ?? 0,
       endMove: (row.endMove as number) ?? undefined,
-      expectedMoves: typeof row.expectedMoves === 'string' ? JSON.parse(row.expectedMoves) : (row.expectedMoves as string[]),
+      expectedMoves: typeof row.expectedMoves === 'string' ? JSON.parse(row.expectedMoves as string) : (row.expectedMoves as string[]),
       currentMoveIndex: (row.currentMoveIndex as number) ?? 0,
       completed: !!row.completed,
       createdAt: row.createdAt as string,
@@ -645,9 +713,13 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   function mapReviewScheduleRow(row: Record<string, unknown>): ReviewSchedule {
+    // v0.5: prefer taskId, fall back to itemId
+    const taskId = (row.taskId as string) || (row.itemId as string) || ''
+
     return {
       id: row.id as string,
-      itemId: row.itemId as string,
+      taskId,
+      itemId: row.itemId as string | undefined,
       itemType: row.itemType as ReviewSchedule['itemType'],
       dueAt: row.dueAt as string,
       intervalDays: (row.intervalDays as number) ?? 1,
@@ -679,5 +751,54 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     createReviewSchedule, findReviewScheduleByItem, listDueReviewItems, updateReviewSchedule,
     listIncompleteAttempts, listIncompleteRecallSessions, listExpiredPendingMoveEvaluations,
     transaction,
+  }
+}
+
+/**
+ * Map a legacy source object + kind to a v0.5 TaskOrigin.
+ * Pure function -- no side effects.
+ */
+export function mapSourceToOrigin(
+  source: TrainingTaskSource | null | undefined,
+  kind: TrainingTaskKind | string,
+): TrainingTask['origin'] | undefined {
+  if (!source) return undefined
+
+  const s = source as Record<string, unknown>
+  const kindStr = typeof kind === 'string' ? kind : ''
+
+  switch (kindStr) {
+    case 'game':
+      return {
+        provider: 'local',
+        externalId: s.gameId as string | undefined,
+        raw: source as Record<string, unknown>,
+      }
+    case 'problem':
+      return {
+        provider: 'inferred',
+        externalId: s.problemId as string | undefined,
+        raw: source as Record<string, unknown>,
+      }
+    case 'snapshot_problem':
+      return {
+        provider: 'snapshot',
+        externalId: s.problemId as string | undefined,
+        parentTaskId: s.parentTaskId as string | undefined,
+        parentAttemptId: s.parentAttemptId as string | undefined,
+        raw: source as Record<string, unknown>,
+      }
+    case 'recall_segment':
+      return {
+        provider: 'recall',
+        externalId: s.segmentId as string | undefined,
+        parentAttemptId: s.sourceAttemptId as string | undefined,
+        raw: source as Record<string, unknown>,
+      }
+    default:
+      return {
+        provider: 'local',
+        raw: source as Record<string, unknown>,
+      }
   }
 }

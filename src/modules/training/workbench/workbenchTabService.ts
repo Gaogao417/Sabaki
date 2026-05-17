@@ -1,4 +1,4 @@
-import type { WorkbenchTab, WorkbenchPhase, TrainingTask } from '../types/index'
+import type { WorkbenchTab, WorkbenchMode, TrainingTask } from '../types/index'
 import type { WorkbenchStore } from '../store/workbenchStore'
 import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
 import type { TrainingRepository } from '../repository/trainingRepository'
@@ -83,7 +83,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     return {
       id: generateId(),
       taskId: task.id,
-      phase: 'play' as WorkbenchPhase,
+      mode: 'play' as WorkbenchMode,
       childTabIds: [],
       parentTabId: options?.parentTabId,
       createdAt: now,

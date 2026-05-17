@@ -1,4 +1,4 @@
-import type { WorkbenchPhase, WorkbenchTab, TrainingTask } from '../types/index'
+import type { WorkbenchMode, WorkbenchTab, TrainingTask } from '../types/index'
 import type { WorkbenchStore } from '../store/workbenchStore'
 import type { SnapshotService } from '../analysis/snapshotService'
 import type { WorkbenchTabService } from './workbenchTabService'
@@ -12,13 +12,13 @@ export type PhaseTransition =
   | 'restart'
   | 'snapshot'
 
-export const VALID_PHASE_TRANSITIONS: Record<WorkbenchPhase, PhaseTransition[]> = {
+export const VALID_PHASE_TRANSITIONS: Record<WorkbenchMode, PhaseTransition[]> = {
   play: ['submit'],
   recall: ['complete', 'restart'],
   analysis: ['restart', 'snapshot'],
 }
 
-export const PHASE_TRANSITION_RESULT: Record<string, WorkbenchPhase> = {
+export const PHASE_TRANSITION_RESULT: Record<string, WorkbenchMode> = {
   'play:submit': 'recall',
   'recall:complete': 'analysis',
   'recall:restart': 'play',
@@ -27,7 +27,7 @@ export const PHASE_TRANSITION_RESULT: Record<string, WorkbenchPhase> = {
 
 export type WorkbenchPhaseService = {
   transition(tabId: string, transition: PhaseTransition): void
-  getPhase(tabId: string): WorkbenchPhase | null
+  getPhase(tabId: string): WorkbenchMode | null
   getValidTransitions(tabId: string): PhaseTransition[]
   snapshotFromAnalysis(tabId: string): Promise<WorkbenchTab>
 }
@@ -43,7 +43,7 @@ export type WorkbenchPhaseServiceDeps = {
 export class InvalidPhaseTransitionError extends Error {
   constructor(
     public readonly tabId: string,
-    public readonly from: WorkbenchPhase,
+    public readonly from: WorkbenchMode,
     public readonly transition: PhaseTransition,
   ) {
     super(`Invalid phase transition: ${from} --${transition}--> ? (tabId=${tabId})`)
@@ -64,28 +64,28 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
       throw new Error(`workbenchPhaseService.transition: tab not found (id=${tabId})`)
     }
 
-    if (!VALID_PHASES.has(tab.phase)) {
-      throw new Error(`workbenchPhaseService.transition: unknown phase "${tab.phase}" on tab ${tabId}`)
+    if (!VALID_PHASES.has(tab.mode)) {
+      throw new Error(`workbenchPhaseService.transition: unknown phase "${tab.mode}" on tab ${tabId}`)
     }
 
-    const allowed = VALID_PHASE_TRANSITIONS[tab.phase]
+    const allowed = VALID_PHASE_TRANSITIONS[tab.mode]
     if (!allowed.includes(transition)) {
       logger?.info('phase.transition.rejected', 'Phase transition rejected', {
         tabId,
-        from: tab.phase,
+        from: tab.mode,
         transition,
         allowed,
       })
-      throw new InvalidPhaseTransitionError(tabId, tab.phase, transition)
+      throw new InvalidPhaseTransitionError(tabId, tab.mode, transition)
     }
 
-    const key = `${tab.phase}:${transition}` as const
+    const key = `${tab.mode}:${transition}` as const
 
     // snapshot does not change current tab phase — it creates a new tab
     if (transition === 'snapshot') {
       logger?.info('phase.snapshot', 'Snapshot transition (phase unchanged)', {
         tabId,
-        from: tab.phase,
+        from: tab.mode,
       })
       return
     }
@@ -97,12 +97,12 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
 
     logger?.info('phase.transition', 'Phase transition', {
       tabId,
-      from: tab.phase,
+      from: tab.mode,
       to: newPhase,
       transition,
     })
 
-    workbenchStore.updateTab(tabId, { phase: newPhase })
+    workbenchStore.updateTab(tabId, { mode: newPhase })
   }
 
   async function snapshotFromAnalysis(tabId: string): Promise<WorkbenchTab> {
@@ -110,8 +110,8 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
     if (!tab) {
       throw new Error(`workbenchPhaseService.snapshotFromAnalysis: tab not found (id=${tabId})`)
     }
-    if (tab.phase !== 'analysis') {
-      throw new Error(`workbenchPhaseService.snapshotFromAnalysis: tab must be in analysis phase (current=${tab.phase})`)
+    if (tab.mode !== 'analysis') {
+      throw new Error(`workbenchPhaseService.snapshotFromAnalysis: tab must be in analysis mode (current=${tab.mode})`)
     }
 
     const task = await repository.loadTask(tab.taskId)
@@ -168,8 +168,8 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
   function getValidTransitions(tabId: string): PhaseTransition[] {
     const tab = getTab(tabId)
     if (!tab) return []
-    if (!VALID_PHASES.has(tab.phase)) return []
-    return VALID_PHASE_TRANSITIONS[tab.phase]
+    if (!VALID_PHASES.has(tab.mode)) return []
+    return VALID_PHASE_TRANSITIONS[tab.mode]
   }
 
   return {

@@ -10,10 +10,13 @@ export type RecallSession = {
   taskId: string
   tabId?: string
 
-  type: 'line_recall'
-  source: RecallSource
+  // v0.5: direct attempt binding
+  attemptId?: string
 
-  startMove: number
+  // v0.4 legacy fields (deprecated, kept for compatibility)
+  type?: 'line_recall'
+  source?: RecallSource
+  startMove?: number
   endMove?: number
 
   expectedMoves: string[]

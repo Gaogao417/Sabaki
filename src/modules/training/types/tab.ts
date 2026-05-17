@@ -1,10 +1,13 @@
+export type WorkbenchMode = 'play' | 'problem' | 'recall' | 'analysis'
+
+/** @deprecated Use WorkbenchMode instead */
 export type WorkbenchPhase = 'play' | 'recall' | 'analysis'
 
 export type WorkbenchTab = {
   id: string
   taskId: string
 
-  phase: WorkbenchPhase
+  mode: WorkbenchMode
 
   activeAttemptId?: string
   activeRecallSessionId?: string

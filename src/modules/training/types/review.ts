@@ -1,12 +1,19 @@
 import type { TrainingAttemptResult } from './attempt'
 
+/** @deprecated */
 export type ReviewItemType = 'problem' | 'recall_segment'
 
 export type ReviewSchedule = {
   id: string
 
-  itemId: string
-  itemType: ReviewItemType
+  // v0.5: direct task reference
+  taskId: string
+
+  // v0.4 legacy fields (deprecated)
+  /** @deprecated Use taskId */
+  itemId?: string
+  /** @deprecated Use taskId */
+  itemType?: ReviewItemType
 
   dueAt: string
   intervalDays: number
@@ -23,7 +30,10 @@ export type ReviewSchedule = {
 }
 
 export type ReviewUpdateInput = {
-  itemId: string
-  itemType: ReviewItemType
+  taskId?: string
+  /** @deprecated */
+  itemId?: string
+  /** @deprecated */
+  itemType?: ReviewItemType
   result: TrainingAttemptResult
 }

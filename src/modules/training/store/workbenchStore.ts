@@ -35,6 +35,16 @@ export function createWorkbenchStore(): WorkbenchStore {
     return state.tabs.find(t => t.id === tabId)
   }
 
+  // Phase 0 compatibility: derive mode from phase when mode is absent.
+  // When both are present, phase takes priority (handles legacy patch with {phase}).
+  function normalizeTab(tab: Record<string, unknown>): WorkbenchTab {
+    const phase = tab.phase as WorkbenchTab['mode'] | undefined
+    const existingMode = tab.mode as WorkbenchTab['mode'] | undefined
+    const mode = phase || existingMode
+    const { phase: _, ...rest } = tab as Record<string, unknown> & { phase?: unknown }
+    return { ...rest, mode } as WorkbenchTab
+  }
+
   return {
     getState() {
       return {
@@ -51,9 +61,10 @@ export function createWorkbenchStore(): WorkbenchStore {
     },
 
     setTabs(tabs: WorkbenchTab[]) {
-      state = { ...state, tabs }
+      const normalized = tabs.map(t => normalizeTab(t))
+      state = { ...state, tabs: normalized }
       // Clear activeTabId if it no longer references a tab in the new list
-      if (state.activeTabId != null && !tabs.some(t => t.id === state.activeTabId)) {
+      if (state.activeTabId != null && !normalized.some(t => t.id === state.activeTabId)) {
         state = { ...state, activeTabId: null }
       }
       notify()
@@ -63,7 +74,8 @@ export function createWorkbenchStore(): WorkbenchStore {
       if (findTab(tab.id)) {
         throw new Error(`workbenchStore.addTab: duplicate tab id "${tab.id}"`)
       }
-      state = { ...state, tabs: [...state.tabs, { ...tab }] }
+      const normalized = normalizeTab(tab)
+      state = { ...state, tabs: [...state.tabs, normalized] }
       notify()
     },
 
@@ -73,9 +85,11 @@ export function createWorkbenchStore(): WorkbenchStore {
       }
       state = {
         ...state,
-        tabs: state.tabs.map((t) =>
-          t.id === tabId ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t
-        ),
+        tabs: state.tabs.map((t) => {
+          if (t.id !== tabId) return t
+          const merged = { ...t, ...patch, updatedAt: new Date().toISOString() }
+          return normalizeTab(merged)
+        }),
       }
       notify()
     },

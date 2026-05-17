@@ -128,6 +128,7 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
 
       await repository.createReviewSchedule({
         id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        taskId: input.itemId,
         itemId: input.itemId,
         itemType: input.itemType,
         dueAt: next.dueAt,
@@ -182,6 +183,7 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     const now = new Date()
     const schedule: ReviewSchedule = {
       id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      taskId: input.itemId,
       itemId: input.itemId,
       itemType: input.itemType,
       dueAt: now.toISOString(),

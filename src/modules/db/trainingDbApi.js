@@ -13,13 +13,16 @@ function createTrainingDbApi(client) {
   function createTrainingRecallSession(session) {
     const id = session.id || uuid()
     const now = new Date().toISOString()
+    const attemptId = session.attemptId || null
     client.run(`INSERT INTO training_recall_sessions (id, task_id, tab_id, type, source_json,
-      start_move, end_move, expected_moves_json, current_move_index, completed, created_at, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      start_move, end_move, expected_moves_json, current_move_index, completed, created_at, completed_at,
+      attempt_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       id, session.taskId, session.tabId || null, session.type || 'line_recall',
-      JSON.stringify(session.source), session.startMove || 0, session.endMove ?? null,
+      JSON.stringify(session.source || {}), session.startMove || 0, session.endMove ?? null,
       JSON.stringify(session.expectedMoves || []), session.currentMoveIndex || 0,
       session.completed ? 1 : 0, now, session.completedAt || null,
+      attemptId,
     ])
     client.save()
     return rowToTrainingRecallSession(client.queryOne('SELECT * FROM training_recall_sessions WHERE id = ?', [id]))
@@ -47,10 +50,22 @@ function createTrainingDbApi(client) {
   }
 
   function rowToTrainingRecallSession(row) {
+    // v0.5: prefer attemptId column, fall back to source_json parsing
+    let attemptId = row.attempt_id || null
+    if (!attemptId && row.source_json) {
+      try {
+        const source = JSON.parse(row.source_json)
+        if (source && source.kind === 'attempt' && source.attemptId) {
+          attemptId = source.attemptId
+        }
+      } catch (_) {}
+    }
+
     return {
       id: row.id,
       taskId: row.task_id,
       tabId: row.tab_id,
+      attemptId: attemptId,
       type: row.type,
       source: JSON.parse(row.source_json || '{}'),
       startMove: row.start_move,
@@ -203,6 +218,7 @@ function createTrainingDbApi(client) {
     const params = []
     if (patch.recallCheckpointId !== undefined) { sets.push('recall_checkpoint_id = ?'); params.push(patch.recallCheckpointId) }
     if (patch.generatedProblemId !== undefined) { sets.push('generated_problem_id = ?'); params.push(patch.generatedProblemId) }
+    if (patch.generatedTaskId !== undefined) { sets.push('generated_task_id = ?'); params.push(patch.generatedTaskId) }
     if (patch.userMarkedAsNotBad !== undefined) { sets.push('user_marked_as_not_bad = ?'); params.push(patch.userMarkedAsNotBad ? 1 : 0) }
     if (sets.length === 0) return
     params.push(badMoveId)

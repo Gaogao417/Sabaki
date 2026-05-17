@@ -328,32 +328,40 @@ function getDueReviews() {
 
 function upsertReviewSchedule(item) {
   const now = new Date().toISOString()
-  const id = item.id || `${item.itemId}_${item.itemType || 'problem'}`
+  const id = item.id || `${item.itemId || item.taskId}_${item.itemType || 'problem'}`
   const existing = queryOne('SELECT id FROM review_schedule WHERE id = ?', [id])
+
+  const taskId = item.taskId || item.itemId || null
+  const itemId = item.itemId || item.taskId || null
+  const itemType = item.itemType || (item.taskId ? 'task' : 'problem')
 
   if (existing) {
     run(`UPDATE review_schedule SET due_at = ?, interval_days = ?, ease_factor = ?,
       last_result = ?, consecutive_pass_count = ?, total_fail_count = ?,
-      last_reviewed_at = ?, updated_at = ? WHERE id = ?`, [
+      last_reviewed_at = ?, task_id = ?, updated_at = ? WHERE id = ?`, [
       item.dueAt, item.intervalDays ?? 1, item.easeFactor ?? null,
       item.lastResult || null, item.consecutivePassCount ?? 0,
-      item.totalFailCount ?? 0, item.lastReviewedAt || null, now, id,
+      item.totalFailCount ?? 0, item.lastReviewedAt || null, taskId, now, id,
     ])
   } else {
-    run(`INSERT INTO review_schedule (id, item_id, item_type, due_at, interval_days, ease_factor,
+    run(`INSERT INTO review_schedule (id, item_id, item_type, task_id, due_at, interval_days, ease_factor,
       last_result, consecutive_pass_count, total_fail_count, last_reviewed_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      id, item.itemId, item.itemType || 'problem', item.dueAt,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      id, itemId, itemType, taskId, item.dueAt,
       item.intervalDays ?? 1, item.easeFactor ?? null,
       item.lastResult || null, item.consecutivePassCount ?? 0,
       item.totalFailCount ?? 0, item.lastReviewedAt || null, now, now,
     ])
   }
   save()
-  return {...item, id}
+  return {...item, id, taskId}
 }
 
 function findReviewScheduleByItem(itemId, itemType) {
+  // v0.5: also check task_id column for direct lookups
+  if (itemType === 'task') {
+    return queryOne('SELECT * FROM review_schedule WHERE task_id = ?', [itemId])
+  }
   return queryOne('SELECT * FROM review_schedule WHERE item_id = ? AND item_type = ?', [itemId, itemType])
 }
 
@@ -470,14 +478,27 @@ function createTrainingTask(task) {
   const id = task.id || uuid()
   const now = new Date().toISOString()
   const source = task.source || {}
+  const originJson = task.origin ? JSON.stringify(task.origin) : null
+  const passRuleJson = task.passRule ? JSON.stringify(task.passRule) : null
+  const referenceLinesJson = task.referenceLines ? JSON.stringify(task.referenceLines) : null
+  const problemAreaJson = task.problemArea ? JSON.stringify(task.problemArea) : null
+  const tagsJson = task.tags ? JSON.stringify(task.tags) : null
   run(`INSERT INTO training_tasks (id, kind, source_json, source_kind, source_game_id, source_problem_id,
     source_segment_id, parent_task_id, parent_attempt_id,
-    root_position_sgf, side_to_move, title, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    id, task.kind, JSON.stringify(source), source.kind || null,
+    root_position_sgf, side_to_move, title,
+    origin_json, initial_position_sgf, prompt, goal,
+    pass_rule_json, reference_lines_json, problem_area_json, tags_json,
+    difficulty, status,
+    created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, task.kind || 'free_play', JSON.stringify(source), source.kind || null,
     source.gameId || null, source.problemId || null, source.segmentId || null,
     source.parentTaskId || null, source.parentAttemptId || null,
-    task.rootPositionSgf, task.sideToMove || null, task.title || null, now, now,
+    task.rootPositionSgf, task.sideToMove || null, task.title || null,
+    originJson, task.initialPositionSgf || null, task.prompt || null, task.goal || null,
+    passRuleJson, referenceLinesJson, problemAreaJson, tagsJson,
+    task.difficulty ?? null, task.status || null,
+    now, now,
   ])
   save()
   return {...rowToTrainingTask(queryOne('SELECT * FROM training_tasks WHERE id = ?', [id])), id}
@@ -526,6 +547,16 @@ function rowToTrainingTask(row) {
     rootPositionSgf: row.root_position_sgf,
     sideToMove: row.side_to_move,
     title: row.title,
+    origin: row.origin_json ? JSON.parse(row.origin_json) : undefined,
+    initialPositionSgf: row.initial_position_sgf,
+    prompt: row.prompt,
+    goal: row.goal,
+    passRule: row.pass_rule_json ? JSON.parse(row.pass_rule_json) : undefined,
+    referenceLines: row.reference_lines_json ? JSON.parse(row.reference_lines_json) : undefined,
+    problemArea: row.problem_area_json ? JSON.parse(row.problem_area_json) : undefined,
+    tags: row.tags_json ? JSON.parse(row.tags_json) : undefined,
+    difficulty: row.difficulty,
+    status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -535,15 +566,18 @@ function rowToTrainingTask(row) {
 
 function createTrainingAttempt(attempt) {
   const id = attempt.id || uuid()
+  const moveActorsJson = attempt.moveActors ? JSON.stringify(attempt.moveActors) : null
   run(`INSERT INTO training_attempts (id, task_id, tab_id, started_at, submitted_at, completed_at,
-    root_position_sgf, user_line_json, status, result, hint_level_used, recall_completed, analysis_opened)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    root_position_sgf, user_line_json, status, result, hint_level_used, recall_completed, analysis_opened,
+    move_actors_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
     id, attempt.taskId, attempt.tabId || null,
     attempt.startedAt, attempt.submittedAt || null, attempt.completedAt || null,
     attempt.rootPositionSgf, JSON.stringify(attempt.userLine || []),
     attempt.status || 'playing', attempt.result || 'pending',
     attempt.hintLevelUsed || 0, attempt.recallCompleted ? 1 : 0,
     attempt.analysisOpened ? 1 : 0,
+    moveActorsJson,
   ])
   save()
   return {...rowToTrainingAttempt(queryOne('SELECT * FROM training_attempts WHERE id = ?', [id])), id}
@@ -590,6 +624,7 @@ function rowToTrainingAttempt(row) {
     completedAt: row.completed_at,
     rootPositionSgf: row.root_position_sgf,
     userLine: JSON.parse(row.user_line_json || '[]'),
+    moveActors: row.move_actors_json ? JSON.parse(row.move_actors_json) : undefined,
     status: row.status,
     result: row.result,
     hintLevelUsed: row.hint_level_used,
@@ -731,6 +766,7 @@ function rowToTrainingBadMove(row) {
     positionBeforeSgf: row.position_before_sgf,
     positionAfterSgf: row.position_after_sgf,
     userMarkedAsNotBad: !!row.user_marked_as_not_bad,
+    generatedTaskId: row.generated_task_id || row.generated_problem_id || undefined,
     generatedProblemId: row.generated_problem_id,
     recallCheckpointId: row.recall_checkpoint_id,
     createdAt: row.created_at,

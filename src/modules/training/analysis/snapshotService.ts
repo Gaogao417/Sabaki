@@ -62,8 +62,8 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
       throw new Error(`snapshotService.captureSnapshotInput: tab not found (id=${input.tabId})`)
     }
 
-    if (tab.phase !== 'analysis') {
-      throw new Error(`snapshotService.captureSnapshotInput: tab must be in analysis phase (current=${tab.phase})`)
+    if (tab.mode !== 'analysis') {
+      throw new Error(`snapshotService.captureSnapshotInput: tab must be in analysis mode (current=${tab.mode})`)
     }
 
     if (tab.taskId !== input.sourceTaskId) {

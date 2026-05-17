@@ -16,6 +16,8 @@ export type BadMove = {
 
   userMarkedAsNotBad?: boolean
 
+  generatedTaskId?: string
+  /** @deprecated Use generatedTaskId */
   generatedProblemId?: string
   recallCheckpointId?: string
 

@@ -1,5 +1,13 @@
-export type { TrainingTask, TrainingTaskKind, TrainingTaskSource } from './task'
-export type { WorkbenchPhase, WorkbenchTab } from './tab'
+export type {
+  TrainingTask,
+  TrainingTaskKind,
+  TrainingTaskSource,
+  TaskOrigin,
+  ProblemArea,
+  TaskPassRule,
+  MoveActor,
+} from './task'
+export type { WorkbenchMode, WorkbenchPhase, WorkbenchTab } from './tab'
 export type {
   TrainingAttempt,
   TrainingAttemptStatus,

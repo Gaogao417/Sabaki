@@ -346,6 +346,38 @@ function migrate(client) {
     client.run('CREATE INDEX IF NOT EXISTS idx_review_schedule_item ON review_schedule(item_id, item_type)')
   }
 
+  // --- Schema migration v3: Phase 0 v0.5 model convergence ---
+
+  // training_tasks: add v0.5 columns
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN origin_json TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN initial_position_sgf TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN prompt TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN goal TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN pass_rule_json TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN reference_lines_json TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN problem_area_json TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN tags_json TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN difficulty INTEGER')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN status TEXT')
+  _tryAlter('ALTER TABLE training_tasks ADD COLUMN archived_at TEXT')
+
+  // training_bad_moves: add generated_task_id (v0.5 rename of generated_problem_id)
+  _tryAlter('ALTER TABLE training_bad_moves ADD COLUMN generated_task_id TEXT')
+
+  // review_schedule: add task_id (v0.5 replacement for item_id + item_type)
+  _tryAlter('ALTER TABLE review_schedule ADD COLUMN task_id TEXT')
+
+  // training_recall_sessions: add attempt_id (v0.5 replacement for source_json)
+  _tryAlter('ALTER TABLE training_recall_sessions ADD COLUMN attempt_id TEXT')
+
+  // training_attempts: add move_actors_json (v0.5 new field)
+  _tryAlter('ALTER TABLE training_attempts ADD COLUMN move_actors_json TEXT')
+
+  // New indexes for v0.5 columns
+  client.run('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks(status)')
+  client.run('CREATE INDEX IF NOT EXISTS idx_review_schedule_task ON review_schedule(task_id)')
+  client.run('CREATE INDEX IF NOT EXISTS idx_training_recall_sessions_attempt ON training_recall_sessions(attempt_id)')
+
   client.save()
 }
 
