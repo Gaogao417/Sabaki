@@ -19,6 +19,12 @@ function createDeps(appState) {
       notifyChange: () => {
         notified++
       },
+      logger: {
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      },
     },
     get notified() {
       return notified
@@ -66,8 +72,18 @@ describe('overlayStore', () => {
     let store = createOverlayStore(tracker.deps)
 
     assert.strictEqual(store.setTerritoryEnabled(true), true)
-    assert.strictEqual(store.setTerritoryCompareEnabled(true), true)
     assert.strictEqual(store.getState().territoryEnabled, true)
+
+    appState.mode = 'play'
+    store.onModeChange('play')
+
+    assert.strictEqual(store.getState().territoryEnabled, false)
+    assert.strictEqual(store.getState().territoryCompareEnabled, false)
+
+    appState.mode = 'analysis'
+    assert.strictEqual(store.setTerritoryCompareEnabled(true), true)
+    assert.strictEqual(store.getState().territoryEnabled, false)
+    assert.strictEqual(store.getState().territoryCompareEnabled, true)
 
     appState.mode = 'play'
     store.onModeChange('play')
