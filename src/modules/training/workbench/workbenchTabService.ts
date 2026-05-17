@@ -1,4 +1,4 @@
-import type { WorkbenchTab, WorkbenchMode, TrainingTask } from '../types/index'
+import type { WorkbenchTab, WorkbenchMode, TrainingTask, PlayerConfig } from '../types/index'
 import type { WorkbenchStore } from '../store/workbenchStore'
 import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
 import type { TrainingRepository } from '../repository/trainingRepository'
@@ -15,9 +15,17 @@ export type OpenProblemTabOptions = {
   legacyCompatibility?: boolean
 }
 
+export type OpenTaskOptions = {
+  taskId: string
+  mode?: WorkbenchMode
+  parentTabId?: string
+  playerConfig?: PlayerConfig
+}
+
 export type WorkbenchTabService = {
   openGameTab(gameId: string): Promise<WorkbenchTab>
   openProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab>
+  openTask(opts: OpenTaskOptions): Promise<WorkbenchTab>
   openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab>
   closeTab(tabId: string): Promise<void>
   switchTab(tabId: string): void
@@ -32,6 +40,11 @@ export type WorkbenchTabServiceDeps = {
   attemptService?: AttemptService
   monitor?: PlayTrainingMonitor
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
+}
+
+export function inferDefaultMode(task: TrainingTask): WorkbenchMode {
+  if (task.prompt || task.goal || task.passRule || task.referenceLines) return 'problem'
+  return 'play'
 }
 
 export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): WorkbenchTabService {
@@ -190,6 +203,45 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     return tab
   }
 
+  async function openTask(opts: OpenTaskOptions): Promise<WorkbenchTab> {
+    const task = await repository.loadTask(opts.taskId)
+    if (!task) {
+      throw new Error(`workbenchTabService.openTask: task not found (id=${opts.taskId})`)
+    }
+
+    const mode = opts.mode ?? inferDefaultMode(task)
+
+    if (opts.parentTabId) {
+      const parent = workbenchStore.getState().tabs.find(t => t.id === opts.parentTabId)
+      if (!parent) {
+        throw new Error(`workbenchTabService.openTask: parent tab not found (id=${opts.parentTabId})`)
+      }
+    }
+
+    const now = new Date().toISOString()
+    const tab: WorkbenchTab = {
+      id: generateId(),
+      taskId: task.id,
+      mode,
+      parentTabId: opts.parentTabId,
+      childTabIds: [],
+      playerConfig: opts.playerConfig,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    if (opts.parentTabId) {
+      const parent = workbenchStore.getState().tabs.find(t => t.id === opts.parentTabId)
+      workbenchStore.updateTab(opts.parentTabId, {
+        childTabIds: [...parent.childTabIds, tab.id],
+      })
+    }
+
+    workbenchStore.addTab(tab)
+    workbenchStore.setActiveTab(tab.id)
+    return tab
+  }
+
   async function openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab> {
     return openProblemTab(problemId, { parentTabId: options.parentTabId })
   }
@@ -229,6 +281,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
   return {
     openProblemTab,
     openGameTab,
+    openTask,
     openSnapshotProblemTab,
     closeTab,
     switchTab,

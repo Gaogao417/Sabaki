@@ -95,11 +95,23 @@ function createMockSgfParser(overrides = {}) {
   }
 }
 
+function createMockTaskStore(tasks = {}) {
+  // Tasks keyed by id for openTask to load.
+  return tasks
+}
+
 function createTestServices(overrides = {}) {
   const store = createWorkbenchStore()
   const repository = createMockRepository(overrides)
   const legacyAdapter = createMockLegacyAdapter()
   const sgfParser = createMockSgfParser(overrides)
+
+  // Extend repository with loadTask for Phase 1 openTask.
+  if (!repository.loadTask) {
+    const taskStore = createMockTaskStore(overrides.tasks)
+    repository.loadTask = async id => taskStore[id] ?? null
+  }
+
   const tabService = createWorkbenchTabService({
     workbenchStore: store,
     repository,
@@ -122,9 +134,9 @@ describe('workbenchTabService', () => {
       tabService = ctx.tabService
     })
 
-    it('creates a tab with phase=play', async () => {
+    it('creates a tab with mode=play', async () => {
       const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      assert.strictEqual(tab.phase, 'play')
+      assert.strictEqual(tab.mode, 'play')
       assert.ok(tab.taskId)
     })
 
@@ -216,9 +228,9 @@ describe('workbenchTabService', () => {
       tabService = ctx.tabService
     })
 
-    it('creates a tab with phase=play', async () => {
+    it('creates a tab with mode=play', async () => {
       const tab = await tabService.openGameTab('game_1')
-      assert.strictEqual(tab.phase, 'play')
+      assert.strictEqual(tab.mode, 'play')
     })
 
     it('sets opened game tab as active', async () => {
@@ -335,13 +347,13 @@ describe('workbenchTabService + workbenchPhaseService integration', () => {
 
   it('full flow: open problem -> submit -> recall -> complete -> analysis', async () => {
     const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-    assert.strictEqual(phaseService.getPhase(tab.id), 'play')
+    assert.strictEqual(phaseService.getMode(tab.id), 'play')
 
     phaseService.transition(tab.id, 'submit')
-    assert.strictEqual(phaseService.getPhase(tab.id), 'recall')
+    assert.strictEqual(phaseService.getMode(tab.id), 'recall')
 
     phaseService.transition(tab.id, 'complete')
-    assert.strictEqual(phaseService.getPhase(tab.id), 'analysis')
+    assert.strictEqual(phaseService.getMode(tab.id), 'analysis')
   })
 
   it('cannot skip directly from play to analysis', async () => {
@@ -356,16 +368,173 @@ describe('workbenchTabService + workbenchPhaseService integration', () => {
     const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
     phaseService.transition(tab.id, 'submit')
     phaseService.transition(tab.id, 'restart')
-    assert.strictEqual(phaseService.getPhase(tab.id), 'play')
+    assert.strictEqual(phaseService.getMode(tab.id), 'play')
   })
 
-  it('snapshot from analysis does not change tab phase', async () => {
+  it('snapshot from analysis does not change tab mode', async () => {
     const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
     phaseService.transition(tab.id, 'submit')
     phaseService.transition(tab.id, 'complete')
-    assert.strictEqual(phaseService.getPhase(tab.id), 'analysis')
+    assert.strictEqual(phaseService.getMode(tab.id), 'analysis')
 
     phaseService.transition(tab.id, 'snapshot')
-    assert.strictEqual(phaseService.getPhase(tab.id), 'analysis')
+    assert.strictEqual(phaseService.getMode(tab.id), 'analysis')
+  })
+})
+
+// --- Phase 1 contracts: openTask, legacy wrappers, playerConfig ---
+
+// openTask may not exist yet; skip gracefully.
+const hasOpenTask = () => {
+  try {
+    const {tabService} = createTestServices()
+    return typeof tabService.openTask === 'function'
+  } catch {
+    return false
+  }
+}
+
+;(hasOpenTask() ? describe : describe.skip)('workbenchTabService.openTask', () => {
+  let store, tabService
+
+  beforeEach(() => {
+    const ctx = createTestServices({
+      tasks: {
+        task_free: {
+          id: 'task_free',
+          rootPositionSgf: '(;SZ[19])',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        task_problem: {
+          id: 'task_problem',
+          rootPositionSgf: '(;SZ[19])',
+          prompt: 'Find the best move',
+          goal: 'Kill the group',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    })
+    store = ctx.store
+    tabService = ctx.tabService
+  })
+
+  it('infers problem mode for task with prompt', async () => {
+    const tab = await tabService.openTask({taskId: 'task_problem'})
+    assert.strictEqual(tab.mode, 'problem')
+  })
+
+  it('infers play mode for free task', async () => {
+    const tab = await tabService.openTask({taskId: 'task_free'})
+    assert.strictEqual(tab.mode, 'play')
+  })
+
+  it('explicit mode overrides inference', async () => {
+    const tab = await tabService.openTask({taskId: 'task_problem', mode: 'play'})
+    assert.strictEqual(tab.mode, 'play')
+  })
+
+  it('adds tab to store and sets it active', async () => {
+    const tab = await tabService.openTask({taskId: 'task_free'})
+    assert.strictEqual(store.getState().activeTabId, tab.id)
+    assert.ok(store.getState().tabs.find(t => t.id === tab.id))
+  })
+
+  it('creates tab with mode field (not phase)', async () => {
+    const tab = await tabService.openTask({taskId: 'task_free'})
+    assert.ok('mode' in tab)
+    assert.strictEqual(tab.phase, undefined)
+  })
+
+  it('links parent/child when parentTabId provided', async () => {
+    const parentTab = await tabService.openTask({taskId: 'task_free'})
+    const childTab = await tabService.openTask({taskId: 'task_problem', parentTabId: parentTab.id})
+    const updatedParent = store.getState().tabs.find(t => t.id === parentTab.id)
+    assert.ok(updatedParent.childTabIds.includes(childTab.id))
+    assert.strictEqual(childTab.parentTabId, parentTab.id)
+  })
+
+  it('throws when task does not exist', async () => {
+    await assert.rejects(
+      () => tabService.openTask({taskId: 'nonexistent'}),
+      /task not found/,
+    )
+  })
+
+  it('throws when parentTabId does not exist', async () => {
+    await assert.rejects(
+      () => tabService.openTask({taskId: 'task_free', parentTabId: 'missing_tab'}),
+      /parent tab not found/,
+    )
+  })
+})
+
+;(hasOpenTask() ? describe : describe.skip)('legacy wrappers via openTask', () => {
+  it('openProblemTab produces tab with mode (not phase)', async () => {
+    const {tabService} = createTestServices()
+    const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+    assert.ok('mode' in tab)
+  })
+
+  it('openGameTab produces tab with mode=play', async () => {
+    const {tabService} = createTestServices()
+    const tab = await tabService.openGameTab('game_1')
+    assert.strictEqual(tab.mode, 'play')
+  })
+})
+
+;(hasOpenTask() ? describe : describe.skip)('playerConfig on tab', () => {
+  it('stores playerConfig on tab via openTask', async () => {
+    const {tabService, store} = createTestServices({
+      tasks: {
+        task_1: {
+          id: 'task_1',
+          rootPositionSgf: '(;SZ[19])',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    })
+    const config = {black: 'human', white: 'ai', ai: {engineId: 'leela'}}
+    const tab = await tabService.openTask({taskId: 'task_1', playerConfig: config})
+    assert.deepStrictEqual(tab.playerConfig, config)
+  })
+
+  it('playerConfig round-trips through store', async () => {
+    const {tabService, store} = createTestServices({
+      tasks: {
+        task_1: {
+          id: 'task_1',
+          rootPositionSgf: '(;SZ[19])',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    })
+    const config = {black: 'ai', white: 'human', ai: {maxVisits: 100}}
+    const tab = await tabService.openTask({taskId: 'task_1', playerConfig: config})
+    const stored = store.getState().tabs.find(t => t.id === tab.id)
+    assert.deepStrictEqual(stored.playerConfig, config)
+  })
+
+  it('playerConfig can be updated after creation', async () => {
+    const {tabService, store} = createTestServices({
+      tasks: {
+        task_1: {
+          id: 'task_1',
+          rootPositionSgf: '(;SZ[19])',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    })
+    const tab = await tabService.openTask({taskId: 'task_1'})
+    assert.strictEqual(tab.playerConfig, undefined)
+
+    const newConfig = {black: 'human', white: 'ai', ai: {autoPlay: true}}
+    store.updateTab(tab.id, {playerConfig: newConfig})
+    const updated = store.getState().tabs.find(t => t.id === tab.id)
+    assert.deepStrictEqual(updated.playerConfig, newConfig)
   })
 })

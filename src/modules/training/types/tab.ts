@@ -3,6 +3,17 @@ export type WorkbenchMode = 'play' | 'problem' | 'recall' | 'analysis'
 /** @deprecated Use WorkbenchMode instead */
 export type WorkbenchPhase = 'play' | 'recall' | 'analysis'
 
+export type PlayerConfig = {
+  black: 'human' | 'ai'
+  white: 'human' | 'ai'
+  ai?: {
+    engineId?: string
+    timeLimitMs?: number
+    maxVisits?: number
+    autoPlay?: boolean
+  }
+}
+
 export type WorkbenchTab = {
   id: string
   taskId: string
@@ -17,6 +28,9 @@ export type WorkbenchTab = {
 
   parentTabId?: string
   childTabIds: string[]
+
+  playerConfig?: PlayerConfig
+  previousMode?: WorkbenchMode
 
   createdAt: string
   updatedAt: string

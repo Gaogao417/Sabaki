@@ -7,7 +7,7 @@ export type {
   TaskPassRule,
   MoveActor,
 } from './task'
-export type { WorkbenchMode, WorkbenchPhase, WorkbenchTab } from './tab'
+export type { WorkbenchMode, WorkbenchPhase, WorkbenchTab, PlayerConfig } from './tab'
 export type {
   TrainingAttempt,
   TrainingAttemptStatus,

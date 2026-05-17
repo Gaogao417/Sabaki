@@ -8,9 +8,11 @@ export { createAnalysisResultAdapter } from './adapter/analysisResultAdapter'
 export {
   createWorkbenchTabService,
   createWorkbenchPhaseService,
+  createWorkbenchFlowService,
   VALID_PHASE_TRANSITIONS,
   PHASE_TRANSITION_RESULT,
   InvalidPhaseTransitionError,
+  InvalidModeTransitionError,
 } from './workbench/index'
 
 export {

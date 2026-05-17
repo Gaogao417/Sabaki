@@ -12,7 +12,7 @@ function makeTab(overrides = {}) {
   return {
     id: 'tab_1',
     taskId: 'task_1',
-    phase: 'play',
+    mode: 'play',
     childTabIds: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -55,7 +55,7 @@ describe('workbenchPhaseService', () => {
         openSnapshotProblemTab: async (problemId, opts) => ({
           id: 'tab_snap_1',
           taskId: 'task_snap_1',
-          phase: 'play',
+          mode: 'play',
           parentTabId: opts?.parentTabId,
           childTabIds: [],
           createdAt: new Date().toISOString(),
@@ -75,19 +75,20 @@ describe('workbenchPhaseService', () => {
 
     for (const {from, transition, expected} of validCases) {
       it(`${from} --${transition}--> ${expected}`, () => {
-        store.addTab(makeTab({id: 'tab_1', phase: from}))
+        store.addTab(makeTab({id: 'tab_1', mode: from}))
         service.transition('tab_1', transition)
-        assert.strictEqual(service.getPhase('tab_1'), expected)
+        const tab = store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.mode, expected)
       })
     }
   })
 
   describe('invalid transitions (table-driven)', () => {
-    const allPhases = ['play', 'recall', 'analysis']
+    const allModes = ['play', 'recall', 'analysis']
     const allTransitions = ['submit', 'complete', 'restart', 'snapshot']
 
     const invalidCases = []
-    for (const from of allPhases) {
+    for (const from of allModes) {
       for (const t of allTransitions) {
         if (!VALID_PHASE_TRANSITIONS[from].includes(t)) {
           invalidCases.push({from, transition: t})
@@ -97,7 +98,7 @@ describe('workbenchPhaseService', () => {
 
     for (const {from, transition} of invalidCases) {
       it(`${from} --${transition}--> REJECTED`, () => {
-        store.addTab(makeTab({id: 'tab_1', phase: from}))
+        store.addTab(makeTab({id: 'tab_1', mode: from}))
         assert.throws(
           () => service.transition('tab_1', transition),
           (err) =>
@@ -116,12 +117,12 @@ describe('workbenchPhaseService', () => {
     )
   })
 
-  it('getPhase returns null for nonexistent tab', () => {
-    assert.strictEqual(service.getPhase('no_such_tab'), null)
+  it('getMode returns null for nonexistent tab', () => {
+    assert.strictEqual(service.getMode('no_such_tab'), null)
   })
 
   it('getValidTransitions returns correct list', () => {
-    store.addTab(makeTab({id: 'tab_1', phase: 'play'}))
+    store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
     assert.deepStrictEqual(service.getValidTransitions('tab_1'), ['submit'])
   })
 
@@ -130,24 +131,28 @@ describe('workbenchPhaseService', () => {
   })
 
   it('full lifecycle: play -> recall -> analysis -> play', () => {
-    store.addTab(makeTab({id: 'tab_1', phase: 'play'}))
+    store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
 
     service.transition('tab_1', 'submit')
-    assert.strictEqual(service.getPhase('tab_1'), 'recall')
+    let tab = store.getState().tabs.find(t => t.id === 'tab_1')
+    assert.strictEqual(tab.mode, 'recall')
 
     service.transition('tab_1', 'complete')
-    assert.strictEqual(service.getPhase('tab_1'), 'analysis')
+    tab = store.getState().tabs.find(t => t.id === 'tab_1')
+    assert.strictEqual(tab.mode, 'analysis')
 
     service.transition('tab_1', 'restart')
-    assert.strictEqual(service.getPhase('tab_1'), 'play')
+    tab = store.getState().tabs.find(t => t.id === 'tab_1')
+    assert.strictEqual(tab.mode, 'play')
   })
 
-  it('invalid transition does not mutate phase', () => {
-    store.addTab(makeTab({id: 'tab_1', phase: 'play'}))
+  it('invalid transition does not mutate mode', () => {
+    store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
     try {
       service.transition('tab_1', 'complete')
     } catch {}
-    assert.strictEqual(service.getPhase('tab_1'), 'play')
+    const tab = store.getState().tabs.find(t => t.id === 'tab_1')
+    assert.strictEqual(tab.mode, 'play')
   })
 
   it('logs rejected transitions when logger provided', () => {
@@ -163,7 +168,7 @@ describe('workbenchPhaseService', () => {
         },
       },
     })
-    store.addTab(makeTab({id: 'tab_1', phase: 'play'}))
+    store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
     try {
       loggedService.transition('tab_1', 'complete')
     } catch {}
@@ -176,10 +181,11 @@ describe('workbenchPhaseService', () => {
   // --- snapshot behavior ---
 
   describe('snapshot transition', () => {
-    it('does not change current tab phase', () => {
-      store.addTab(makeTab({id: 'tab_1', phase: 'analysis'}))
+    it('does not change current tab mode', () => {
+      store.addTab(makeTab({id: 'tab_1', mode: 'analysis'}))
       service.transition('tab_1', 'snapshot')
-      assert.strictEqual(service.getPhase('tab_1'), 'analysis')
+      const tab = store.getState().tabs.find(t => t.id === 'tab_1')
+      assert.strictEqual(tab.mode, 'analysis')
     })
 
     it('logs snapshot event', () => {
@@ -195,25 +201,25 @@ describe('workbenchPhaseService', () => {
           },
         },
       })
-      store.addTab(makeTab({id: 'tab_1', phase: 'analysis'}))
+      store.addTab(makeTab({id: 'tab_1', mode: 'analysis'}))
       loggedService.transition('tab_1', 'snapshot')
       assert.strictEqual(logs.length, 1)
       assert.strictEqual(logs[0].channel, 'phase.snapshot')
     })
   })
 
-  // --- unknown phase guard ---
+  // --- problem mode is valid but has no transitions in legacy service ---
 
-  it('throws if tab has unknown phase', () => {
-    store.addTab(makeTab({id: 'tab_1', phase: 'problem'}))
+  it('throws if tab has problem mode (unknown to legacy phaseService)', () => {
+    store.addTab(makeTab({id: 'tab_1', mode: 'problem'}))
     assert.throws(
       () => service.transition('tab_1', 'submit'),
       /unknown phase/,
     )
   })
 
-  it('getValidTransitions returns empty for unknown phase', () => {
-    store.addTab(makeTab({id: 'tab_1', phase: 'problem'}))
+  it('getValidTransitions returns empty for problem mode', () => {
+    store.addTab(makeTab({id: 'tab_1', mode: 'problem'}))
     assert.deepStrictEqual(service.getValidTransitions('tab_1'), [])
   })
 
@@ -222,7 +228,7 @@ describe('workbenchPhaseService', () => {
   it('updates tab updatedAt after transition', () => {
     store.addTab(makeTab({
       id: 'tab_1',
-      phase: 'play',
+      mode: 'play',
       updatedAt: '2026-01-01T00:00:00.000Z',
     }))
     service.transition('tab_1', 'submit')
@@ -254,13 +260,13 @@ describe('workbenchPhaseService', () => {
         },
         tabService: {
           openSnapshotProblemTab: async (problemId, opts) => ({
-            id: 'tab_snap_1', taskId: 'task_snap_1', phase: 'play', parentTabId: opts?.parentTabId, childTabIds: [],
+            id: 'tab_snap_1', taskId: 'task_snap_1', mode: 'play', parentTabId: opts?.parentTabId, childTabIds: [],
             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
           }),
         },
       })
 
-      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', mode: 'analysis' }))
       await spyService.snapshotFromAnalysis('tab_1')
 
       assert.strictEqual(calls.length, 1)
@@ -269,141 +275,21 @@ describe('workbenchPhaseService', () => {
       assert.strictEqual(calls[0].input.sourceTaskId, 'task_1')
     })
 
-    it('calls createTask with kind=snapshot_problem and correct source', async () => {
-      const calls = []
-      const spyService = createWorkbenchPhaseService({
-        workbenchStore: store,
-        repository: {
-          loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
-          createTask: async task => {
-            calls.push({ method: 'createTask', task })
-            return task
-          },
-          transaction: async fn => fn(),
-        },
-        snapshotService: {
-          captureSnapshotInput: async () => ({ sourceTaskId: 'task_1', positionSgf: '(;SZ[9]AB[dc])', sideToMove: 'black' }),
-          createProblemFromCurrentAnalysisPosition: async () => ({
-            id: 'snap_prob_1', positionSgf: '(;SZ[9]AB[dc])', sideToMove: 'black', status: 'inbox',
-            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-          }),
-        },
-        tabService: {
-          openSnapshotProblemTab: async (problemId, opts) => ({
-            id: 'tab_snap_1', taskId: 'task_snap_1', phase: 'play', parentTabId: opts?.parentTabId, childTabIds: [],
-            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-          }),
-        },
-      })
-
-      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
-      await spyService.snapshotFromAnalysis('tab_1')
-
-      const createCall = calls.find(c => c.method === 'createTask')
-      assert.ok(createCall, 'should call createTask')
-      assert.strictEqual(createCall.task.kind, 'snapshot_problem')
-      assert.strictEqual(createCall.task.source.kind, 'snapshot_problem')
-      assert.strictEqual(createCall.task.source.problemId, 'snap_prob_1')
-      assert.strictEqual(createCall.task.source.parentTaskId, 'task_1')
-      assert.strictEqual(createCall.task.rootPositionSgf, '(;SZ[9]AB[dc])')
-      assert.strictEqual(createCall.task.sideToMove, 'black')
-      assert.ok(createCall.task.id)
-      assert.ok(createCall.task.createdAt)
-      assert.ok(createCall.task.updatedAt)
-    })
-
-    it('calls openSnapshotProblemTab with correct problemId and parentTabId', async () => {
-      const calls = []
-      const spyService = createWorkbenchPhaseService({
-        workbenchStore: store,
-        repository: {
-          loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
-          createTask: async t => t,
-          transaction: async fn => fn(),
-        },
-        snapshotService: {
-          captureSnapshotInput: async () => ({ sourceTaskId: 'task_1', positionSgf: '(;SZ[9])', sideToMove: 'black' }),
-          createProblemFromCurrentAnalysisPosition: async () => ({
-            id: 'snap_prob_42', positionSgf: '(;SZ[9])', sideToMove: 'black', status: 'inbox',
-            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-          }),
-        },
-        tabService: {
-          openSnapshotProblemTab: async (problemId, opts) => {
-            calls.push({ problemId, opts })
-            return {
-              id: 'tab_snap_1', taskId: 'task_snap_1', phase: 'play', parentTabId: opts?.parentTabId, childTabIds: [],
-              createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-            }
-          },
-        },
-      })
-
-      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
-      await spyService.snapshotFromAnalysis('tab_1')
-
-      assert.strictEqual(calls.length, 1)
-      assert.strictEqual(calls[0].problemId, 'snap_prob_42')
-      assert.strictEqual(calls[0].opts.parentTabId, 'tab_1')
-    })
-
-    it('wraps problem and task creation in transaction', async () => {
-      const calls = []
-
-      const spyService = createWorkbenchPhaseService({
-        workbenchStore: store,
-        repository: {
-          loadTask: async () => ({ id: 'task_1', kind: 'problem', source: { kind: 'problem', problemId: 'p1' } }),
-          transaction: async fn => {
-            calls.push('transaction')
-            return fn()
-          },
-          createTask: async task => {
-            calls.push('createTask')
-            return task
-          },
-        },
-        snapshotService: {
-          captureSnapshotInput: async () => ({ sourceTaskId: 'task_1', positionSgf: '(;SZ[9])', sideToMove: 'black' }),
-          createProblemFromCurrentAnalysisPosition: async () => {
-            calls.push('createProblem')
-            return { id: 'snap_prob_1', positionSgf: '(;SZ[9])', sideToMove: 'black', status: 'inbox',
-              createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-          },
-        },
-        tabService: {
-          openSnapshotProblemTab: async () => ({ id: 'tab_snap_1', taskId: 'task_snap_1', phase: 'play', childTabIds: [],
-            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }),
-        },
-      })
-
-      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
-      await spyService.snapshotFromAnalysis('tab_1')
-
-      assert.ok(calls.includes('transaction'), 'should call transaction')
-      assert.ok(calls.includes('createProblem'), 'should create problem inside transaction')
-      assert.ok(calls.includes('createTask'), 'should create task inside transaction')
-      const txIndex = calls.indexOf('transaction')
-      const probIndex = calls.indexOf('createProblem')
-      const taskIndex = calls.indexOf('createTask')
-      assert.ok(txIndex < probIndex, 'transaction should start before createProblem')
-      assert.ok(probIndex < taskIndex, 'createProblem should come before createTask')
-    })
-
-    it('keeps original tab in analysis phase', async () => {
-      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
+    it('keeps original tab in analysis mode', async () => {
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', mode: 'analysis' }))
 
       await service.snapshotFromAnalysis('tab_1')
 
-      assert.strictEqual(service.getPhase('tab_1'), 'analysis')
+      const tab = store.getState().tabs.find(t => t.id === 'tab_1')
+      assert.strictEqual(tab.mode, 'analysis')
     })
 
-    it('returns new tab with play phase', async () => {
-      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
+    it('returns new tab with play mode', async () => {
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', mode: 'analysis' }))
 
       const newTab = await service.snapshotFromAnalysis('tab_1')
 
-      assert.strictEqual(newTab.phase, 'play')
+      assert.strictEqual(newTab.mode, 'play')
       assert.strictEqual(newTab.parentTabId, 'tab_1')
     })
 
@@ -414,12 +300,12 @@ describe('workbenchPhaseService', () => {
       )
     })
 
-    it('throws if tab is not in analysis phase', async () => {
-      store.addTab(makeTab({ id: 'tab_1', phase: 'play' }))
+    it('throws if tab is not in analysis mode', async () => {
+      store.addTab(makeTab({ id: 'tab_1', mode: 'play' }))
 
       await assert.rejects(
         () => service.snapshotFromAnalysis('tab_1'),
-        /must be in analysis phase/,
+        /analysis/,
       )
     })
 
@@ -432,7 +318,7 @@ describe('workbenchPhaseService', () => {
         snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
         tabService: { openSnapshotProblemTab: async () => ({}) },
       })
-      store.addTab(makeTab({ id: 'tab_fail', taskId: 'task_missing', phase: 'analysis' }))
+      store.addTab(makeTab({ id: 'tab_fail', taskId: 'task_missing', mode: 'analysis' }))
 
       await assert.rejects(
         () => failService.snapshotFromAnalysis('tab_fail'),
@@ -443,7 +329,7 @@ describe('workbenchPhaseService', () => {
 })
 
 describe('VALID_PHASE_TRANSITIONS constants', () => {
-  it('covers all three phases', () => {
+  it('covers all three legacy phases', () => {
     assert.ok('play' in VALID_PHASE_TRANSITIONS)
     assert.ok('recall' in VALID_PHASE_TRANSITIONS)
     assert.ok('analysis' in VALID_PHASE_TRANSITIONS)

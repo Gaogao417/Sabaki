@@ -1,0 +1,200 @@
+import type { WorkbenchMode, WorkbenchTab } from '../types/index'
+import type { WorkbenchStore } from '../store/workbenchStore'
+import type { TrainingRepository } from '../repository/trainingRepository'
+import type { SnapshotService } from '../analysis/snapshotService'
+import type { WorkbenchTabService } from './workbenchTabService'
+
+const MODE_TRANSITIONS: Record<WorkbenchMode, string[]> = {
+  play: ['submit', 'enterAnalysis'],
+  problem: ['submit', 'enterAnalysis'],
+  recall: ['completeRecall', 'enterAnalysis'],
+  analysis: ['returnFromAnalysis'],
+}
+
+const TRANSITION_RESULT: Record<string, WorkbenchMode | null> = {
+  'play:submit': 'recall',
+  'problem:submit': 'recall',
+  'recall:completeRecall': 'analysis',
+  'play:enterAnalysis': 'analysis',
+  'problem:enterAnalysis': 'analysis',
+  'recall:enterAnalysis': 'analysis',
+}
+
+export class InvalidModeTransitionError extends Error {
+  constructor(
+    public readonly tabId: string,
+    public readonly from: WorkbenchMode,
+    public readonly method: string,
+  ) {
+    super(`Invalid mode transition: ${from} --${method}--> ? (tabId=${tabId})`)
+    this.name = 'InvalidModeTransitionError'
+  }
+}
+
+export type WorkbenchFlowServiceDeps = {
+  workbenchStore: WorkbenchStore
+  repository: TrainingRepository
+  attemptService: {
+    createAttempt(input: { taskId: string; tabId: string; rootPositionSgf: string }): Promise<{ id: string }>
+    freezeAttempt(attemptId: string): Promise<void>
+  }
+  recallService: {
+    createRecallSession(input: Record<string, unknown>): Promise<{ id: string }>
+  }
+  snapshotService: SnapshotService
+  tabService: WorkbenchTabService
+  logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
+}
+
+export type WorkbenchFlowService = {
+  submit(tabId: string): Promise<void>
+  enterAnalysis(tabId: string): void
+  returnFromAnalysis(tabId: string, toMode: WorkbenchMode): void
+  completeRecall(tabId: string): void
+  restartAttempt(tabId: string): void
+  startAttempt(tabId: string): Promise<void>
+  snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab>
+}
+
+export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): WorkbenchFlowService {
+  const { workbenchStore, repository, attemptService, recallService, snapshotService, tabService, logger } = deps
+
+  function getTab(tabId: string): WorkbenchTab {
+    const tab = workbenchStore.getState().tabs.find(t => t.id === tabId)
+    if (!tab) throw new Error(`workbenchFlowService: tab not found (id=${tabId})`)
+    return tab
+  }
+
+  function assertTransition(tab: WorkbenchTab, method: string): void {
+    const allowed = MODE_TRANSITIONS[tab.mode]
+    if (!allowed || !allowed.includes(method)) {
+      logger?.info('flow.transition.rejected', 'Transition rejected', {
+        tabId: tab.id,
+        from: tab.mode,
+        method,
+      })
+      throw new InvalidModeTransitionError(tab.id, tab.mode, method)
+    }
+  }
+
+  function submit(tabId: string): Promise<void> {
+    const tab = getTab(tabId)
+    assertTransition(tab, 'submit')
+
+    workbenchStore.updateTab(tabId, { mode: 'recall' })
+
+    if (!tab.activeAttemptId) return Promise.resolve()
+
+    return (async () => {
+      await attemptService.freezeAttempt(tab.activeAttemptId)
+
+      const session = await recallService.createRecallSession({
+        taskId: tab.taskId,
+        tabId: tab.id,
+        attemptId: tab.activeAttemptId,
+      })
+
+      workbenchStore.updateTab(tabId, {
+        activeRecallSessionId: session.id,
+      })
+    })()
+  }
+
+  function enterAnalysis(tabId: string): void {
+    const tab = getTab(tabId)
+    assertTransition(tab, 'enterAnalysis')
+
+    workbenchStore.updateTab(tabId, {
+      mode: 'analysis',
+      previousMode: tab.mode,
+    })
+  }
+
+  function returnFromAnalysis(tabId: string, toMode: WorkbenchMode): void {
+    const tab = getTab(tabId)
+    assertTransition(tab, 'returnFromAnalysis')
+
+    workbenchStore.updateTab(tabId, {
+      mode: toMode,
+      previousMode: undefined,
+    })
+  }
+
+  function completeRecall(tabId: string): void {
+    const tab = getTab(tabId)
+    assertTransition(tab, 'completeRecall')
+
+    workbenchStore.updateTab(tabId, {
+      mode: 'analysis',
+    })
+  }
+
+  function restartAttempt(tabId: string): void {
+    const tab = getTab(tabId)
+    const targetMode = tab.previousMode ?? 'play'
+    workbenchStore.updateTab(tabId, {
+      mode: targetMode,
+    })
+  }
+
+  async function startAttempt(tabId: string): Promise<void> {
+    const tab = getTab(tabId)
+    const task = await repository.loadTask(tab.taskId)
+
+    const attempt = await attemptService.createAttempt({
+      taskId: tab.taskId,
+      tabId: tab.id,
+      rootPositionSgf: task?.rootPositionSgf ?? '',
+    })
+
+    workbenchStore.updateTab(tabId, {
+      activeAttemptId: attempt.id,
+    })
+  }
+
+  async function snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab> {
+    const tab = getTab(tabId)
+
+    const snapshotInput = await snapshotService.captureSnapshotInput({
+      tabId,
+      sourceTaskId: tab.taskId,
+    })
+
+    const now = new Date().toISOString()
+    const snapshotTask = {
+      id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      rootPositionSgf: snapshotInput.positionSgf ?? '',
+      sideToMove: snapshotInput.sideToMove,
+      origin: {
+        provider: 'snapshot' as const,
+        parentTaskId: tab.taskId,
+        parentAttemptId: tab.activeAttemptId,
+        parentMoveIndex: undefined,
+      },
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await repository.transaction(async () => {
+      await repository.createTask(snapshotTask)
+    })
+
+    const newTab = await tabService.openTask({
+      taskId: snapshotTask.id,
+      mode: 'problem',
+      parentTabId: tabId,
+    })
+
+    return newTab
+  }
+
+  return {
+    submit,
+    enterAnalysis,
+    returnFromAnalysis,
+    completeRecall,
+    restartAttempt,
+    startAttempt,
+    snapshotFromCurrentContext,
+  }
+}

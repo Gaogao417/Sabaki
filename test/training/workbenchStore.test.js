@@ -6,7 +6,7 @@ function makeTab(overrides = {}) {
   return {
     id: 'tab_1',
     taskId: 'task_1',
-    phase: 'play',
+    mode: 'play',
     childTabIds: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -51,16 +51,16 @@ describe('workbenchStore', () => {
   })
 
   it('updateTab patches a tab', () => {
-    store.addTab(makeTab({id: 'tab_1', phase: 'play'}))
-    store.updateTab('tab_1', {phase: 'recall'})
-    assert.strictEqual(store.getState().tabs[0].phase, 'recall')
+    store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
+    store.updateTab('tab_1', {mode: 'recall'})
+    assert.strictEqual(store.getState().tabs[0].mode, 'recall')
   })
 
   it('updateTab does not mutate other tabs', () => {
-    store.addTab(makeTab({id: 'tab_1', phase: 'play'}))
-    store.addTab(makeTab({id: 'tab_2', phase: 'play'}))
-    store.updateTab('tab_1', {phase: 'recall'})
-    assert.strictEqual(store.getState().tabs[1].phase, 'play')
+    store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
+    store.addTab(makeTab({id: 'tab_2', mode: 'play'}))
+    store.updateTab('tab_1', {mode: 'recall'})
+    assert.strictEqual(store.getState().tabs[1].mode, 'play')
   })
 
   it('removeTab removes a tab', () => {
@@ -107,7 +107,7 @@ describe('workbenchStore', () => {
     let callCount = 0
     store.addTab(makeTab({id: 'tab_1'}))
     store.subscribe(() => callCount++)
-    store.updateTab('tab_1', {phase: 'recall'})
+    store.updateTab('tab_1', {mode: 'recall'})
     assert.strictEqual(callCount, 1)
   })
 
@@ -163,7 +163,7 @@ describe('workbenchStore', () => {
 
   it('updateTab throws if tab does not exist', () => {
     assert.throws(() => {
-      store.updateTab('missing_tab', {phase: 'recall'})
+      store.updateTab('missing_tab', {mode: 'recall'})
     }, /tab not found/)
   })
 
@@ -192,12 +192,12 @@ describe('workbenchStore', () => {
   // --- Immutability / external mutation defense ---
 
   it('addTab clones input tab to prevent external mutation', () => {
-    const tab = makeTab({id: 'tab_1', phase: 'play'})
+    const tab = makeTab({id: 'tab_1', mode: 'play'})
     store.addTab(tab)
 
-    tab.phase = 'analysis'
+    tab.mode = 'analysis'
 
-    assert.strictEqual(store.getState().tabs[0].phase, 'play')
+    assert.strictEqual(store.getState().tabs[0].mode, 'play')
   })
 
   it('getState does not expose mutable internal tabs array', () => {
@@ -207,5 +207,28 @@ describe('workbenchStore', () => {
     state.tabs.push(makeTab({id: 'tab_2'}))
 
     assert.strictEqual(store.getState().tabs.length, 1)
+  })
+
+  // --- Phase 0 compatibility: legacy phase → mode normalization ---
+
+  it('normalizes legacy phase field to mode', () => {
+    const legacyTab = { id: 'tab_1', taskId: 'task_1', phase: 'recall', childTabIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    store.addTab(legacyTab)
+    assert.strictEqual(store.getState().tabs[0].mode, 'recall')
+    assert.strictEqual(store.getState().tabs[0].phase, undefined)
+  })
+
+  // Phase 0: phase takes priority over mode for legacy compat.
+  // Phase 1 implementation will flip this so mode takes priority.
+  it('currently prefers phase over mode when both present (Phase 0 compat)', () => {
+    const tab = { id: 'tab_1', taskId: 'task_1', mode: 'problem', phase: 'play', childTabIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    store.addTab(tab)
+    assert.strictEqual(store.getState().tabs[0].mode, 'play')
+  })
+
+  it('normalizes phase in updateTab patch', () => {
+    store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
+    store.updateTab('tab_1', {phase: 'recall'})
+    assert.strictEqual(store.getState().tabs[0].mode, 'recall')
   })
 })

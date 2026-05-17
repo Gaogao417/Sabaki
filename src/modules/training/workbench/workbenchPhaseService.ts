@@ -27,7 +27,8 @@ export const PHASE_TRANSITION_RESULT: Record<string, WorkbenchMode> = {
 
 export type WorkbenchPhaseService = {
   transition(tabId: string, transition: PhaseTransition): void
-  getPhase(tabId: string): WorkbenchMode | null
+  getPhase(tabId: string): WorkbenchPhase | null
+  getMode(tabId: string): WorkbenchMode | null
   getValidTransitions(tabId: string): PhaseTransition[]
   snapshotFromAnalysis(tabId: string): Promise<WorkbenchTab>
 }
@@ -172,10 +173,16 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
     return VALID_PHASE_TRANSITIONS[tab.mode]
   }
 
+  function getMode(tabId: string): WorkbenchMode | null {
+    const tab = getTab(tabId)
+    return tab?.mode ?? null
+  }
+
   return {
     transition,
     snapshotFromAnalysis,
     getPhase,
+    getMode,
     getValidTransitions,
   }
 }
