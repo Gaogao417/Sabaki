@@ -1,6 +1,8 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Bash(git status *)"
+    ],
     "additionalDirectories": [
       "/Users/gaochong/develop/Sabaki/.claude"
     ]
@@ -37,8 +39,8 @@
         "matcher": "",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "Review Claude's final response for this turn. If it completed or modified code but did NOT include a human acceptance checklist covering: 1) test classification, 2) architecture boundaries, 3) manual UI verification, then return {\"ok\":false,\"reason\":\"Before finishing, output a human acceptance checklist covering: test classification, architecture boundary compliance, and manual UI verification items.\"}. If it only answered a question or did exploratory work without code changes, return {\"ok\":true}. Otherwise return {\"ok\":true}."
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/auto-commit-contract-and-tests.sh\""
           },
           {
             "type": "command",
