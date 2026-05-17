@@ -5,7 +5,7 @@
 > v0.5 核心变化：`source` 不再作为核心建模维度；产品层明确为
 > `Play / Problem / Recall / Analysis` 四个模式；`origin`
 > 只作为来源追溯 metadata；主流程固定为
-> `Play/Problem → Submit → Recall`，`Analysis` 作为灵活的自由研究空间。
+> `Play/Problem → Submit/End → Recall`，`Analysis` 作为灵活的自由研究空间。
 
 ---
 
@@ -97,14 +97,14 @@ Analysis 自由复盘、AI 对比、分支探索
 v0.4 中的强流程是：
 
 ```text
-Play → Recall → Analysis
+Play → Submit/End → Recall → Analysis
 ```
 
 v0.5 改为：
 
 ```text
 主干流程：
-Play / Problem → Submit → Recall
+Play / Problem → Submit/End → Recall
 
 自由研究入口：
 Play / Problem 可以进入 Analysis 做临时研究
@@ -117,7 +117,7 @@ Review 打开的是普通 Task
 也就是说：
 
 ```text
-Recall 是提交后的默认下一步。
+Recall 是 Attempt 冻结后的默认下一步。Attempt 只在用户显式提交、认输或对局结束后冻结；Play Mode 不应在普通行棋过程中提前冻结。
 Analysis 是灵活的自由研究空间，不是强制第三关。
 ```
 
@@ -137,16 +137,18 @@ Sabaki 训练系统是一个以“实战/做题产出 → 主动回忆 → 问�
 1. **把训练材料标准化**  
    无论材料来自野狐、本地 SGF、101、Snapshot、BadMove 还是 Review，进入系统后都变成统一的 `TrainingTask`。
 
+   材料库不是左侧训练侧栏的一部分。它属于全局文件管理能力，入口放在应用菜单 `文件 > 材料库...`，以独立弹窗打开，用于导入、搜索、管理和打开 `TrainingTask`。
+
 2. **把用户产出保存成 Attempt**  
-   用户在 Play / Problem 中产出一条线。提交后，这条线被冻结为
+   用户在 Play / Problem 中产出一条线。显式提交、认输或对局结束后，这条线被冻结为
    `TrainingAttempt.userLine`。
 
 3. **先训练自我回忆，再看 AI**  
-   Submit 后默认进入 Recall，用户先复现自己的线，并在坏棋处先自己修正。
+   Attempt 冻结后默认进入 Recall。默认要求用户先复现自己的线，并在坏棋处先自己修正；用户也可以关闭“先复现原线”，直接进入坏棋纠错和 AI 对比流程。
 
 4. **把坏棋变成主动纠错 checkpoint**  
    major / severe
-   BadMove 在 Recall 中触发 Checkpoint：用户先摆修正图，再看 AI 候选图，再写 comment。
+   BadMove 在 Recall 中触发 Checkpoint；用户也可以手动标记 Checkpoint。Checkpoint 中用户先摆修正图，再看 AI 候选图，再写 comment。
 
 5. **把任意关键局面变成新训练材料**  
    Play / Problem / Recall / Analysis 中的关键局面都可以 Snapshot 成新的
@@ -195,6 +197,8 @@ Analysis 我现在要自由研究、比较、摆变化
 ## 2.2 TrainingTask 是标准化训练材料
 
 `TrainingTask` 表示一份可训练材料。
+
+材料库用于管理 `TrainingTask`，但不占用 Workbench 左侧栏。Workbench 左侧栏只展示当前模式任务和局部操作；材料库通过应用菜单 `文件 > 材料库...` 打开独立弹窗，用户从弹窗中选择材料后再打开到新的或当前 Workbench Tab。
 
 它可能来自：
 
@@ -263,7 +267,7 @@ Play 和 Problem 的共同点：
 记录 MoveEvaluation
 记录 BadMove
 Submit
-冻结 userLine
+显式提交 / 认输 / 对局结束后冻结 userLine
 进入 Recall
 ```
 
@@ -364,7 +368,7 @@ Review 打开的自由训练材料
 后台分析运行
 AI overlay 默认隐藏
 PlayTrainingMonitor 记录 MoveEvaluation / BadMove
-用户 Submit
+用户 Submit / 认输 / 对局结束
 Attempt 冻结
 进入 Recall
 ```
@@ -417,7 +421,7 @@ TrainingTask with prompt / goal / passRule / referenceLines
 如果对方配置为 AI，则用户落子后由 AI 在题目范围内自动应手
 如果对方配置为自己，则用户手动控制双方落子
 后台分析运行，但 AI 答案默认隐藏
-用户 Submit
+用户 Submit / 放弃 / 题目结束
 Attempt 冻结
 进入 Recall
 ```
@@ -463,12 +467,12 @@ Problem Mode 没有题目范围时，不能启用 AI 应手。
 
 ### 定位
 
-Recall Mode 用于回忆已冻结的 Attempt。它是有阻碍的主动研究阶段。
+Recall Mode 用于回忆已冻结的 Attempt。它是有阻碍的主动研究阶段，但不强制每个用户都先完整复现整条 `Attempt.userLine`；用户可以选择“复现模式”或“直接纠错模式”。
 
 ### 入口
 
 ```text
-Play / Problem Submit 后默认进入
+Play / Problem 的 Attempt 冻结后默认进入
 Review 打开的“回忆任务”也应先转成标准 Task + Attempt，再进入 Recall
 ```
 
@@ -477,9 +481,10 @@ Review 打开的“回忆任务”也应先转成标准 Task + Attempt，再进�
 ```text
 创建 RecallSession
 expectedMoves = attempt.userLine
-用户逐手回忆
-每手生成 RecallAttempt
-命中 major / severe BadMove 时触发 Checkpoint
+如果 recallSession.requireReproduceUserLine = true，用户逐手回忆，并每手生成 RecallAttempt
+如果 recallSession.requireReproduceUserLine = false，用户直接进入坏棋列表 / checkpoint 队列，不要求自己先浮现 attempt.userLine
+命中 major / severe BadMove 时自动触发 Checkpoint
+用户也可以在任意 Recall 局面手动标记 Checkpoint
 Checkpoint 中用户先摆 correction line
 用户请求后 reveal AI candidate lines
 用户写 comment
@@ -491,9 +496,11 @@ Recall 完成后可进入 Analysis，也可结束
 
 ```text
 显示回忆进度
+提供“先复现原线”开关，默认开启；关闭后进入直接纠错流程
 默认不显示 AI 候选
 checkpoint 时突出“先自己修正”
 AI candidates 需要用户主动 reveal
+Checkpoint 可由系统从 major / severe BadMove 自动触发，也可由用户通过“标记 checkpoint”手动创建
 comment 可以模板填空 / quick comment / skipped
 允许进入 Analysis 查证，但要清楚标识这是自由研究，不是 Recall 答案页
 ```
@@ -880,6 +887,7 @@ type RecallSession = {
 
   expectedMoves: string[]
   currentMoveIndex: number
+  requireReproduceUserLine: boolean
 
   completed: boolean
 
@@ -931,7 +939,10 @@ type ReferenceLine = {
 type RecallCheckpoint = {
   id: string
   recallSessionId: string
-  badMoveId: string
+  badMoveId?: string
+  source: 'auto_bad_move' | 'manual'
+  moveNumber: number
+  positionSgf?: string
 
   status: RecallCheckpointStatus
 
@@ -1021,7 +1032,7 @@ BadMove → TrainingTask(origin.provider='bad_move') → Problem Mode
 Review → taskId → openTask(taskId)
 ```
 
-## 5.2 Play / Problem → Submit → Recall
+## 5.2 Play / Problem → Submit/End → Recall
 
 ```text
 openTask
@@ -1033,7 +1044,7 @@ openTask
 → 如果下一手由 AI 控制，aiMoveService 在约束内生成并落子
 → AI 落子同样 append 到 Attempt，并标记 moveActors='ai'
 → analysis update 后补齐评价
-→ 用户 Submit
+→ 用户 Submit / 认输 / 对局结束
 → freeze Attempt
 → evaluationRules.evaluateAttempt
 → recallService.createRecallFromAttempt
@@ -1047,6 +1058,7 @@ Recall 用户逐手回忆
 → submitRecallMove
 → 如果 moveIndex 命中 major/severe BadMove
 → startCheckpoint
+或用户在当前 Recall 局面手动 Mark Checkpoint
 → 用户先摆 correction line
 → 用户请求 reveal AI candidates
 → 保存 comment
@@ -1264,6 +1276,8 @@ comment 模板
 交互原则：
 
 ```text
+先复现原线开关
+标记 checkpoint
 默认不显示 AI 答案
 先让用户摆修正图
 用户请求后再 reveal
@@ -1339,6 +1353,8 @@ TrainingTask
 - Task 支持 origin metadata；
 - WorkbenchTab 支持 `mode = play | problem | recall | analysis`；
 - 支持 openTask；
+- 材料库入口在 `文件 > 材料库...`，以独立弹窗打开；
+- Workbench 左侧栏不承载材料库列表；
 - 不再引入 snapshot_problem / punishment_problem / recall_segment task kind。
 
 ### B. Play / Problem
@@ -1352,14 +1368,15 @@ TrainingTask
 - 支持 pending MoveEvaluation；
 - 支持 BadMove 检测；
 - 支持 Submit；
-- Submit 后冻结 Attempt。
+- Submit / 认输 / 对局结束后冻结 Attempt。
 
 ### C. Recall
 
 - RecallSession 绑定 Attempt；
 - expectedMoves 来自 Attempt.userLine；
-- 支持逐手回忆；
-- major/severe BadMove 触发 Checkpoint；
+- 支持逐手回忆，也支持关闭“先复现原线”后直接纠错；
+- major/severe BadMove 自动触发 Checkpoint；
+- 支持用户手动标记 Checkpoint；
 - 支持 correction line；
 - 支持 reveal AI candidates；
 - 支持 comment；
@@ -1403,6 +1420,7 @@ TrainingTask
 ## 8.1 Task / Mode
 
 - 可以从外部材料创建 TrainingTask；
+- 材料库通过 `文件 > 材料库...` 独立弹窗打开，不在左侧栏常驻；
 - `origin` 能保存来源，但不参与流程判断；
 - 可以通过 openTask 打开任务；
 - 有题面任务默认进入 Problem Mode；
@@ -1421,13 +1439,14 @@ TrainingTask
 - 系统记录 Attempt；
 - 系统记录 MoveEvaluation；
 - 系统检测 BadMove；
-- Submit 后 Attempt 被冻结；
-- Submit 后默认进入 Recall。
+- Submit / 认输 / 对局结束后 Attempt 被冻结；
+- Attempt 冻结后默认进入 Recall。
 
 ## 8.3 Recall
 
-- Recall 可以复现 Attempt.userLine；
+- Recall 可以复现 Attempt.userLine，也可以关闭“先复现原线”后直接进入纠错；
 - 遇到 major/severe BadMove 时暂停；
+- 用户可以主动标记 checkpoint；
 - 用户可以先摆 correction line；
 - 系统随后展示 AI candidate lines；
 - 用户可以写 comment；
@@ -1485,7 +1504,7 @@ MVP 中 Problem-like 信息直接存在 TrainingTask：prompt / goal / passRule 
 应对：
 
 ```text
-Attempt 提交后冻结。
+Attempt 仅在 Submit / 认输 / 对局结束后冻结。
 Analysis 默认使用 scratch / exploration 上下文。
 只有 Snapshot 才创建新的 TrainingTask。
 ```
@@ -1564,9 +1583,9 @@ evaluationRules / review schedule rules 先作为纯函数模块。
 5. Play 支持黑白 human / ai；
 6. Problem 支持对方 self / ai；
 7. Problem AI 受 problemArea / analysis area 限制；
-8. Submit 冻结 Attempt；
-9. Submit 后创建 RecallSession；
-10. Submit 后进入 Recall。
+8. Submit / 认输 / 对局结束后冻结 Attempt；
+9. Attempt 冻结后创建 RecallSession；
+10. Attempt 冻结后进入 Recall。
 
 ## Phase 3：MoveEvaluation / BadMove
 

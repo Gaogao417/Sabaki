@@ -30,6 +30,7 @@ v0.5 将这些全部降级。
 ```text
 外部来源只在导入 / 创建 Task 时有意义。
 进入系统后，所有材料都是标准化 TrainingTask。
+材料库属于 File / 文件菜单打开的独立窗口，不属于 Workbench 左侧栏。
 ```
 
 核心架构不再围绕 source 展开，而围绕四个产品模式展开：
@@ -121,6 +122,15 @@ Submit Button
 → workbenchStore.updateTab({mode:'recall'})
 ```
 
+材料库是全局文件入口，不进入 Workbench 左侧栏：
+
+```text
+App Menu: File / 文件
+→ MaterialLibraryWindow
+→ taskImportService / trainingRepository
+→ open selected TrainingTask in WorkbenchTab
+```
+
 ## 1.3 依赖规则
 
 ```text
@@ -142,7 +152,7 @@ Existing Core 不反向依赖 training
 UI Components
   ├─ WorkbenchShell.js / Training views
   ├─ TabBar
-  ├─ MaterialBrowser
+  ├─ MaterialLibraryWindow
   ├─ PlayModePanel
   ├─ ProblemModePanel
   ├─ RecallModePanel
@@ -616,6 +626,13 @@ type WorkbenchFlowService = {
 
   submit(tabId: string): Promise<RecallSession>
 
+  resignAttempt(tabId: string): Promise<RecallSession>
+
+  endGame(input: {
+    tabId: string
+    reason: 'double_pass' | 'resign' | 'score_complete' | 'manual'
+  }): Promise<RecallSession>
+
   enterRecall(input: {tabId: string; attemptId: string}): Promise<RecallSession>
 
   completeRecall(input: {tabId: string; recallSessionId: string}): Promise<void>
@@ -644,7 +661,7 @@ type WorkbenchFlowService = {
 主干转换：
 
 ```text
-play/problem --submit--> recall
+play/problem --submit/resign/endGame--> recall
 recall --complete--> analysis 或 end
 any mode --snapshot--> new tab, mode = problem/play
 ```
@@ -661,7 +678,8 @@ analysis --restartAttempt--> play/problem
 约束：
 
 ```text
-Submit 必须 freeze Attempt。
+Submit / resign / endGame 必须 freeze Attempt。
+Play Mode 普通落子、AI 自动应手和分析更新不得 freeze Attempt。
 Analysis 不得隐式修改 Attempt.userLine。
 Snapshot 不得复用当前 Tab 作为新 Task。
 非法转换必须 throw / reject 并记录日志。
@@ -854,7 +872,15 @@ type EvaluationRules = {
 
 ```ts
 type RecallService = {
-  createRecallFromAttempt(attemptId: string): Promise<RecallSession>
+  createRecallFromAttempt(input: {
+    attemptId: string
+    requireReproduceUserLine?: boolean
+  }): Promise<RecallSession>
+
+  updateRecallMode(input: {
+    recallSessionId: string
+    requireReproduceUserLine: boolean
+  }): Promise<void>
 
   submitRecallMove(input: {
     recallSessionId: string
@@ -872,6 +898,8 @@ Recall 只回忆：
 ```text
 Attempt.userLine
 ```
+
+`requireReproduceUserLine` 控制是否要求用户逐手复现 `Attempt.userLine`。默认 `true`；关闭后 Recall 仍绑定同一个 Attempt，但 UI 直接进入坏棋 / checkpoint 纠错队列，不要求提交每一手 RecallAttempt。
 
 ## 5.9 recallCheckpointService
 
@@ -891,6 +919,13 @@ type RecallCheckpointService = {
   startCheckpoint(input: {
     recallSessionId: string
     badMoveId: string
+  }): Promise<RecallCheckpoint>
+
+  markManualCheckpoint(input: {
+    recallSessionId: string
+    moveNumber: number
+    positionSgf?: string
+    note?: string
   }): Promise<RecallCheckpoint>
 
   submitUserCorrectionLine(input: {
@@ -1094,7 +1129,7 @@ type TrainingRepository = {
 必须使用 transaction 的流程：
 
 ```text
-submit：freeze attempt + evaluate result + create recall session
+submit / resign / endGame：freeze attempt + evaluate result + create recall session
 completeRecall：complete recall + update attempt + update review schedule
 snapshot：create task + create review schedule? + open tab 前持久化
 createTaskFromBadMove：create task + update bad move + create review schedule
@@ -1248,6 +1283,7 @@ CREATE TABLE recall_sessions (
 
   expected_moves_json TEXT NOT NULL,
   current_move_index INTEGER NOT NULL,
+  require_reproduce_user_line INTEGER DEFAULT 1,
 
   completed INTEGER DEFAULT 0,
   created_at TEXT NOT NULL,
@@ -1263,6 +1299,7 @@ CREATE TABLE recall_sessions (
 ```text
 MVP 不再有 source_json / type / start_move / end_move。
 Recall 只回忆 attempt.userLine。
+require_reproduce_user_line 控制是否必须逐手复现 attempt.userLine；关闭后 RecallSession 仍可复用 expected_moves_json 做原线对照。
 ```
 
 ## 7.6 recall_attempts
@@ -1291,7 +1328,10 @@ CREATE TABLE recall_checkpoints (
   id TEXT PRIMARY KEY,
 
   recall_session_id TEXT NOT NULL,
-  bad_move_id TEXT NOT NULL,
+  bad_move_id TEXT,
+  source TEXT NOT NULL,
+  move_number INTEGER NOT NULL,
+  position_sgf TEXT,
 
   status TEXT NOT NULL,
   user_correction_line_json TEXT NOT NULL,
@@ -1304,6 +1344,14 @@ CREATE TABLE recall_checkpoints (
   FOREIGN KEY(recall_session_id) REFERENCES recall_sessions(id),
   FOREIGN KEY(bad_move_id) REFERENCES bad_moves(id)
 );
+```
+
+说明：
+
+```text
+source = auto_bad_move | manual。
+auto_bad_move 必须有 bad_move_id。
+manual checkpoint 可以没有 bad_move_id，用 move_number / position snapshot 定位用户主动标记的局面。
 ```
 
 ## 7.8 move_comments
@@ -1451,12 +1499,15 @@ sgfAdapter：当 SGF 构造/解析逻辑出现第二个消费者时再抽。
 ## 9.1 导入野狐 / 101 / 本地材料
 
 ```text
-MaterialBrowser click import
+File / 文件 → 材料库...
+→ MaterialLibraryWindow click import/open
 → taskImportService.importFoxGame / import101Problem / importLocalSgf
 → trainingRepository.createTask({origin_json})
 → workbenchTabService.openTask({taskId})
 → workbenchStore.addTab
 ```
+
+MaterialLibraryWindow 是独立窗口 / dialog，不挂在 Workbench 左侧栏；Workbench 左侧栏只读当前 tab 的任务状态。
 
 ## 9.2 打开 Task
 
@@ -1512,12 +1563,12 @@ analysisService emits update
      trainingRuntimeStore.setVisibleBadMoveIds
 ```
 
-## 9.4 Submit
+## 9.4 Submit / Resign / EndGame
 
 ```text
-SubmitButton.onClick
-→ TrainingWorkbenchContainer.handleSubmit
-→ workbenchFlowService.submit(tabId)
+SubmitButton.onClick / ResignButton.onClick / game-end detector
+→ TrainingWorkbenchContainer.handleSubmit / handleResign / handleGameEnd
+→ workbenchFlowService.submit(tabId) / resignAttempt(tabId) / endGame(...)
 → trainingRepository.transaction:
    → attemptService.freezeAttempt(activeAttemptId)
    → trainingRepository.listMoveEvaluationsByAttempt
@@ -1528,6 +1579,8 @@ SubmitButton.onClick
 → workbenchStore.updateTab({mode:'recall', activeRecallSessionId})
 → trainingRuntimeStore.setActiveRecallSession(recallSessionId)
 ```
+
+普通落子、AI 自动应手和 `analysisService` 更新只 append / evaluate，不进入本流程；freeze Attempt 只能由 Submit、认输或对局结束触发。
 
 ## 9.5 Recall Checkpoint
 
@@ -1541,6 +1594,25 @@ User submits recall move
      recallCheckpointService.startCheckpoint
      trainingRuntimeStore.setActiveCheckpoint
      UI enters checkpoint substate
+```
+
+直接纠错模式：
+
+```text
+RecallModePanel toggles requireReproduceUserLine = false
+→ recallService.updateRecallMode
+→ UI loads bad moves / checkpoints for attempt
+→ user opens checkpoint without submitting every RecallAttempt
+```
+
+用户手动标记 checkpoint：
+
+```text
+MarkCheckpointButton.onClick
+→ recallCheckpointService.markManualCheckpoint({recallSessionId, moveNumber, positionSgf?})
+→ trainingRepository.createRecallCheckpoint(source='manual', badMoveId=null)
+→ trainingRuntimeStore.setActiveCheckpoint
+→ UI enters checkpoint substate
 ```
 
 用户提交 correction：
@@ -1777,7 +1849,7 @@ src/modules/training/
 
 src/components/training/
   TrainingWorkbenchContainer.tsx
-  MaterialBrowser.tsx
+  MaterialLibraryWindow.tsx
   ReviewInbox.tsx
   TabBar.tsx
   panels/
@@ -1832,7 +1904,7 @@ transaction rollback
 
 ```text
 openTask 默认 mode 推导
-submit 创建 RecallSession
+submit / resign / endGame 创建 RecallSession
 Recall checkpoint 流程
 Snapshot 创建新 Task 但不打开旧 Tab
 Review openDueItem 只通过 taskId 打开
@@ -1844,8 +1916,8 @@ Problem AI 应手必须限制在 problemArea 内
 ## 13.4 Integration Tests
 
 ```text
-Problem-like task → Problem Mode → Submit → Recall
-Free task → Play Mode → Submit → Recall
+Problem-like task → Problem Mode → Submit/End → Recall
+Free task → Play Mode → Submit/End → Recall
 Play Mode black/white human|ai → AI auto move
 Problem Mode opponent=ai → constrained AI reply
 Recall major BadMove → Checkpoint → Comment → Resume
