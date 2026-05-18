@@ -1,6 +1,5 @@
 import type { TrainingTask, TaskOrigin, TaskPassRule, ProblemArea } from '../types/task'
 import type { ReferenceLine } from '../types/recall'
-import type { BadMove } from '../types/badMove'
 import type { TrainingRepository } from '../repository/trainingRepository'
 
 // --- Input types ---
@@ -240,6 +239,7 @@ export function createTaskImportService(
     const origin: TaskOrigin = {
       provider: 'snapshot',
       parentTaskId: input.parentTaskId,
+      raw: input.snapshotReason ? { snapshotReason: input.snapshotReason } : undefined,
     }
     if (input.parentAttemptId) {
       origin.parentAttemptId = input.parentAttemptId
