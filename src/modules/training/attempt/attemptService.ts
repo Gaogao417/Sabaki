@@ -14,7 +14,7 @@ export type AttemptService = {
     tabId?: string
     rootPositionSgf: string
   }): Promise<TrainingAttempt>
-  appendMove(attemptId: string, move: string): Promise<void>
+  appendMove(attemptId: string, move: string, actor?: 'human' | 'ai'): Promise<void>
   freezeAttempt(attemptId: string): Promise<TrainingAttempt>
   saveMoveEvaluation(evaluation: MoveEvaluation): Promise<void>
   saveBadMove(badMove: BadMove): Promise<void>
@@ -68,7 +68,7 @@ export function createAttemptService(deps: AttemptServiceDeps): AttemptService {
     return attempt
   }
 
-  async function appendMove(attemptId: string, move: string): Promise<void> {
+  async function appendMove(attemptId: string, move: string, actor: 'human' | 'ai' = 'human'): Promise<void> {
     const attempt = await repository.loadAttempt(attemptId)
     if (!attempt) {
       throw new Error(`attemptService.appendMove: attempt not found (id=${attemptId})`)
@@ -80,7 +80,10 @@ export function createAttemptService(deps: AttemptServiceDeps): AttemptService {
     }
 
     const updatedLine = [...attempt.userLine, move]
-    await repository.updateAttempt(attemptId, { userLine: updatedLine })
+    const moveIndex = updatedLine.length - 1
+    const existingActors = attempt.moveActors ?? []
+    const updatedActors = [...existingActors, { moveIndex, actor }]
+    await repository.updateAttempt(attemptId, { userLine: updatedLine, moveActors: updatedActors })
   }
 
   async function freezeAttempt(attemptId: string): Promise<TrainingAttempt> {

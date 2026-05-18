@@ -241,6 +241,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.hintLevelUsed !== undefined) mapped.hintLevelUsed = patch.hintLevelUsed
     if (patch.recallCompleted !== undefined) mapped.recallCompleted = patch.recallCompleted
     if (patch.analysisOpened !== undefined) mapped.analysisOpened = patch.analysisOpened
+    if (patch.moveActors !== undefined) mapped.moveActors = patch.moveActors
     await db.updateTrainingAttempt(attemptId, mapped)
   }
 
