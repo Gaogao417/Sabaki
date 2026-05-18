@@ -1,10 +1,11 @@
 import {h} from 'preact'
+import ModeActions from './ModeActions.js'
 
 const MODES = [
-  {key: 'play', label: 'Play', color: '#169b55'},
-  {key: 'problem', label: 'Problem', color: '#2563ff'},
-  {key: 'recall', label: 'Recall', color: '#7c3fed'},
-  {key: 'analysis', label: 'Analysis', color: '#e67e22'},
+  {key: 'play', label: 'Play', color: '#2563ff'},
+  {key: 'problem', label: 'Problem', color: '#d97706'},
+  {key: 'recall', label: 'Recall', color: '#169b55'},
+  {key: 'analysis', label: 'Analysis', color: '#7c3aed'},
 ]
 
 export default function ModeBar({
@@ -45,19 +46,10 @@ export default function ModeBar({
     h(
       'div',
       {class: 'wb-mode-bar__actions'},
-      h(
-        'button',
-        {
-          class: 'wb-mode-bar__snapshot-btn',
-          onClick: onSnapshot,
-        },
-        'Snapshot',
-      ),
-      h(
-        'button',
-        {class: 'wb-mode-bar__more-btn'},
-        '更多',
-      ),
+      h(ModeActions, {
+        mode: activeMode,
+        onSnapshot,
+      }),
     ),
   )
 }

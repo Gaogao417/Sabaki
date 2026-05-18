@@ -1,10 +1,10 @@
 import {h} from 'preact'
 
 const MODE_COLORS = {
-  play: '#169b55',
-  problem: '#2563ff',
-  recall: '#7c3fed',
-  analysis: '#e67e22',
+  play: '#2563ff',
+  problem: '#d97706',
+  recall: '#169b55',
+  analysis: '#7c3aed',
 }
 
 export default function GlobalHeader({

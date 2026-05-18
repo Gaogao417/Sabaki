@@ -10,13 +10,13 @@
 
 :root {
   /* Mode colours */
-  --ui-play: #16a34a;
+  --ui-play: #2563ff;
   --ui-play-soft: #f0fdf4;
-  --ui-problem: #2563eb;
+  --ui-problem: #d97706;
   --ui-problem-soft: #eff6ff;
-  --ui-recall-mode: #7c3aed;
+  --ui-recall-mode: #169b55;
   --ui-recall-mode-soft: #f5f3ff;
-  --ui-analysis: #f59e0b;
+  --ui-analysis: #7c3aed;
   --ui-analysis-soft: #fffbeb;
 
   /* Semantic palette */
@@ -1740,4 +1740,345 @@
   .wb-right-panel {
     width: 300px;
   }
+}
+
+/* ========================================================================
+   16. QuietStatusChips
+   ======================================================================== */
+
+.wb-quiet-status-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ========================================================================
+   17. EmptyStatePanel
+   ======================================================================== */
+
+.wb-empty-state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.wb-empty-state-panel__icon {
+  font-size: 32px;
+  color: var(--ui-text-tertiary);
+}
+
+.wb-empty-state-panel__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.wb-empty-state-panel__description {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+  max-width: 280px;
+}
+
+/* ========================================================================
+   18. ProgressRing
+   ======================================================================== */
+
+.wb-progress-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.wb-progress-ring__label {
+  position: absolute;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-text);
+  z-index: 1;
+}
+
+/* ========================================================================
+   19. ModeToggle
+   ======================================================================== */
+
+.wb-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.wb-mode-toggle__track {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--ui-border-strong);
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.wb-mode-toggle--checked .wb-mode-toggle__track {
+  background: var(--ui-blue);
+}
+
+.wb-mode-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.wb-mode-toggle--checked .wb-mode-toggle__thumb {
+  transform: translateX(16px);
+}
+
+/* ========================================================================
+   20. OpponentControl
+   ======================================================================== */
+
+.wb-opponent-control {
+  display: inline-flex;
+  gap: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ui-border);
+  overflow: hidden;
+}
+
+.wb-opponent-control--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.wb-opponent-control__option {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: var(--ui-card);
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wb-opponent-control__option--selected {
+  background: var(--ui-blue);
+  color: #fff;
+}
+
+.wb-opponent-control__option:hover:not(.wb-opponent-control__option--selected) {
+  background: var(--ui-blue-soft);
+}
+
+/* ========================================================================
+   21. ReferenceLineSummary
+   ======================================================================== */
+
+.wb-reference-line-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wb-reference-line-summary__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.wb-reference-line-summary__label {
+  color: var(--ui-text);
+  font-weight: 500;
+}
+
+.wb-reference-line-summary__length {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.wb-reference-line-summary__total {
+  font-size: 12px;
+  color: var(--ui-text-tertiary);
+  font-weight: 600;
+  padding-top: 4px;
+  border-top: 1px solid var(--ui-border);
+}
+
+/* ========================================================================
+   22. RightDrawer
+   ======================================================================== */
+
+.wb-right-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--wb-right-w);
+  background: var(--ui-card);
+  border-left: 1px solid var(--ui-border);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  transition: transform 0.25s ease;
+}
+
+.wb-right-drawer--hidden {
+  transform: translateX(100%);
+  pointer-events: none;
+}
+
+.wb-right-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.wb-right-drawer__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.wb-right-drawer__close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--ui-text-tertiary);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.wb-right-drawer__close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.wb-right-drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ========================================================================
+   23. AnnotationToolbar
+   ======================================================================== */
+
+.wb-annotation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wb-annotation-toolbar__btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wb-annotation-toolbar__btn:hover {
+  background: var(--ui-card-hover);
+  color: var(--ui-text);
+}
+
+.wb-annotation-toolbar__btn--active {
+  background: var(--ui-blue-soft);
+  color: var(--ui-blue);
+  border-color: var(--ui-blue);
+}
+
+/* ========================================================================
+   24. MaterialLibraryDialog
+   ======================================================================== */
+
+.wb-material-library-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-card);
+  max-width: 600px;
+  margin: 60px auto;
+  border-radius: var(--wb-radius);
+  border: 1px solid var(--ui-border);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.25);
+}
+
+.wb-material-library-dialog--hidden {
+  display: none;
+}
+
+.wb-material-library-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.wb-material-library-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.wb-material-library-dialog__close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--ui-text-tertiary);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.wb-material-library-dialog__close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.wb-material-library-dialog__body {
+  padding: 20px;
+}
+
+/* ========================================================================
+   25. ModeActions
+   ======================================================================== */
+
+.wb-mode-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-mode-actions__item {
+  display: inline-flex;
 }

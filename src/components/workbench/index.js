@@ -6,6 +6,7 @@ import MainBoardStage from './shell/MainBoardStage.js'
 import RightModePanel from './shell/RightModePanel.js'
 import BottomActionBar from './shell/BottomActionBar.js'
 import TrainingTabBar from './shell/TrainingTabBar.js'
+import ModeActions from './shell/ModeActions.js'
 
 import PlayModePanel from './panels/PlayModePanel.js'
 import ProblemModePanel from './panels/ProblemModePanel.js'
@@ -29,6 +30,15 @@ import CommentBox from './shared/CommentBox.js'
 import SnapshotDialog from './shared/SnapshotDialog.js'
 import ReviewInboxList from './shared/ReviewInboxList.js'
 import TaskListItem from './shared/TaskListItem.js'
+import QuietStatusChips from './shared/QuietStatusChips.js'
+import EmptyStatePanel from './shared/EmptyStatePanel.js'
+import ProgressRing from './shared/ProgressRing.js'
+import ModeToggle from './shared/ModeToggle.js'
+import OpponentControl from './shared/OpponentControl.js'
+import ReferenceLineSummary from './shared/ReferenceLineSummary.js'
+import RightDrawer from './shared/RightDrawer.js'
+import AnnotationToolbar from './shared/AnnotationToolbar.js'
+import MaterialLibraryDialog from './shared/MaterialLibraryDialog.js'
 
 export {
   GlobalHeader,
@@ -37,6 +47,7 @@ export {
   RightModePanel,
   BottomActionBar,
   TrainingTabBar,
+  ModeActions,
   PlayModePanel,
   ProblemModePanel,
   RecallModePanel,
@@ -58,6 +69,15 @@ export {
   SnapshotDialog,
   ReviewInboxList,
   TaskListItem,
+  QuietStatusChips,
+  EmptyStatePanel,
+  ProgressRing,
+  ModeToggle,
+  OpponentControl,
+  ReferenceLineSummary,
+  RightDrawer,
+  AnnotationToolbar,
+  MaterialLibraryDialog,
 }
 
 export function TrainingWorkbenchShell({
