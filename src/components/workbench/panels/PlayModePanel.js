@@ -1,4 +1,5 @@
 import {h} from 'preact'
+import EmptyStatePanel from '../shared/EmptyStatePanel.js'
 
 /**
  * PlayModePanel renders the left panel for Play mode.
@@ -10,6 +11,7 @@ import {h} from 'preact'
  * @param {{black: number, white: number}} props.captures - Capture counts
  * @param {Function} props.onMarkDoubtful - Called when user marks position as doubtful
  * @param {Function} props.onEnterAnalysis - Called when user wants to enter analysis
+ * @param {'empty'|'active'|'success'|'error'|'loading'|'disabled'} [props.state='active'] - Panel state overlay
  */
 export default function PlayModePanel({
   taskTitle = '',
@@ -18,31 +20,75 @@ export default function PlayModePanel({
   captures = {black: 0, white: 0},
   onMarkDoubtful = () => {},
   onEnterAnalysis = () => {},
+  state = 'active',
 }) {
-  return h('div', {'data-testid': 'play-mode-panel', class: 'wb-play-mode-panel'},
-    h('div', {class: 'wb-play-mode-panel__info-card'},
-      h('h3', {class: 'wb-play-mode-panel__title'}, taskTitle),
-      h('p', {class: 'wb-play-mode-panel__description'}, taskDescription),
-      h('div', {class: 'wb-play-mode-panel__stats'},
-        h('span', {class: 'wb-play-mode-panel__move-count'}, moveCount),
-        h('span', {class: 'wb-play-mode-panel__captures'},
-          captures.black,
-          ' / ',
-          captures.white,
+  function renderContent() {
+    if (state === 'loading') {
+      return h('div', {class: 'wb-state-loading'},
+        h('div', {'data-testid': 'loading-indicator', class: 'wb-state-loading__spinner'}),
+      )
+    }
+
+    if (state === 'disabled') {
+      return h('div', {class: 'wb-state-disabled'},
+        h('div', {'data-testid': 'disabled-overlay', class: 'wb-state-disabled__overlay'}, 'Disabled'),
+      )
+    }
+
+    if (state === 'error') {
+      return h('div', {class: 'wb-state-error'},
+        h('div', {class: 'wb-state-error__icon'}, '!'),
+        h('div', {class: 'wb-state-error__message'}, 'Something went wrong'),
+        h('div', {class: 'wb-state-error__retry'},
+          h('button', {'data-testid': 'error-overlay', class: 'wb-btn wb-btn-secondary wb-btn--sm'}, 'Retry'),
+        ),
+      )
+    }
+
+    if (state === 'success') {
+      return h('div', {class: 'wb-state-success'},
+        h('div', {'data-testid': 'success-indicator', class: 'wb-state-success__icon'}, '✓'),
+        h('div', {class: 'wb-state-success__message'}, 'Complete'),
+      )
+    }
+
+    if (state === 'empty') {
+      return h(EmptyStatePanel, {
+        icon: '○',
+        title: 'No Game Loaded',
+        description: 'Start a new game to begin playing.',
+      })
+    }
+
+    return [
+      h('div', {class: 'wb-play-mode-panel__info-card'},
+        h('h3', {class: 'wb-play-mode-panel__title'}, taskTitle),
+        h('p', {class: 'wb-play-mode-panel__description'}, taskDescription),
+        h('div', {class: 'wb-play-mode-panel__stats'},
+          h('span', {class: 'wb-play-mode-panel__move-count'}, moveCount),
+          h('span', {class: 'wb-play-mode-panel__captures'},
+            captures.black,
+            ' / ',
+            captures.white,
+          ),
         ),
       ),
-    ),
-    h('div', {class: 'wb-play-mode-panel__actions'},
-      h('button', {
-        'data-testid': 'mark-doubtful-btn',
-        class: 'wb-play-mode-panel__btn wb-play-mode-panel__btn--doubtful',
-        onClick: onMarkDoubtful,
-      }, 'Mark Doubtful'),
-      h('button', {
-        'data-testid': 'enter-analysis-btn',
-        class: 'wb-play-mode-panel__btn wb-play-mode-panel__btn--analysis',
-        onClick: onEnterAnalysis,
-      }, 'Enter Analysis'),
-    ),
+      h('div', {class: 'wb-play-mode-panel__actions'},
+        h('button', {
+          'data-testid': 'mark-doubtful-btn',
+          class: 'wb-play-mode-panel__btn wb-play-mode-panel__btn--doubtful',
+          onClick: onMarkDoubtful,
+        }, 'Mark Doubtful'),
+        h('button', {
+          'data-testid': 'enter-analysis-btn',
+          class: 'wb-play-mode-panel__btn wb-play-mode-panel__btn--analysis',
+          onClick: onEnterAnalysis,
+        }, 'Enter Analysis'),
+      ),
+    ]
+  }
+
+  return h('div', {'data-testid': 'play-mode-panel', class: 'wb-play-mode-panel'},
+    renderContent(),
   )
 }
