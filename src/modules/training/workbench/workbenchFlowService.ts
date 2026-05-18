@@ -196,6 +196,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     const snapshotInput = await snapshotService.captureSnapshotInput({
       tabId,
       sourceTaskId: tab.taskId,
+      sourceAttemptId: tab.activeAttemptId,
     })
 
     const now = new Date().toISOString()

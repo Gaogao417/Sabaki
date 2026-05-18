@@ -28,6 +28,7 @@ function createFakeRepo(overrides = {}) {
           id: 'task_1',
           kind: 'problem',
           source: { kind: 'problem', problemId: 'prob_1' },
+          origin: { provider: '101', externalId: 'prob_1' },
           rootPositionSgf: '(;SZ[9]AB[dc]PL[B])',
           sideToMove: 'black',
           createdAt: '2026-01-01T00:00:00.000Z',
@@ -39,6 +40,7 @@ function createFakeRepo(overrides = {}) {
           id: 'task_game',
           kind: 'game',
           source: { kind: 'game', gameId: 'game_1' },
+          origin: { provider: 'fox', externalId: 'game_1' },
           rootPositionSgf: '(;SZ[9])',
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
@@ -49,6 +51,7 @@ function createFakeRepo(overrides = {}) {
           id: 'task_snap',
           kind: 'snapshot_problem',
           source: { kind: 'snapshot_problem', problemId: 'snap_orig' },
+          origin: { provider: 'snapshot', externalId: 'snap_orig' },
           rootPositionSgf: '(;SZ[9])',
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
@@ -123,7 +126,7 @@ describe('snapshotService', () => {
       assert.strictEqual(input.sourceProblemId, undefined)
     })
 
-    it('resolves sourceProblemId from snapshot_problem task', async () => {
+    it('resolves no source fields from snapshot_provider task (origin.provider=snapshot)', async () => {
       store.addTab(makeTab({ id: 'tab_3', taskId: 'task_snap', phase: 'analysis' }))
 
       const input = await service.captureSnapshotInput({
@@ -131,7 +134,8 @@ describe('snapshotService', () => {
         sourceTaskId: 'task_snap',
       })
 
-      assert.strictEqual(input.sourceProblemId, 'snap_orig')
+      // Phase 6: only 'fox' and '101' map to sourceGameId/sourceProblemId
+      assert.strictEqual(input.sourceProblemId, undefined)
       assert.strictEqual(input.sourceGameId, undefined)
     })
 
