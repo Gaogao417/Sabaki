@@ -14,246 +14,130 @@
 
 ## 1. 当前已有组件
 
+### 已实现（Phase 1-3）
+
 | 组件 | 路径 | 状态 |
 |------|------|------|
-| GlobalHeader | `workbench/shell/GlobalHeader.js` | 可用，缺交互 |
-| ModeBar | `workbench/shell/ModeBar.js` | 可用，有 onModeChange |
-| MainBoardStage | `workbench/shell/MainBoardStage.js` | 占位符 |
-| RightModePanel | `workbench/shell/RightModePanel.js` | 外壳，无内容 |
-| BottomActionBar | `workbench/shell/BottomActionBar.js` | 可用，未按模式区分 |
-| TrainingTabBar | `workbench/shell/TrainingTabBar.js` | 可用 |
-| PlayModePanel | `workbench/panels/PlayModePanel.js` | 可用 |
-| ProblemModePanel | `workbench/panels/ProblemModePanel.js` | 可用 |
-| RecallModePanel | `workbench/panels/RecallModePanel.js` | 骨架，缺关键交互 |
-| RecallCheckpointPanel | `workbench/panels/RecallCheckpointPanel.js` | 可用，缺操作按钮 |
-| AnalysisModePanel | `workbench/panels/AnalysisModePanel.js` | 可用，缺右栏面板 |
-| 16 个 shared 组件 | `workbench/shared/*.js` | 可用 |
-| workbench.css | `style/workbench.css` | 可用，颜色需修正 |
+| GlobalHeader | `workbench/shell/GlobalHeader.js` | 可用，QuietStatusChips 已提取为独立组件 |
+| ModeBar | `workbench/shell/ModeBar.js` | 可用，已集成 ModeActions |
+| ModeActions | `workbench/shell/ModeActions.js` | 可用，四模式按钮组 |
+| QuietStatusChips | `workbench/shared/QuietStatusChips.js` | 可用 |
+| EmptyStatePanel | `workbench/shared/EmptyStatePanel.js` | 可用 |
+| ProgressRing | `workbench/shared/ProgressRing.js` | 可用 |
+| ModeToggle | `workbench/shared/ModeToggle.js` | 可用 |
+| OpponentControl | `workbench/shared/OpponentControl.js` | 可用 |
+| ReferenceLineSummary | `workbench/shared/ReferenceLineSummary.js` | 可用 |
+| RightDrawer | `workbench/shared/RightDrawer.js` | 可用 |
+| AnnotationToolbar | `workbench/shared/AnnotationToolbar.js` | 可用 |
+| MaterialLibraryDialog | `workbench/shared/MaterialLibraryDialog.js` | 壳可用 |
+| workbench.css | `style/workbench.css` | 颜色已修正，752 行 |
+
+### 已移除（revert a68a8345）— 需重建
+
+以下组件在 Phase 1-3 实现后被清理，因为原始版本是占位实现或与新模式不符。它们将在 Phase 4-6 中按新模式重新创建。
+
+| 组件 | 原路径 | 说明 |
+|------|--------|------|
+| MainBoardStage | `workbench/shell/MainBoardStage.js` | 需重建为占位符 |
+| BottomActionBar | `workbench/shell/BottomActionBar.js` | 需重建为模式化底部栏 |
+| RightModePanel | `workbench/shell/RightModePanel.js` | 需重建为右栏容器 |
+| TrainingTabBar | `workbench/shell/TrainingTabBar.js` | 需重建 |
+| PlayModePanel | `workbench/panels/PlayModePanel.js` | 需重建 |
+| ProblemModePanel | `workbench/panels/ProblemModePanel.js` | 需重建 |
+| RecallModePanel | `workbench/panels/RecallModePanel.js` | 需重建 |
+| RecallCheckpointPanel | `workbench/panels/RecallCheckpointPanel.js` | 需重建 |
+| AnalysisModePanel | `workbench/panels/AnalysisModePanel.js` | 需重建 |
 
 ---
 
 ## 2. 缺失项总表
 
-### 2.1 P0 — 阻塞性缺失
+### 2.1 ~~P0 — 阻塞性缺失~~ ✅ 已完成（Phase 1）
 
-| # | 缺失项 | 影响范围 | 说明 |
-|---|--------|---------|------|
-| 1 | 四模式颜色对调 | 全局 | CSS 变量 `--ui-play`/`--ui-problem`/`--ui-recall-mode`/`--ui-analysis` 的色值与 spec 相反 |
-| 2 | 右侧面板内容 | 四模式右栏 | RightModePanel 只有外壳，四个模式各自应有 3-5 张卡片 |
-| 3 | AppChrome 独立组件 | §1.3 | GlobalHeader 覆盖部分，但缺 QuietStatusChips 独立化、窄窗口折叠 |
+| # | 缺失项 | 状态 |
+|---|--------|------|
+| 1 | 四模式颜色对调 | ✅ Phase 1 已修正 |
+| 2 | QuietStatusChips 独立化 | ✅ Phase 1 已提取 |
+| 3 | CSS 变量 `--ui-play-soft` 等配套色值 | ⚠️ 已定义但 soft 色值仍需微调（见下方） |
+
+> **遗留问题**：CSS 中 `--ui-play-soft: #f0fdf4`（绿底）而非蓝系软色 `#eef4ff`，其他三模式同理。soft 色未严格对齐主色色系，视觉上可能不协调。列为 P2 低优。
 
 ### 2.2 P1 — 核心交互缺失
 
 | # | 缺失项 | 影响范围 | 说明 |
 |---|--------|---------|------|
-| 4 | 顶部右侧动作区按模式切换 | §2 | 当前无 ModeActions 组件，应按 activeMode 渲染不同按钮组 |
-| 5 | 底部栏按模式切换内容 | §10 | BottomActionBar 未区分四模式，各模式按钮组不同 |
-| 6 | Recall「先复现原线」开关 + 双模式 | §7 | 无 ModeToggle 组件，缺开/关两套左栏布局切换 |
-| 7 | RightDrawer 抽屉组件 | §4.1 | 无右侧展开抽屉，AI 分析/变化树/快照对比需此容器 |
-| 8 | Play 左栏「当前任务」操作按钮 | §5 | 缺「标记疑问手」「进入复盘」按钮 |
-| 9 | Problem 左栏题面独立展示 | §6 | 缺 prompt/goal/passRule 摘要的独立卡片区 |
-| 10 | Problem 作答操作「请求提示」 | §6 | 缺少提示请求按钮 |
+| 4 | ~~顶部右侧动作区按模式切换~~ | — | ✅ Phase 3 已实现 ModeActions |
+| 5 | 底部栏按模式切换内容 | §10 | BottomActionBar 已移除，需重建为模式化 |
+| 6 | MainBoardStage 占位符 | §1.3 | 已移除，需重建 |
+| 7 | 右侧面板容器 + 四模式面板 | §4.1 | RightModePanel 已移除，需重建 + 四模式右栏面板 |
+| 8 | 左侧四模式面板 | §5-8 | 所有 panels 已移除，需重建 |
+| 9 | Recall「先复现原线」双模式 | §7 | ModeToggle 组件已有，需在 RecallModePanel 中使用 |
+| 10 | TrainingTabBar | §1.2 | 已移除，需重建 |
 
 ### 2.3 P2 — 辅助交互缺失
 
 | # | 缺失项 | 影响范围 | 说明 |
 |---|--------|---------|------|
-| 11 | AnnotationToolbar 标注工具栏 | §8 | Analysis 底部标注工具（黑白/X/△/□/○/线/箭头/A/1） |
-| 12 | ProgressRing 环形进度 | §7 | Recall 进度展示用环形图，当前是线性 progress bar |
-| 13 | EmptyStatePanel 空态卡片 | §4 | AI 分析/变化树等的统一空态展示 |
-| 14 | ReferenceLineSummary 参考变化摘要 | §6 | Problem 提交前参考线数量/标签摘要 |
-| 15 | MaterialLibraryDialog 材料库 | §1.4 | `文件 > 材料库...` 独立 dialog |
-| 16 | OpponentControl 对方控制 | §6 | Problem 黑白双方「自己/AI」切换独立组件 |
-| 17 | 状态覆盖 6 种变体 | §11 | 每个模式需空态/进行中/成功/错误/loading/disabled |
+| 11 | AnnotationToolbar 集成到 Analysis 底部栏 | §8 | 组件已有，需在 BottomActionBar Analysis 模式中集成 |
+| 12 | ProgressRing 集成到 Recall 面板 | §7 | 组件已有，需在 RecallModePanel 中使用 |
+| 13 | EmptyStatePanel 集成到右栏 | §4 | 组件已有，需在右栏面板中使用 |
+| 14 | ReferenceLineSummary 集成到 Problem 面板 | §6 | 组件已有，需在 ProblemModePanel 中使用 |
+| 15 | MaterialLibraryDialog 集成 | §1.4 | 壳已有，需接入文件菜单 |
+| 16 | OpponentControl 集成到 Problem 面板 | §6 | 组件已有，需在 ProblemModePanel 中使用 |
+| 17 | 状态覆盖 6 种变体 | §11 | 各面板需支持 empty/active/success/error/loading/disabled |
 | 18 | 响应式折叠规则 | §1.2 | 窄窗口右栏→抽屉、左栏→抽屉逻辑 |
+| 19 | CSS soft 色值对齐主色色系 | 全局 | 当前 soft 色未严格匹配对应主色 |
 
 ---
 
 ## 3. 实施计划
 
-### Phase 1：基础修正（影响全局，必须先做）
+### ~~Phase 1：基础修正~~ ✅ 已完成
 
-#### 1.1 修正 CSS 颜色变量
-
-文件：`style/workbench.css`
-
-```css
-/* 修正前 → 修正后 */
---ui-play: #16a34a       → --ui-play: #2563ff
---ui-play-soft: #f0fdf4  → --ui-play-soft: #eef4ff
---ui-problem: #2563eb    → --ui-problem: #d97706
---ui-problem-soft: #eff6ff → --ui-problem-soft: #fff7ed
---ui-recall-mode: #7c3aed → --ui-recall-mode: #169b55
---ui-recall-mode-soft: #f5f3ff → --ui-recall-mode-soft: #eaf8f0
---ui-analysis: #f59e0b   → --ui-analysis: #7c3aed
---ui-analysis-soft: #fffbeb → --ui-analysis-soft: #f2edff
-```
-
-同步更新 `style/app.css` 中 `--ui-blue`/`--ui-recall`/`--ui-review` 的语义注释。
-
-#### 1.2 拆出 QuietStatusChips 组件
-
-从 GlobalHeader 中提取状态 chips 为独立组件，增加窄窗口折叠：
-
-```
-QuietStatusChips
-  props:
-    saveStatus: 'saved' | 'saving' | 'failed'
-    engineStatus: 'disconnected' | 'connecting' | 'idle' | 'thinking'
-    attemptStatus: 'active' | 'frozen' | 'recall'
-    syncStatus: 'ok' | 'pending:N' | 'offline'
-```
+CSS 颜色变量已修正，QuietStatusChips 已从 GlobalHeader 提取为独立组件。
 
 ---
 
-### Phase 2：缺失共享组件
+### ~~Phase 2：缺失共享组件~~ ✅ 已完成
 
-以下组件均为纯 UI，通过 props 接收数据，通过 callback 向外通信。
-
-#### 2.1 EmptyStatePanel
-
-```
-props:
-  icon: string          // 图标名
-  title: string         // 空态标题
-  description: string   // 说明文案
-  action?: { label, onClick }  // 可选操作按钮
-```
-
-#### 2.2 ProgressRing
-
-```
-props:
-  progress: number      // 0-100
-  size?: number         // 默认 80
-  label?: string        // 中心文字
-  color?: string        // 进度色
-```
-
-#### 2.3 ModeToggle
-
-```
-props:
-  label: string         // 如「先复现原线」
-  checked: boolean
-  onChange: (checked: boolean) => void
-```
-
-#### 2.4 OpponentControl
-
-```
-props:
-  label: string         // 「黑方」或「白方」
-  value: 'self' | 'ai'
-  onChange: (value) => void
-  disabled?: boolean
-  disabledReason?: string  // tooltip 文案
-```
-
-#### 2.5 ReferenceLineSummary
-
-```
-props:
-  lines: Array<{ label: string, length: number }>
-  totalCount: number
-```
-
-#### 2.6 RightDrawer
-
-```
-props:
-  open: boolean
-  title: string
-  onClose: () => void
-  width?: number        // 默认 480
-  children: ReactNode
-```
-
-行为：fixed 定位，从右侧滑出，Esc 关闭，不影响三栏布局。
-
-#### 2.7 AnnotationToolbar
-
-```
-props:
-  activeTool: string    // 'stone-b' | 'stone-w' | 'x' | 'triangle' | 'square' | 'circle' | 'line' | 'arrow' | 'label-a' | 'label-1'
-  onToolChange: (tool) => void
-  disabled?: boolean
-```
-
-#### 2.8 MaterialLibraryDialog
-
-```
-props:
-  open: boolean
-  onClose: () => void
-  onOpenTask: (taskId: string) => void  // 打开材料后回调
-```
-
-UI：modal dialog，内部结构待定，本阶段只搭壳。
+8 个共享组件 + QuietStatusChips 已全部实现：
+- EmptyStatePanel、ProgressRing、ModeToggle、OpponentControl
+- ReferenceLineSummary、RightDrawer、AnnotationToolbar、MaterialLibraryDialog
 
 ---
 
-### Phase 3：顶部右侧 ModeActions 组件
+### ~~Phase 3：顶部右侧 ModeActions~~ ✅ 已完成
 
-新建 `workbench/shell/ModeActions.js`，按 activeMode 渲染不同按钮组：
+ModeActions 组件已创建并集成到 ModeBar，按 activeMode 渲染不同按钮组。
+
+---
+
+### Phase 4：Shell 骨架重建
+
+重建被 revert 移除的 shell 组件，使其与 Phase 1-3 新组件协作。
+
+#### 4.1 MainBoardStage（占位符）
 
 ```
 props:
   mode: 'play' | 'problem' | 'recall' | 'analysis'
-  onNewGame: () => void
-  onGameSettings: () => void
-  onEndAttempt: () => void
-  onResign: () => void          // 红色旗帜按钮
-  onSubmitAnswer: () => void
-  onAbandonAnswer: () => void
-  onProblemSettings: () => void
-  onEnterAnalysis: () => void
-  onEndRecall: () => void
-  onSnapshot: () => void
-  onAnalysisSettings: () => void
-  onReturnToPreviousMode: () => void
+  children?: ReactNode     // 预留棋盘挂载点
 ```
 
-各模式渲染逻辑：
+简单的占位区域，显示模式标签和「棋盘区域」提示文字。
 
-| Play | Problem | Recall | Analysis |
-|------|---------|--------|----------|
-| + 新对局 | 提交答案 | 进入复盘 | Snapshot / 派生新 Task |
-| 对局设置 | 放弃作答 | 结束回忆 | 复盘设置 |
-| 结束当前 attempt | 做题设置 | Snapshot | 返回上一个模式 |
-| 认输(红色) | 进入复盘 | | |
-
----
-
-### Phase 4：底部栏模式化
-
-改造 `BottomActionBar.js`，增加 mode prop，按模式切换：
-
-#### Play 底部
+#### 4.2 TrainingTabBar
 
 ```
-[悔棋] [Pass] [认输] [结束当前 attempt] [标记疑问手]   [选择] [手型] [-] [+] [全屏]
+props:
+  activeTab: 'play' | 'problem' | 'recall' | 'analysis'
+  onTabChange: (tab) => void
+  badgeCounts?: { play?: number, problem?: number, recall?: number, analysis?: number }
 ```
 
-#### Problem 底部
+#### 4.3 BottomActionBar（模式化）
 
-```
-[悔棋] [重做] [Pass] [请求提示] [提交答案] [放弃作答]   [选择] [手型] [-] [+] [全屏]
-```
-
-#### Recall 底部
-
-```
-[标记 checkpoint] [提示] [校对/跳过] [进入复盘]          [选择] [手型] [-] [+] [全屏]
-```
-
-#### Analysis 底部
-
-```
-标注工具组: [黑] [白] [X] [△] [□] [○] [线] [箭头] [A] [1]   [撤销] [重做] [清空] [Edit position] [Snapshot] [100%]
-```
-
-新增 props：
+改造为按 mode prop 切换按钮组：
 
 ```
 props:
@@ -271,57 +155,81 @@ props:
   onToolSelect, onShapeSelect, onZoomIn, onZoomOut, onFullscreen
 ```
 
----
+各模式渲染逻辑：
 
-### Phase 5：左侧面板补全
+| Play | Problem | Recall | Analysis |
+|------|---------|--------|----------|
+| 悔棋 | 悔棋 | 标记 checkpoint | 标注工具组: 黑 白 X △ □ ○ 线 箭头 A 1 |
+| Pass | 重做 | 提示 | 撤销 重做 清空 |
+| 认输 | Pass | 校对/跳过 | Edit position |
+| 结束 attempt | 请求提示 | 进入复盘 | Snapshot |
+| 标记疑问手 | 提交答案 | | 100% |
+| | 放弃作答 | | |
+| 通用: 选择 手型 - + 全屏 | 同左 | 同左 | |
 
-#### 5.1 Play — 当前任务操作
-
-在 PlayModePanel 底部增加操作区：
+#### 4.4 RightModePanel（容器）
 
 ```
-props 新增:
+props:
+  mode: 'play' | 'problem' | 'recall' | 'analysis'
+  // 透传各模式面板所需 props
+```
+
+根据 mode 渲染对应的 RightPanel 组件。
+
+---
+
+### Phase 5：左侧面板重建
+
+#### 5.1 PlayModePanel
+
+```
+props:
+  taskTitle: string
+  taskDescription: string
+  moveCount: number
+  captures: { black: number, white: number }
   onMarkDoubtful: () => void
   onEnterAnalysis: () => void
 ```
 
-渲染「标记疑问手」「进入复盘」按钮。
+卡片：当前任务信息 + 操作按钮（标记疑问手、进入复盘）。
 
-#### 5.2 Problem — 题面与目标独立卡片
-
-在 ProblemModePanel 增加独立展示区：
+#### 5.2 ProblemModePanel
 
 ```
-props 新增:
+props:
   prompt: string
   goal: string
   passRuleSummary: string
   referenceLines: Array<{ label, length }>
+  blackPlayer: 'self' | 'ai'
+  whitePlayer: 'self' | 'ai'
+  onOpponentChange: (color: 'black' | 'white', value: 'self' | 'ai') => void
   onRequestHint: () => void
 ```
 
-使用 ReferenceLineSummary 组件渲染参考线摘要。
+使用 OpponentControl 和 ReferenceLineSummary 组件。
 
-#### 5.3 Recall — 双模式切换
+#### 5.3 RecallModePanel
 
-RecallModePanel 根据「先复现原线」开关渲染两套布局：
+根据 ModeToggle 「先复现原线」开关渲染两套布局：
 
 **开启模式（默认）：**
 - ProgressRing 环形进度
 - 进度/正确/状态统计
-- 操作按钮：标记 checkpoint / 校对跳过 / 提示 / 结束回忆
+- 操作按钮
 
 **关闭模式：**
 - Checkpoint 队列列表
 - 当前 checkpoint 面板
-- 操作按钮：提交修正图 / 查看 AI / 跳过 checkpoint
+- 操作按钮
 
 ```
 props:
-  recallOriginalLine: boolean     // 先复现原线 开关
+  recallOriginalLine: boolean
   onRecallToggle: (checked) => void
-  // 开启模式
-  progress: number                // 0-100
+  progress: number
   currentMove: number
   totalMoves: number
   correctCount: number
@@ -332,19 +240,35 @@ props:
   onSkip: () => void
   onHint: () => void
   onEndRecall: () => void
-  // 关闭模式
-  checkpoints: Array<{ id, moveNumber, source: 'system' | 'manual', summary }>
+  checkpoints: Array<{ id, moveNumber, source, summary }>
   activeCheckpointId: string | null
   onSubmitCorrection: () => void
   onRevealAI: () => void
   onSkipCheckpoint: () => void
 ```
 
+#### 5.4 RecallCheckpointPanel
+
+```
+props:
+  checkpoint: { id, moveNumber, source, summary }
+  isActive: boolean
+  onSelect: () => void
+```
+
+#### 5.5 AnalysisModePanel
+
+```
+props:
+  moveCount: number
+  captures: { black: number, white: number }
+  evaluation: string | null
+  onSnapshot: () => void
+```
+
 ---
 
 ### Phase 6：右侧面板内容
-
-新建四个模式的右栏面板组件。
 
 #### 6.1 PlayRightPanel
 
@@ -373,7 +297,7 @@ props:
 │ 对方：自己控制 / AI 应手    │
 └─────────────────────────────┘
 ┌─ Hint ──────────────────────┐
-│ HintCard (已有)             │
+│ HintCard                    │
 └─────────────────────────────┘
 ┌─ AI 分析 ───────────────────┐
 │ "AI 答案默认隐藏"           │
@@ -390,11 +314,9 @@ props:
 ```
 ┌─ 回忆提示 ──────────────────┐
 │ "下一手：保持回忆"           │
-│ "尚未 reveal AI candidates"  │
 └─────────────────────────────┘
 ┌─ Checkpoint 摘要 ───────────┐
 │ 系统触发: N  手动标记: N     │
-│ 当前状态: ...                │
 └─────────────────────────────┘
 ┌─ 结果反馈 ──────────────────┐
 │ 正确: N   错误: N            │
@@ -463,23 +385,47 @@ state: 'empty' | 'active' | 'success' | 'error' | 'loading' | 'disabled'
 - loading → spinner / 骨架屏
 - disabled → 灰色 + tooltip 说明原因
 
+#### 7.3 CSS soft 色值对齐
+
+```css
+/* 当前 → 应修正为 */
+--ui-play-soft: #f0fdf4   → #eef4ff
+--ui-problem-soft: #eff6ff → #fff7ed
+--ui-recall-mode-soft: #f5f3ff → #eaf8f0
+--ui-analysis-soft: #fffbeb → #f2edff
+```
+
 ---
 
 ## 4. 文件变更清单
 
 | Phase | 新建文件 | 修改文件 |
 |-------|---------|---------|
-| 1 | — | `style/workbench.css`, `style/app.css`, `workbench/shell/GlobalHeader.js` |
-| 2 | `shared/EmptyStatePanel.js`, `shared/ProgressRing.js`, `shared/ModeToggle.js`, `shared/OpponentControl.js`, `shared/ReferenceLineSummary.js`, `shared/RightDrawer.js`, `shared/AnnotationToolbar.js`, `shared/MaterialLibraryDialog.js` | — |
-| 3 | `shell/ModeActions.js` | `shell/ModeBar.js`（集成 ModeActions） |
-| 4 | — | `shell/BottomActionBar.js` |
-| 5 | — | `panels/PlayModePanel.js`, `panels/ProblemModePanel.js`, `panels/RecallModePanel.js`, `panels/RecallCheckpointPanel.js` |
+| ~~1~~ ✅ | ~~QuietStatusChips.js~~ | ~~workbench.css, GlobalHeader.js~~ |
+| ~~2~~ ✅ | ~~8 个 shared 组件~~ | — |
+| ~~3~~ ✅ | ~~ModeActions.js~~ | ~~ModeBar.js, index.js~~ |
+| 4 | — | — (重建已移除文件) |
+| 5 | — | — (重建已移除文件) |
 | 6 | `panels/PlayRightPanel.js`, `panels/ProblemRightPanel.js`, `panels/RecallRightPanel.js`, `panels/AnalysisRightPanel.js` | `shell/RightModePanel.js`（按 mode 切换） |
 | 7 | — | `style/workbench.css` |
 
 ---
 
-## 5. 接口约定
+## 5. 实施进度
+
+| Phase | 描述 | 提交 | 状态 |
+|-------|------|------|------|
+| 1 | 基础修正（CSS 颜色 + QuietStatusChips） | `3e025629` (test) + `051a8712` (impl) | ✅ 完成 |
+| 2 | 8 个共享组件 | `3e025629` (test) + `051a8712` (impl) | ✅ 完成 |
+| 3 | ModeActions + ModeBar 集成 | `3e025629` (test) + `051a8712` (impl) | ✅ 完成 |
+| 4 | Shell 骨架重建 | `5057531b` (test) + `b3f8fa55` (impl) | ✅ 完成 |
+| 5 | 左侧面板重建 | `ab9da009` (test) + `5d94484e` (impl) | ✅ 完成 |
+| 6 | 右侧面板内容 | `e289d4bc` (test) + `fa514e4a` (impl) | ✅ 完成 |
+| 7 | 响应式 + 状态覆盖 | `dc966b37` (test) + `202ca79c` (impl) | ✅ 完成 |
+
+---
+
+## 6. 接口约定
 
 所有新增组件遵循以下约定：
 
