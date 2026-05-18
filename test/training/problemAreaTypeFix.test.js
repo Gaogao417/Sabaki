@@ -194,11 +194,14 @@ describe('problemAreaTypeFix - Group B: engineMoveAdapter Removal', () => {
 
   // C05: training/index.ts does not export createEngineMoveAdapter
   it('C05: training/index.ts does not export createEngineMoveAdapter', () => {
-    // After the fix, createEngineMoveAdapter should be removed from exports.
-    // Pre-fix: it IS exported, so this test will fail until the fix is applied.
-    const hasExport = indexMod && 'createEngineMoveAdapter' in indexMod
-    assert.strictEqual(hasExport, false,
-      'createEngineMoveAdapter must not be exported from training/index.ts')
+    // Static source check — avoids require() failing due to Audio polyfill
+    const indexPath = path.resolve(__dirname, '../../src/modules/training/index.ts')
+    assert.ok(fs.existsSync(indexPath), 'training/index.ts must exist')
+    const source = fs.readFileSync(indexPath, 'utf-8')
+    assert.ok(
+      !source.includes('createEngineMoveAdapter'),
+      'training/index.ts must not reference createEngineMoveAdapter',
+    )
   })
 
   // C06: aiMoveService deps interface does not contain engineMoveAdapter field

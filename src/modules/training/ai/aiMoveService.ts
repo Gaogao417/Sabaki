@@ -7,7 +7,7 @@ export type AiMoveServiceDeps = {
       positionSgf: string
       timeLimitMs?: number
       maxVisits?: number
-      analysisArea?: ProblemArea
+      analysisAreaVertices?: ProblemArea
     }): Promise<{ move: string; candidates: string[] } | null>
   }
 }
@@ -67,38 +67,38 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
   }): Promise<string | null> {
     const { tab, attempt, task } = input
 
-    const adapterInput: {
+    const engineInput: {
       engineId?: string
       positionSgf: string
       timeLimitMs?: number
       maxVisits?: number
-      analysisArea?: ProblemArea
+      analysisAreaVertices?: ProblemArea
     } = {
       positionSgf: attempt.rootPositionSgf,
     }
 
     // Pass engine params from playerConfig if available
     if (tab.playerConfig?.ai?.engineId) {
-      adapterInput.engineId = tab.playerConfig.ai.engineId
+      engineInput.engineId = tab.playerConfig.ai.engineId
     }
     if (tab.playerConfig?.ai?.timeLimitMs) {
-      adapterInput.timeLimitMs = tab.playerConfig.ai.timeLimitMs
+      engineInput.timeLimitMs = tab.playerConfig.ai.timeLimitMs
     }
     if (tab.playerConfig?.ai?.maxVisits) {
-      adapterInput.maxVisits = tab.playerConfig.ai.maxVisits
+      engineInput.maxVisits = tab.playerConfig.ai.maxVisits
     }
 
-    // In problem mode, pass analysisArea from task
-    if (tab.mode === 'problem' && task.problemArea) {
-      adapterInput.analysisArea = task.problemArea
+    // In problem mode, pass analysisAreaVertices from task
+    if (tab.mode === 'problem' && task.problemArea && task.problemArea.length > 0) {
+      engineInput.analysisAreaVertices = task.problemArea
     }
 
-    const result = await engineMoveAdapter.requestMove(adapterInput)
+    const result = await engineMoveAdapter.requestMove(engineInput)
 
     if (!result) return null
 
     // In problem mode with problemArea, filter by area
-    if (tab.mode === 'problem' && task.problemArea) {
+    if (tab.mode === 'problem' && task.problemArea && task.problemArea.length > 0) {
       const area = task.problemArea
       const moveCoord = moveToCoord(result.move)
       if (moveCoord && isCoordInArea(moveCoord, area)) {
@@ -160,9 +160,9 @@ function humanReadableToCoord(coord: string): { x: number; y: number } | null {
 }
 
 /**
- * Check if a coordinate is within a problem area (inclusive bounds).
+ * Check if a coordinate appears in a vertex list.
  */
 function isCoordInArea(coord: { x: number; y: number }, area: ProblemArea): boolean {
-  return coord.x >= area.x1 && coord.x <= area.x2
-    && coord.y >= area.y1 && coord.y <= area.y2
+  if (!area || area.length === 0) return true
+  return area.some(([vx, vy]) => vx === coord.x && vy === coord.y)
 }

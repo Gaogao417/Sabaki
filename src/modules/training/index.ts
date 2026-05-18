@@ -4,8 +4,6 @@ export { createTrainingRepository } from './repository/trainingRepository'
 export { createLegacySabakiAdapter } from './adapter/legacySabakiAdapter'
 export { createPositionSnapshotAdapter } from './adapter/positionSnapshotAdapter'
 export { createAnalysisResultAdapter } from './adapter/analysisResultAdapter'
-export { createEngineMoveAdapter } from './adapter/engineMoveAdapter'
-
 export {
   createWorkbenchTabService,
   createWorkbenchPhaseService,
