@@ -203,3 +203,23 @@ describe('RecallModePanel (T-5.3)', function () {
     assert.strictEqual(correctionCalled, true, 'onSubmitCorrection should be called on click')
   })
 })
+
+describe('RecallModePanel state overlay (T-7.2f)', function () {
+  before(async function () {
+    RecallModePanel = await tryImport('src/components/workbench/panels/RecallModePanel.js')
+    if (!RecallModePanel) this.skip()
+  })
+
+  // --- T-7.2f: state="disabled" renders disabled overlay ---
+  // Production subject: RecallModePanel component state prop
+  // Production bug: disabled overlay not rendered when state="disabled"
+  // Controlled dependencies: props are inline
+  it('T-7.2f: state="disabled" renders disabled overlay', () => {
+    const {queryByTestId} = renderToDom(
+      h(RecallModePanel, noopProps({state: 'disabled'}))
+    )
+
+    const overlay = queryByTestId('disabled-overlay')
+    assert.ok(overlay, 'data-testid="disabled-overlay" should be present when state="disabled"')
+  })
+})

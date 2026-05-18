@@ -136,3 +136,62 @@ describe('PlayModePanel (T-5.1)', function () {
     assert.strictEqual(called, true, 'onEnterAnalysis should be called on click')
   })
 })
+
+describe('PlayModePanel state overlay (T-7.2a-d)', function () {
+  before(async function () {
+    PlayModePanel = await tryImport('src/components/workbench/panels/PlayModePanel.js')
+    if (!PlayModePanel) this.skip()
+  })
+
+  // --- T-7.2a: state="loading" renders loading indicator ---
+  // Production subject: PlayModePanel component state prop
+  // Production bug: loading indicator not rendered when state="loading"
+  // Controlled dependencies: props are inline
+  it('T-7.2a: state="loading" renders loading indicator', () => {
+    const {queryByTestId} = renderToDom(
+      h(PlayModePanel, noopProps({state: 'loading'}))
+    )
+
+    const indicator = queryByTestId('loading-indicator')
+    assert.ok(indicator, 'data-testid="loading-indicator" should be present when state="loading"')
+  })
+
+  // --- T-7.2b: state="disabled" renders disabled overlay ---
+  // Production subject: PlayModePanel component state prop
+  // Production bug: disabled overlay not rendered when state="disabled"
+  // Controlled dependencies: props are inline
+  it('T-7.2b: state="disabled" renders disabled overlay', () => {
+    const {queryByTestId} = renderToDom(
+      h(PlayModePanel, noopProps({state: 'disabled'}))
+    )
+
+    const overlay = queryByTestId('disabled-overlay')
+    assert.ok(overlay, 'data-testid="disabled-overlay" should be present when state="disabled"')
+  })
+
+  // --- T-7.2c: state="error" renders error overlay ---
+  // Production subject: PlayModePanel component state prop
+  // Production bug: error overlay not rendered when state="error"
+  // Controlled dependencies: props are inline
+  it('T-7.2c: state="error" renders error overlay', () => {
+    const {queryByTestId} = renderToDom(
+      h(PlayModePanel, noopProps({state: 'error'}))
+    )
+
+    const overlay = queryByTestId('error-overlay')
+    assert.ok(overlay, 'data-testid="error-overlay" should be present when state="error"')
+  })
+
+  // --- T-7.2d: state="success" renders success indicator ---
+  // Production subject: PlayModePanel component state prop
+  // Production bug: success indicator not rendered when state="success"
+  // Controlled dependencies: props are inline
+  it('T-7.2d: state="success" renders success indicator', () => {
+    const {queryByTestId} = renderToDom(
+      h(PlayModePanel, noopProps({state: 'success'}))
+    )
+
+    const indicator = queryByTestId('success-indicator')
+    assert.ok(indicator, 'data-testid="success-indicator" should be present when state="success"')
+  })
+})

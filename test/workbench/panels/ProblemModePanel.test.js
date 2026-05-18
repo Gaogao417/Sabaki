@@ -154,3 +154,23 @@ describe('ProblemModePanel (T-5.2)', function () {
     assert.strictEqual(called, true, 'onRequestHint should be called on click')
   })
 })
+
+describe('ProblemModePanel state overlay (T-7.2e)', function () {
+  before(async function () {
+    ProblemModePanel = await tryImport('src/components/workbench/panels/ProblemModePanel.js')
+    if (!ProblemModePanel) this.skip()
+  })
+
+  // --- T-7.2e: state="error" renders error overlay ---
+  // Production subject: ProblemModePanel component state prop
+  // Production bug: error overlay not rendered when state="error"
+  // Controlled dependencies: props are inline
+  it('T-7.2e: state="error" renders error overlay', () => {
+    const {queryByTestId} = renderToDom(
+      h(ProblemModePanel, noopProps({state: 'error'}))
+    )
+
+    const overlay = queryByTestId('error-overlay')
+    assert.ok(overlay, 'data-testid="error-overlay" should be present when state="error"')
+  })
+})

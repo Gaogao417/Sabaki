@@ -113,12 +113,13 @@ describe('CSS Color Variables (T-1.1)', () => {
   })
 
   // --- T-1.1e: All four -soft variables resolve to correct values ---
+  // Phase 7 updated soft colors: each mode's soft tint now matches its primary hue.
   it('T-1.1e: all four -soft variables resolve to correct values', () => {
     const softVars = {
-      '--ui-play-soft': '#f0fdf4',
-      '--ui-problem-soft': '#eff6ff',
-      '--ui-recall-mode-soft': '#f5f3ff',
-      '--ui-analysis-soft': '#fffbeb',
+      '--ui-play-soft': '#eef4ff',
+      '--ui-problem-soft': '#fff7ed',
+      '--ui-recall-mode-soft': '#eaf8f0',
+      '--ui-analysis-soft': '#f2edff',
     }
 
     for (const [name, expected] of Object.entries(softVars)) {

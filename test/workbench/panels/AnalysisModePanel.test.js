@@ -134,3 +134,23 @@ describe('AnalysisModePanel (T-5.5)', function () {
     )
   })
 })
+
+describe('AnalysisModePanel state overlay (T-7.2g)', function () {
+  before(async function () {
+    AnalysisModePanel = await tryImport('src/components/workbench/panels/AnalysisModePanel.js')
+    if (!AnalysisModePanel) this.skip()
+  })
+
+  // --- T-7.2g: state="loading" renders loading indicator ---
+  // Production subject: AnalysisModePanel component state prop
+  // Production bug: loading indicator not rendered when state="loading"
+  // Controlled dependencies: props are inline
+  it('T-7.2g: state="loading" renders loading indicator', () => {
+    const {queryByTestId} = renderToDom(
+      h(AnalysisModePanel, noopProps({state: 'loading'}))
+    )
+
+    const indicator = queryByTestId('loading-indicator')
+    assert.ok(indicator, 'data-testid="loading-indicator" should be present when state="loading"')
+  })
+})
