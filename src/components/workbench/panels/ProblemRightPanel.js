@@ -26,26 +26,33 @@ export default function ProblemRightPanel({
   },
     // Answer draft card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '答题信息'),
+      h('div', {class: 'wb-panel-title'}, '答案草稿'),
       h('div', {class: 'wb-problem-right-panel__answer-draft'},
         h('div', {class: 'wb-problem-right-panel__stat'},
           h('span', {class: 'wb-problem-right-panel__stat-label'}, '当前变化'),
-          h('span', {class: 'wb-problem-right-panel__stat-value'}, currentVariation),
+          h('span', {class: 'wb-problem-right-panel__stat-value'}, currentVariation, ' 手'),
         ),
         h('div', {class: 'wb-problem-right-panel__stat'},
-          h('span', {class: 'wb-problem-right-panel__stat-label'}, '对手模式'),
-          h('span', {class: 'wb-problem-right-panel__stat-value'}, opponentMode),
+          h('span', {class: 'wb-problem-right-panel__stat-label'}, '对方'),
+          h('span', {class: 'wb-problem-right-panel__stat-value'},
+            opponentMode === 'ai' ? 'AI 应手' : '自己控制',
+          ),
         ),
       ),
     ),
 
-    // Hint card
-    hint != null && h('div', {
+    // Hint card — always shown, with empty state when no hint
+    h('div', {
       'data-testid': 'hint-card',
       class: 'wb-card',
     },
-      h('div', {class: 'wb-panel-title'}, '提示'),
-      h('div', {class: 'wb-problem-right-panel__hint-content'}, hint),
+      h('div', {class: 'wb-panel-title'}, 'Hint'),
+      hint != null
+        ? h('div', {class: 'wb-problem-right-panel__hint-content'}, hint)
+        : h('div', {style: 'font-size: 13px; color: var(--ui-text-tertiary)'},
+            '暂无提示',
+            h('div', {style: 'margin-top: 4px; font-size: 12px'}, '请求提示后显示方向性信息，不直接显示完整答案。'),
+          ),
     ),
 
     // AI analysis card
@@ -58,7 +65,7 @@ export default function ProblemRightPanel({
 
     // Reference line summary card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '参考线'),
+      h('div', {class: 'wb-panel-title'}, '参考变化摘要'),
       referenceLines.length > 0
         ? h(ReferenceLineSummary, {
             lines: referenceLines,

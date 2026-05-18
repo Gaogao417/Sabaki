@@ -25,7 +25,7 @@ export default function ProgressRing({progress = 0, size = 64, label}) {
         cy: size / 2,
         r: radius,
         fill: 'none',
-        stroke: 'rgba(0,0,0,0.06)',
+        stroke: 'var(--ui-border)',
         'stroke-width': strokeWidth,
       }),
       h('circle', {

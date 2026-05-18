@@ -81,7 +81,7 @@ export default function RecallModePanel({
 
     if (state === 'empty') {
       return h(EmptyStatePanel, {
-        icon: '◇',
+        icon: 'diamond',
         title: 'No Recall Session',
         description: 'Start a recall session to practice.',
       })
@@ -96,10 +96,12 @@ export default function RecallModePanel({
     // Card 1: Mode toggle (always shown)
     cards.push(
       h('div', {class: 'wb-card', key: 'mode-toggle-card'},
-        h('div', {class: 'wb-card__title'}, '回忆模式'),
-        h('div', {class: 'wb-card__body'},
-          h('div', {class: 'wb-recall-mode-panel__toggle-row'},
-            h('span', {class: 'wb-panel-body'}, '先复现原线'),
+        h('div', {class: 'wb-panel-title'}, '当前模式'),
+        h('div', {class: 'wb-panel-body'},
+          h('div', {style: 'margin-bottom: 4px'}, '回忆模式'),
+          h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '先复现原线'),
+          h('div', {class: 'wb-recall-mode-panel__toggle-row', style: 'margin-top: 8px'},
+            h('span', {}, '先复现原线'),
             h(ModeToggle, {checked: recallOriginalLine, onChange: onRecallToggle}),
           ),
         ),
@@ -110,8 +112,8 @@ export default function RecallModePanel({
     if (recallOriginalLine) {
       cards.push(
         h('div', {class: 'wb-card', key: 'progress-card'},
-          h('div', {class: 'wb-card__title'}, '复现进度'),
-          h('div', {class: 'wb-card__body'},
+          h('div', {class: 'wb-panel-title'}, '复现进度'),
+          h('div', {class: 'wb-panel-body'},
             h('div', {class: 'wb-recall-mode-panel__progress-ring'},
               h(ProgressRing, {progress}),
             ),
@@ -155,8 +157,8 @@ export default function RecallModePanel({
     } else {
       cards.push(
         h('div', {class: 'wb-card', key: 'checkpoint-card'},
-          h('div', {class: 'wb-card__title'}, '检查点队列'),
-          h('div', {class: 'wb-card__body'},
+          h('div', {class: 'wb-panel-title'}, '检查点队列'),
+          h('div', {class: 'wb-panel-body'},
             h('div', {class: 'wb-recall-mode-panel__checkpoint-list'},
               checkpoints.length > 0
                 ? checkpoints.map(cp =>

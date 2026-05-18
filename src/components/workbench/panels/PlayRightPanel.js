@@ -37,6 +37,14 @@ export default function PlayRightPanel({
             '黑 ', captures.black, ' / 白 ', captures.white,
           ),
         ),
+        h('div', {class: 'wb-play-right-panel__stat'},
+          h('span', {class: 'wb-play-right-panel__stat-label'}, 'pending 评价'),
+          h('span', {class: 'wb-play-right-panel__stat-value'}, pendingEval),
+        ),
+        h('div', {class: 'wb-play-right-panel__stat'},
+          h('span', {class: 'wb-play-right-panel__stat-label'}, '坏棋记录'),
+          h('span', {class: 'wb-play-right-panel__stat-value'}, badMoveCount),
+        ),
       ),
     ),
 
@@ -47,9 +55,9 @@ export default function PlayRightPanel({
         class: 'wb-drawer-toggle',
       }, h('span', {class: 'wb-panel-title'}, 'AI 分析')),
       h(EmptyStatePanel, {
-        icon: '🔍',
-        title: 'AI 分析',
-        description: '连接引擎后可查看分析结果',
+        icon: 'search',
+        title: '暂无分析数据',
+        description: '连接引擎后可查看胜率、目数和候选点等分析结果',
       }),
     ),
 
@@ -60,8 +68,8 @@ export default function PlayRightPanel({
         class: 'wb-drawer-toggle',
       }, h('span', {class: 'wb-panel-title'}, '变化树')),
       h(EmptyStatePanel, {
-        icon: '🌳',
-        title: '变化树',
+        icon: 'tree',
+        title: '暂无变化',
         description: '对局过程中将自动记录变化',
       }),
     ),

@@ -1,4 +1,5 @@
 import {h} from 'preact'
+import {ANNOTATION_TOOL_DEFS} from '../shared/AnnotationToolbar.js'
 
 /**
  * Mode-specific action button definitions.
@@ -43,10 +44,8 @@ const VIEW_ACTIONS = [
   {testId: 'action-fullscreen', label: '全屏', callback: 'onFullscreen'},
 ]
 
-const ANNOTATION_TOOLS = [
-  'black', 'white', 'cross', 'triangle', 'square',
-  'circle', 'line', 'arrow', 'label-A', 'label-1',
-]
+/** Reuse SVG-based annotation tools from AnnotationToolbar */
+const ANNOTATION_TOOLS = ANNOTATION_TOOL_DEFS
 
 const WORKSPACE_LABELS = {
   play: '对局工作区',
@@ -92,6 +91,13 @@ export default function BottomActionBar({
   workspaceLabel,
   moveNumber = 0,
   engineStatus = '引擎就绪',
+  opponentType = 'self',
+  problemAreaSet = true,
+  recallProgress = 0,
+  recallTotal = 0,
+  recallWaiting = true,
+  keyPointCount = 0,
+  snapshotCount = 0,
   activeAnnotationTool = null,
   onAnnotationToolChange = () => {},
   ...callbacks
@@ -115,6 +121,45 @@ export default function BottomActionBar({
     }, btn.label)
   }
 
+  /** Build mode-specific status segments */
+  function renderStatusSegments() {
+    const segs = []
+
+    segs.push(h('span', {class: 'wb-status-text__label'}, label))
+    segs.push(h('span', {class: 'wb-status-text__divider'}))
+
+    if (mode === 'recall') {
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前进度 ${recallProgress} / ${recallTotal}`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        recallWaiting ? '等待输入下一手' : ''))
+    } else if (mode === 'problem') {
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前第 ${moveNumber} 手`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `对方：${opponentType === 'ai' ? 'AI' : '自己'}`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `题目范围：${problemAreaSet ? '已设置' : '未设置'}`))
+    } else if (mode === 'analysis') {
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前第 ${moveNumber} 手`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `关键点 ${keyPointCount} · Snapshot ${snapshotCount}`))
+    } else {
+      // play
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前第 ${moveNumber} 手`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'}, engineStatus))
+    }
+
+    return segs
+  }
+
   return h('div', {
     'data-testid': 'bottom-action-bar',
     class: 'wb-bottom-action-bar',
@@ -123,13 +168,7 @@ export default function BottomActionBar({
     h('div', {
       'data-testid': 'bottom-status-text',
       class: 'wb-status-text',
-    },
-      h('span', {class: 'wb-status-text__label'}, label),
-      h('span', {class: 'wb-status-text__divider'}),
-      h('span', {class: 'wb-status-text__value'}, `当前第 ${moveNumber} 手`),
-      h('span', {class: 'wb-status-text__divider'}),
-      h('span', {class: 'wb-status-text__value'}, engineStatus),
-    ),
+    }, ...renderStatusSegments()),
 
     // Center: Mode actions
     h('div', {class: 'wb-bottom-action-bar__mode-actions'},
@@ -158,12 +197,14 @@ export default function BottomActionBar({
           h('div', {class: 'wb-bottom-action-bar__divider'}),
           ANNOTATION_TOOLS.map(tool =>
             h('button', {
-              key: tool,
+              key: tool.id,
               'data-testid': 'annotation-tool-btn',
-              'data-tool': tool,
-              class: `wb-btn wb-btn--sm wb-btn-ghost${activeAnnotationTool === tool ? ' active' : ''}`,
-              onClick: () => onAnnotationToolChange(tool),
-            }, tool),
+              'data-tool': tool.id,
+              'aria-label': tool.title,
+              title: tool.title,
+              class: `wb-btn wb-btn--sm wb-btn-ghost${activeAnnotationTool === tool.id ? ' active' : ''}`,
+              onClick: () => onAnnotationToolChange(tool.id),
+            }, tool.icon()),
           ),
         ),
     ),

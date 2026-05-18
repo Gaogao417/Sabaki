@@ -60,7 +60,7 @@ export default function ProblemModePanel({
 
     if (state === 'empty') {
       return h(EmptyStatePanel, {
-        icon: '□',
+        icon: 'square',
         title: 'No Problem Loaded',
         description: 'Load a problem to begin solving.',
       })
@@ -71,9 +71,10 @@ export default function ProblemModePanel({
     return [
       // Card 1: Current mode
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '做题模式'),
+        h('div', {class: 'wb-panel-title'}, '当前模式'),
         h('div', {class: 'wb-panel-body'},
-          '阅读题面，完成有目标和提交标准的作答',
+          h('div', {style: 'font-weight: 500; margin-bottom: 4px'}, '做题模式'),
+          h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '阅读题面，完成有目标和提交标准的作答'),
         ),
       ),
       // Card 2: Prompt & Goal
@@ -93,17 +94,46 @@ export default function ProblemModePanel({
         h('div', {class: 'wb-panel-title'}, '对方控制'),
         h('div', {class: 'wb-panel-body'},
           h(OpponentControl, {value: 'ai', onChange: onOpponentChange}),
+          h('div', {style: 'margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--ui-border)'},
+            h('div', {style: 'display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px'},
+              h('span', {style: 'color: var(--ui-text-secondary)'}, '题目范围'),
+              h('span', {style: 'font-weight: 500; color: var(--mode-accent)'}, '已设置'),
+            ),
+            h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'},
+              'AI 应手仅在题目范围内自动应手',
+            ),
+          ),
         ),
       ),
       // Card 4: Answer actions
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '作答操作'),
+        h('div', {class: 'wb-panel-title'}, '作答'),
         h('div', {class: 'wb-panel-body'},
-          h('button', {
-            'data-testid': 'request-hint-btn',
-            class: 'wb-btn wb-btn-secondary wb-btn--sm',
-            onClick: onRequestHint,
-          }, '请求提示'),
+          h('div', {style: 'display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px'},
+            h('span', {style: 'color: var(--ui-text-secondary)'}, '当前手数'),
+            h('span', {style: 'font-weight: 600'}, '0'),
+          ),
+          h('div', {style: 'display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px'},
+            h('span', {style: 'color: var(--ui-text-secondary)'}, '答案状态'),
+            h('span', {style: 'font-weight: 600'}, '作答中'),
+          ),
+          h('div', {style: 'display: flex; gap: 6px; flex-wrap: wrap'},
+            h('button', {
+              'data-testid': 'submit-answer-btn',
+              class: 'wb-btn wb-btn-primary wb-btn--sm',
+              onClick: () => {},
+            }, '提交答案'),
+            h('button', {
+              'data-testid': 'abandon-answer-btn',
+              class: 'wb-btn wb-btn-danger wb-btn--sm',
+              onClick: () => {},
+            }, '放弃作答'),
+            h('button', {
+              'data-testid': 'request-hint-btn',
+              class: 'wb-btn wb-btn-secondary wb-btn--sm',
+              onClick: onRequestHint,
+            }, '请求提示'),
+          ),
         ),
       ),
     ]

@@ -13,7 +13,7 @@ export default function RecallCheckpointPanel({
   isActive = false,
   onSelect = () => {},
 }) {
-  const classNames = 'wb-recall-checkpoint-panel' + (isActive ? ' active' : '')
+  const classNames = 'wb-recall-checkpoint-panel' + (isActive ? ' wb-recall-checkpoint-panel--active' : '')
 
   return h('div', {
     'data-testid': 'recall-checkpoint-panel',

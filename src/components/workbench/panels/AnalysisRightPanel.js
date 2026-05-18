@@ -1,6 +1,18 @@
 import {h} from 'preact'
 import EmptyStatePanel from '../shared/EmptyStatePanel.js'
 
+function ExpandableTitle({title, onExpand}) {
+  return h('div', {style: 'display: flex; align-items: center; justify-content: space-between'},
+    h('span', {class: 'wb-panel-title', style: 'margin-bottom: 0'}, title),
+    onExpand && h('button', {
+      'data-testid': `expand-${title}`,
+      class: 'wb-btn wb-btn-ghost wb-btn--sm',
+      style: 'font-size: 12px; padding: 0 8px; height: 24px',
+      onClick: onExpand,
+    }, '展开'),
+  )
+}
+
 /**
  * AnalysisRightPanel renders the right panel content for Analysis mode.
  *
@@ -11,6 +23,9 @@ import EmptyStatePanel from '../shared/EmptyStatePanel.js'
  * @param {string|null} props.userOriginalLine - User's original line text
  * @param {string|null} props.userCorrection - User's correction text
  * @param {string|null} props.aiCandidates - AI candidates text
+ * @param {Function} [props.onExpandAI] - Called when AI analysis expand is clicked
+ * @param {Function} [props.onExpandVariation] - Called when variation tree expand is clicked
+ * @param {Function} [props.onExpandSnapshot] - Called when snapshot comparison expand is clicked
  */
 export default function AnalysisRightPanel({
   moveCount = 0,
@@ -19,6 +34,9 @@ export default function AnalysisRightPanel({
   userOriginalLine = null,
   userCorrection = null,
   aiCandidates = null,
+  onExpandAI,
+  onExpandVariation,
+  onExpandSnapshot,
 }) {
   return h('div', {
     'data-testid': 'analysis-right-panel',
@@ -26,11 +44,11 @@ export default function AnalysisRightPanel({
   },
     // AI analysis card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, 'AI 分析'),
+      h(ExpandableTitle, {title: 'AI 分析', onExpand: onExpandAI}),
       h(EmptyStatePanel, {
-        icon: '🔍',
-        title: 'AI 分析',
-        description: '连接引擎后可查看分析结果',
+        icon: 'search',
+        title: '暂无分析数据',
+        description: '选择关键局面后，AI 将在此提供形势判断、推荐手段与变化建议',
       }),
     ),
 
@@ -54,11 +72,11 @@ export default function AnalysisRightPanel({
 
     // Variation tree card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '变化树'),
+      h(ExpandableTitle, {title: '变化树', onExpand: onExpandVariation}),
       h(EmptyStatePanel, {
-        icon: '🌳',
-        title: '变化树',
-        description: '分析过程中将记录变化',
+        icon: 'tree',
+        title: '暂无变化',
+        description: '自由摆棋或进入分支后将记录变化',
       }),
     ),
 
@@ -66,24 +84,27 @@ export default function AnalysisRightPanel({
     h('div', {class: 'wb-card'},
       h('div', {class: 'wb-panel-title'}, '对比'),
       h('div', {class: 'wb-analysis-right-panel__comparison'},
-        userOriginalLine != null && h('div', {class: 'wb-analysis-right-panel__field'},
-          h('span', {class: 'wb-analysis-right-panel__field-label'}, '用户原谱'),
-          h('span', {class: 'wb-analysis-right-panel__field-value'}, userOriginalLine),
+        h('div', {class: 'wb-analysis-right-panel__field'},
+          h('span', {class: 'wb-analysis-right-panel__field-label'}, '用户原线'),
+          h('span', {class: 'wb-analysis-right-panel__field-value'}, userOriginalLine || '--'),
         ),
-        userCorrection != null && h('div', {class: 'wb-analysis-right-panel__field'},
+        h('div', {class: 'wb-analysis-right-panel__field'},
           h('span', {class: 'wb-analysis-right-panel__field-label'}, '用户修正'),
-          h('span', {class: 'wb-analysis-right-panel__field-value'}, userCorrection),
+          h('span', {class: 'wb-analysis-right-panel__field-value'}, userCorrection || '--'),
         ),
-        aiCandidates != null && h('div', {class: 'wb-analysis-right-panel__field'},
-          h('span', {class: 'wb-analysis-right-panel__field-label'}, 'AI 候选'),
-          h('span', {class: 'wb-analysis-right-panel__field-value'}, aiCandidates),
+        h('div', {class: 'wb-analysis-right-panel__field'},
+          h('span', {class: 'wb-analysis-right-panel__field-label'}, 'AI candidates'),
+          h('span', {class: 'wb-analysis-right-panel__field-value'}, aiCandidates || '--'),
         ),
       ),
     ),
 
     // Snapshot comparison card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '快照对比'),
+      h(ExpandableTitle, {title: '快照对比', onExpand: onExpandSnapshot}),
+      h('div', {style: 'font-size: 13px; color: var(--ui-text-tertiary); margin-bottom: 10px'},
+        '捕捉参考局面后可进行快照对比。',
+      ),
       h('button', {
         'data-testid': 'add-snapshot-btn',
         class: 'wb-analysis-right-panel__snapshot-btn',

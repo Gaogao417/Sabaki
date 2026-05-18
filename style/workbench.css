@@ -16,6 +16,7 @@
   --wb-tab-bar-h: 48px;
   --wb-sidebar-w: 300px;
   --wb-right-w: 300px;
+  --wb-right-drawer-w: 480px;
   --wb-gap: 16px;
   --wb-radius: 16px;
 
@@ -400,8 +401,12 @@
 }
 
 .wb-empty-state-panel__icon {
-  font-size: 32px;
+  width: 36px;
+  height: 36px;
   color: var(--ui-text-tertiary);
+  opacity: 0.5;
+  display: grid;
+  place-items: center;
 }
 
 .wb-empty-state-panel__title {
@@ -558,7 +563,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: var(--wb-right-w);
+  width: var(--wb-right-drawer-w);
   background: var(--ui-card);
   border-left: 1px solid var(--ui-border);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
@@ -566,6 +571,19 @@
   flex-direction: column;
   z-index: 50;
   transition: transform 0.25s ease;
+}
+
+.wb-right-drawer__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.2);
+  z-index: 49;
+  transition: opacity 0.25s ease;
+}
+
+.wb-right-drawer__backdrop--hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .wb-right-drawer--hidden {

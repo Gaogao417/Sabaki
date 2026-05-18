@@ -1,10 +1,10 @@
 import {h} from 'preact'
 
 const TABS = [
-  {key: 'play', label: '对局'},
-  {key: 'problem', label: '做题'},
-  {key: 'recall', label: '回忆'},
-  {key: 'analysis', label: '复盘'},
+  {key: 'play', label: '对局模式'},
+  {key: 'problem', label: '做题模式'},
+  {key: 'recall', label: '回忆模式'},
+  {key: 'analysis', label: '复盘模式'},
 ]
 
 /**

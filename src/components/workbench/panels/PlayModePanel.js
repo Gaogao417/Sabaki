@@ -40,9 +40,13 @@ export default function PlayModePanel({
   moveCount = 0,
   captures = {black: 0, white: 0},
   opponentType = 'self',
+  blackPlayer = 'self',
+  whitePlayer = 'self',
   onMarkDoubtful = () => {},
   onEnterAnalysis = () => {},
   onOpponentChange = () => {},
+  onBlackPlayerChange,
+  onWhitePlayerChange,
   state = 'active',
 }) {
   function renderContent() {
@@ -77,30 +81,57 @@ export default function PlayModePanel({
 
     if (state === 'empty') {
       return h(EmptyStatePanel, {
-        icon: '○',
+        icon: 'circle',
         title: 'No Game Loaded',
         description: 'Start a new game to begin playing.',
       })
     }
 
-    // Card 1: 对局模式 — task title + description
+    // Card 1: 当前模式
     // Card 2: 黑白控制 — opponent selector
     // Card 3: 当前任务 — stats + action buttons
     return [
       h('div', {class: 'wb-card', key: 'card-mode'},
-        h('div', {class: 'wb-panel-title'}, '对局模式'),
+        h('div', {class: 'wb-panel-title'}, '当前模式'),
         h('div', {class: 'wb-panel-body'},
-          h('h3', {class: 'wb-play-mode-panel__title'}, taskTitle),
-          h('p', {class: 'wb-play-mode-panel__description'}, taskDescription),
+          h('div', {style: 'font-weight: 500; margin-bottom: 4px'}, '对局模式'),
+          h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '普通对局、续弈或实战模拟'),
+          h('div', {style: 'margin-top: 10px; border-top: 1px solid var(--ui-border); padding-top: 8px'},
+            h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary); margin-bottom: 4px'}, '当前行棋'),
+            h('div', {style: 'font-size: 13px; font-weight: 500'}, taskTitle || '准备开始'),
+          ),
+          h('div', {style: 'margin-top: 8px; border-top: 1px solid var(--ui-border); padding-top: 8px'},
+            h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary); margin-bottom: 4px'}, '对局状态'),
+            h('div', {style: 'font-size: 13px'},
+              h('span', {style: 'color: var(--ui-text-secondary)'}, moveCount === 0 ? '准备开始' : '对局中'),
+              ' · 第 ', moveCount, ' 手',
+            ),
+          ),
         ),
       ),
       h('div', {class: 'wb-card', key: 'card-opponent'},
         h('div', {class: 'wb-panel-title'}, '黑白控制'),
         h('div', {class: 'wb-panel-body'},
-          h(OpponentControl, {
-            value: opponentType,
-            onChange: onOpponentChange,
-          }),
+          h('div', {style: 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px'},
+            h('span', {
+              style: 'display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #555, #111 60%, #000); flex-shrink: 0',
+            }),
+            h(OpponentControl, {
+              value: onBlackPlayerChange ? blackPlayer : opponentType,
+              onChange: onBlackPlayerChange || onOpponentChange,
+              label: '黑方',
+            }),
+          ),
+          h('div', {style: 'display: flex; align-items: center; gap: 8px'},
+            h('span', {
+              style: 'display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #e8e8e8 60%, #ccc); border: 1px solid var(--ui-border); flex-shrink: 0',
+            }),
+            h(OpponentControl, {
+              value: onWhitePlayerChange ? whitePlayer : opponentType,
+              onChange: onWhitePlayerChange || onOpponentChange,
+              label: '白方',
+            }),
+          ),
         ),
       ),
       h('div', {class: 'wb-card', key: 'card-task'},

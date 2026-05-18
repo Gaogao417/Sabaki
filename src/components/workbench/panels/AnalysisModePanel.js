@@ -50,34 +50,37 @@ export default function AnalysisModePanel({
 
     if (state === 'empty') {
       return h(EmptyStatePanel, {
-        icon: '△',
+        icon: 'triangle',
         title: 'No Analysis Session',
         description: 'Enter analysis mode to review positions.',
       })
     }
 
     return [
-      // Card 1: 复盘模式
+      // Card 1: 当前模式
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '复盘模式'),
+        h('div', {class: 'wb-panel-title'}, '当前模式'),
         h('div', {class: 'wb-panel-body'},
-          '自由研究、比较变化、沉淀笔记',
+          h('div', {style: 'font-weight: 500; margin-bottom: 4px'}, '复盘模式'),
+          h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '自由研究、比较变化、沉淀笔记'),
         ),
       ),
-      // Card 2: 局面信息
+      // Card 2: 复盘上下文
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '局面信息'),
+        h('div', {class: 'wb-panel-title'}, '复盘上下文'),
         h('div', {class: 'wb-panel-body'},
           h('div', {class: 'wb-analysis-mode-panel__stats'},
             h('span', {class: 'wb-analysis-mode-panel__stat-item'},
-              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '手数'),
+              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '来源'),
+              h('span', {class: 'wb-analysis-mode-panel__captures'}, '当前局面'),
+            ),
+            h('span', {class: 'wb-analysis-mode-panel__stat-item'},
+              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '当前手数'),
               h('span', {class: 'wb-analysis-mode-panel__move-count'}, moveCount),
             ),
             h('span', {class: 'wb-analysis-mode-panel__stat-item'},
-              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '提子'),
-              h('span', {class: 'wb-analysis-mode-panel__captures'},
-                '黑 ', captures.black, ' / 白 ', captures.white,
-              ),
+              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '关联评论'),
+              h('span', {class: 'wb-analysis-mode-panel__captures'}, '0'),
             ),
           ),
           evaluation != null && h('div', {
@@ -89,10 +92,40 @@ export default function AnalysisModePanel({
           ),
         ),
       ),
-      // Card 3: 操作
+      // Card 3: 关键点筛选
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '操作'),
+        h('div', {class: 'wb-panel-title'}, '关键点筛选'),
         h('div', {class: 'wb-panel-body'},
+          h('div', {style: 'display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap'},
+            ['全部', '坏棋', 'Checkpoint', '备注'].map(tag =>
+              h('button', {
+                key: tag,
+                class: 'wb-btn wb-btn-ghost wb-btn--sm',
+                onClick: () => {},
+              }, tag),
+            ),
+          ),
+          h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'},
+            '使用右侧变化树和局面点评辅助筛选。',
+          ),
+        ),
+      ),
+      // Card 4: 复盘笔记
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '复盘笔记'),
+        h('div', {class: 'wb-panel-body'},
+          h('div', {style: 'font-size: 13px; color: var(--ui-text-tertiary); padding: 8px 0'},
+            '记录这一手的想法、对局思路与改进方向。',
+          ),
+        ),
+      ),
+      // Card 5: Snapshot / 派生新 Task
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, 'Snapshot'),
+        h('div', {class: 'wb-panel-body'},
+          h('div', {style: 'font-size: 13px; color: var(--ui-text-secondary); margin-bottom: 10px'},
+            '捕获当前局面，派生为新的 TrainingTask。',
+          ),
           h('button', {
             'data-testid': 'snapshot-btn',
             class: 'wb-btn wb-btn-primary wb-btn--sm',
