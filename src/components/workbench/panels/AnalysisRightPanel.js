@@ -36,7 +36,7 @@ export default function AnalysisRightPanel({
 
     // Board evaluation card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '棋局评估'),
+      h('div', {class: 'wb-panel-title'}, '局面点评'),
       h('div', {class: 'wb-analysis-right-panel__evaluation'},
         h('div', {class: 'wb-analysis-right-panel__stat'},
           h('span', {class: 'wb-analysis-right-panel__stat-label'}, '手数'),
@@ -45,9 +45,7 @@ export default function AnalysisRightPanel({
         h('div', {class: 'wb-analysis-right-panel__stat'},
           h('span', {class: 'wb-analysis-right-panel__stat-label'}, '提子'),
           h('span', {class: 'wb-analysis-right-panel__stat-value'},
-            captures.black,
-            ' / ',
-            captures.white,
+            '黑 ', captures.black, ' / 白 ', captures.white,
           ),
         ),
         evaluation != null && h('div', {class: 'wb-analysis-right-panel__eval-text'}, evaluation),

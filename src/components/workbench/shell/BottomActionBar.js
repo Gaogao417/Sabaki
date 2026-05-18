@@ -2,45 +2,45 @@ import {h} from 'preact'
 
 /**
  * Mode-specific action button definitions.
- * Each entry: { testId, label, callback }
+ * Each entry: { testId, label, callback, variant? }
  */
 const MODE_ACTIONS = {
   play: [
-    {testId: 'action-undo', label: 'Undo', callback: 'onUndo'},
-    {testId: 'action-pass', label: 'Pass', callback: 'onPass'},
-    {testId: 'action-resign', label: 'Resign', callback: 'onResign'},
-    {testId: 'action-end-attempt', label: 'End', callback: 'onEndAttempt'},
-    {testId: 'action-mark-doubtful', label: 'Doubtful', callback: 'onMarkDoubtful'},
+    {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
+    {testId: 'action-pass', label: '弃权', callback: 'onPass'},
+    {testId: 'action-resign', label: '认输', callback: 'onResign', variant: 'danger'},
+    {testId: 'action-end-attempt', label: '结束', callback: 'onEndAttempt'},
+    {testId: 'action-mark-doubtful', label: '标记疑问手', callback: 'onMarkDoubtful'},
   ],
   problem: [
-    {testId: 'action-undo', label: 'Undo', callback: 'onUndo'},
-    {testId: 'action-redo', label: 'Redo', callback: 'onRedo'},
-    {testId: 'action-pass', label: 'Pass', callback: 'onPass'},
-    {testId: 'action-request-hint', label: 'Hint', callback: 'onRequestHint'},
-    {testId: 'action-submit-answer', label: 'Submit', callback: 'onSubmitAnswer'},
-    {testId: 'action-abandon-answer', label: 'Abandon', callback: 'onAbandonAnswer'},
+    {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
+    {testId: 'action-redo', label: '重做', callback: 'onRedo'},
+    {testId: 'action-pass', label: '弃权', callback: 'onPass'},
+    {testId: 'action-request-hint', label: '提示', callback: 'onRequestHint'},
+    {testId: 'action-submit-answer', label: '提交答案', callback: 'onSubmitAnswer', variant: 'primary'},
+    {testId: 'action-abandon-answer', label: '放弃', callback: 'onAbandonAnswer'},
   ],
   recall: [
-    {testId: 'action-mark-checkpoint', label: 'Checkpoint', callback: 'onMarkCheckpoint'},
-    {testId: 'action-hint', label: 'Hint', callback: 'onHint'},
-    {testId: 'action-verify-skip', label: 'Verify', callback: 'onVerifySkip'},
-    {testId: 'action-enter-analysis', label: 'Analysis', callback: 'onEnterAnalysis'},
+    {testId: 'action-mark-checkpoint', label: '标记检查点', callback: 'onMarkCheckpoint'},
+    {testId: 'action-hint', label: '提示', callback: 'onHint'},
+    {testId: 'action-verify-skip', label: '校对跳过', callback: 'onVerifySkip'},
+    {testId: 'action-enter-analysis', label: '进入复盘', callback: 'onEnterAnalysis'},
   ],
   analysis: [
-    {testId: 'action-undo', label: 'Undo', callback: 'onUndo'},
-    {testId: 'action-redo', label: 'Redo', callback: 'onRedo'},
-    {testId: 'action-clear', label: 'Clear', callback: 'onClear'},
-    {testId: 'action-edit-position', label: 'Edit', callback: 'onEditPosition'},
-    {testId: 'action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},
+    {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
+    {testId: 'action-redo', label: '重做', callback: 'onRedo'},
+    {testId: 'action-clear', label: '清除', callback: 'onClear'},
+    {testId: 'action-edit-position', label: '编辑局面', callback: 'onEditPosition'},
+    {testId: 'action-snapshot', label: '快照', callback: 'onSnapshot', variant: 'primary'},
   ],
 }
 
-const COMMON_ACTIONS = [
-  {testId: 'action-select', label: 'Select', callback: 'onSelect'},
-  {testId: 'action-hand-shape', label: 'Hand', callback: 'onHandShape'},
-  {testId: 'action-zoom-in', label: 'Zoom+', callback: 'onZoomIn'},
-  {testId: 'action-zoom-out', label: 'Zoom-', callback: 'onZoomOut'},
-  {testId: 'action-fullscreen', label: 'Full', callback: 'onFullscreen'},
+const VIEW_ACTIONS = [
+  {testId: 'action-select', label: '选择', callback: 'onSelect'},
+  {testId: 'action-hand-shape', label: '手型', callback: 'onHandShape'},
+  {testId: 'action-zoom-in', label: '放大', callback: 'onZoomIn'},
+  {testId: 'action-zoom-out', label: '缩小', callback: 'onZoomOut'},
+  {testId: 'action-fullscreen', label: '全屏', callback: 'onFullscreen'},
 ]
 
 const ANNOTATION_TOOLS = [
@@ -97,13 +97,29 @@ export default function BottomActionBar({
   ...callbacks
 }) {
   const modeActions = MODE_ACTIONS[mode] || []
-  const allActions = [...modeActions, ...COMMON_ACTIONS]
   const label = workspaceLabel || WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.play
+
+  function actionBtn(btn) {
+    const cls = btn.variant === 'danger'
+      ? 'wb-btn wb-btn--sm wb-btn-danger'
+      : btn.variant === 'primary'
+        ? 'wb-btn wb-btn--sm wb-btn-primary'
+        : 'wb-btn wb-btn--sm wb-btn-ghost'
+    return h('button', {
+      'data-testid': btn.testId,
+      class: cls,
+      onClick: () => {
+        const handler = callbacks[btn.callback]
+        if (handler) handler()
+      },
+    }, btn.label)
+  }
 
   return h('div', {
     'data-testid': 'bottom-action-bar',
     class: 'wb-bottom-action-bar',
   },
+    // Left: Status
     h('div', {
       'data-testid': 'bottom-status-text',
       class: 'wb-status-text',
@@ -115,39 +131,41 @@ export default function BottomActionBar({
       h('span', {class: 'wb-status-text__value'}, engineStatus),
     ),
 
+    // Center: Mode actions
     h('div', {class: 'wb-bottom-action-bar__mode-actions'},
-      allActions.map(btn =>
+      modeActions.map(btn =>
         h('div', {
           key: btn.testId,
-          'data-testid': 'action-btn',
           class: 'wb-bottom-action-bar__item',
-        },
-          h('button', {
-            'data-testid': btn.testId,
-            class: 'wb-btn wb-btn--ghost wb-btn--sm',
-            onClick: () => {
-              const handler = callbacks[btn.callback]
-              if (handler) handler()
-            },
-          }, btn.label),
-        ),
+        }, actionBtn(btn)),
       ),
     ),
 
-    mode === 'analysis' &&
-      h('div', {
-        'data-testid': 'annotation-tool',
-        class: 'wb-bottom-action-bar__annotation-tools',
-      },
-        ANNOTATION_TOOLS.map(tool =>
-          h('button', {
-            key: tool,
-            'data-testid': 'annotation-tool-btn',
-            'data-tool': tool,
-            class: `wb-btn wb-btn--sm wb-btn--ghost${activeAnnotationTool === tool ? ' active' : ''}`,
-            onClick: () => onAnnotationToolChange(tool),
-          }, tool),
-        ),
+    // Right: View controls + annotation tools (analysis)
+    h('div', {class: 'wb-bottom-action-bar__view-controls'},
+      h('div', {class: 'wb-bottom-action-bar__divider'}),
+      VIEW_ACTIONS.map(btn =>
+        h('div', {
+          key: btn.testId,
+          class: 'wb-bottom-action-bar__item',
+        }, actionBtn(btn)),
       ),
+      mode === 'analysis' &&
+        h('div', {
+          'data-testid': 'annotation-tool',
+          class: 'wb-bottom-action-bar__annotation-tools',
+        },
+          h('div', {class: 'wb-bottom-action-bar__divider'}),
+          ANNOTATION_TOOLS.map(tool =>
+            h('button', {
+              key: tool,
+              'data-testid': 'annotation-tool-btn',
+              'data-tool': tool,
+              class: `wb-btn wb-btn--sm wb-btn-ghost${activeAnnotationTool === tool ? ' active' : ''}`,
+              onClick: () => onAnnotationToolChange(tool),
+            }, tool),
+          ),
+        ),
+    ),
   )
 }

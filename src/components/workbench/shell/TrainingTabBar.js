@@ -1,10 +1,10 @@
 import {h} from 'preact'
 
 const TABS = [
-  {key: 'play', label: 'Play', color: '#2563ff'},
-  {key: 'problem', label: 'Problem', color: '#d97706'},
-  {key: 'recall', label: 'Recall', color: '#169b55'},
-  {key: 'analysis', label: 'Analysis', color: '#7c3aed'},
+  {key: 'play', label: '对局'},
+  {key: 'problem', label: '做题'},
+  {key: 'recall', label: '回忆'},
+  {key: 'analysis', label: '复盘'},
 ]
 
 /**
@@ -20,7 +20,7 @@ export default function TrainingTabBar({activeTab = 'play', onTabChange = () => 
     'data-testid': 'training-tab-bar',
     class: 'wb-training-tab-bar',
   },
-    TABS.map(({key, label, color}) => {
+    TABS.map(({key, label}) => {
       const isActive = activeTab === key
       const badgeCount = badgeCounts[key]
 
@@ -29,7 +29,6 @@ export default function TrainingTabBar({activeTab = 'play', onTabChange = () => 
         'data-testid': 'training-tab',
         'data-tab': key,
         class: `wb-training-tab-bar__tab${isActive ? ' wb-training-tab-bar__tab--active' : ''}`,
-        style: isActive ? {borderBottom: `2px solid ${color}`, color} : {},
         onClick: () => onTabChange(key),
       },
         label,

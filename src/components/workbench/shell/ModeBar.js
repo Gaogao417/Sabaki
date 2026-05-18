@@ -1,32 +1,39 @@
 import {h} from 'preact'
+import StoneStatus from './StoneStatus.js'
 import ModeActions from './ModeActions.js'
 
 const MODES = [
-  {key: 'play', label: '对局', color: '#2563ff'},
-  {key: 'problem', label: '做题', color: '#d97706'},
-  {key: 'recall', label: '回忆', color: '#169b55'},
-  {key: 'analysis', label: '复盘', color: '#7c3aed'},
+  {key: 'play', label: '对局'},
+  {key: 'problem', label: '做题'},
+  {key: 'recall', label: '回忆'},
+  {key: 'analysis', label: '复盘'},
 ]
 
 export default function ModeBar({
   activeMode = 'problem',
   onModeChange = () => {},
-  onSnapshot = () => {},
+  blackCaptures = 0,
+  whiteCaptures = 0,
+  currentPlayer = 'black',
+  ...rest
 }) {
   return h(
     'nav',
     {'data-testid': 'mode-bar', class: 'wb-mode-bar'},
 
+    // Left: StoneStatus
+    h(StoneStatus, {blackCaptures, whiteCaptures, currentPlayer}),
+
+    // Center: Segmented control
     h(
       'div',
       {class: 'wb-mode-bar__tabs wb-segmented-control'},
-      MODES.map(({key, label, color}) =>
+      MODES.map(({key, label}) =>
         h(
           'button',
           {
             key,
             class: `wb-segmented-control__item${activeMode === key ? ' wb-segmented-control__item--active' : ''}`,
-            style: activeMode === key ? {'--segment-color': color} : {},
             onClick: () => onModeChange(key),
           },
           label,
@@ -34,12 +41,13 @@ export default function ModeBar({
       ),
     ),
 
+    // Right: Mode actions
     h(
       'div',
       {class: 'wb-mode-bar__actions'},
       h(ModeActions, {
         mode: activeMode,
-        onSnapshot,
+        ...rest,
       }),
     ),
   )

@@ -28,13 +28,13 @@ export default function RecallRightPanel({
   },
     // Recall hint card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '提示信息'),
+      h('div', {class: 'wb-panel-title'}, '回忆提示'),
       h('div', {class: 'wb-recall-right-panel__hint'}, hintMessage),
     ),
 
     // Checkpoint summary card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '检查点'),
+      h('div', {class: 'wb-panel-title'}, 'Checkpoint'),
       h('div', {class: 'wb-recall-right-panel__checkpoint-summary'},
         h('div', {class: 'wb-recall-right-panel__stat'},
           h('span', {class: 'wb-recall-right-panel__stat-label'}, '系统检查点'),
@@ -49,7 +49,7 @@ export default function RecallRightPanel({
 
     // Result feedback card
     h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '复棋结果'),
+      h('div', {class: 'wb-panel-title'}, '结果反馈'),
       h('div', {class: 'wb-recall-right-panel__feedback'},
         h('div', {class: 'wb-recall-right-panel__stat'},
           h('span', {class: 'wb-recall-right-panel__stat-label'}, '正确'),

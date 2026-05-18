@@ -9,33 +9,49 @@
 /* ===== Additional Custom Properties ===== */
 
 :root {
-  /* Mode colours */
-  --ui-play: #2563ff;
-  --ui-play-soft: #eef4ff;
-  --ui-problem: #d97706;
-  --ui-problem-soft: #fff7ed;
-  --ui-recall-mode: #169b55;
-  --ui-recall-mode-soft: #eaf8f0;
-  --ui-analysis: #7c3aed;
-  --ui-analysis-soft: #f2edff;
-
-  /* Semantic palette */
-  --ui-orange: #f59e0b;
-  --ui-orange-soft: #fffbeb;
-  --ui-success: #16a34a;
-  --ui-success-soft: #f0fdf4;
-  --ui-warning: #f59e0b;
-  --ui-warning-soft: #fffbeb;
-
   /* Layout constants */
   --wb-header-h: 52px;
-  --wb-mode-bar-h: 48px;
+  --wb-mode-bar-h: 78px;
   --wb-action-bar-h: 68px;
   --wb-tab-bar-h: 48px;
-  --wb-sidebar-w: 280px;
-  --wb-right-w: 380px;
-  --wb-gap: 20px;
+  --wb-sidebar-w: 300px;
+  --wb-right-w: 300px;
+  --wb-gap: 16px;
   --wb-radius: 16px;
+
+  /* Card atom tokens */
+  --wb-card-radius: var(--radius-card);
+  --wb-card-padding: var(--card-padding);
+  --wb-card-gap: 16px;
+}
+
+/* ===== Mode accent via data-mode ===== */
+/* The shell root carries data-mode="play|problem|recall|analysis"
+   and provides --mode-accent so children don't hardcode colours. */
+
+[data-mode="play"] {
+  --mode-accent: var(--accent-play);
+  --mode-accent-soft: var(--accent-play-soft);
+  --ui-play: var(--accent-play);
+  --ui-play-soft: var(--accent-play-soft);
+}
+[data-mode="problem"] {
+  --mode-accent: var(--accent-problem);
+  --mode-accent-soft: var(--accent-problem-soft);
+  --ui-problem: var(--accent-problem);
+  --ui-problem-soft: var(--accent-problem-soft);
+}
+[data-mode="recall"] {
+  --mode-accent: var(--accent-recall);
+  --mode-accent-soft: var(--accent-recall-soft);
+  --ui-recall-mode: var(--accent-recall);
+  --ui-recall-mode-soft: var(--accent-recall-soft);
+}
+[data-mode="analysis"] {
+  --mode-accent: var(--accent-analysis);
+  --mode-accent-soft: var(--accent-analysis-soft);
+  --ui-analysis: var(--accent-analysis);
+  --ui-analysis-soft: var(--accent-analysis-soft);
 }
 
 /* ========================================================================
@@ -78,12 +94,18 @@
   gap: 6px;
 }
 
-.wb-global-header__engine-status {
+.wb-global-header__engine-status,
+.wb-global-header__engine {
   font-size: 12px;
   color: var(--ui-text-tertiary);
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.wb-global-header__engine-name {
+  font-size: 12px;
+  color: var(--ui-text-tertiary);
 }
 
 .wb-global-header__engine-dot {
@@ -113,7 +135,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--ui-blue), var(--ui-review));
+  background: linear-gradient(135deg, var(--accent-play), var(--accent-analysis));
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -127,7 +149,8 @@
 }
 
 /* ========================================================================
-   2. Mode Bar  (.wb-mode-bar)
+   2. Mode Bar / Toolbar  (.wb-mode-bar)
+   Spec: white card, 72-84px, rounded corners, light shadow, three-section layout
    ======================================================================== */
 
 .wb-mode-bar {
@@ -135,14 +158,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--wb-gap);
-  background: var(--ui-bg-strong);
-  border-bottom: 1px solid var(--ui-border);
-  gap: 12px;
+  padding: 0 24px;
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-shell);
+  box-shadow: var(--shadow-panel);
+  gap: 16px;
 }
 
 .wb-mode-bar__tabs {
   /* Layout handled by .wb-segmented-control atomic class */
+  flex-shrink: 0;
 }
 
 .wb-mode-bar__actions {
@@ -272,33 +298,33 @@
   transform: none;
 }
 
-/* Primary */
+/* Primary — follows mode accent */
 .wb-btn-primary {
-  background: var(--ui-blue);
+  background: var(--mode-accent, var(--accent-play));
   color: #fff;
-  border-color: rgba(16, 88, 196, 0.6);
+  border-color: var(--mode-accent, var(--accent-play));
   box-shadow:
-    0 1px 2px rgba(37, 99, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .wb-btn-primary:hover:not(:disabled) {
-  background: #1a56e6;
+  filter: brightness(1.1);
   box-shadow:
-    0 4px 12px rgba(37, 99, 255, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-/* Secondary */
+/* Secondary — follows mode accent */
 .wb-btn-secondary {
   background: var(--ui-card);
-  color: var(--ui-blue);
-  border-color: var(--ui-blue);
+  color: var(--mode-accent, var(--accent-play));
+  border-color: var(--mode-accent, var(--accent-play));
   box-shadow: var(--ui-shadow-inner);
 }
 
 .wb-btn-secondary:hover:not(:disabled) {
-  background: var(--ui-blue-soft);
+  background: var(--mode-accent-soft, var(--accent-play-soft));
 }
 
 /* Ghost */
@@ -431,7 +457,7 @@
 }
 
 .wb-mode-toggle--checked .wb-mode-toggle__track {
-  background: var(--ui-blue);
+  background: var(--mode-accent, var(--accent-play));
 }
 
 .wb-mode-toggle__thumb {
@@ -479,12 +505,12 @@
 }
 
 .wb-opponent-control__option--selected {
-  background: var(--ui-blue);
+  background: var(--mode-accent, var(--accent-play));
   color: #fff;
 }
 
 .wb-opponent-control__option:hover:not(.wb-opponent-control__option--selected) {
-  background: var(--ui-blue-soft);
+  background: var(--mode-accent-soft, var(--accent-play-soft));
 }
 
 /* ========================================================================
@@ -615,9 +641,9 @@
 }
 
 .wb-annotation-toolbar__btn--active {
-  background: var(--ui-blue-soft);
-  color: var(--ui-blue);
-  border-color: var(--ui-blue);
+  background: var(--mode-accent-soft, var(--accent-analysis-soft));
+  color: var(--mode-accent, var(--accent-analysis));
+  border-color: var(--mode-accent, var(--accent-analysis));
 }
 
 /* ========================================================================
@@ -909,20 +935,21 @@
 
 .wb-game-tab-bar__add:hover {
   color: var(--ui-text);
-  border-color: var(--ui-blue, #2563ff);
-  background: var(--ui-blue-soft, #eef4ff);
+  border-color: var(--mode-accent, var(--accent-play));
+  background: var(--mode-accent-soft, var(--accent-play-soft));
 }
 
 /* ========================================================================
    18. Card  (.wb-card)
+   Spec: radius 14-16px, padding 18-22px, gap 14-16px, light shadow
    ======================================================================== */
 
 .wb-card {
   background: var(--ui-card);
   border: 1px solid var(--ui-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--ui-shadow-sm);
-  padding: 18px;
+  border-radius: var(--wb-card-radius);
+  box-shadow: var(--shadow-panel);
+  padding: var(--wb-card-padding);
 }
 
 .wb-card--flat {
@@ -949,6 +976,17 @@
 }
 
 /* ========================================================================
+   18b. Panel  (.wb-panel)
+   Unified panel container with gap
+   ======================================================================== */
+
+.wb-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-card-gap);
+}
+
+/* ========================================================================
    19. Segmented Control  (.wb-segmented-control)
    ======================================================================== */
 
@@ -964,7 +1002,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 14px;
+  padding: 8px 18px;
   border-radius: calc(var(--radius-md) - 2px);
   cursor: pointer;
   font-size: 13px;
@@ -975,9 +1013,14 @@
   background: transparent;
 }
 
+.wb-segmented-control__item:hover:not(.wb-segmented-control__item--active) {
+  background: var(--ui-border);
+  color: var(--ui-text);
+}
+
 .wb-segmented-control__item--active {
-  background: var(--segment-color, var(--ui-blue));
-  color: var(--ui-bg);
+  background: var(--mode-accent, var(--accent-play));
+  color: #fff;
 }
 
 /* ========================================================================
@@ -1018,9 +1061,9 @@
 }
 
 .wb-status-text__label {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--ui-text);
+  color: var(--ui-text-secondary);
 }
 
 .wb-status-text__value {
@@ -1036,15 +1079,20 @@
 
 /* ========================================================================
    22. Panel Typography  (.wb-panel-title, .wb-panel-body, .wb-panel-caption)
+   .wb-panel-title is aliased to .wb-card__title for consistency
    ======================================================================== */
 
 .wb-panel-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--ui-text);
+  margin: 0 0 12px 0;
 }
 
 .wb-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   font-size: 13px;
   color: var(--ui-text-secondary);
 }
@@ -1095,7 +1143,7 @@
 
 /* Active modifier on stone indicator itself */
 .wb-stone-indicator--active {
-  box-shadow: 0 0 0 2px var(--ui-blue), 1px 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 2px var(--mode-accent, var(--accent-play)), 1px 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 /* ========================================================================
@@ -1105,7 +1153,7 @@
 .wb-recall-mode-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--wb-gap);
+  gap: var(--wb-card-gap);
 }
 
 .wb-recall-mode-panel__toggle-row {
@@ -1164,7 +1212,7 @@
 .wb-play-mode-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--wb-gap);
+  gap: var(--wb-card-gap);
 }
 
 .wb-play-mode-panel__title {
@@ -1210,7 +1258,7 @@
 .wb-analysis-mode-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--wb-gap);
+  gap: var(--wb-card-gap);
 }
 
 .wb-analysis-mode-panel__stats {
@@ -1249,19 +1297,54 @@
 }
 
 /* ========================================================================
+   Section 24b. ProblemModePanel  (.wb-problem-mode-panel)
+   ======================================================================== */
+
+.wb-problem-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-card-gap);
+}
+
+.wb-problem-mode-panel__prompt {
+  font-size: 13px;
+  color: var(--ui-text);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.wb-problem-mode-panel__goal {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+  margin-bottom: 4px;
+}
+
+.wb-problem-mode-panel__rules {
+  font-size: 12px;
+  color: var(--ui-text-tertiary);
+}
+
+.wb-problem-mode-panel__reference-lines {
+  margin-top: 4px;
+}
+
+/* ========================================================================
    Section 26. Bottom Action Bar  (.wb-bottom-action-bar)
-   Apple-style floating bar: white bg, subtle border, rounded corners, horizontal flex
+   Spec: 64-76px, white card, three-section layout (status / mode actions / view controls)
    ======================================================================== */
 
 .wb-bottom-action-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
+  gap: 16px;
+  padding: 0 24px;
+  height: var(--wb-action-bar-h);
+  min-height: 64px;
+  max-height: 76px;
   background: var(--ui-card);
   border: 1px solid var(--ui-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--ui-shadow-sm);
+  border-radius: var(--radius-shell);
+  box-shadow: var(--shadow-panel);
   white-space: nowrap;
 }
 
@@ -1271,6 +1354,21 @@
   gap: 4px;
   flex-wrap: nowrap;
   overflow-x: auto;
+}
+
+.wb-bottom-action-bar__view-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.wb-bottom-action-bar__divider {
+  width: 1px;
+  height: 24px;
+  background: var(--ui-border-strong);
+  margin: 0 6px;
+  flex-shrink: 0;
 }
 
 .wb-bottom-action-bar__annotation-tools {
@@ -1293,7 +1391,7 @@
 }
 
 .wb-bottom-action-bar .wb-btn:hover {
-  background: var(--ui-card-hover);
+  background: var(--mode-accent-soft, var(--accent-play-soft));
   border-color: var(--ui-border-strong);
   box-shadow: var(--ui-shadow-sm);
 }
@@ -1304,9 +1402,25 @@
 }
 
 .wb-bottom-action-bar .wb-btn.active {
-  background: var(--ui-blue);
+  background: var(--mode-accent, var(--accent-play));
   color: #fff;
-  border-color: var(--ui-blue);
+  border-color: var(--mode-accent, var(--accent-play));
+}
+
+.wb-bottom-action-bar .wb-btn-primary {
+  background: var(--mode-accent, var(--accent-play));
+  color: #fff;
+  border-color: var(--mode-accent, var(--accent-play));
+}
+
+.wb-bottom-action-bar .wb-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.wb-bottom-action-bar .wb-btn-danger {
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  border-color: var(--ui-danger);
 }
 
 /* ========================================================================
@@ -1318,16 +1432,17 @@
   color: var(--ui-text);
   border: 1px solid var(--ui-border);
   border-radius: var(--radius-sm);
-  height: 30px;
-  padding: 0 12px;
+  height: 34px;
+  padding: 0 14px;
   font-size: 12px;
   font-weight: 500;
   transition: all 0.12s ease;
 }
 
 .wb-mode-actions .wb-btn:hover {
-  background: var(--ui-card-hover);
-  border-color: var(--ui-border-strong);
+  background: var(--mode-accent-soft, var(--accent-play-soft));
+  border-color: var(--mode-accent, var(--accent-play));
+  color: var(--mode-accent, var(--accent-play));
 }
 
 .wb-mode-actions .wb-btn-danger {
@@ -1339,4 +1454,163 @@
 .wb-mode-actions .wb-btn-danger:hover {
   background: var(--ui-danger);
   color: #fff;
+}
+
+/* ========================================================================
+   Section 28. Right Panel Containers  (.wb-*-right-panel, .wb-right-mode-panel)
+   ======================================================================== */
+
+.wb-right-mode-panel,
+.wb-play-right-panel,
+.wb-problem-right-panel,
+.wb-recall-right-panel,
+.wb-analysis-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-card-gap);
+}
+
+/* Right panel stat rows */
+.wb-play-right-panel__board-info,
+.wb-problem-right-panel__answer-draft,
+.wb-recall-right-panel__checkpoint-summary,
+.wb-recall-right-panel__feedback,
+.wb-analysis-right-panel__evaluation,
+.wb-analysis-right-panel__comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Generic stat row */
+.wb-play-right-panel__stat,
+.wb-problem-right-panel__stat,
+.wb-recall-right-panel__stat,
+.wb-analysis-right-panel__stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.wb-play-right-panel__stat-label,
+.wb-problem-right-panel__stat-label,
+.wb-recall-right-panel__stat-label,
+.wb-analysis-right-panel__stat-label {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.wb-play-right-panel__stat-value,
+.wb-problem-right-panel__stat-value,
+.wb-recall-right-panel__stat-value,
+.wb-analysis-right-panel__stat-value {
+  font-weight: 600;
+  color: var(--ui-text);
+  font-size: 13px;
+}
+
+/* Drawer toggle (used as card header button in right panels) */
+.wb-drawer-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.wb-drawer-toggle:hover {
+  opacity: 0.8;
+}
+
+/* Right panel hint / ai content */
+.wb-problem-right-panel__hint-content,
+.wb-problem-right-panel__ai-hidden,
+.wb-problem-right-panel__ai-visible,
+.wb-recall-right-panel__hint {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+/* Analysis right panel specific */
+.wb-analysis-right-panel__eval-text {
+  font-size: 13px;
+  color: var(--ui-text);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.wb-analysis-right-panel__field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.wb-analysis-right-panel__field-label {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.wb-analysis-right-panel__field-value {
+  color: var(--ui-text);
+  font-weight: 500;
+}
+
+.wb-analysis-right-panel__snapshot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mode-accent, var(--accent-analysis));
+  background: var(--mode-accent-soft, var(--accent-analysis-soft));
+  border: 1px solid var(--mode-accent, var(--accent-analysis));
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wb-analysis-right-panel__snapshot-btn:hover {
+  background: var(--mode-accent, var(--accent-analysis));
+  color: #fff;
+}
+
+/* ========================================================================
+   Section 29. MainBoardStage  (.wb-main-board-stage)
+   ======================================================================== */
+
+.wb-main-board-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  flex: 1;
+  position: relative;
+}
+
+.wb-main-board-stage__chip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+}
+
+.wb-main-board-stage__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  font-size: 16px;
+  color: var(--ui-text-tertiary);
+  border: 2px dashed var(--ui-border);
+  border-radius: var(--radius-card);
+  background: var(--ui-bg-soft);
 }

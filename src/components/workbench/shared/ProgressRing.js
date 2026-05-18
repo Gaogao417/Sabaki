@@ -34,7 +34,7 @@ export default function ProgressRing({progress = 0, size = 64, label}) {
         cy: size / 2,
         r: radius,
         fill: 'none',
-        stroke: 'var(--ui-blue)',
+        stroke: 'var(--mode-accent, var(--accent-play))',
         'stroke-width': strokeWidth,
         'stroke-linecap': 'round',
         'stroke-dasharray': circumference,

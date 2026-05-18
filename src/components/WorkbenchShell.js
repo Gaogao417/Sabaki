@@ -74,20 +74,20 @@ export default function WorkbenchShell({
     analysis: h(AnalysisModePanel, {...rest}),
   }
 
-  return h('section', {class: 'workbench-shell'},
+  return h('section', {class: 'workbench-shell', 'data-mode': mode},
     h('div', {class: 'workbench-shell__inner'},
 
-      // Top rows: GlobalHeader + GameTabBar + ModeBar
-      h('div', {class: 'workbench-shell__top'},
+      // Row 1: Chrome — GlobalHeader + GameTabBar
+      h('div', {class: 'workbench-shell__chrome'},
         h(GlobalHeader, {mode, taskTitle, statusChips, engineName, engineConnected}),
 
         // Game tab bar (only when games prop is provided)
         games && games.length > 0 &&
           h(GameTabBar, {games, activeIndex, onSelect: onSelectGame, onClose: onCloseGame, onAdd: onAddGame}),
-
-        // Mode bar
-        h(ModeBar, {activeMode: mode, onModeChange}),
       ),
+
+      // Row 2: Toolbar — ModeBar (StoneStatus + Segmented + Actions)
+      h(ModeBar, {activeMode: mode, onModeChange, ...rest}),
 
       // Main content area
       h('div', {class: 'workbench-shell__main'},

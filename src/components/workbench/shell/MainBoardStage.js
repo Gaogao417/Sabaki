@@ -3,15 +3,8 @@ import {h} from 'preact'
 const MODE_LABELS = {
   play: '对局',
   problem: '题目',
-  recall: '复棋',
+  recall: '回忆',
   analysis: '分析',
-}
-
-const MODE_COLORS = {
-  play: '#2563ff',
-  problem: '#d97706',
-  recall: '#169b55',
-  analysis: '#7c3aed',
 }
 
 /**
@@ -23,7 +16,6 @@ const MODE_COLORS = {
  */
 export default function MainBoardStage({mode = 'play', children}) {
   const label = MODE_LABELS[mode] || mode
-  const color = MODE_COLORS[mode] || '#2563ff'
 
   return h('div', {
     'data-testid': 'main-board-stage',
@@ -31,8 +23,7 @@ export default function MainBoardStage({mode = 'play', children}) {
   },
     h('span', {
       'data-testid': 'board-mode-chip',
-      class: 'wb-main-board-stage__chip',
-      style: {background: color, color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', '--mode-color': color},
+      class: `wb-main-board-stage__chip wb-mode-chip wb-mode-chip--${mode}`,
     }, label),
     h('div', {
       'data-testid': 'board-placeholder',
