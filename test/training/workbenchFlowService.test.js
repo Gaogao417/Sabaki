@@ -157,6 +157,317 @@ describeIf('workbenchFlowService', () => {
     })
   })
 
+  // --- Phase 3: enhanced submit with evaluation flow (C22-C31, C38, C39) ---
+
+  describe('submit — evaluation and finalization (C22-C31, C38, C39)', () => {
+    function createEvalMockDeps(overrides = {}) {
+      const frozenAttempts = {}
+      const finalizedResults = {}
+      const createdRecallSessions = []
+      const logs = []
+
+      return {
+        frozenAttempts,
+        finalizedResults,
+        createdRecallSessions,
+        logs,
+        store: createWorkbenchStore(),
+        workbenchStore: undefined, // set below
+        repository: {
+          loadTask: async id => overrides.tasks?.[id] ?? makeTask({id}),
+          createTask: async t => t,
+          transaction: async fn => fn(),
+          async listMoveEvaluationsByAttempt(attemptId) {
+            return overrides.evaluations ?? []
+          },
+          async listBadMovesByAttempt(attemptId) {
+            return overrides.badMoves ?? []
+          },
+          async updateAttempt(id, patch) {
+            if (patch.status === 'submitted') {
+              frozenAttempts[id] = true
+            }
+            if (patch.result) {
+              finalizedResults[id] = patch.result
+            }
+          },
+          ...overrides.repository,
+        },
+        attemptService: {
+          createAttempt: async input => ({id: 'attempt_1', ...input}),
+          async freezeAttempt(attemptId) {
+            frozenAttempts[attemptId] = true
+          },
+          async finalizeAttemptResult(attemptId, result) {
+            finalizedResults[attemptId] = result
+          },
+          ...overrides.attemptService,
+        },
+        recallService: {
+          async createRecallSession(input) {
+            createdRecallSessions.push({...input})
+            return {id: 'rs_1', ...input}
+          },
+          ...overrides.recallService,
+        },
+        evaluationRules: {
+          evaluateAttempt: overrides.evaluateAttempt ?? (() => 'pass'),
+        },
+        snapshotService: {
+          captureSnapshotInput: async input => ({
+            sourceTaskId: input?.sourceTaskId ?? 'task_1',
+            positionSgf: '(;SZ[9]AB[dc])',
+            sideToMove: 'black',
+          }),
+        },
+        tabService: {
+          openTask: async opts => ({
+            id: 'tab_snap_1',
+            taskId: 'task_snap_1',
+            mode: 'problem',
+            parentTabId: opts?.parentTabId,
+            childTabIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }),
+        },
+        runtimeStore: overrides.runtimeStore,
+        logger: {
+          info(channel, message, data) {
+            logs.push({channel, message, data})
+          },
+        },
+      }
+    }
+
+    it('submit full flow: status submitted, result finalized, recall created, tab mode recall (C22)', async () => {
+      const deps = createEvalMockDeps()
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+      assert.strictEqual(tab.mode, 'recall')
+      assert.ok(deps.frozenAttempts['att_1'], 'attempt should be frozen')
+      assert.ok(deps.createdRecallSessions.length >= 1, 'recall session should be created')
+    })
+
+    it('submit sets attempt status to submitted (C23)', async () => {
+      let frozenStatus = null
+      const deps = createEvalMockDeps({
+        attemptService: {
+          async freezeAttempt(attemptId) {
+            frozenStatus = 'submitted'
+          },
+          async finalizeAttemptResult() {},
+        },
+      })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(frozenStatus, 'submitted')
+    })
+
+    it('submit determines result from evaluation data (C24)', async () => {
+      let receivedResult = null
+      const deps = createEvalMockDeps({
+        evaluateAttempt: () => 'soft_pass',
+        attemptService: {
+          async freezeAttempt() {},
+          async finalizeAttemptResult(attemptId, result) {
+            receivedResult = result
+          },
+        },
+      })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(receivedResult, 'soft_pass')
+    })
+
+    it('submit creates recall session with attemptId pointing to frozen attempt (C25)', async () => {
+      const deps = createEvalMockDeps()
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.ok(deps.createdRecallSessions.length >= 1)
+      const session = deps.createdRecallSessions[0]
+      assert.strictEqual(session.attemptId, 'att_1')
+    })
+
+    it('submit sets tab.activeRecallSessionId (C26)', async () => {
+      const deps = createEvalMockDeps()
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+      assert.ok(tab.activeRecallSessionId)
+    })
+
+    it('submit is no-op when activeAttemptId is not set (C27)', async () => {
+      const deps = createEvalMockDeps()
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
+
+      // Should not throw -- mode transition still happens
+      await service.submit('tab_1')
+
+      const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+      assert.strictEqual(tab.mode, 'recall')
+      assert.strictEqual(deps.createdRecallSessions.length, 0, 'no recall session without attempt')
+    })
+
+    it('submit finalizes pass when no bad moves (C28)', async () => {
+      let receivedResult = null
+      const deps = createEvalMockDeps({
+        evaluateAttempt: () => 'pass',
+        badMoves: [],
+        attemptService: {
+          async freezeAttempt() {},
+          async finalizeAttemptResult(attemptId, result) {
+            receivedResult = result
+          },
+        },
+      })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(receivedResult, 'pass')
+    })
+
+    it('submit finalizes fail when severe bad moves (C29)', async () => {
+      let receivedResult = null
+      const deps = createEvalMockDeps({
+        evaluateAttempt: () => 'fail',
+        attemptService: {
+          async freezeAttempt() {},
+          async finalizeAttemptResult(attemptId, result) {
+            receivedResult = result
+          },
+        },
+      })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(receivedResult, 'fail')
+    })
+
+    it('submit finalizes soft_pass when only minor bad moves (C30)', async () => {
+      let receivedResult = null
+      const deps = createEvalMockDeps({
+        evaluateAttempt: () => 'soft_pass',
+        attemptService: {
+          async freezeAttempt() {},
+          async finalizeAttemptResult(attemptId, result) {
+            receivedResult = result
+          },
+        },
+      })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(receivedResult, 'soft_pass')
+    })
+
+    it('submit clears problemView and activates recall in runtime store (C31)', async () => {
+      const { createTrainingRuntimeStore } = require('../../src/modules/training/store/trainingRuntimeStore.ts')
+      const runtimeStore = createTrainingRuntimeStore()
+      runtimeStore.setProblemView({
+        taskId: 'task_1',
+        attemptId: 'att_1',
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+        legacyProblemSession: null,
+      })
+
+      const deps = createEvalMockDeps({ runtimeStore })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(runtimeStore.getState().problemView, null, 'problemView should be cleared')
+      assert.ok(runtimeStore.getState().activeRecallSessionId, 'activeRecallSessionId should be set')
+    })
+
+    it('submit writes attempt result to persistence (C38)', async () => {
+      const persistedResults = {}
+      const deps = createEvalMockDeps({
+        evaluateAttempt: () => 'pass',
+        attemptService: {
+          async freezeAttempt() {},
+          async finalizeAttemptResult(attemptId, result) {
+            persistedResults[attemptId] = result
+          },
+        },
+      })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(persistedResults['att_1'], 'pass')
+    })
+
+    it('submit ordering: freeze before recall creation (C39)', async () => {
+      let freezeCalled = false
+      let recallCreatedBeforeFreeze = false
+
+      const deps = createEvalMockDeps({
+        attemptService: {
+          async freezeAttempt() {
+            freezeCalled = true
+          },
+          async finalizeAttemptResult() {},
+        },
+        recallService: {
+          async createRecallSession(input) {
+            if (!freezeCalled) {
+              recallCreatedBeforeFreeze = true
+            }
+            return {id: 'rs_1', ...input}
+          },
+        },
+      })
+      deps.workbenchStore = deps.store
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+      await service.submit('tab_1')
+
+      assert.strictEqual(recallCreatedBeforeFreeze, false, 'recall must not be created before freeze')
+      assert.strictEqual(freezeCalled, true, 'freeze must have been called')
+    })
+  })
+
   describe('enterAnalysis — any mode → analysis', () => {
     const sourceModes = ['play', 'problem', 'recall']
 
