@@ -1,19 +1,18 @@
 import type { TrainingAttemptResult } from '../types/attempt'
-import type { ReviewSchedule, ReviewItemType } from '../types/review'
+import type { ReviewSchedule } from '../types/review'
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { WorkbenchTabService } from '../workbench/workbenchTabService'
+import { inferDefaultMode } from '../workbench/workbenchTabService'
 
 export type ReviewService = {
   getDueItems(now?: string): Promise<ReviewSchedule[]>
-  openDueItem(itemId: string): Promise<ReturnType<WorkbenchTabService['openProblemTab']>>
+  openDueItem(scheduleId: string): Promise<ReturnType<WorkbenchTabService['openTask']>>
   updateScheduleAfterResult(input: {
-    itemId: string
-    itemType: ReviewItemType
+    taskId: string
     result: TrainingAttemptResult
   }): Promise<void>
   addToReviewQueue(input: {
-    itemId: string
-    itemType: ReviewItemType
+    taskId: string
   }): Promise<ReviewSchedule>
 }
 
@@ -86,37 +85,36 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     return repository.listDueReviewItems(isoNow)
   }
 
-  async function openDueItem(itemId: string): Promise<ReturnType<WorkbenchTabService['openProblemTab']>> {
+  async function openDueItem(scheduleId: string): Promise<ReturnType<WorkbenchTabService['openTask']>> {
     const schedule = (await repository.listDueReviewItems(new Date().toISOString()))
-      .find(s => s.id === itemId)
+      .find(s => s.id === scheduleId)
 
     if (!schedule) {
-      throw new Error(`reviewService.openDueItem: schedule item not found (id=${itemId})`)
+      throw new Error(`reviewService.openDueItem: schedule not found (id=${scheduleId})`)
     }
 
-    if (schedule.itemType === 'problem') {
-      logger?.info('review.open', 'Opening review problem', {
-        scheduleId: itemId,
-        problemId: schedule.itemId,
-      })
-
-      return workbenchTabService.openProblemTab(schedule.itemId)
+    const task = await repository.loadTask(schedule.taskId)
+    if (!task) {
+      throw new Error(`reviewService.openDueItem: task not found (taskId=${schedule.taskId})`)
     }
 
-    throw new Error(`reviewService.openDueItem: unsupported itemType=${schedule.itemType}`)
+    logger?.info('review.open', 'Opening review task', {
+      scheduleId,
+      taskId: schedule.taskId,
+    })
+
+    return workbenchTabService.openTask({ taskId: schedule.taskId, mode: inferDefaultMode(task) })
   }
 
   async function updateScheduleAfterResult(input: {
-    itemId: string
-    itemType: ReviewItemType
+    taskId: string
     result: TrainingAttemptResult
   }): Promise<void> {
-    const schedule = await repository.findReviewScheduleByItem(input.itemId, input.itemType)
+    const schedule = await repository.findReviewScheduleByTask(input.taskId)
 
     if (!schedule) {
       logger?.info('review.update', 'Creating new review schedule', {
-        itemId: input.itemId,
-        itemType: input.itemType,
+        taskId: input.taskId,
         result: input.result,
       })
 
@@ -128,9 +126,7 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
 
       await repository.createReviewSchedule({
         id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        taskId: input.itemId,
-        itemId: input.itemId,
-        itemType: input.itemType,
+        taskId: input.taskId,
         dueAt: next.dueAt,
         intervalDays: next.intervalDays,
         consecutivePassCount: next.consecutivePassCount,
@@ -160,21 +156,19 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
 
     logger?.info('review.update', 'Review schedule updated', {
       scheduleId: schedule.id,
-      itemId: input.itemId,
+      taskId: input.taskId,
       result: input.result,
       nextIntervalDays: next.intervalDays,
     })
   }
 
   async function addToReviewQueue(input: {
-    itemId: string
-    itemType: ReviewItemType
+    taskId: string
   }): Promise<ReviewSchedule> {
-    const existing = await repository.findReviewScheduleByItem(input.itemId, input.itemType)
+    const existing = await repository.findReviewScheduleByTask(input.taskId)
     if (existing) {
-      logger?.info('review.add', 'Item already in review queue', {
-        itemId: input.itemId,
-        itemType: input.itemType,
+      logger?.info('review.add', 'Task already in review queue', {
+        taskId: input.taskId,
         scheduleId: existing.id,
       })
       return existing
@@ -183,9 +177,7 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     const now = new Date()
     const schedule: ReviewSchedule = {
       id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      taskId: input.itemId,
-      itemId: input.itemId,
-      itemType: input.itemType,
+      taskId: input.taskId,
       dueAt: now.toISOString(),
       intervalDays: 1,
       easeFactor: undefined,
@@ -199,10 +191,9 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
 
     const saved = await repository.createReviewSchedule(schedule)
 
-    logger?.info('review.add', 'Added item to review queue', {
+    logger?.info('review.add', 'Added task to review queue', {
       scheduleId: saved.id,
-      itemId: input.itemId,
-      itemType: input.itemType,
+      taskId: input.taskId,
     })
 
     return saved

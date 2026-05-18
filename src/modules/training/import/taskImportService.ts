@@ -275,6 +275,18 @@ export function createTaskImportService(
       throw new Error(`Bad move not found: ${input.badMoveId}`)
     }
 
+    // Idempotency: if badMove already has a generatedTaskId, return existing task
+    if (badMove.generatedTaskId) {
+      const existingTask = await repository.loadTask(badMove.generatedTaskId)
+      if (existingTask) {
+        logger?.info('taskImport.badMove', 'BadMove already has generated task, returning existing', {
+          badMoveId: input.badMoveId,
+          existingTaskId: existingTask.id,
+        })
+        return existingTask
+      }
+    }
+
     const now = nowISO()
 
     const origin: TaskOrigin = {
@@ -298,6 +310,18 @@ export function createTaskImportService(
 
     await repository.updateBadMove(input.badMoveId, {
       generatedTaskId: saved.id,
+    })
+
+    // Phase 7: auto-enroll in review queue
+    await repository.createReviewSchedule({
+      id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      taskId: saved.id,
+      dueAt: now,
+      intervalDays: 1,
+      consecutivePassCount: 0,
+      totalFailCount: 0,
+      createdAt: now,
+      updatedAt: now,
     })
 
     logger?.info('taskImport.badMove', 'Created task from bad move', {
