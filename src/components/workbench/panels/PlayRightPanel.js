@@ -20,12 +20,12 @@ export default function PlayRightPanel({
     'data-testid': 'play-right-panel',
     class: 'wb-play-right-panel',
   },
-    // Board info section
-    h('div', {class: 'wb-play-right-panel__section'},
+    // Board info card
+    h('div', {class: 'wb-card'},
       h('button', {
         'data-testid': 'drawer-toggle',
         class: 'wb-drawer-toggle',
-      }, '棋盘信息'),
+      }, h('span', {class: 'wb-panel-title'}, '棋盘信息')),
       h('div', {class: 'wb-play-right-panel__board-info'},
         h('div', {class: 'wb-play-right-panel__stat'},
           h('span', {class: 'wb-play-right-panel__stat-label'}, '手数'),
@@ -42,12 +42,12 @@ export default function PlayRightPanel({
       ),
     ),
 
-    // AI analysis section
-    h('div', {class: 'wb-play-right-panel__section'},
+    // AI analysis card
+    h('div', {class: 'wb-card'},
       h('button', {
         'data-testid': 'drawer-toggle',
         class: 'wb-drawer-toggle',
-      }, 'AI 分析'),
+      }, h('span', {class: 'wb-panel-title'}, 'AI 分析')),
       h(EmptyStatePanel, {
         icon: '🔍',
         title: 'AI 分析',
@@ -55,12 +55,12 @@ export default function PlayRightPanel({
       }),
     ),
 
-    // Variation tree section
-    h('div', {class: 'wb-play-right-panel__section'},
+    // Variation tree card
+    h('div', {class: 'wb-card'},
       h('button', {
         'data-testid': 'drawer-toggle',
         class: 'wb-drawer-toggle',
-      }, '变化树'),
+      }, h('span', {class: 'wb-panel-title'}, '变化树')),
       h(EmptyStatePanel, {
         icon: '🌳',
         title: '变化树',

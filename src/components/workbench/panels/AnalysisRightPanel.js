@@ -24,8 +24,9 @@ export default function AnalysisRightPanel({
     'data-testid': 'analysis-right-panel',
     class: 'wb-analysis-right-panel',
   },
-    // AI analysis section
-    h('div', {class: 'wb-analysis-right-panel__section'},
+    // AI analysis card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, 'AI 分析'),
       h(EmptyStatePanel, {
         icon: '🔍',
         title: 'AI 分析',
@@ -33,8 +34,9 @@ export default function AnalysisRightPanel({
       }),
     ),
 
-    // Board evaluation section
-    h('div', {class: 'wb-analysis-right-panel__section'},
+    // Board evaluation card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '棋局评估'),
       h('div', {class: 'wb-analysis-right-panel__evaluation'},
         h('div', {class: 'wb-analysis-right-panel__stat'},
           h('span', {class: 'wb-analysis-right-panel__stat-label'}, '手数'),
@@ -52,8 +54,9 @@ export default function AnalysisRightPanel({
       ),
     ),
 
-    // Variation tree section
-    h('div', {class: 'wb-analysis-right-panel__section'},
+    // Variation tree card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '变化树'),
       h(EmptyStatePanel, {
         icon: '🌳',
         title: '变化树',
@@ -61,8 +64,9 @@ export default function AnalysisRightPanel({
       }),
     ),
 
-    // Comparison section
-    h('div', {class: 'wb-analysis-right-panel__section'},
+    // Comparison card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '对比'),
       h('div', {class: 'wb-analysis-right-panel__comparison'},
         userOriginalLine != null && h('div', {class: 'wb-analysis-right-panel__field'},
           h('span', {class: 'wb-analysis-right-panel__field-label'}, '用户原谱'),
@@ -79,8 +83,9 @@ export default function AnalysisRightPanel({
       ),
     ),
 
-    // Snapshot comparison section
-    h('div', {class: 'wb-analysis-right-panel__snapshot'},
+    // Snapshot comparison card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '快照对比'),
       h('button', {
         'data-testid': 'add-snapshot-btn',
         class: 'wb-analysis-right-panel__snapshot-btn',

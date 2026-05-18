@@ -26,13 +26,15 @@ export default function RecallRightPanel({
     'data-testid': 'recall-right-panel',
     class: 'wb-recall-right-panel',
   },
-    // Recall hint section
-    h('div', {class: 'wb-recall-right-panel__section'},
+    // Recall hint card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '提示信息'),
       h('div', {class: 'wb-recall-right-panel__hint'}, hintMessage),
     ),
 
-    // Checkpoint summary section
-    h('div', {class: 'wb-recall-right-panel__section'},
+    // Checkpoint summary card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '检查点'),
       h('div', {class: 'wb-recall-right-panel__checkpoint-summary'},
         h('div', {class: 'wb-recall-right-panel__stat'},
           h('span', {class: 'wb-recall-right-panel__stat-label'}, '系统检查点'),
@@ -45,8 +47,9 @@ export default function RecallRightPanel({
       ),
     ),
 
-    // Result feedback section
-    h('div', {class: 'wb-recall-right-panel__section'},
+    // Result feedback card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '复棋结果'),
       h('div', {class: 'wb-recall-right-panel__feedback'},
         h('div', {class: 'wb-recall-right-panel__stat'},
           h('span', {class: 'wb-recall-right-panel__stat-label'}, '正确'),
@@ -63,8 +66,9 @@ export default function RecallRightPanel({
       ),
     ),
 
-    // Variation tree section
-    h('div', {class: 'wb-recall-right-panel__section'},
+    // Variation tree card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '变化树'),
       h(EmptyStatePanel, {
         icon: '🌳',
         title: '变化树',

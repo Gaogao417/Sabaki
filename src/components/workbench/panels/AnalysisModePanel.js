@@ -57,24 +57,50 @@ export default function AnalysisModePanel({
     }
 
     return [
-      h('div', {class: 'wb-analysis-mode-panel__stats'},
-        h('span', {class: 'wb-analysis-mode-panel__move-count'}, moveCount),
-        h('span', {class: 'wb-analysis-mode-panel__captures'},
-          captures.black,
-          ' / ',
-          captures.white,
+      // Card 1: 复盘模式
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '复盘模式'),
+        h('div', {class: 'wb-panel-body'},
+          '自由研究、比较变化、沉淀笔记',
         ),
       ),
-      evaluation != null && h('div', {
-        'data-testid': 'evaluation-section',
-        class: 'wb-analysis-mode-panel__evaluation',
-      }, evaluation),
-      h('div', {class: 'wb-analysis-mode-panel__actions'},
-        h('button', {
-          'data-testid': 'snapshot-btn',
-          class: 'wb-analysis-mode-panel__btn',
-          onClick: onSnapshot,
-        }, 'Snapshot'),
+      // Card 2: 局面信息
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '局面信息'),
+        h('div', {class: 'wb-panel-body'},
+          h('div', {class: 'wb-analysis-mode-panel__stats'},
+            h('span', {class: 'wb-analysis-mode-panel__stat-item'},
+              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '手数'),
+              h('span', {class: 'wb-analysis-mode-panel__move-count'}, moveCount),
+            ),
+            h('span', {class: 'wb-analysis-mode-panel__stat-item'},
+              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '提子'),
+              h('span', {class: 'wb-analysis-mode-panel__captures'},
+                captures.black,
+                ' / ',
+                captures.white,
+              ),
+            ),
+          ),
+          evaluation != null && h('div', {
+            'data-testid': 'evaluation-section',
+            class: 'wb-analysis-mode-panel__evaluation',
+          },
+            h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '综合评价'),
+            h('span', null, evaluation),
+          ),
+        ),
+      ),
+      // Card 3: 操作
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '操作'),
+        h('div', {class: 'wb-panel-body'},
+          h('button', {
+            'data-testid': 'snapshot-btn',
+            class: 'wb-btn wb-btn-primary wb-btn--sm',
+            onClick: onSnapshot,
+          }, 'Snapshot / 派生新 Task'),
+        ),
       ),
     ]
   }

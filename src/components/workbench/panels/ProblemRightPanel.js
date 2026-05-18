@@ -24,8 +24,9 @@ export default function ProblemRightPanel({
     'data-testid': 'problem-right-panel',
     class: 'wb-problem-right-panel',
   },
-    // Answer draft section
-    h('div', {class: 'wb-problem-right-panel__section'},
+    // Answer draft card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '答题信息'),
       h('div', {class: 'wb-problem-right-panel__answer-draft'},
         h('div', {class: 'wb-problem-right-panel__stat'},
           h('span', {class: 'wb-problem-right-panel__stat-label'}, '当前变化'),
@@ -38,25 +39,32 @@ export default function ProblemRightPanel({
       ),
     ),
 
-    // Hint card section
+    // Hint card
     hint != null && h('div', {
       'data-testid': 'hint-card',
-      class: 'wb-problem-right-panel__hint-card',
-    }, hint),
+      class: 'wb-card',
+    },
+      h('div', {class: 'wb-panel-title'}, '提示'),
+      h('div', {class: 'wb-problem-right-panel__hint-content'}, hint),
+    ),
 
-    // AI analysis section
-    h('div', {class: 'wb-problem-right-panel__section'},
+    // AI analysis card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, 'AI 分析'),
       aiAnalysisHidden
         ? h('div', {class: 'wb-problem-right-panel__ai-hidden'}, 'AI 答案默认隐藏')
         : h('div', {class: 'wb-problem-right-panel__ai-visible'}, 'AI 分析可见'),
     ),
 
-    // Reference line summary section
-    h('div', {class: 'wb-problem-right-panel__section'},
-      referenceLines.length > 0 && h(ReferenceLineSummary, {
-        lines: referenceLines,
-        totalCount: totalRefCount,
-      }),
+    // Reference line summary card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '参考线'),
+      referenceLines.length > 0
+        ? h(ReferenceLineSummary, {
+            lines: referenceLines,
+            totalCount: totalRefCount,
+          })
+        : h('div', {class: 'wb-panel-caption'}, '暂无参考线'),
     ),
   )
 }

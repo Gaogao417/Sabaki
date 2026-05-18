@@ -933,6 +933,21 @@
   padding: 10px;
 }
 
+.wb-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-text);
+  margin: 0 0 12px 0;
+}
+
+.wb-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
 /* ========================================================================
    19. Segmented Control  (.wb-segmented-control)
    ======================================================================== */
@@ -1081,4 +1096,154 @@
 /* Active modifier on stone indicator itself */
 .wb-stone-indicator--active {
   box-shadow: 0 0 0 2px var(--ui-blue), 1px 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* ========================================================================
+   25. RecallModePanel  (.wb-recall-mode-panel)
+   ======================================================================== */
+
+.wb-recall-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-gap);
+}
+
+.wb-recall-mode-panel__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wb-recall-mode-panel__progress-ring {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.wb-recall-mode-panel__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wb-recall-mode-panel__stat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wb-recall-mode-panel__stat-label {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.wb-recall-mode-panel__stat-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.wb-recall-mode-panel__checkpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.wb-recall-mode-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ========================================================================
+   24. PlayModePanel  (.wb-play-mode-panel)
+   ======================================================================== */
+
+.wb-play-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-gap);
+}
+
+.wb-play-mode-panel__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ui-text);
+  margin: 0 0 4px 0;
+}
+
+.wb-play-mode-panel__description {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+  margin: 0;
+}
+
+.wb-play-mode-panel__stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.wb-play-mode-panel__move-count {
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.wb-play-mode-panel__captures {
+  color: var(--ui-text-tertiary);
+}
+
+.wb-play-mode-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ========================================================================
+   25. AnalysisModePanel  (.wb-analysis-mode-panel)
+   ======================================================================== */
+
+.wb-analysis-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-gap);
+}
+
+.wb-analysis-mode-panel__stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wb-analysis-mode-panel__stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wb-analysis-mode-panel__stat-label {
+  font-size: 12px;
+  color: var(--ui-text-tertiary);
+}
+
+.wb-analysis-mode-panel__move-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.wb-analysis-mode-panel__captures {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.wb-analysis-mode-panel__evaluation {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
 }

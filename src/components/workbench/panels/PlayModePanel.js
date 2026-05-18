@@ -1,5 +1,24 @@
 import {h} from 'preact'
 import EmptyStatePanel from '../shared/EmptyStatePanel.js'
+import OpponentControl from '../shared/OpponentControl.js'
+
+/**
+ * @callback onMarkDoubtfulCallback
+ * @param {void} - No parameters
+ * Called when user marks the current position as doubtful.
+ */
+
+/**
+ * @callback onEnterAnalysisCallback
+ * @param {void} - No parameters
+ * Called when user wants to switch from Play to Analysis mode.
+ */
+
+/**
+ * @callback onOpponentChangeCallback
+ * @param {string} newValue - New opponent type: 'self' or 'ai'
+ * Called when user selects a different opponent type.
+ */
 
 /**
  * PlayModePanel renders the left panel for Play mode.
@@ -9,8 +28,10 @@ import EmptyStatePanel from '../shared/EmptyStatePanel.js'
  * @param {string} props.taskDescription - Description of the current task
  * @param {number} props.moveCount - Number of moves played
  * @param {{black: number, white: number}} props.captures - Capture counts
- * @param {Function} props.onMarkDoubtful - Called when user marks position as doubtful
- * @param {Function} props.onEnterAnalysis - Called when user wants to enter analysis
+ * @param {string} props.opponentType - Current opponent selection: 'self' or 'ai'
+ * @param {onMarkDoubtfulCallback} props.onMarkDoubtful - Called when user marks position as doubtful
+ * @param {onEnterAnalysisCallback} props.onEnterAnalysis - Called when user wants to enter analysis
+ * @param {onOpponentChangeCallback} props.onOpponentChange - Called when user changes opponent type
  * @param {'empty'|'active'|'success'|'error'|'loading'|'disabled'} [props.state='active'] - Panel state overlay
  */
 export default function PlayModePanel({
@@ -18,8 +39,10 @@ export default function PlayModePanel({
   taskDescription = '',
   moveCount = 0,
   captures = {black: 0, white: 0},
+  opponentType = 'self',
   onMarkDoubtful = () => {},
   onEnterAnalysis = () => {},
+  onOpponentChange = () => {},
   state = 'active',
 }) {
   function renderContent() {
@@ -60,30 +83,50 @@ export default function PlayModePanel({
       })
     }
 
+    // Card 1: 对局模式 — task title + description
+    // Card 2: 黑白控制 — opponent selector
+    // Card 3: 当前任务 — stats + action buttons
     return [
-      h('div', {class: 'wb-play-mode-panel__info-card'},
-        h('h3', {class: 'wb-play-mode-panel__title'}, taskTitle),
-        h('p', {class: 'wb-play-mode-panel__description'}, taskDescription),
-        h('div', {class: 'wb-play-mode-panel__stats'},
-          h('span', {class: 'wb-play-mode-panel__move-count'}, moveCount),
-          h('span', {class: 'wb-play-mode-panel__captures'},
-            captures.black,
-            ' / ',
-            captures.white,
-          ),
+      h('div', {class: 'wb-card', key: 'card-mode'},
+        h('div', {class: 'wb-panel-title'}, '对局模式'),
+        h('div', {class: 'wb-panel-body'},
+          h('h3', {class: 'wb-play-mode-panel__title'}, taskTitle),
+          h('p', {class: 'wb-play-mode-panel__description'}, taskDescription),
         ),
       ),
-      h('div', {class: 'wb-play-mode-panel__actions'},
-        h('button', {
-          'data-testid': 'mark-doubtful-btn',
-          class: 'wb-play-mode-panel__btn wb-play-mode-panel__btn--doubtful',
-          onClick: onMarkDoubtful,
-        }, 'Mark Doubtful'),
-        h('button', {
-          'data-testid': 'enter-analysis-btn',
-          class: 'wb-play-mode-panel__btn wb-play-mode-panel__btn--analysis',
-          onClick: onEnterAnalysis,
-        }, 'Enter Analysis'),
+      h('div', {class: 'wb-card', key: 'card-opponent'},
+        h('div', {class: 'wb-panel-title'}, '黑白控制'),
+        h('div', {class: 'wb-panel-body'},
+          h(OpponentControl, {
+            value: opponentType,
+            onChange: onOpponentChange,
+          }),
+        ),
+      ),
+      h('div', {class: 'wb-card', key: 'card-task'},
+        h('div', {class: 'wb-panel-title'}, '当前任务'),
+        h('div', {class: 'wb-panel-body'},
+          h('div', {class: 'wb-play-mode-panel__stats'},
+            h('span', {class: 'wb-play-mode-panel__move-count'}, moveCount),
+            h('span', {class: 'wb-play-mode-panel__captures'},
+              captures.black,
+              ' / ',
+              captures.white,
+            ),
+          ),
+          h('div', {class: 'wb-play-mode-panel__actions'},
+            h('button', {
+              'data-testid': 'mark-doubtful-btn',
+              class: 'wb-btn wb-btn-secondary wb-btn--sm',
+              onClick: onMarkDoubtful,
+            }, '标记疑问'),
+            h('button', {
+              'data-testid': 'enter-analysis-btn',
+              class: 'wb-btn wb-btn-secondary wb-btn--sm',
+              onClick: onEnterAnalysis,
+            }, '进入复盘'),
+          ),
+        ),
       ),
     ]
   }

@@ -69,21 +69,42 @@ export default function ProblemModePanel({
     const totalCount = referenceLines.reduce((sum, line) => sum + line.length, 0)
 
     return [
-      h('div', {class: 'wb-problem-mode-panel__prompt'}, prompt),
-      h('div', {class: 'wb-problem-mode-panel__goal'}, goal),
-      h('div', {class: 'wb-problem-mode-panel__rules'}, passRuleSummary),
-      h('div', {class: 'wb-problem-mode-panel__opponent'},
-        h(OpponentControl, {value: 'ai', onChange: onOpponentChange}),
+      // Card 1: Current mode
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '做题模式'),
+        h('div', {class: 'wb-panel-body'},
+          '阅读题面，完成有目标和提交标准的作答',
+        ),
       ),
-      h('div', {class: 'wb-problem-mode-panel__reference-lines'},
-        h(ReferenceLineSummary, {lines: referenceLines, totalCount}),
+      // Card 2: Prompt & Goal
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '题面与目标'),
+        h('div', {class: 'wb-panel-body'},
+          h('div', {class: 'wb-problem-mode-panel__prompt'}, prompt),
+          h('div', {class: 'wb-problem-mode-panel__goal'}, goal),
+          h('div', {class: 'wb-problem-mode-panel__rules'}, passRuleSummary),
+          h('div', {class: 'wb-problem-mode-panel__reference-lines'},
+            h(ReferenceLineSummary, {lines: referenceLines, totalCount}),
+          ),
+        ),
       ),
-      h('div', {class: 'wb-problem-mode-panel__actions'},
-        h('button', {
-          'data-testid': 'request-hint-btn',
-          class: 'wb-problem-mode-panel__btn wb-problem-mode-panel__btn--hint',
-          onClick: onRequestHint,
-        }, 'Request Hint'),
+      // Card 3: Opponent control
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '对方控制'),
+        h('div', {class: 'wb-panel-body'},
+          h(OpponentControl, {value: 'ai', onChange: onOpponentChange}),
+        ),
+      ),
+      // Card 4: Answer actions
+      h('div', {class: 'wb-card'},
+        h('div', {class: 'wb-panel-title'}, '作答操作'),
+        h('div', {class: 'wb-panel-body'},
+          h('button', {
+            'data-testid': 'request-hint-btn',
+            class: 'wb-btn wb-btn-secondary wb-btn--sm',
+            onClick: onRequestHint,
+          }, '请求提示'),
+        ),
       ),
     ]
   }

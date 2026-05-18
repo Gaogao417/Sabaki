@@ -49,7 +49,7 @@ export default function RecallModePanel({
   onSkipCheckpoint = () => {},
   state = 'active',
 }) {
-  function renderContent() {
+  function renderOverlay() {
     if (state === 'loading') {
       return h('div', {class: 'wb-state-loading'},
         h('div', {'data-testid': 'loading-indicator', class: 'wb-state-loading__spinner'}),
@@ -87,52 +87,112 @@ export default function RecallModePanel({
       })
     }
 
-    return [
-      h('div', {class: 'wb-recall-mode-panel__toggle'},
-        h(ModeToggle, {checked: recallOriginalLine, onChange: onRecallToggle}),
-      ),
-      recallOriginalLine
-        ? h('div', {class: 'wb-recall-mode-panel__progress-view'},
-            h(ProgressRing, {progress}),
+    return null
+  }
+
+  function renderCards() {
+    const cards = []
+
+    // Card 1: Mode toggle (always shown)
+    cards.push(
+      h('div', {class: 'wb-card', key: 'mode-toggle-card'},
+        h('div', {class: 'wb-card__title'}, '回忆模式'),
+        h('div', {class: 'wb-card__body'},
+          h('div', {class: 'wb-recall-mode-panel__toggle-row'},
+            h('span', {class: 'wb-panel-body'}, '先复现原线'),
+            h(ModeToggle, {checked: recallOriginalLine, onChange: onRecallToggle}),
+          ),
+        ),
+      )
+    )
+
+    // Card 2: Progress view (when recallOriginalLine=true) or Checkpoint queue (when false)
+    if (recallOriginalLine) {
+      cards.push(
+        h('div', {class: 'wb-card', key: 'progress-card'},
+          h('div', {class: 'wb-card__title'}, '复现进度'),
+          h('div', {class: 'wb-card__body'},
+            h('div', {class: 'wb-recall-mode-panel__progress-ring'},
+              h(ProgressRing, {progress}),
+            ),
             h('div', {class: 'wb-recall-mode-panel__stats'},
-              h('span', null, currentMove),
-              ' / ',
-              h('span', null, totalMoves),
+              h('div', {class: 'wb-recall-mode-panel__stat-item'},
+                h('span', {class: 'wb-recall-mode-panel__stat-label'}, '进度'),
+                h('span', {class: 'wb-recall-mode-panel__stat-value'}, currentMove, ' / ', totalMoves),
+              ),
+              h('div', {class: 'wb-recall-mode-panel__stat-item'},
+                h('span', {class: 'wb-recall-mode-panel__stat-label'}, '正确'),
+                h('span', {class: 'wb-recall-mode-panel__stat-value'}, correctCount, ' 手'),
+              ),
+              h('div', {class: 'wb-recall-mode-panel__stat-item'},
+                h('span', {class: 'wb-recall-mode-panel__stat-label'}, '状态'),
+                h('span', {class: 'wb-recall-mode-panel__stat-value'}, status || '进行中'),
+              ),
             ),
             h('div', {class: 'wb-recall-mode-panel__actions'},
               h('button', {
                 'data-testid': 'mark-checkpoint-btn',
-                class: 'wb-recall-mode-panel__btn',
+                class: 'wb-btn wb-btn-secondary wb-btn--sm',
                 onClick: onMarkCheckpoint,
-              }, 'Mark Checkpoint'),
+              }, '标记 checkpoint'),
               h('button', {
                 'data-testid': 'verify-btn',
-                class: 'wb-recall-mode-panel__btn',
+                class: 'wb-btn wb-btn-secondary wb-btn--sm',
                 onClick: onVerify,
-              }, 'Verify'),
+              }, '校对'),
+              h('button', {
+                class: 'wb-btn wb-btn-ghost wb-btn--sm',
+                onClick: onHint,
+              }, '提示'),
+              h('button', {
+                class: 'wb-btn wb-btn-ghost wb-btn--sm',
+                onClick: onEndRecall,
+              }, '结束回忆'),
             ),
-          )
-        : h('div', {class: 'wb-recall-mode-panel__checkpoint-view'},
-            checkpoints.map(cp =>
-              h(RecallCheckpointPanel, {
-                key: cp.id,
-                checkpoint: cp,
-                isActive: cp.id === activeCheckpointId,
-                onSelect: () => {},
-              })
+          ),
+        )
+      )
+    } else {
+      cards.push(
+        h('div', {class: 'wb-card', key: 'checkpoint-card'},
+          h('div', {class: 'wb-card__title'}, '检查点队列'),
+          h('div', {class: 'wb-card__body'},
+            h('div', {class: 'wb-recall-mode-panel__checkpoint-list'},
+              checkpoints.length > 0
+                ? checkpoints.map(cp =>
+                    h(RecallCheckpointPanel, {
+                      key: cp.id,
+                      checkpoint: cp,
+                      isActive: cp.id === activeCheckpointId,
+                      onSelect: () => {},
+                    })
+                  )
+                : h('div', {class: 'wb-panel-caption'}, '暂无检查点'),
             ),
             h('div', {class: 'wb-recall-mode-panel__actions'},
               h('button', {
                 'data-testid': 'submit-correction-btn',
-                class: 'wb-recall-mode-panel__btn',
+                class: 'wb-btn wb-btn-secondary wb-btn--sm',
                 onClick: onSubmitCorrection,
-              }, 'Submit Correction'),
+              }, '提交修正图'),
+              h('button', {
+                class: 'wb-btn wb-btn-ghost wb-btn--sm',
+                onClick: onRevealAI,
+              }, '查看 AI'),
+              h('button', {
+                class: 'wb-btn wb-btn-ghost wb-btn--sm',
+                onClick: onSkipCheckpoint,
+              }, '跳过 checkpoint'),
             ),
           ),
-    ]
+        )
+      )
+    }
+
+    return cards
   }
 
   return h('div', {'data-testid': 'recall-mode-panel', class: 'wb-recall-mode-panel'},
-    renderContent(),
+    state !== 'active' ? renderOverlay() : renderCards(),
   )
 }
