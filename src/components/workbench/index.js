@@ -22,6 +22,11 @@ import RecallModePanel from './panels/RecallModePanel.js'
 import RecallCheckpointPanel from './panels/RecallCheckpointPanel.js'
 import AnalysisModePanel from './panels/AnalysisModePanel.js'
 
+import PlayRightPanel from './panels/PlayRightPanel.js'
+import ProblemRightPanel from './panels/ProblemRightPanel.js'
+import RecallRightPanel from './panels/RecallRightPanel.js'
+import AnalysisRightPanel from './panels/AnalysisRightPanel.js'
+
 export {
   GlobalHeader,
   ModeBar,
@@ -44,4 +49,8 @@ export {
   RecallModePanel,
   RecallCheckpointPanel,
   AnalysisModePanel,
+  PlayRightPanel,
+  ProblemRightPanel,
+  RecallRightPanel,
+  AnalysisRightPanel,
 }
