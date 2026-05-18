@@ -16,6 +16,12 @@ import RightDrawer from './shared/RightDrawer.js'
 import AnnotationToolbar from './shared/AnnotationToolbar.js'
 import MaterialLibraryDialog from './shared/MaterialLibraryDialog.js'
 
+import PlayModePanel from './panels/PlayModePanel.js'
+import ProblemModePanel from './panels/ProblemModePanel.js'
+import RecallModePanel from './panels/RecallModePanel.js'
+import RecallCheckpointPanel from './panels/RecallCheckpointPanel.js'
+import AnalysisModePanel from './panels/AnalysisModePanel.js'
+
 export {
   GlobalHeader,
   ModeBar,
@@ -33,4 +39,9 @@ export {
   RightDrawer,
   AnnotationToolbar,
   MaterialLibraryDialog,
+  PlayModePanel,
+  ProblemModePanel,
+  RecallModePanel,
+  RecallCheckpointPanel,
+  AnalysisModePanel,
 }
