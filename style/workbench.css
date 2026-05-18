@@ -973,3 +973,129 @@
   border-color: var(--ui-blue, #2563ff);
   background: var(--ui-blue-soft, #eef4ff);
 }
+
+/* ========================================================================
+   18. Card  (.wb-card)
+   ======================================================================== */
+
+.wb-card {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--ui-shadow-sm);
+  padding: 18px;
+}
+
+.wb-card--flat {
+  box-shadow: none;
+}
+
+.wb-card--compact {
+  padding: 10px;
+}
+
+/* ========================================================================
+   19. Segmented Control  (.wb-segmented-control)
+   ======================================================================== */
+
+.wb-segmented-control {
+  display: inline-flex;
+  background: var(--ui-bg-soft);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+}
+
+.wb-segmented-control__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: calc(var(--radius-md) - 2px);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+  border: none;
+  background: transparent;
+}
+
+.wb-segmented-control__item--active {
+  background: var(--segment-color, var(--ui-blue));
+  color: var(--ui-bg);
+}
+
+/* ========================================================================
+   20. Stone Indicator  (.wb-stone-indicator)
+   ======================================================================== */
+
+.wb-stone-indicator {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.wb-stone-indicator--black {
+  background: radial-gradient(circle at 35% 35%, #555, #111 60%, #000 100%);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.wb-stone-indicator--white {
+  background: radial-gradient(circle at 35% 35%, #fff, #e8e8e8 60%, #ccc 100%);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.wb-stone-indicator--inline {
+  width: 16px;
+  height: 16px;
+}
+
+/* ========================================================================
+   21. Status Text  (.wb-status-text)
+   ======================================================================== */
+
+.wb-status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-status-text__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.wb-status-text__value {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.wb-status-text__divider {
+  width: 1px;
+  height: 14px;
+  background: var(--ui-border);
+}
+
+/* ========================================================================
+   22. Panel Typography  (.wb-panel-title, .wb-panel-body, .wb-panel-caption)
+   ======================================================================== */
+
+.wb-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.wb-panel-body {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.wb-panel-caption {
+  font-size: 12px;
+  color: var(--ui-text-tertiary);
+}
