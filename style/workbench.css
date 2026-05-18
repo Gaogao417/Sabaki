@@ -142,68 +142,7 @@
 }
 
 .wb-mode-bar__tabs {
-  display: flex;
-  align-items: stretch;
-  height: 100%;
-  gap: 0;
-}
-
-.wb-mode-bar__tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 18px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ui-text-secondary);
-  cursor: pointer;
-  transition: color 0.15s ease;
-  border: none;
-  background: none;
-  white-space: nowrap;
-}
-
-.wb-mode-bar__tab:hover {
-  color: var(--ui-text);
-}
-
-.wb-mode-bar__tab::after {
-  content: '';
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 0;
-  height: 2.5px;
-  border-radius: 2px 2px 0 0;
-  background: transparent;
-  transition: background 0.2s ease;
-}
-
-/* Active indicator colours per mode */
-.wb-mode-bar__tab--active::after {
-  background: var(--ui-blue);
-}
-
-.wb-mode-bar__tab--active[data-mode='play']::after {
-  background: var(--ui-play);
-}
-
-.wb-mode-bar__tab--active[data-mode='problem']::after {
-  background: var(--ui-problem);
-}
-
-.wb-mode-bar__tab--active[data-mode='recall']::after {
-  background: var(--ui-recall-mode);
-}
-
-.wb-mode-bar__tab--active[data-mode='analysis']::after {
-  background: var(--ui-analysis);
-}
-
-.wb-mode-bar__tab--active {
-  color: var(--ui-text);
-  font-weight: 600;
+  /* Layout handled by .wb-segmented-control atomic class */
 }
 
 .wb-mode-bar__actions {
@@ -1098,4 +1037,48 @@
 .wb-panel-caption {
   font-size: 12px;
   color: var(--ui-text-tertiary);
+}
+
+/* ========================================================================
+   23. Stone Status  (.wb-stone-status)
+   ======================================================================== */
+
+.wb-stone-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wb-stone-status__side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-stone-status__side--active .wb-stone-status__label {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wb-stone-status__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-text);
+}
+
+.wb-stone-status__captures {
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+}
+
+.wb-stone-status__divider {
+  width: 1px;
+  height: 16px;
+  background: var(--ui-border);
+}
+
+/* Active modifier on stone indicator itself */
+.wb-stone-indicator--active {
+  box-shadow: 0 0 0 2px var(--ui-blue), 1px 1px 3px rgba(0, 0, 0, 0.2);
 }

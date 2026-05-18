@@ -6,6 +6,7 @@ import TrainingTabBar from './shell/TrainingTabBar.js'
 import GameTabBar from './shell/GameTabBar.js'
 import BottomActionBar from './shell/BottomActionBar.js'
 import RightModePanel from './shell/RightModePanel.js'
+import StoneStatus from './shell/StoneStatus.js'
 
 import QuietStatusChips from './shared/QuietStatusChips.js'
 import EmptyStatePanel from './shared/EmptyStatePanel.js'
@@ -37,6 +38,7 @@ export {
   GameTabBar,
   BottomActionBar,
   RightModePanel,
+  StoneStatus,
   QuietStatusChips,
   EmptyStatePanel,
   ProgressRing,

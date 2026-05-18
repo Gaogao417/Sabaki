@@ -48,11 +48,21 @@ const ANNOTATION_TOOLS = [
   'circle', 'line', 'arrow', 'label-A', 'label-1',
 ]
 
+const WORKSPACE_LABELS = {
+  play: '对局工作区',
+  problem: '做题工作区',
+  recall: '回忆工作区',
+  analysis: '复盘工作区',
+}
+
 /**
  * BottomActionBar renders mode-specific and common action buttons.
  *
  * @param {Object} props
  * @param {string} props.mode - Current mode
+ * @param {string} [props.workspaceLabel] - Workspace label text; defaults by mode
+ * @param {number} [props.moveNumber] - Current move number
+ * @param {string} [props.engineStatus] - Engine status text
  * @param {Function} [props.onUndo] - Undo action
  * @param {Function} [props.onRedo] - Redo action
  * @param {Function} [props.onPass] - Pass action
@@ -77,14 +87,34 @@ const ANNOTATION_TOOLS = [
  * @param {string|null} [props.activeAnnotationTool] - Active annotation tool key (analysis only)
  * @param {Function} [props.onAnnotationToolChange] - Annotation tool selection callback
  */
-export default function BottomActionBar({mode = 'play', activeAnnotationTool = null, onAnnotationToolChange = () => {}, ...callbacks}) {
+export default function BottomActionBar({
+  mode = 'play',
+  workspaceLabel,
+  moveNumber = 0,
+  engineStatus = '引擎就绪',
+  activeAnnotationTool = null,
+  onAnnotationToolChange = () => {},
+  ...callbacks
+}) {
   const modeActions = MODE_ACTIONS[mode] || []
   const allActions = [...modeActions, ...COMMON_ACTIONS]
+  const label = workspaceLabel || WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.play
 
   return h('div', {
     'data-testid': 'bottom-action-bar',
     class: 'wb-bottom-action-bar',
   },
+    h('div', {
+      'data-testid': 'bottom-status-text',
+      class: 'wb-status-text',
+    },
+      h('span', {class: 'wb-status-text__label'}, label),
+      h('span', {class: 'wb-status-text__divider'}),
+      h('span', {class: 'wb-status-text__value'}, `当前第 ${moveNumber} 手`),
+      h('span', {class: 'wb-status-text__divider'}),
+      h('span', {class: 'wb-status-text__value'}, engineStatus),
+    ),
+
     h('div', {class: 'wb-bottom-action-bar__mode-actions'},
       allActions.map(btn =>
         h('div', {

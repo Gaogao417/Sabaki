@@ -1,4 +1,5 @@
 import {h} from 'preact'
+import StoneStatus from './StoneStatus.js'
 
 const MODE_COLORS = {
   play: '#2563ff',
@@ -13,6 +14,9 @@ export default function GlobalHeader({
   statusChips = ['黑先', '未提交'],
   engineName = 'KataGo',
   engineConnected = true,
+  blackCaptures = 0,
+  whiteCaptures = 0,
+  currentPlayer = 'black',
 }) {
   const modeColor = MODE_COLORS[mode] || MODE_COLORS.problem
 
@@ -23,6 +27,7 @@ export default function GlobalHeader({
     h(
       'div',
       {class: 'wb-global-header__left'},
+      h(StoneStatus, {blackCaptures, whiteCaptures, currentPlayer}),
       h('span', {class: 'wb-global-header__title'}, taskTitle),
       h(
         'span',
@@ -61,11 +66,6 @@ export default function GlobalHeader({
           {class: 'wb-global-header__engine-name'},
           engineName,
         ),
-      ),
-      h(
-        'div',
-        {class: 'wb-global-header__avatar'},
-        h('span', {class: 'wb-global-header__avatar-initials'}, 'GC'),
       ),
     ),
   )

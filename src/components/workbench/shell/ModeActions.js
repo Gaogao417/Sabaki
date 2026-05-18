@@ -6,26 +6,26 @@ import {h} from 'preact'
  */
 const MODE_BUTTONS = {
   play: [
-    {testId: 'mode-action-new-game', label: 'New Game', callback: 'onNewGame'},
-    {testId: 'mode-action-settings', label: 'Settings', callback: 'onSettings'},
-    {testId: 'mode-action-end', label: 'End', callback: 'onEnd'},
-    {testId: 'mode-action-resign', label: 'Resign', callback: 'onResign', variant: 'danger'},
+    {testId: 'mode-action-new-game', label: '新对局', callback: 'onNewGame'},
+    {testId: 'mode-action-settings', label: '对局设置', callback: 'onSettings'},
+    {testId: 'mode-action-end', label: '结束', callback: 'onEnd'},
+    {testId: 'mode-action-resign', label: '认输', callback: 'onResign', variant: 'danger'},
   ],
   problem: [
-    {testId: 'mode-action-submit', label: 'Submit', callback: 'onSubmit'},
-    {testId: 'mode-action-abandon', label: 'Abandon', callback: 'onAbandon'},
-    {testId: 'mode-action-settings', label: 'Settings', callback: 'onSettings'},
-    {testId: 'mode-action-analysis', label: 'Analysis', callback: 'onAnalysis'},
+    {testId: 'mode-action-submit', label: '提交答案', callback: 'onSubmit'},
+    {testId: 'mode-action-abandon', label: '放弃作答', callback: 'onAbandon'},
+    {testId: 'mode-action-settings', label: '做题设置', callback: 'onSettings'},
+    {testId: 'mode-action-analysis', label: '进入复盘', callback: 'onAnalysis'},
   ],
   recall: [
-    {testId: 'mode-action-analysis', label: 'Analysis', callback: 'onAnalysis'},
-    {testId: 'mode-action-end', label: 'End', callback: 'onEnd'},
+    {testId: 'mode-action-analysis', label: '进入复盘', callback: 'onAnalysis'},
+    {testId: 'mode-action-end', label: '结束', callback: 'onEnd'},
     {testId: 'mode-action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},
   ],
   analysis: [
     {testId: 'mode-action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},
-    {testId: 'mode-action-settings', label: 'Settings', callback: 'onSettings'},
-    {testId: 'mode-action-return', label: 'Return', callback: 'onReturn'},
+    {testId: 'mode-action-settings', label: '设置', callback: 'onSettings'},
+    {testId: 'mode-action-return', label: '返回', callback: 'onReturn'},
   ],
 }
 

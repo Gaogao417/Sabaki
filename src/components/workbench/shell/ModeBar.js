@@ -2,10 +2,10 @@ import {h} from 'preact'
 import ModeActions from './ModeActions.js'
 
 const MODES = [
-  {key: 'play', label: 'Play', color: '#2563ff'},
-  {key: 'problem', label: 'Problem', color: '#d97706'},
-  {key: 'recall', label: 'Recall', color: '#169b55'},
-  {key: 'analysis', label: 'Analysis', color: '#7c3aed'},
+  {key: 'play', label: '对局', color: '#2563ff'},
+  {key: 'problem', label: '做题', color: '#d97706'},
+  {key: 'recall', label: '回忆', color: '#169b55'},
+  {key: 'analysis', label: '复盘', color: '#7c3aed'},
 ]
 
 export default function ModeBar({
@@ -19,26 +19,17 @@ export default function ModeBar({
 
     h(
       'div',
-      {class: 'wb-mode-bar__tabs'},
+      {class: 'wb-mode-bar__tabs wb-segmented-control'},
       MODES.map(({key, label, color}) =>
         h(
           'button',
           {
             key,
-            class: `wb-mode-bar__tab${activeMode === key ? ' wb-mode-bar__tab--active' : ''}`,
-            style: activeMode === key ? {'--tab-color': color} : {},
+            class: `wb-segmented-control__item${activeMode === key ? ' wb-segmented-control__item--active' : ''}`,
+            style: activeMode === key ? {'--segment-color': color} : {},
             onClick: () => onModeChange(key),
           },
-          h(
-            'span',
-            {class: 'wb-mode-bar__tab-label'},
-            label,
-          ),
-          activeMode === key &&
-            h('span', {
-              class: 'wb-mode-bar__tab-indicator',
-              style: {background: color},
-            }),
+          label,
         ),
       ),
     ),
