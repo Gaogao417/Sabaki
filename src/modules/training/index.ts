@@ -4,7 +4,6 @@ export { createTrainingRepository } from './repository/trainingRepository'
 export { createLegacySabakiAdapter } from './adapter/legacySabakiAdapter'
 export { createPositionSnapshotAdapter } from './adapter/positionSnapshotAdapter'
 export { createAnalysisResultAdapter } from './adapter/analysisResultAdapter'
-
 export {
   createWorkbenchTabService,
   createWorkbenchPhaseService,
@@ -44,6 +43,11 @@ export {
 export {
   createProblemFlowService,
 } from './problem/problemFlowService'
+
+export {
+  createAiMoveService,
+  shouldAiMove,
+} from './ai/aiMoveService'
 
 export {
   projectTrainingState,

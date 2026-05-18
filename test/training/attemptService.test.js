@@ -109,6 +109,72 @@ describe('attemptService', () => {
         /attempt not found/,
       )
     })
+
+    // --- Phase 3: actor tracking (C01-C06) ---
+
+    it('appends moveActor with actor=human when actor param is "human" (C01)', async () => {
+      await service.createAttempt({ taskId: 'task_1', rootPositionSgf: '(;SZ[9])' })
+      const attemptId = runtimeStore.getState().activeAttemptId
+
+      await service.appendMove(attemptId, 'D4', 'human')
+      const update = mockRepo.updated.find(u => u.patch.moveActors)
+      assert.ok(update, 'expected moveActors in update patch')
+      assert.deepStrictEqual(update.patch.moveActors, [{ moveIndex: 0, actor: 'human' }])
+    })
+
+    it('appends moveActor with actor=ai when actor param is "ai" (C02)', async () => {
+      await service.createAttempt({ taskId: 'task_1', rootPositionSgf: '(;SZ[9])' })
+      const attemptId = runtimeStore.getState().activeAttemptId
+
+      await service.appendMove(attemptId, 'Q16', 'ai')
+      const update = mockRepo.updated.find(u => u.patch.moveActors)
+      assert.ok(update, 'expected moveActors in update patch')
+      assert.deepStrictEqual(update.patch.moveActors, [{ moveIndex: 0, actor: 'ai' }])
+    })
+
+    it('defaults actor to "human" when no actor param given (C03)', async () => {
+      await service.createAttempt({ taskId: 'task_1', rootPositionSgf: '(;SZ[9])' })
+      const attemptId = runtimeStore.getState().activeAttemptId
+
+      await service.appendMove(attemptId, 'D4')
+      const update = mockRepo.updated.find(u => u.patch.moveActors)
+      assert.ok(update, 'expected moveActors in update patch')
+      assert.deepStrictEqual(update.patch.moveActors, [{ moveIndex: 0, actor: 'human' }])
+    })
+
+    it('throws when attempt status is not "playing" (C04)', async () => {
+      await service.createAttempt({ taskId: 'task_1', rootPositionSgf: '(;SZ[9])' })
+      const attemptId = runtimeStore.getState().activeAttemptId
+
+      await service.freezeAttempt(attemptId)
+
+      await assert.rejects(
+        () => service.appendMove(attemptId, 'D4', 'human'),
+        /not in playing/,
+      )
+    })
+
+    it('throws when attempt is not found with actor param (C05)', async () => {
+      await assert.rejects(
+        () => service.appendMove('nonexistent', 'D4', 'human'),
+        /attempt not found/,
+      )
+    })
+
+    it('moveIndex in moveActors matches zero-based index in userLine (C06)', async () => {
+      await service.createAttempt({ taskId: 'task_1', rootPositionSgf: '(;SZ[9])' })
+      const attemptId = runtimeStore.getState().activeAttemptId
+
+      await service.appendMove(attemptId, 'D4', 'human')
+      await service.appendMove(attemptId, 'Q16', 'ai')
+      await service.appendMove(attemptId, 'C3', 'human')
+
+      const update = mockRepo.updated.find(u => u.patch.moveActors && u.patch.moveActors.length === 3)
+      assert.ok(update, 'expected three moveActors')
+      assert.strictEqual(update.patch.moveActors[0].moveIndex, 0)
+      assert.strictEqual(update.patch.moveActors[1].moveIndex, 1)
+      assert.strictEqual(update.patch.moveActors[2].moveIndex, 2)
+    })
   })
 
   describe('freezeAttempt', () => {

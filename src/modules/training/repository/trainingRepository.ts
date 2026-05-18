@@ -98,6 +98,7 @@ export type TrainingRepository = {
   // Review (new)
   createReviewSchedule(schedule: ReviewSchedule): Promise<ReviewSchedule>
   findReviewScheduleByItem(itemId: string, itemType: string): Promise<ReviewSchedule | null>
+  findReviewScheduleByTask(taskId: string): Promise<ReviewSchedule | null>
   listDueReviewItems(now: string): Promise<ReviewSchedule[]>
   updateReviewSchedule(id: string, patch: Partial<ReviewSchedule>): Promise<void>
 
@@ -241,6 +242,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.hintLevelUsed !== undefined) mapped.hintLevelUsed = patch.hintLevelUsed
     if (patch.recallCompleted !== undefined) mapped.recallCompleted = patch.recallCompleted
     if (patch.analysisOpened !== undefined) mapped.analysisOpened = patch.analysisOpened
+    if (patch.moveActors !== undefined) mapped.moveActors = patch.moveActors
     await db.updateTrainingAttempt(attemptId, mapped)
   }
 
@@ -469,6 +471,11 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     return row ? mapReviewScheduleRow(row) : null
   }
 
+  async function findReviewScheduleByTask(taskId: string): Promise<ReviewSchedule | null> {
+    const row = await db.findReviewScheduleByTask(taskId)
+    return row ? mapReviewScheduleRow(row) : null
+  }
+
   async function listDueReviewItems(_now: string): Promise<ReviewSchedule[]> {
     const rows = await db.getDueReviews()
     return rows.map(mapReviewScheduleRow)
@@ -507,6 +514,34 @@ export function createTrainingRepository(db: Db): TrainingRepository {
 
   // --- Row mappers ---
 
+  /**
+   * Migrate problemArea from legacy rectangle format to vertex list.
+   * - If null/undefined -> undefined
+   * - If already [number, number][] -> pass through
+   * - If {x1, y1, x2, y2} -> expand to all vertices in the rectangle
+   */
+  function migrateProblemArea(raw: unknown): TrainingTask['problemArea'] {
+    if (raw == null) return undefined
+
+    const area = typeof raw === 'string' ? JSON.parse(raw) : raw
+
+    // Already a vertex list (array of arrays)
+    if (Array.isArray(area)) return area as TrainingTask['problemArea']
+
+    // Legacy rectangle format {x1, y1, x2, y2}
+    if (typeof area === 'object' && 'x1' in area && 'y1' in area && 'x2' in area && 'y2' in area) {
+      const vertices: [number, number][] = []
+      for (let x = area.x1; x <= area.x2; x++) {
+        for (let y = area.y1; y <= area.y2; y++) {
+          vertices.push([x, y])
+        }
+      }
+      return vertices
+    }
+
+    return undefined
+  }
+
   function mapTaskRow(row: Record<string, unknown>): TrainingTask {
     const source = typeof row.source === 'string' ? JSON.parse(row.source as string) : row.source
     const kind = row.kind as TrainingTask['kind']
@@ -537,9 +572,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
       referenceLines: row.referenceLines != null
         ? (typeof row.referenceLines === 'string' ? JSON.parse(row.referenceLines as string) : row.referenceLines) as TrainingTask['referenceLines']
         : undefined,
-      problemArea: row.problemArea != null
-        ? (typeof row.problemArea === 'string' ? JSON.parse(row.problemArea as string) : row.problemArea) as TrainingTask['problemArea']
-        : undefined,
+      problemArea: migrateProblemArea(row.problemArea),
       tags: row.tags != null
         ? (typeof row.tags === 'string' ? JSON.parse(row.tags as string) : row.tags) as string[]
         : undefined,
@@ -748,7 +781,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     createRecallCheckpoint, loadRecallCheckpoint, updateRecallCheckpoint, listCheckpointsByRecallSession,
     createProblem, loadProblem, updateProblem, archiveProblem,
     createMoveComment, loadMoveComment, updateMoveComment,
-    createReviewSchedule, findReviewScheduleByItem, listDueReviewItems, updateReviewSchedule,
+    createReviewSchedule, findReviewScheduleByItem, findReviewScheduleByTask, listDueReviewItems, updateReviewSchedule,
     listIncompleteAttempts, listIncompleteRecallSessions, listExpiredPendingMoveEvaluations,
     transaction,
   }

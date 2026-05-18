@@ -62,10 +62,6 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
       throw new Error(`snapshotService.captureSnapshotInput: tab not found (id=${input.tabId})`)
     }
 
-    if (tab.mode !== 'analysis') {
-      throw new Error(`snapshotService.captureSnapshotInput: tab must be in analysis mode (current=${tab.mode})`)
-    }
-
     if (tab.taskId !== input.sourceTaskId) {
       throw new Error(
         `snapshotService.captureSnapshotInput: sourceTaskId (${input.sourceTaskId}) does not match tab.taskId (${tab.taskId})`,
@@ -82,12 +78,10 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
     let sourceGameId: string | undefined
     let sourceProblemId: string | undefined
 
-    if (task.source.kind === 'game') {
-      sourceGameId = task.source.gameId
-    } else if (task.source.kind === 'problem') {
-      sourceProblemId = task.source.problemId
-    } else if (task.source.kind === 'snapshot_problem') {
-      sourceProblemId = task.source.problemId
+    if (task.origin?.provider === 'fox') {
+      sourceGameId = task.origin.externalId
+    } else if (task.origin?.provider === '101') {
+      sourceProblemId = task.origin.externalId
     }
 
     logger?.info('snapshot.capture', 'Snapshot input captured', {
@@ -99,7 +93,7 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
 
     return {
       sourceTaskId: input.sourceTaskId,
-      sourceAttemptId: input.sourceAttemptId,
+      sourceAttemptId: input.sourceAttemptId ?? tab.activeAttemptId,
       sourceGameId,
       sourceProblemId,
       sourceMoveIndex: snapshot.moveNumber,

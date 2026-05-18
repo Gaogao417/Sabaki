@@ -30,6 +30,8 @@ export type RecallCheckpointService = {
     comment: MoveComment
   }): Promise<void>
 
+  skipCheckpoint(checkpointId: string): Promise<void>
+
   resumeRecall(checkpointId: string): Promise<void>
 }
 
@@ -211,6 +213,42 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     })
   }
 
+  async function skipCheckpoint(checkpointId: string): Promise<void> {
+    const checkpoint = await repository.loadRecallCheckpoint(checkpointId)
+    if (!checkpoint) {
+      throw new Error(`recallCheckpointService.skipCheckpoint: checkpoint not found (id=${checkpointId})`)
+    }
+    if (checkpoint.status === 'commented' || checkpoint.status === 'skipped') {
+      throw new Error(`recallCheckpointService.skipCheckpoint: cannot skip checkpoint in '${checkpoint.status}' status (id=${checkpointId})`)
+    }
+    if (checkpoint.completedAt) {
+      throw new Error(`recallCheckpointService.skipCheckpoint: checkpoint already completed (id=${checkpointId})`)
+    }
+
+    const session = await repository.loadRecallSession(checkpoint.recallSessionId)
+    if (!session) {
+      throw new Error(`recallCheckpointService.skipCheckpoint: session not found (id=${checkpoint.recallSessionId})`)
+    }
+
+    const now = new Date().toISOString()
+    await repository.updateRecallCheckpoint(checkpointId, {
+      status: 'skipped',
+      completedAt: now,
+    })
+
+    await repository.updateRecallSession(session.id, {
+      currentMoveIndex: session.currentMoveIndex + 1,
+    })
+
+    runtimeStore.setActiveCheckpoint(undefined)
+    runtimeStore.setCorrectionDraft(undefined)
+
+    logger?.info('checkpoint.skip', 'Checkpoint skipped', {
+      checkpointId,
+      sessionId: session.id,
+    })
+  }
+
   async function resumeRecall(checkpointId: string): Promise<void> {
     const checkpoint = await repository.loadRecallCheckpoint(checkpointId)
     if (!checkpoint) {
@@ -252,6 +290,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     submitUserCorrectionLine,
     revealAiCandidateLines,
     saveComment,
+    skipCheckpoint,
     resumeRecall,
   }
 }

@@ -33,12 +33,7 @@ export type TrainingTaskSource =
       sourceGameId?: string
     }
 
-export type ProblemArea = {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}
+export type ProblemArea = [number, number][]
 
 export type TaskPassRule = {
   allowed?: boolean

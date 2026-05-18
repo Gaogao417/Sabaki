@@ -1,8 +1,9 @@
-import type { WorkbenchMode, WorkbenchTab } from '../types/index'
+import type { WorkbenchMode, WorkbenchTab, TrainingAttemptResult } from '../types/index'
 import type { WorkbenchStore } from '../store/workbenchStore'
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { SnapshotService } from '../analysis/snapshotService'
 import type { WorkbenchTabService } from './workbenchTabService'
+import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
 
 const MODE_TRANSITIONS: Record<WorkbenchMode, string[]> = {
   play: ['submit', 'enterAnalysis'],
@@ -37,12 +38,21 @@ export type WorkbenchFlowServiceDeps = {
   attemptService: {
     createAttempt(input: { taskId: string; tabId: string; rootPositionSgf: string }): Promise<{ id: string }>
     freezeAttempt(attemptId: string): Promise<void>
+    finalizeAttemptResult(attemptId: string, result: TrainingAttemptResult): Promise<void>
   }
   recallService: {
     createRecallSession(input: Record<string, unknown>): Promise<{ id: string }>
   }
   snapshotService: SnapshotService
   tabService: WorkbenchTabService
+  evaluationRules?: {
+    evaluateAttempt(input: {
+      attempt: Record<string, unknown>
+      evaluations: unknown[]
+      badMoves: unknown[]
+    }): TrainingAttemptResult
+  }
+  runtimeStore?: TrainingRuntimeStore
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
 }
 
@@ -58,6 +68,8 @@ export type WorkbenchFlowService = {
 
 export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): WorkbenchFlowService {
   const { workbenchStore, repository, attemptService, recallService, snapshotService, tabService, logger } = deps
+  const evaluationRules = deps.evaluationRules
+  const runtimeStore = deps.runtimeStore
 
   function getTab(tabId: string): WorkbenchTab {
     const tab = workbenchStore.getState().tabs.find(t => t.id === tabId)
@@ -81,22 +93,48 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     const tab = getTab(tabId)
     assertTransition(tab, 'submit')
 
-    workbenchStore.updateTab(tabId, { mode: 'recall' })
-
-    if (!tab.activeAttemptId) return Promise.resolve()
+    if (!tab.activeAttemptId) {
+      workbenchStore.updateTab(tabId, { mode: 'recall' })
+      return Promise.resolve()
+    }
 
     return (async () => {
+      // Step 1: Freeze attempt
       await attemptService.freezeAttempt(tab.activeAttemptId)
 
+      // Step 2 & 3: Load evaluations and bad moves, then evaluate
+      let result: TrainingAttemptResult = 'pass'
+      if (evaluationRules && attemptService.finalizeAttemptResult) {
+        const [evaluations, badMoves] = await Promise.all([
+          repository.listMoveEvaluationsByAttempt(tab.activeAttemptId),
+          repository.listBadMovesByAttempt(tab.activeAttemptId),
+        ])
+        result = evaluationRules.evaluateAttempt({
+          attempt: { id: tab.activeAttemptId },
+          evaluations,
+          badMoves,
+        })
+
+        // Step 4: Finalize attempt result
+        await attemptService.finalizeAttemptResult(tab.activeAttemptId, result)
+      }
+
+      // Step 5: Create recall session
       const session = await recallService.createRecallSession({
         taskId: tab.taskId,
         tabId: tab.id,
         attemptId: tab.activeAttemptId,
       })
 
+      // Step 6: Transition mode only after all work succeeds
       workbenchStore.updateTab(tabId, {
+        mode: 'recall',
         activeRecallSessionId: session.id,
       })
+
+      // Step 7: Update runtime store
+      runtimeStore?.setProblemView(null)
+      runtimeStore?.setActiveRecallSession(session.id)
     })()
   }
 
@@ -158,6 +196,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     const snapshotInput = await snapshotService.captureSnapshotInput({
       tabId,
       sourceTaskId: tab.taskId,
+      sourceAttemptId: tab.activeAttemptId,
     })
 
     const now = new Date().toISOString()

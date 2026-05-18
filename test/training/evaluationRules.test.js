@@ -223,6 +223,32 @@ describe('evaluationRules.evaluateAttempt', () => {
     assert.strictEqual(result, 'fail')
   })
 
+  // C34: 'failed' evaluations are NOT treated as 'pending' — they don't block result
+  it('returns "pass" when all evaluations are evaluated or failed (no pending)', () => {
+    const result = evaluateAttempt({
+      attempt: makeAttempt(),
+      moveEvaluations: [
+        makeEval({ status: 'evaluated' }),
+        makeEval({ status: 'failed', id: 'eval_failed_1' }),
+      ],
+      badMoves: [],
+    })
+    assert.strictEqual(result, 'pass')
+  })
+
+  // C34 variant: failed evals do not cause 'pending' result even when mixed with evaluated
+  it('does not return "pending" for failed evaluations', () => {
+    const result = evaluateAttempt({
+      attempt: makeAttempt(),
+      moveEvaluations: [
+        makeEval({ status: 'failed', id: 'eval_failed_1' }),
+      ],
+      badMoves: [],
+    })
+    assert.notStrictEqual(result, 'pending')
+    assert.strictEqual(result, 'pass')
+  })
+
   it('returns "fail" when requireNoSevereBadMove and severe exists', () => {
     const result = evaluateAttempt({
       attempt: makeAttempt(),
@@ -250,13 +276,23 @@ describe('evaluationRules.evaluateAttempt', () => {
 // --- shouldCreateBadMove ---
 
 describe('evaluationRules.shouldCreateBadMove', () => {
+  // C22: already tested above — returns false for 'none'
   it('returns false for "none"', () => {
     assert.strictEqual(shouldCreateBadMove('none'), false)
   })
 
-  it('returns true for actual severities', () => {
-    assert.strictEqual(shouldCreateBadMove('minor'), true)
+  // C23: minor drops do NOT create BadMove — Phase 4 spec change
+  it('returns false for "minor"', () => {
+    assert.strictEqual(shouldCreateBadMove('minor'), false)
+  })
+
+  // C24
+  it('returns true for "major"', () => {
     assert.strictEqual(shouldCreateBadMove('major'), true)
+  })
+
+  // C25
+  it('returns true for "severe"', () => {
     assert.strictEqual(shouldCreateBadMove('severe'), true)
   })
 })
