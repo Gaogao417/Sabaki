@@ -608,6 +608,224 @@ describeOrSkip('taskImportService', () => {
       assert.ok(task.goal)
     })
   })
+
+  // =========================================================
+  // Phase 7: BadMove -> Review auto-enqueue
+  // =========================================================
+
+  describe('Phase 7: BadMove -> Review auto-enqueue', () => {
+    function createTestServiceWithBadMove(badMoveId, badMoveData, extraOverrides) {
+      const badMoves = {[badMoveId]: {
+        id: badMoveId,
+        moveEvaluationId: 'eval_p7',
+        attemptId: 'attempt_p7',
+        taskId: 'task_original_p7',
+        moveIndex: 12,
+        severity: 'major',
+        punishSide: 'black',
+        positionBeforeSgf: GAME_SGF,
+        createdAt: new Date().toISOString(),
+        ...badMoveData,
+      }}
+
+      return createTestService({
+        repository: {badMoves},
+        ...extraOverrides,
+      })
+    }
+
+    // C10: auto-enqueue into review queue after task creation
+    it('T46: createTaskFromBadMove enqueues new task into review queue (C10)', async () => {
+      const {service, repository} = createTestServiceWithBadMove('bm_c10', {
+        positionBeforeSgf: MINIMAL_SGF,
+      })
+      const task = await service.createTaskFromBadMove({badMoveId: 'bm_c10'})
+
+      // After creating the task, a review schedule should have been created
+      // whose taskId points to the newly created task
+      assert.ok(repository.calls.createReviewSchedule.length >= 1,
+        'createReviewSchedule should be called at least once after creating task from bad move')
+
+      const schedule = repository.calls.createReviewSchedule[
+        repository.calls.createReviewSchedule.length - 1
+      ]
+      assert.strictEqual(schedule.taskId, task.id,
+        'review schedule taskId must point to the newly created task')
+    })
+
+    // C10 supplementary: review schedule should have the task id, not the bad move id
+    it('T47: review schedule taskId is the new task id, not the badMove id (C10)', async () => {
+      const {service, repository} = createTestServiceWithBadMove('bm_c10b', {
+        positionBeforeSgf: MINIMAL_SGF,
+      })
+      const task = await service.createTaskFromBadMove({badMoveId: 'bm_c10b'})
+
+      const schedule = repository.calls.createReviewSchedule[
+        repository.calls.createReviewSchedule.length - 1
+      ]
+      assert.notStrictEqual(schedule.taskId, 'bm_c10b',
+        'review schedule taskId must NOT be the badMove id')
+      assert.strictEqual(schedule.taskId, task.id,
+        'review schedule taskId must be the new task id')
+    })
+
+    // C11: returned task is a plain TrainingTask with origin.provider = 'bad_move'
+    it('T48: createTaskFromBadMove returns a plain TrainingTask (C11)', async () => {
+      const {service} = createTestServiceWithBadMove('bm_c11', {
+        positionBeforeSgf: MINIMAL_SGF,
+      })
+      const task = await service.createTaskFromBadMove({badMoveId: 'bm_c11'})
+
+      // Standard TrainingTask fields
+      assert.ok(task.id, 'task must have id')
+      assert.ok(task.rootPositionSgf, 'task must have rootPositionSgf')
+      assert.ok(task.createdAt, 'task must have createdAt')
+      assert.ok(task.updatedAt, 'task must have updatedAt')
+      assert.ok(task.origin, 'task must have origin')
+
+      // No special kind discriminator
+      if (task.kind) {
+        assert.notStrictEqual(task.kind, 'snapshot_problem')
+        assert.notStrictEqual(task.kind, 'punishment_problem')
+      }
+    })
+
+    // C12: badMove.generatedTaskId updated to new task id
+    it('T49: createTaskFromBadMove updates badMove.generatedTaskId (C12)', async () => {
+      const {service, repository} = createTestServiceWithBadMove('bm_c12', {
+        positionBeforeSgf: MINIMAL_SGF,
+      })
+      const task = await service.createTaskFromBadMove({badMoveId: 'bm_c12'})
+
+      const updateCall = repository.calls.updateBadMove.find(c => c.id === 'bm_c12')
+      assert.ok(updateCall, 'updateBadMove should be called for the bad move')
+      assert.strictEqual(updateCall.patch.generatedTaskId, task.id,
+        'badMove.generatedTaskId should be updated to the new task id')
+    })
+
+    // C13: origin.provider is 'bad_move'
+    it('T50: bad_move derived task has origin.provider=bad_move (C13)', async () => {
+      const {service} = createTestServiceWithBadMove('bm_c13', {
+        positionBeforeSgf: MINIMAL_SGF,
+      })
+      const task = await service.createTaskFromBadMove({badMoveId: 'bm_c13'})
+      assert.strictEqual(task.origin.provider, 'bad_move')
+    })
+
+    // C14: idempotency -- if generatedTaskId already exists, return existing task
+    it('T51: duplicate createTaskFromBadMove returns existing task when generatedTaskId is set (C14)', async () => {
+      // Set up a bad move that already has a generatedTaskId pointing to an existing task
+      const existingTaskId = 'task_existing_from_bm'
+      const existingTask = {
+        id: existingTaskId,
+        rootPositionSgf: GAME_SGF,
+        sideToMove: 'black',
+        origin: {provider: 'bad_move', parentTaskId: 'task_original_p7'},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      const {service, repository} = createTestServiceWithBadMove('bm_c14', {
+        positionBeforeSgf: MINIMAL_SGF,
+        generatedTaskId: existingTaskId,
+      }, {
+        // Pre-populate the existing task in the repo so loadTask can find it
+        repository: {
+          badMoves: {},
+          tasks: {[existingTaskId]: existingTask},
+        },
+      })
+
+      // Override badMoves after construction since createTestServiceWithBadMove
+      // sets up its own badMoves -- we need to inject the one with generatedTaskId
+      repository.calls._badMovesOverride = true
+      const bmData = {
+        id: 'bm_c14',
+        moveEvaluationId: 'eval_p7',
+        attemptId: 'attempt_p7',
+        taskId: 'task_original_p7',
+        moveIndex: 12,
+        severity: 'major',
+        punishSide: 'black',
+        positionBeforeSgf: MINIMAL_SGF,
+        generatedTaskId: existingTaskId,
+        createdAt: new Date().toISOString(),
+      }
+      // Inject into the repository's internal state
+      // The mock repo stores badMoves in a closure via overrides.repository.badMoves
+      // We need to ensure loadBadMove('bm_c14') returns our bad move with generatedTaskId
+      // and loadTask(existingTaskId) returns the existing task.
+
+      // Since createTestServiceWithBadMove already set up the repo with overrides,
+      // let's rebuild more directly for this test.
+      const repo2 = createMockRepository({
+        badMoves: {bm_c14: bmData},
+        tasks: {[existingTaskId]: existingTask},
+      })
+      const svc = createTaskImportService({
+        repository: repo2,
+        foxAdapter: createMockFoxAdapter(),
+        weiqi101Db: createMockWeiqi101Db(),
+        sgfAdapter: createMockSgfAdapter(),
+        fileAdapter: createMockFileAdapter(),
+        logger: createMockLogger(),
+      })
+
+      const task = await svc.createTaskFromBadMove({badMoveId: 'bm_c14'})
+
+      // Should return the existing task, not create a new one
+      assert.strictEqual(task.id, existingTaskId,
+        'should return the existing task referenced by generatedTaskId')
+
+      // Should NOT create a new task
+      assert.strictEqual(repo2.calls.createTask.length, 0,
+        'should not create a new task when generatedTaskId already exists')
+    })
+
+    // C14 supplementary: no duplicate review schedule for idempotent call
+    it('T52: duplicate createTaskFromBadMove does not create additional review schedule (C14)', async () => {
+      const existingTaskId = 'task_existing_dup'
+      const existingTask = {
+        id: existingTaskId,
+        rootPositionSgf: GAME_SGF,
+        sideToMove: 'black',
+        origin: {provider: 'bad_move'},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      const bmData = {
+        id: 'bm_c14b',
+        moveEvaluationId: 'eval_p7',
+        attemptId: 'attempt_p7',
+        taskId: 'task_original_p7',
+        moveIndex: 12,
+        severity: 'major',
+        punishSide: 'black',
+        positionBeforeSgf: MINIMAL_SGF,
+        generatedTaskId: existingTaskId,
+        createdAt: new Date().toISOString(),
+      }
+
+      const repo = createMockRepository({
+        badMoves: {bm_c14b: bmData},
+        tasks: {[existingTaskId]: existingTask},
+      })
+      const svc = createTaskImportService({
+        repository: repo,
+        foxAdapter: createMockFoxAdapter(),
+        weiqi101Db: createMockWeiqi101Db(),
+        sgfAdapter: createMockSgfAdapter(),
+        fileAdapter: createMockFileAdapter(),
+        logger: createMockLogger(),
+      })
+
+      await svc.createTaskFromBadMove({badMoveId: 'bm_c14b'})
+
+      // No new review schedule should be created for the idempotent path
+      assert.strictEqual(repo.calls.createReviewSchedule.length, 0,
+        'idempotent call should not create a new review schedule')
+    })
+  })
 })
 
 // =========================================================
