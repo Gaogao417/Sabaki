@@ -1,15 +1,15 @@
 /**
- * ModeActions Contract Tests (Phase 3)
+ * ModeActions Contract Tests (Phase 3 + Phase U2)
  *
- * Test contract: docs/design/2026-05-18/workbench-ui-phases-1-3/test-contract-v0.1.md
- * Contracts covered: T-3a through T-3h, T-INDEX
+ * Test contract:
+ *   Phase 3: docs/design/2026-05-18/workbench-ui-phases-1-3/test-contract-v0.1.md
+ *   Phase U2: docs/design/2026-05-19/phase-u2-structural/test-contract-v0.1.md
+ * Contracts covered: T-3a through T-3h (Phase 3), T-U2-4a through T-U2-4d (Phase U2)
  *
  * Test Legitimacy:
  *   All tests import the production ModeActions component and workbench index.
  *   Production module missing -> tests FAIL (import error), no silent pass.
  *   Controlled dependencies: jsdom DOM via preactTestHelper.
- *
- * NOTE: ModeActions is a TO-BE-CREATED component.
  *
  * Fragility note (from contract): Use data-testid or role, not button text as selector.
  */
@@ -17,20 +17,12 @@
 import assert from 'assert'
 import {h} from 'preact'
 import {renderToDom} from '../preactTestHelper.js'
-import {tryImport} from '../tryImport.js'
 
 // Static import for ModeBar — this component already exists
 import ModeBar from '../../../src/components/workbench/shell/ModeBar.js'
+import ModeActions from '../../../src/components/workbench/shell/ModeActions.js'
 
-let ModeActions = null
-let workbenchIndex = null
-
-describe('ModeActions (T-3)', function () {
-  before(async function () {
-    ModeActions = await tryImport('src/components/workbench/shell/ModeActions.js')
-    if (!ModeActions) this.skip()
-  })
-
+describe('ModeActions (T-3)', () => {
   // --- T-3a: mode='play' renders 4 buttons ---
   // Production subject: ModeActions component
   // Production bug: wrong number of buttons for play mode
@@ -195,7 +187,6 @@ describe('ModeBar integration (T-3g)', () => {
   // WIRING: ModeBar passes correct props to ModeActions
   // Production subject: ModeBar component (existing)
   // Production bug: ModeBar does not integrate ModeActions
-  // This test runs independently of ModeActions existence because ModeBar already exists.
   it('T-3g: ModeBar integrates ModeActions with mode and callback props', () => {
     const {queryAllByTestId} = renderToDom(
       h(ModeBar, {
@@ -213,20 +204,100 @@ describe('ModeBar integration (T-3g)', () => {
   })
 })
 
-describe('Workbench Index exports (T-INDEX)', () => {
-  before(async function () {
-    workbenchIndex = await tryImport('src/components/workbench/index.js')
+// ============================================================================
+// Phase U2: Chinese Labels
+// ============================================================================
+
+describe('ModeActions Chinese labels (T-U2-4)', () => {
+  // --- T-U2-4a: Play Chinese labels ---
+  // Production subject: ModeActions component
+  // Production import path: src/components/workbench/shell/ModeActions.js
+  // Production bug: Play buttons still use English labels (New Game/Settings/End/Resign)
+  //   instead of Chinese (新对局/对局设置/结束/认输)
+  // Controlled dependencies: props are inline
+  it('T-U2-4a: Play mode uses Chinese labels', () => {
+    const {container} = renderToDom(
+      h(ModeActions, {
+        mode: 'play',
+        onNewGame: () => {},
+        onSettings: () => {},
+        onEnd: () => {},
+        onResign: () => {},
+      })
+    )
+
+    const text = container.textContent
+    assert.ok(text.includes('新对局'), 'Expected Play label "新对局"')
+    assert.ok(text.includes('对局设置'), 'Expected Play label "对局设置"')
+    assert.ok(text.includes('结束'), 'Expected Play label "结束"')
+    assert.ok(text.includes('认输'), 'Expected Play label "认输"')
   })
 
-  // --- T-INDEX: index.js exports all new components ---
-  // WIRING: barrel file exports
-  // Production subject: workbench/index.js
-  // Production bug: new components not exported from barrel file
-  it('exports ModeActions', () => {
-    assert.ok(workbenchIndex, 'workbench/index.js should be importable')
-    assert.ok(
-      typeof workbenchIndex.ModeActions === 'function' || workbenchIndex.ModeActions != null,
-      'ModeActions should be exported from workbench/index.js'
+  // --- T-U2-4b: Problem Chinese labels ---
+  // Production subject: ModeActions component
+  // Production import path: src/components/workbench/shell/ModeActions.js
+  // Production bug: Problem buttons still use English labels
+  //   instead of Chinese (提交答案/放弃作答/做题设置/进入复盘)
+  // Controlled dependencies: props are inline
+  it('T-U2-4b: Problem mode uses Chinese labels', () => {
+    const {container} = renderToDom(
+      h(ModeActions, {
+        mode: 'problem',
+        onSubmit: () => {},
+        onAbandon: () => {},
+        onSettings: () => {},
+        onAnalysis: () => {},
+      })
     )
+
+    const text = container.textContent
+    assert.ok(text.includes('提交答案'), 'Expected Problem label "提交答案"')
+    assert.ok(text.includes('放弃作答'), 'Expected Problem label "放弃作答"')
+    assert.ok(text.includes('做题设置'), 'Expected Problem label "做题设置"')
+    assert.ok(text.includes('进入复盘'), 'Expected Problem label "进入复盘"')
+  })
+
+  // --- T-U2-4c: Recall Chinese labels ---
+  // Production subject: ModeActions component
+  // Production import path: src/components/workbench/shell/ModeActions.js
+  // Production bug: Recall buttons still use English labels
+  //   instead of Chinese (标记/提示/校对/进入复盘)
+  // Controlled dependencies: props are inline
+  it('T-U2-4c: Recall mode uses Chinese labels', () => {
+    const {container} = renderToDom(
+      h(ModeActions, {
+        mode: 'recall',
+        onAnalysis: () => {},
+        onEnd: () => {},
+        onSnapshot: () => {},
+      })
+    )
+
+    const text = container.textContent
+    assert.ok(text.includes('标记'), 'Expected Recall label "标记"')
+    assert.ok(text.includes('提示'), 'Expected Recall label "提示"')
+    assert.ok(text.includes('校对'), 'Expected Recall label "校对"')
+    assert.ok(text.includes('进入复盘'), 'Expected Recall label "进入复盘"')
+  })
+
+  // --- T-U2-4d: Analysis labels ---
+  // Production subject: ModeActions component
+  // Production import path: src/components/workbench/shell/ModeActions.js
+  // Production bug: Analysis buttons use wrong labels
+  //   Contract says: Snapshot/返回
+  // Controlled dependencies: props are inline
+  it('T-U2-4d: Analysis mode has Snapshot and 返回 labels', () => {
+    const {container} = renderToDom(
+      h(ModeActions, {
+        mode: 'analysis',
+        onSnapshot: () => {},
+        onSettings: () => {},
+        onReturn: () => {},
+      })
+    )
+
+    const text = container.textContent
+    assert.ok(text.includes('Snapshot'), 'Expected Analysis label "Snapshot"')
+    assert.ok(text.includes('返回'), 'Expected Analysis label "返回"')
   })
 })

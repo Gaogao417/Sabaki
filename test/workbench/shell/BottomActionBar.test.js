@@ -1,18 +1,18 @@
 /**
- * BottomActionBar Contract Tests (Phase 4)
+ * BottomActionBar Contract Tests (Phase 4 + Phase U2)
  *
- * Test contract: docs/design/2026-05-18/workbench-ui-phase-4/test-contract-v0.1.md
- * Contracts covered: T-4.3a through T-4.3g
+ * Test contract:
+ *   Phase 4: docs/design/2026-05-18/workbench-ui-phase-4/test-contract-v0.1.md
+ *   Phase U2: docs/design/2026-05-19/phase-u2-structural/test-contract-v0.1.md
+ * Contracts covered: T-4.3a through T-4.3g (Phase 4), T-U2-3a through T-U2-3c (Phase U2)
  *
  * Test Legitimacy:
  *   All tests import the production BottomActionBar component.
  *   Production module missing -> tryImport returns null -> this.skip(), no silent pass.
  *   Controlled dependencies: jsdom DOM via preactTestHelper.
  *
- * NOTE: BottomActionBar is a TO-BE-CREATED component.
- *
- * Fragility note: Button testid lists come directly from the contract.
- * Adding/removing buttons requires a contract update.
+ * NOTE: BottomActionBar is an existing component that needs Phase U2 additions
+ *   (status text area). Phase 4 tests are preserved; U2 tests are appended.
  */
 
 import assert from 'assert'
@@ -273,5 +273,90 @@ describe('BottomActionBar (T-4.3)', function () {
       classList.includes('active'),
       `Active tool "triangle" should have active class, got "${classList}"`
     )
+  })
+})
+
+// ============================================================================
+// Phase U2: Status Text Area
+// ============================================================================
+
+describe('BottomActionBar status text (T-U2-3)', function () {
+  before(async function () {
+    BottomActionBar = await tryImport('src/components/workbench/shell/BottomActionBar.js')
+    if (!BottomActionBar) this.skip()
+  })
+
+  // --- T-U2-3a: has .wb-status-text area ---
+  // Production subject: BottomActionBar component
+  // Production import path: src/components/workbench/shell/BottomActionBar.js
+  // Production bug: BottomActionBar does not render a .wb-status-text element
+  // Controlled dependencies: props are inline
+  it('T-U2-3a: renders .wb-status-text area', () => {
+    const {container} = renderToDom(
+      h(BottomActionBar, noopProps({
+        mode: 'play',
+        workspaceLabel: '对局',
+        moveNumber: 42,
+        engineStatus: 'KataGo 已连接',
+      }))
+    )
+
+    const statusText = container.querySelector('.wb-status-text')
+    assert.ok(statusText, 'Expected element with class .wb-status-text')
+  })
+
+  // --- T-U2-3b: contains workspaceLabel, moveNumber, engineStatus ---
+  // Production subject: BottomActionBar component
+  // Production import path: src/components/workbench/shell/BottomActionBar.js
+  // Production bug: BottomActionBar does not render workspaceLabel, moveNumber,
+  //   or engineStatus text in the status area
+  // Controlled dependencies: props are inline test data
+  it('T-U2-3b: status text contains workspaceLabel, moveNumber, engineStatus', () => {
+    const {container} = renderToDom(
+      h(BottomActionBar, noopProps({
+        mode: 'play',
+        workspaceLabel: '对局',
+        moveNumber: 42,
+        engineStatus: 'KataGo 已连接',
+      }))
+    )
+
+    const text = container.textContent
+    assert.ok(text.includes('对局'), 'Expected workspaceLabel "对局" in status text')
+    assert.ok(text.includes('42'), 'Expected moveNumber "42" in status text')
+    assert.ok(text.includes('KataGo'), 'Expected engineStatus containing "KataGo" in status text')
+  })
+
+  // --- T-U2-3c: different mode produces different workspaceLabel ---
+  // Production subject: BottomActionBar component
+  // Production import path: src/components/workbench/shell/BottomActionBar.js
+  // Production bug: workspaceLabel does not change across modes, always shows
+  //   same label regardless of mode prop
+  // Controlled dependencies: props are inline test data
+  it('T-U2-3c: different mode produces different workspaceLabel', () => {
+    const playResult = renderToDom(
+      h(BottomActionBar, noopProps({
+        mode: 'play',
+        workspaceLabel: '对局',
+        moveNumber: 1,
+        engineStatus: '',
+      }))
+    )
+
+    const problemResult = renderToDom(
+      h(BottomActionBar, noopProps({
+        mode: 'problem',
+        workspaceLabel: '做题',
+        moveNumber: 1,
+        engineStatus: '',
+      }))
+    )
+
+    const playText = playResult.container.textContent
+    const problemText = problemResult.container.textContent
+
+    assert.ok(playText.includes('对局'), 'Play mode should show "对局" workspaceLabel')
+    assert.ok(problemText.includes('做题'), 'Problem mode should show "做题" workspaceLabel')
+    assert.notStrictEqual(playText, problemText, 'Different modes should produce different status text')
   })
 })
