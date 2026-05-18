@@ -1247,3 +1247,96 @@
   gap: 4px;
   margin-top: 6px;
 }
+
+/* ========================================================================
+   Section 26. Bottom Action Bar  (.wb-bottom-action-bar)
+   Apple-style floating bar: white bg, subtle border, rounded corners, horizontal flex
+   ======================================================================== */
+
+.wb-bottom-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--ui-shadow-sm);
+  white-space: nowrap;
+}
+
+.wb-bottom-action-bar__mode-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.wb-bottom-action-bar__annotation-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Soft Apple-style toolbar button (replaces ghost in bottom bar) */
+.wb-bottom-action-bar .wb-btn {
+  background: var(--ui-bg-soft);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-sm);
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.12s ease;
+}
+
+.wb-bottom-action-bar .wb-btn:hover {
+  background: var(--ui-card-hover);
+  border-color: var(--ui-border-strong);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.wb-bottom-action-bar .wb-btn:active {
+  transform: scale(0.96);
+  background: var(--ui-border);
+}
+
+.wb-bottom-action-bar .wb-btn.active {
+  background: var(--ui-blue);
+  color: #fff;
+  border-color: var(--ui-blue);
+}
+
+/* ========================================================================
+   Section 27. Mode Actions bar-level buttons
+   ======================================================================== */
+
+.wb-mode-actions .wb-btn {
+  background: var(--ui-bg-soft);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-sm);
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.12s ease;
+}
+
+.wb-mode-actions .wb-btn:hover {
+  background: var(--ui-card-hover);
+  border-color: var(--ui-border-strong);
+}
+
+.wb-mode-actions .wb-btn-danger {
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  border-color: var(--ui-danger);
+}
+
+.wb-mode-actions .wb-btn-danger:hover {
+  background: var(--ui-danger);
+  color: #fff;
+}

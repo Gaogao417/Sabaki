@@ -77,17 +77,17 @@ export default function WorkbenchShell({
   return h('section', {class: 'workbench-shell'},
     h('div', {class: 'workbench-shell__inner'},
 
-      // Top row: GlobalHeader
+      // Top rows: GlobalHeader + GameTabBar + ModeBar
       h('div', {class: 'workbench-shell__top'},
         h(GlobalHeader, {mode, taskTitle, statusChips, engineName, engineConnected}),
+
+        // Game tab bar (only when games prop is provided)
+        games && games.length > 0 &&
+          h(GameTabBar, {games, activeIndex, onSelect: onSelectGame, onClose: onCloseGame, onAdd: onAddGame}),
+
+        // Mode bar
+        h(ModeBar, {activeMode: mode, onModeChange}),
       ),
-
-      // Game tab bar (only when games prop is provided)
-      games && games.length > 0 &&
-        h(GameTabBar, {games, activeIndex, onSelect: onSelectGame, onClose: onCloseGame, onAdd: onAddGame}),
-
-      // Mode bar
-      h(ModeBar, {activeMode: mode, onModeChange}),
 
       // Main content area
       h('div', {class: 'workbench-shell__main'},
