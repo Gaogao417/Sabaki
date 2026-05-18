@@ -1,0 +1,212 @@
+import {h} from 'preact'
+import {ANNOTATION_TOOL_DEFS} from '../shared/AnnotationToolbar.js'
+
+/**
+ * Mode-specific action button definitions.
+ * Each entry: { testId, label, callback, variant? }
+ */
+const MODE_ACTIONS = {
+  play: [
+    {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
+    {testId: 'action-pass', label: '弃权', callback: 'onPass'},
+    {testId: 'action-resign', label: '认输', callback: 'onResign', variant: 'danger'},
+    {testId: 'action-end-attempt', label: '结束', callback: 'onEndAttempt'},
+    {testId: 'action-mark-doubtful', label: '标记疑问手', callback: 'onMarkDoubtful'},
+  ],
+  problem: [
+    {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
+    {testId: 'action-redo', label: '重做', callback: 'onRedo'},
+    {testId: 'action-pass', label: '弃权', callback: 'onPass'},
+    {testId: 'action-request-hint', label: '提示', callback: 'onRequestHint'},
+    {testId: 'action-submit-answer', label: '提交答案', callback: 'onSubmitAnswer', variant: 'primary'},
+    {testId: 'action-abandon-answer', label: '放弃', callback: 'onAbandonAnswer'},
+  ],
+  recall: [
+    {testId: 'action-mark-checkpoint', label: '标记检查点', callback: 'onMarkCheckpoint'},
+    {testId: 'action-hint', label: '提示', callback: 'onHint'},
+    {testId: 'action-verify-skip', label: '校对跳过', callback: 'onVerifySkip'},
+    {testId: 'action-enter-analysis', label: '进入复盘', callback: 'onEnterAnalysis'},
+  ],
+  analysis: [
+    {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
+    {testId: 'action-redo', label: '重做', callback: 'onRedo'},
+    {testId: 'action-clear', label: '清除', callback: 'onClear'},
+    {testId: 'action-edit-position', label: '编辑局面', callback: 'onEditPosition'},
+    {testId: 'action-snapshot', label: '快照', callback: 'onSnapshot', variant: 'primary'},
+  ],
+}
+
+const VIEW_ACTIONS = [
+  {testId: 'action-select', label: '选择', callback: 'onSelect'},
+  {testId: 'action-hand-shape', label: '手型', callback: 'onHandShape'},
+  {testId: 'action-zoom-in', label: '放大', callback: 'onZoomIn'},
+  {testId: 'action-zoom-out', label: '缩小', callback: 'onZoomOut'},
+  {testId: 'action-fullscreen', label: '全屏', callback: 'onFullscreen'},
+]
+
+/** Reuse SVG-based annotation tools from AnnotationToolbar */
+const ANNOTATION_TOOLS = ANNOTATION_TOOL_DEFS
+
+const WORKSPACE_LABELS = {
+  play: '对局工作区',
+  problem: '做题工作区',
+  recall: '回忆工作区',
+  analysis: '复盘工作区',
+}
+
+/**
+ * BottomActionBar renders mode-specific and common action buttons.
+ *
+ * @param {Object} props
+ * @param {string} props.mode - Current mode
+ * @param {string} [props.workspaceLabel] - Workspace label text; defaults by mode
+ * @param {number} [props.moveNumber] - Current move number
+ * @param {string} [props.engineStatus] - Engine status text
+ * @param {Function} [props.onUndo] - Undo action
+ * @param {Function} [props.onRedo] - Redo action
+ * @param {Function} [props.onPass] - Pass action
+ * @param {Function} [props.onResign] - Resign action
+ * @param {Function} [props.onEndAttempt] - End attempt action
+ * @param {Function} [props.onMarkDoubtful] - Mark doubtful action
+ * @param {Function} [props.onRequestHint] - Request hint action
+ * @param {Function} [props.onSubmitAnswer] - Submit answer action
+ * @param {Function} [props.onAbandonAnswer] - Abandon answer action
+ * @param {Function} [props.onMarkCheckpoint] - Mark checkpoint action
+ * @param {Function} [props.onHint] - Hint action
+ * @param {Function} [props.onVerifySkip] - Verify skip action
+ * @param {Function} [props.onEnterAnalysis] - Enter analysis action
+ * @param {Function} [props.onClear] - Clear action
+ * @param {Function} [props.onEditPosition] - Edit position action
+ * @param {Function} [props.onSnapshot] - Snapshot action
+ * @param {Function} [props.onSelect] - Select action
+ * @param {Function} [props.onHandShape] - Hand shape action
+ * @param {Function} [props.onZoomIn] - Zoom in action
+ * @param {Function} [props.onZoomOut] - Zoom out action
+ * @param {Function} [props.onFullscreen] - Fullscreen action
+ * @param {string|null} [props.activeAnnotationTool] - Active annotation tool key (analysis only)
+ * @param {Function} [props.onAnnotationToolChange] - Annotation tool selection callback
+ */
+export default function BottomActionBar({
+  mode = 'play',
+  workspaceLabel,
+  moveNumber = 0,
+  engineStatus = '引擎就绪',
+  opponentType = 'self',
+  problemAreaSet = true,
+  recallProgress = 0,
+  recallTotal = 0,
+  recallWaiting = true,
+  keyPointCount = 0,
+  snapshotCount = 0,
+  activeAnnotationTool = null,
+  onAnnotationToolChange = () => {},
+  ...callbacks
+}) {
+  const modeActions = MODE_ACTIONS[mode] || []
+  const label = workspaceLabel || WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.play
+
+  function actionBtn(btn) {
+    const cls = btn.variant === 'danger'
+      ? 'wb-btn wb-btn--sm wb-btn-danger'
+      : btn.variant === 'primary'
+        ? 'wb-btn wb-btn--sm wb-btn-primary'
+        : 'wb-btn wb-btn--sm wb-btn-ghost'
+    return h('button', {
+      'data-testid': btn.testId,
+      class: cls,
+      onClick: () => {
+        const handler = callbacks[btn.callback]
+        if (handler) handler()
+      },
+    }, btn.label)
+  }
+
+  /** Build mode-specific status segments */
+  function renderStatusSegments() {
+    const segs = []
+
+    segs.push(h('span', {class: 'wb-status-text__label'}, label))
+    segs.push(h('span', {class: 'wb-status-text__divider'}))
+
+    if (mode === 'recall') {
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前进度 ${recallProgress} / ${recallTotal}`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        recallWaiting ? '等待输入下一手' : ''))
+    } else if (mode === 'problem') {
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前第 ${moveNumber} 手`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `对方：${opponentType === 'ai' ? 'AI' : '自己'}`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `题目范围：${problemAreaSet ? '已设置' : '未设置'}`))
+    } else if (mode === 'analysis') {
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前第 ${moveNumber} 手`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `关键点 ${keyPointCount} · Snapshot ${snapshotCount}`))
+    } else {
+      // play
+      segs.push(h('span', {class: 'wb-status-text__value'},
+        `当前第 ${moveNumber} 手`))
+      segs.push(h('span', {class: 'wb-status-text__divider'}))
+      segs.push(h('span', {class: 'wb-status-text__value'}, engineStatus))
+    }
+
+    return segs
+  }
+
+  return h('div', {
+    'data-testid': 'bottom-action-bar',
+    class: 'wb-bottom-action-bar',
+  },
+    // Left: Status
+    h('div', {
+      'data-testid': 'bottom-status-text',
+      class: 'wb-status-text',
+    }, ...renderStatusSegments()),
+
+    // Center: Mode actions
+    h('div', {class: 'wb-bottom-action-bar__mode-actions'},
+      modeActions.map(btn =>
+        h('div', {
+          key: btn.testId,
+          class: 'wb-bottom-action-bar__item',
+        }, actionBtn(btn)),
+      ),
+    ),
+
+    // Right: View controls + annotation tools (analysis)
+    h('div', {class: 'wb-bottom-action-bar__view-controls'},
+      h('div', {class: 'wb-bottom-action-bar__divider'}),
+      VIEW_ACTIONS.map(btn =>
+        h('div', {
+          key: btn.testId,
+          class: 'wb-bottom-action-bar__item',
+        }, actionBtn(btn)),
+      ),
+      mode === 'analysis' &&
+        h('div', {
+          'data-testid': 'annotation-tool',
+          class: 'wb-bottom-action-bar__annotation-tools',
+        },
+          h('div', {class: 'wb-bottom-action-bar__divider'}),
+          ANNOTATION_TOOLS.map(tool =>
+            h('button', {
+              key: tool.id,
+              'data-testid': 'annotation-tool-btn',
+              'data-tool': tool.id,
+              'aria-label': tool.title,
+              title: tool.title,
+              class: `wb-btn wb-btn--sm wb-btn-ghost${activeAnnotationTool === tool.id ? ' active' : ''}`,
+              onClick: () => onAnnotationToolChange(tool.id),
+            }, tool.icon()),
+          ),
+        ),
+    ),
+  )
+}

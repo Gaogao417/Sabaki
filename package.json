@@ -125,6 +125,7 @@
     "concurrently": "^7.3.0",
     "electron": "^37.10.3",
     "electron-builder": "^26.4.0",
+    "jsdom": "^29.1.1",
     "mocha": "^10.0.0",
     "onchange": "^7.1.0",
     "prettier": "3.8.1",

@@ -4169,7 +4169,7 @@ button:active {
   justify-content: center;
   padding: 24px;
   box-sizing: border-box;
-  background: #f7f8fa;
+  background: var(--bg-app);
 }
 
 .workbench-shell__inner {
@@ -4177,17 +4177,17 @@ button:active {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 20px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
 }
 
 .workbench-shell__main {
   display: grid;
   grid-template-columns:
-    minmax(112px, 304px)
-    minmax(220px, 1fr)
-    minmax(112px, 304px);
-  gap: 24px;
+    300px
+    minmax(560px, 1fr)
+    300px;
+  gap: 40px;
   min-height: 0;
   overflow: hidden;
 }
@@ -4199,7 +4199,9 @@ button:active {
   justify-self: center;
 }
 
+.workbench-shell__left-panel,
 .workbench-shell__left,
+.workbench-shell__right-panel,
 .workbench-shell__right {
   overflow-y: auto;
   min-height: 0;

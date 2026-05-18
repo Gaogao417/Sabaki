@@ -1,248 +1,117 @@
-import {h, Component} from 'preact'
+import {h} from 'preact'
 
-import BoardToolbar from './BoardToolbar.js'
-import MainView from './MainView.js'
-import LeftSidebar from './LeftSidebar.js'
-import Sidebar from './Sidebar.js'
-import WorkspaceDock from './WorkspaceDock.js'
-import EditBar from './bars/EditBar.js'
-import RecallBar from './bars/RecallBar.js'
-import ProblemBar from './bars/ProblemBar.js'
-import AutoplayBar from './bars/AutoplayBar.js'
-import ScoringBar from './bars/ScoringBar.js'
-import FindBar from './bars/FindBar.js'
-import classNames from 'classnames'
+import {
+  GlobalHeader,
+  ModeBar,
+  MainBoardStage,
+  GameTabBar,
+  BottomActionBar,
+  RightModePanel,
+  PlayModePanel,
+  ProblemModePanel,
+  RecallModePanel,
+  AnalysisModePanel,
+} from './workbench/index.js'
 
-import sabaki from '../modules/sabaki.js'
-import * as gametree from '../modules/gametree.js'
+/**
+ * @callback onModeChangeCallback
+ * @param {'play'|'problem'|'recall'|'analysis'} mode - New active mode
+ */
 
-export default class WorkbenchShell extends Component {
-  constructor(props) {
-    super(props)
+/**
+ * @callback onSelectGameCallback
+ * @param {number} index - Index of the selected game
+ */
 
-    this.handleTogglePlayer = () => {
-      let {
-        treePosition,
-        currentPlayer,
-        editWorkspaceActive,
-        editCurrentPlayer,
-      } = this.props
-      let player = editWorkspaceActive ? editCurrentPlayer : currentPlayer
-      if (editWorkspaceActive) {
-        sabaki.setEditWorkspacePlayer(-player)
-      } else {
-        sabaki.setPlayer(treePosition, -player)
-      }
-    }
+/**
+ * @callback onCloseGameCallback
+ * @param {number} index - Index of the game to close
+ */
 
-    this.handleToolButtonClick = (evt) => {
-      sabaki.setState({selectedTool: evt.tool})
-    }
+/**
+ * @callback onAddGameCallback
+ * Called when the user requests a new game
+ */
 
-    this.handleFindButtonClick = (evt) =>
-      sabaki.findMove(evt.step, {
-        vertex: this.props.findVertex,
-        text: this.props.findText,
-      })
+/**
+ * WorkbenchShell is the top-level layout shell for the training workbench.
+ * Pure front-end skeleton: all callback props are documented with @callback JSDoc.
+ *
+ * @param {Object} props
+ * @param {'play'|'problem'|'recall'|'analysis'} props.mode - Current active mode
+ * @param {onModeChangeCallback} props.onModeChange - Fired when the user switches mode
+ * @param {import('preact').ComponentChildren} [props.children] - Children rendered inside MainBoardStage
+ * @param {Array<{index: number, title: string, active: boolean}>} [props.games] - Game list (omit to hide GameTabBar)
+ * @param {number} [props.activeIndex] - Index of the active game tab
+ * @param {onSelectGameCallback} [props.onSelectGame] - Fired when a game tab is selected
+ * @param {onCloseGameCallback} [props.onCloseGame] - Fired when a game tab is closed
+ * @param {onAddGameCallback} [props.onAddGame] - Fired when the add-game button is clicked
+ * @param {string} [props.taskTitle] - Title displayed in GlobalHeader
+ * @param {Array<string>} [props.statusChips] - Status chips in GlobalHeader
+ * @param {string} [props.engineName] - Engine name in GlobalHeader
+ * @param {boolean} [props.engineConnected] - Engine connection status in GlobalHeader
+ */
+export default function WorkbenchShell({
+  mode = 'play',
+  onModeChange = () => {},
+  children,
+  games,
+  activeIndex,
+  onSelectGame,
+  onCloseGame,
+  onAddGame,
+  taskTitle,
+  statusChips,
+  engineName,
+  engineConnected,
+  ...rest
+}) {
+  /** Left panel content per mode */
+  const leftPanel = {
+    play: h(PlayModePanel, {...rest}),
+    problem: h(ProblemModePanel, {...rest}),
+    recall: h(RecallModePanel, {...rest}),
+    analysis: h(AnalysisModePanel, {...rest}),
   }
 
-  render(props) {
-    let {
-      mode,
-      gameIndex,
-      gameTree,
-      gameCurrents,
-      treePosition,
-      currentPlayer,
-      editWorkspaceActive,
-      editRenderBoard,
-      editCurrentPlayer,
-      editLines,
-      gameInfo,
-      recallSession,
-      openDrawer,
+  return h('section', {class: 'workbench-shell', 'data-mode': mode},
+    h('div', {class: 'workbench-shell__inner'},
 
-      scoringMethod,
-      scoreBoard,
-      areaMap,
+      // Row 1: Chrome — GlobalHeader + GameTabBar
+      h('div', {class: 'workbench-shell__chrome'},
+        h(GlobalHeader, {mode, taskTitle, statusChips, engineName, engineConnected}),
 
-      selectedTool,
-      findText,
-      editWorkspace: editWs,
-    } = props
+        // Game tab bar (only when games prop is provided)
+        games && games.length > 0 &&
+          h(GameTabBar, {games, activeIndex, onSelect: onSelectGame, onClose: onCloseGame, onAdd: onAddGame}),
+      ),
 
-    let board = editWorkspaceActive
-      ? editRenderBoard
-      : gametree.getBoard(gameTree, treePosition)
-    if (board == null) {
-      board = gametree.getBoard(gameTree, treePosition)
-    }
-    currentPlayer = editWorkspaceActive ? editCurrentPlayer : currentPlayer
+      // Row 2: Toolbar — ModeBar (StoneStatus + Segmented + Actions)
+      h(ModeBar, {activeMode: mode, onModeChange, ...rest}),
 
-    let engineSyncers = [
-      props.blackEngineSyncerId,
-      props.whiteEngineSyncerId,
-    ].map((id) =>
-      props.attachedEngineSyncers.find((syncer) => syncer.id === id),
-    )
+      // Main content area
+      h('div', {class: 'workbench-shell__main'},
 
-    let connectedEngines = engineSyncers.filter((s) => s != null).length
-    let engineStatusText =
-      connectedEngines === 0 ? '未连接引擎' : `${connectedEngines} 个引擎已连接`
-
-    let workspaceSummary =
-      mode === 'analysis'
-        ? `当前第 ${gameTree.getLevel(treePosition)} 手 | 关键点 0 · 题目 0`
-        : mode === 'play'
-          ? `当前第 ${gameTree.getLevel(treePosition)} 手 | ${engineStatusText}`
-          : mode === 'recall'
-            ? `当前进度 ${props.recallMoveIndex}/${props.recallExpectedMoves.length} | 等待输入下一手`
-            : ''
-
-    let komi = +gametree.getRootProperty(gameTree, 'KM', 0)
-    let handicap = +gametree.getRootProperty(gameTree, 'HA', 0)
-
-    return h(
-      'section',
-      {class: 'workbench-shell'},
-
-      h(
-        'div',
-        {class: 'workbench-shell__inner'},
-
-        h(
-          'div',
-          {class: 'workbench-shell__top'},
-          h(BoardToolbar, {
-            mode,
-            editWorkspaceActive,
-            territoryEnabled: props.territoryEnabled,
-            territoryCompareEnabled: props.territoryCompareEnabled,
-            territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
-            currentPlayer,
-            playerNames: gameInfo.playerNames,
-            playerRanks: gameInfo.playerRanks,
-            playerCaptures: [1, -1].map((sign) => board.getCaptures(sign)),
-            engineSyncers,
-            enginePanelOpen: props.enginePanelOpen,
-            recallSession,
-            openDrawer,
-            onEnginePanelToggle: props.onEnginePanelToggle,
-            onCurrentPlayerClick: this.handleTogglePlayer,
-          }),
+        // Left panel: mode-specific
+        h('div', {class: 'workbench-shell__left-panel'},
+          leftPanel[mode] || leftPanel.play,
         ),
 
-        h(
-          'div',
-          {
-            class: classNames('workbench-shell__main', {
-              'workbench-shell__main--board-focused': mode === 'play',
-            }),
-          },
-
-          mode !== 'play' &&
-            h('div', {class: 'workbench-shell__left'}, h(LeftSidebar, props)),
-
-          h(
-            'div',
-            {class: 'workbench-shell__center'},
-            h(MainView, {...props, workbenchShell: true}),
-          ),
-
-          mode !== 'play' &&
-            h('div', {class: 'workbench-shell__right'}, h(Sidebar, props)),
+        // Center: board stage with children
+        h('div', {class: 'workbench-shell__center'},
+          h(MainBoardStage, {mode}, children),
         ),
 
-        h(
-          'div',
-          {class: 'workbench-shell__bottom'},
-          h(
-            WorkspaceDock,
-            {
-              mode,
-              editWorkspaceActive,
-              summary: workspaceSummary,
-              treePosition,
-            },
-            h(EditBar, {
-              mode,
-              selectedTool,
-              onToolButtonClick: this.handleToolButtonClick,
-              editWorkspace: editWs,
-              overlayStore: props.boardServices?.overlayStore,
-              territoryEnabled: props.territoryEnabled,
-              territoryCompareEnabled: props.territoryCompareEnabled,
-              territoryCompareAvailable: sabaki.getTerritoryCompareAvailable(),
-              showAISuggestions: props.showAISuggestions,
-              showHumanPreference: props.showHumanPreference,
-              editWorkspaceActive,
-              areaSelectMode: props.areaSelectMode,
-              analysisAreaVertices: props.analysisAreaVertices,
-            }),
-
-            h(RecallBar, {
-              mode,
-              recallMoveIndex: props.recallMoveIndex,
-              recallExpectedMoves: props.recallExpectedMoves,
-              recallCompleted: props.recallCompleted,
-              recallUserAttempts: props.recallUserAttempts,
-              recallShowHint: props.recallShowHint,
-              onHint: props.onShowRecallHint,
-              onSkip: props.onSkipRecallMove,
-              onComplete: props.onEndRecallSession,
-            }),
-
-            h(ProblemBar, {
-              mode,
-              problemSession: props.problemSession,
-              problemAttempt: props.problemAttempt,
-              problemSubmitted: props.problemSubmitted,
-              problemResult: props.problemResult,
-              problemBadMoves: props.problemBadMoves,
-              reviewQueue: props.reviewQueue,
-              reviewCurrentIndex: props.reviewCurrentIndex,
-              reviewTotalDue: props.reviewTotalDue,
-              onUndo: props.onUndoProblemMove,
-              onSubmit: props.onSubmitProblemAttempt,
-              onExit: props.onExitProblemMode,
-              onNextReview: props.onAdvanceReview,
-            }),
-
-            h(AutoplayBar, {
-              mode,
-              gameTree,
-              gameCurrents: gameCurrents[gameIndex],
-              treePosition,
-            }),
-
-            h(ScoringBar, {
-              type: 'scoring',
-              mode,
-              method: scoringMethod,
-              scoreBoard,
-              areaMap,
-              komi,
-              handicap,
-            }),
-
-            h(ScoringBar, {
-              type: 'estimator',
-              mode,
-              method: scoringMethod,
-              scoreBoard,
-              areaMap,
-              komi,
-              handicap,
-            }),
-
-            h(FindBar, {
-              mode,
-              findText,
-              onButtonClick: this.handleFindButtonClick,
-            }),
-          ),
+        // Right panel: mode-specific
+        h('div', {class: 'workbench-shell__right-panel'},
+          h(RightModePanel, {mode, ...rest}),
         ),
       ),
-    )
-  }
+
+      // Bottom: action bar
+      h('div', {class: 'workbench-shell__bottom'},
+        h(BottomActionBar, {mode, ...rest}),
+      ),
+    ),
+  )
 }

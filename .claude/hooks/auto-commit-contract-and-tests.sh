@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Auto-commit test-writer output.
+# Auto-commit test-writer / visual-test-writer output.
 #
 # This hook is intentionally narrow:
-# - it only runs for a turn whose transcript shows a test-writer subagent run
-# - it only commits test code under test/
+# - it only runs for a turn whose transcript shows a test-writer or visual-test-writer subagent run
+# - it only commits test code under test/ and e2e/
 # - it leaves contract docs and unrelated staged files alone
 
 set -euo pipefail
@@ -33,17 +33,20 @@ is_test_writer_turn() {
         and ((.text // "") | startswith("<ide_") | not)
       );
 
+    def is_test_writer_agent($name):
+      ($name == "test-writer") or ($name == "visual-test-writer");
+
     def is_test_writer_call:
       .type == "assistant"
       and any(content_items;
         .type == "tool_use"
         and ((.name == "Agent") or (.name == "Task"))
-        and ((.input.subagent_type // "") == "test-writer")
+        and is_test_writer_agent(.input.subagent_type // "")
       );
 
     def is_test_writer_result:
       .type == "user"
-      and ((.toolUseResult.agentType // "") == "test-writer");
+      and is_test_writer_agent(.toolUseResult.agentType // "");
 
     (to_entries | map(select(.value | is_real_user_prompt)) | last | .key // -1) as $last_prompt
     | any(to_entries[] | select(.key > $last_prompt) | .value;
@@ -70,7 +73,7 @@ commit_files=()
 while IFS= read -r -d '' entry; do
   path="${entry:3}"
   [[ -n "$path" ]] && commit_files+=("$path")
-done < <(git status --porcelain -z -- test/ 2>/dev/null)
+done < <(git status --porcelain -z -- test/ e2e/ 2>/dev/null)
 
 if [[ "${#commit_files[@]}" -eq 0 ]]; then
   exit 0
