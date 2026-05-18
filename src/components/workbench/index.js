@@ -3,6 +3,7 @@ import ModeBar from './shell/ModeBar.js'
 import ModeActions from './shell/ModeActions.js'
 import MainBoardStage from './shell/MainBoardStage.js'
 import TrainingTabBar from './shell/TrainingTabBar.js'
+import GameTabBar from './shell/GameTabBar.js'
 import BottomActionBar from './shell/BottomActionBar.js'
 import RightModePanel from './shell/RightModePanel.js'
 
@@ -33,6 +34,7 @@ export {
   ModeActions,
   MainBoardStage,
   TrainingTabBar,
+  GameTabBar,
   BottomActionBar,
   RightModePanel,
   QuietStatusChips,

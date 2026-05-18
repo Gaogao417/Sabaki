@@ -15,7 +15,7 @@ export default function ModeBar({
 }) {
   return h(
     'nav',
-    {class: 'wb-mode-bar'},
+    {'data-testid': 'mode-bar', class: 'wb-mode-bar'},
 
     h(
       'div',

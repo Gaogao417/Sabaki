@@ -886,3 +886,90 @@
     transform: translateX(0);
   }
 }
+
+/* ========================================================================
+   17. GameTabBar  (.wb-game-tab-bar)
+   ======================================================================== */
+
+.wb-game-tab-bar {
+  height: var(--wb-tab-bar-h);
+  display: flex;
+  align-items: center;
+  background: var(--ui-bg-strong);
+  border-bottom: 1px solid var(--ui-border);
+  padding: 0 var(--wb-gap);
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.wb-game-tab-bar__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: 34px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ui-text-secondary);
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-sm, 6px) var(--radius-sm, 6px) 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.wb-game-tab-bar__tab:hover {
+  color: var(--ui-text);
+  background: var(--ui-card-hover, rgba(0, 0, 0, 0.02));
+}
+
+.wb-game-tab-bar__tab--active,
+.wb-game-tab-bar__tab.active {
+  color: var(--ui-text);
+  background: var(--ui-bg-strong);
+  border-bottom-color: transparent;
+  font-weight: 600;
+}
+
+.wb-game-tab-bar__tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 3px;
+  color: var(--ui-text-tertiary);
+  cursor: pointer;
+}
+
+.wb-game-tab-bar__tab-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--ui-text);
+}
+
+.wb-game-tab-bar__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ui-text-secondary);
+  background: none;
+  border: 1px dashed var(--ui-border);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.wb-game-tab-bar__add:hover {
+  color: var(--ui-text);
+  border-color: var(--ui-blue, #2563ff);
+  background: var(--ui-blue-soft, #eef4ff);
+}

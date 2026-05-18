@@ -18,7 +18,7 @@ export default function GlobalHeader({
 
   return h(
     'header',
-    {class: 'wb-global-header'},
+    {'data-testid': 'global-header', class: 'wb-global-header'},
 
     h(
       'div',
