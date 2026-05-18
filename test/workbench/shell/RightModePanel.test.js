@@ -18,6 +18,10 @@ import {renderToDom} from '../preactTestHelper.js'
 import {tryImport} from '../tryImport.js'
 
 let RightModePanel = null
+let PlayRightPanel = null
+let ProblemRightPanel = null
+let RecallRightPanel = null
+let AnalysisRightPanel = null
 
 describe('RightModePanel (T-4.4)', function () {
   before(async function () {
@@ -68,5 +72,106 @@ describe('RightModePanel (T-4.4)', function () {
       analysisContent,
       'Switching mode from play to analysis should change the panel content'
     )
+  })
+})
+
+/**
+ * RightModePanel Phase 6 Integration Tests (T-6.5)
+ *
+ * Contracts covered: T-6.5a, T-6.5b, T-6.5c, T-6.5d
+ *
+ * Verifies RightModePanel delegates to the correct right panel component
+ * based on the mode prop, and passes through relevant props.
+ */
+
+describe('RightModePanel Phase 6 Integration (T-6.5)', function () {
+  before(async function () {
+    RightModePanel = await tryImport('src/components/workbench/shell/RightModePanel.js')
+    PlayRightPanel = await tryImport('src/components/workbench/panels/PlayRightPanel.js')
+    ProblemRightPanel = await tryImport('src/components/workbench/panels/ProblemRightPanel.js')
+    RecallRightPanel = await tryImport('src/components/workbench/panels/RecallRightPanel.js')
+    AnalysisRightPanel = await tryImport('src/components/workbench/panels/AnalysisRightPanel.js')
+    if (!RightModePanel) this.skip()
+  })
+
+  // --- T-6.5a: play mode delegates to PlayRightPanel ---
+  it('T-6.5a: renders PlayRightPanel for play mode', function () {
+    if (!PlayRightPanel) return this.skip()
+
+    const {queryByTestId} = renderToDom(
+      h(RightModePanel, {
+        mode: 'play',
+        moveCount: 10,
+        captures: {black: 1, white: 2},
+        pendingEval: 0,
+        badMoveCount: 0,
+      })
+    )
+
+    const rightRoot = queryByTestId('right-mode-panel')
+    assert.ok(rightRoot, 'Right mode panel root should exist')
+
+    const playPanel = queryByTestId('play-right-panel')
+    assert.ok(playPanel, 'PlayRightPanel should be rendered inside RightModePanel for play mode')
+  })
+
+  // --- T-6.5b: problem mode delegates to ProblemRightPanel ---
+  it('T-6.5b: renders ProblemRightPanel for problem mode', function () {
+    if (!ProblemRightPanel) return this.skip()
+
+    const {queryByTestId} = renderToDom(
+      h(RightModePanel, {
+        mode: 'problem',
+        currentVariation: 1,
+        opponentMode: 'ai',
+        hint: null,
+        aiAnalysisHidden: true,
+        referenceLines: [],
+      })
+    )
+
+    const problemPanel = queryByTestId('problem-right-panel')
+    assert.ok(problemPanel, 'ProblemRightPanel should be rendered inside RightModePanel for problem mode')
+  })
+
+  // --- T-6.5c: recall mode delegates to RecallRightPanel ---
+  it('T-6.5c: renders RecallRightPanel for recall mode', function () {
+    if (!RecallRightPanel) return this.skip()
+
+    const {queryByTestId} = renderToDom(
+      h(RightModePanel, {
+        mode: 'recall',
+        hintMessage: 'test',
+        systemCheckpoints: 0,
+        manualCheckpoints: 0,
+        correctCount: 0,
+        wrongCount: 0,
+        progress: 0,
+        totalMoves: 0,
+      })
+    )
+
+    const recallPanel = queryByTestId('recall-right-panel')
+    assert.ok(recallPanel, 'RecallRightPanel should be rendered inside RightModePanel for recall mode')
+  })
+
+  // --- T-6.5d: analysis mode delegates to AnalysisRightPanel ---
+  it('T-6.5d: renders AnalysisRightPanel for analysis mode', function () {
+    if (!AnalysisRightPanel) return this.skip()
+
+    const {queryByTestId} = renderToDom(
+      h(RightModePanel, {
+        mode: 'analysis',
+        moveCount: 5,
+        captures: {black: 0, white: 0},
+        evaluation: null,
+        userOriginalLine: null,
+        userCorrection: null,
+        aiCandidates: null,
+      })
+    )
+
+    const analysisPanel = queryByTestId('analysis-right-panel')
+    assert.ok(analysisPanel, 'AnalysisRightPanel should be rendered inside RightModePanel for analysis mode')
   })
 })
