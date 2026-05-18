@@ -42,6 +42,16 @@ Sabaki 是一个围棋/SGF 编辑器，基于 Electron + React 架构。
 - 大量 mock 的测试标记为脆弱
 - 保护架构边界的测试优先级最高
 
+## codex-ui-ux-frontend 分支指导思想
+
+本分支专注于 **Workbench UI 纯前端实施**，遵循以下原则：
+
+1. **纯前端先行** — 只搭建控件结构和交互骨架，留 prop callback 接口，不做数据绑定、不对接 store、不写业务逻辑。
+2. **接口用注释说明意图** — 每个 callback prop 用 JSDoc `@callback` 注释说明预期的调用时机和参数语义，方便后续接线时理解。
+3. **四模式颜色** — Play=蓝 `#2563ff`、Problem=琥珀 `#d97706`、Recall=绿 `#169b55`、Analysis=紫 `#7c3aed`。
+4. **棋盘占位** — MainBoardStage 保持占位符，Goban 集成属于后续阶段。
+5. **参考文档** — 控件与交互缺失分析 + 实施计划见 `docs/design/workbench-frontend-gap-and-plan.md`。
+
 ## 常用命令
 
 - `npm test` — 跑测试
