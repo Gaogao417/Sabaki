@@ -151,5 +151,5 @@ export function evaluateAttempt(input: {
 }
 
 export function shouldCreateBadMove(severity: Severity): severity is BadMoveSeverity {
-  return severity !== 'none'
+  return severity === 'major' || severity === 'severe'
 }
