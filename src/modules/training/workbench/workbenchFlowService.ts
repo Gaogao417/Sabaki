@@ -93,9 +93,10 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     const tab = getTab(tabId)
     assertTransition(tab, 'submit')
 
-    workbenchStore.updateTab(tabId, { mode: 'recall' })
-
-    if (!tab.activeAttemptId) return Promise.resolve()
+    if (!tab.activeAttemptId) {
+      workbenchStore.updateTab(tabId, { mode: 'recall' })
+      return Promise.resolve()
+    }
 
     return (async () => {
       // Step 1: Freeze attempt
@@ -125,8 +126,9 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
         attemptId: tab.activeAttemptId,
       })
 
-      // Step 6: Update tab with recall session
+      // Step 6: Transition mode only after all work succeeds
       workbenchStore.updateTab(tabId, {
+        mode: 'recall',
         activeRecallSessionId: session.id,
       })
 

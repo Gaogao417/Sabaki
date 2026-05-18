@@ -38,11 +38,15 @@ export function createEngineMoveAdapter(deps: EngineMoveAdapterDeps) {
   const { engineConnection } = deps
 
   async function requestMove(input: EngineMoveRequestInput): Promise<EngineMoveResult> {
-    const { positionSgf, analysisArea } = input
+    const { positionSgf, analysisArea, engineId, timeLimitMs, maxVisits } = input
 
     const analyzeParams: Record<string, unknown> = {
       positionSgf,
     }
+
+    if (engineId) analyzeParams.engineId = engineId
+    if (timeLimitMs != null) analyzeParams.timeLimitMs = timeLimitMs
+    if (maxVisits != null) analyzeParams.maxVisits = maxVisits
 
     if (analysisArea) {
       analyzeParams.analysisArea = analysisArea
