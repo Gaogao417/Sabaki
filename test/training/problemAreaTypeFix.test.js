@@ -121,7 +121,7 @@ describe('problemAreaTypeFix - Group A: ProblemArea Type Unification', () => {
 
   // C01: ProblemArea type is [number, number][]
   describeIf('C01: ProblemArea type is [number, number][]', () => {
-    it('accepts vertex list format [[0,0],[1,0],[2,0]] for problemArea', () => {
+    it('accepts vertex list format [[0,0],[1,0],[2,0]] for problemArea', async () => {
       // We test this by verifying the aiMoveService accepts and processes
       // a task with vertex-list problemArea without error.
       const { createAiMoveService } = aiMod
@@ -136,29 +136,22 @@ describe('problemAreaTypeFix - Group A: ProblemArea Type Unification', () => {
       // Post-fix: it should work correctly.
       const mockEngineDeps = {
         async requestMove() {
-          return { move: 'dd', candidates: ['dd'] }
+          // Return SGF 'aa' = coord (0,0), which is in our vertex list
+          return { move: 'aa', candidates: ['aa'] }
         },
       }
 
       // If deps type has engineMoveAdapter, use that key; if new interface, use new key.
       // Pre-fix uses engineMoveAdapter; post-fix will use a different dep.
-      const service = createAiMoveService({ engineMoveAdapter: mockEngineDeps })
+      const service = createAiMoveService({ engineService: mockEngineDeps })
 
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9])', userLine: ['D4'] })
       const task = makeTask({ problemArea: vertices })
 
-      // Should not throw — the vertex list must be accepted
-      return service.requestAiMove({ tab, attempt, task }).then(
-        () => {}, // success is fine
-        (err) => {
-          // If it throws because the format is wrong (pre-fix), that is expected
-          // and the test will be updated when the implementation changes.
-          // But we assert that vertex list format should be accepted.
-          // For now, we just ensure the test runs.
-          assert.ok(true, `service handled vertex list (may have thrown: ${err.message})`)
-        },
-      )
+      // Should resolve with the move returned by engine (vertex list accepted)
+      const result = await service.requestAiMove({ tab, attempt, task })
+      assert.strictEqual(result, 'aa', 'vertex list problemArea should be accepted and move returned')
     })
 
     it('task.problemArea as vertex list is an array of [number, number] tuples', () => {
@@ -209,34 +202,18 @@ describe('problemAreaTypeFix - Group B: engineMoveAdapter Removal', () => {
   const describeIf = aiMod ? describe : describe.skip
 
   describeIf('C06: aiMoveService deps interface', () => {
-    it('createAiMoveService deps does not require engineMoveAdapter', () => {
-      const { createAiMoveService } = aiMod
-
-      // After the fix, the deps should use a real engine path, not engineMoveAdapter.
-      // We verify by creating the service with a deps object that does NOT have
-      // engineMoveAdapter. If the implementation requires it, this will fail.
-      // Post-fix: the deps should have a different field name (e.g., engineService).
-      // We just need to ensure the old engineMoveAdapter field is gone.
-
-      // Attempt to create service without engineMoveAdapter key.
-      // Post-fix: should work with new deps shape.
-      // Pre-fix: createAiMoveService destructures engineMoveAdapter and would crash.
-      try {
-        const newDeps = {
-          // Post-fix deps shape - e.g., engineService or similar
-          // For now we pass nothing related to engineMoveAdapter
-        }
-        createAiMoveService(newDeps)
-        // If it did not throw, the deps no longer require engineMoveAdapter
-        assert.ok(true, 'service created without engineMoveAdapter in deps')
-      } catch (err) {
-        // Pre-fix: this will throw because it tries to destructure engineMoveAdapter
-        // That is expected — the test will pass once the fix is applied
-        assert.ok(
-          err.message.includes('engineMoveAdapter') || err.message.includes('Cannot destructure'),
-          `Expected engineMoveAdapter-related error, got: ${err.message}`,
-        )
-      }
+    it('deps type uses engineService, not engineMoveAdapter', () => {
+      // Static source check: the deps type must not reference engineMoveAdapter
+      const servicePath = path.resolve(__dirname, '../../src/modules/training/ai/aiMoveService.ts')
+      const source = fs.readFileSync(servicePath, 'utf-8')
+      assert.ok(
+        !source.includes('engineMoveAdapter'),
+        'aiMoveService source must not reference engineMoveAdapter',
+      )
+      assert.ok(
+        source.includes('engineService'),
+        'aiMoveService deps must use engineService field name',
+      )
     })
   })
 })
@@ -263,7 +240,7 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockEngineDeps })
+      const service = createAiMoveService({ engineService: mockEngineDeps })
       const vertices = [[0, 0], [1, 0], [2, 0]]
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9])', userLine: ['D4'] })
@@ -292,7 +269,7 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockEngineDeps })
+      const service = createAiMoveService({ engineService: mockEngineDeps })
       const vertices = [[0, 0], [1, 0], [2, 0]]
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9];B[dd])', userLine: ['D4'] })
@@ -313,7 +290,7 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockEngineDeps })
+      const service = createAiMoveService({ engineService: mockEngineDeps })
       const vertices = [[0, 0], [1, 0], [2, 0]]
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9];B[dd])', userLine: ['D4'] })
@@ -334,7 +311,7 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockEngineDeps })
+      const service = createAiMoveService({ engineService: mockEngineDeps })
       const vertices = [[0, 0], [1, 0], [2, 0]]
       const tab = makeTab({ mode: 'play' }) // NOT problem mode
       const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9])', userLine: ['D4'] })
@@ -354,7 +331,7 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockEngineDeps })
+      const service = createAiMoveService({ engineService: mockEngineDeps })
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9])', userLine: ['D4'] })
       const task = makeTask() // no problemArea
@@ -371,7 +348,7 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockEngineDeps })
+      const service = createAiMoveService({ engineService: mockEngineDeps })
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9])', userLine: ['D4'] })
       const task = makeTask({ problemArea: [] })

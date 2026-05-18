@@ -1,7 +1,7 @@
 import type { WorkbenchTab, PlayerConfig, ProblemArea } from '../types/index'
 
 export type AiMoveServiceDeps = {
-  engineMoveAdapter: {
+  engineService: {
     requestMove(input: {
       engineId?: string
       positionSgf: string
@@ -58,7 +58,7 @@ export function shouldAiMove(input: ShouldAiMoveInput): boolean {
 }
 
 export function createAiMoveService(deps: AiMoveServiceDeps) {
-  const { engineMoveAdapter } = deps
+  const { engineService } = deps
 
   async function requestAiMove(input: {
     tab: WorkbenchTab
@@ -93,7 +93,7 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
       engineInput.analysisAreaVertices = task.problemArea
     }
 
-    const result = await engineMoveAdapter.requestMove(engineInput)
+    const result = await engineService.requestMove(engineInput)
 
     if (!result) return null
 
