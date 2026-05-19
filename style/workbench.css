@@ -1041,6 +1041,16 @@
   color: #fff;
 }
 
+.wb-segmented-control__item--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wb-segmented-control__item--disabled:hover:not(.wb-segmented-control__item--active) {
+  background: transparent;
+  color: var(--ui-text-secondary);
+}
+
 /* ========================================================================
    20. Stone Indicator  (.wb-stone-indicator)
    ======================================================================== */

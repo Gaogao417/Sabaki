@@ -12,6 +12,7 @@ const MODES = [
 export default function ModeBar({
   activeMode = 'problem',
   onModeChange = () => {},
+  modeBarPolicy = null,
   blackCaptures = 0,
   whiteCaptures = 0,
   currentPlayer = 'black',
@@ -28,17 +29,25 @@ export default function ModeBar({
     h(
       'div',
       {class: 'wb-mode-bar__tabs wb-segmented-control'},
-      MODES.map(({key, label}) =>
-        h(
+      MODES.map(({key, label}) => {
+        const availability = modeBarPolicy?.[key]
+        const disabled = availability && !availability.enabled
+        const reason = availability?.reason || ''
+        const isActive = activeMode === key
+
+        return h(
           'button',
           {
             key,
-            class: `wb-segmented-control__item${activeMode === key ? ' wb-segmented-control__item--active' : ''}`,
-            onClick: () => onModeChange(key),
+            class: `wb-segmented-control__item${isActive ? ' wb-segmented-control__item--active' : ''}${disabled ? ' wb-segmented-control__item--disabled' : ''}`,
+            'aria-disabled': disabled || undefined,
+            title: reason || undefined,
+            onClick: disabled ? undefined : () => onModeChange(key),
+            'data-testid': `mode-bar-${key}`,
           },
           label,
-        ),
-      ),
+        )
+      }),
     ),
 
     // Right: Mode actions

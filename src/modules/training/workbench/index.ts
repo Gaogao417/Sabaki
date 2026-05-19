@@ -20,3 +20,12 @@ export {
   type WorkbenchFlowServiceDeps,
   InvalidModeTransitionError,
 } from './workbenchFlowService'
+
+export {
+  computeModeBarPolicy,
+  getModeTransitionAction,
+  type ModeAvailability,
+  type ModeBarPolicy,
+  type UiPolicyInput,
+  type ModeTransitionAction,
+} from './workbenchUiPolicy'

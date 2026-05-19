@@ -1,6 +1,7 @@
 import {h, Component} from 'preact'
 
 import WorkbenchShell from './WorkbenchShell.js'
+import {computeModeBarPolicy, getModeTransitionAction} from '../modules/training/workbench/workbenchUiPolicy.ts'
 
 class TrainingWorkbenchContainer extends Component {
   componentDidMount() {
@@ -43,17 +44,21 @@ class TrainingWorkbenchContainer extends Component {
 
     function handleModeChange(mode) {
       if (!activeTab) return
-      const currentMode = activeTab.mode
+      const action = getModeTransitionAction(
+        {
+          currentMode: activeTab.mode,
+          previousMode: activeTab.previousMode,
+          activeAttemptId: activeTab.activeAttemptId,
+          activeRecallSessionId: activeTab.activeRecallSessionId,
+        },
+        mode,
+      )
 
-      // Use existing flowService methods for known transitions
-      if (mode === 'analysis') {
+      if (action === 'enterAnalysis') {
         flowService.enterAnalysis(activeTab.id)
-      } else if (mode === currentMode) {
-        // No-op: already in requested mode
-      } else if (currentMode === 'analysis' && activeTab.previousMode === mode) {
-        flowService.returnFromAnalysis(activeTab.id, mode)
+      } else if (action === 'returnFromAnalysis') {
+        flowService.returnFromAnalysis(activeTab.id, activeTab.previousMode || 'play')
       }
-      // Other free switches (GAP-03) not supported yet
     }
 
     function handleSubmit() {
@@ -204,6 +209,13 @@ function projectFromWorkbench(ws) {
   if (activeTab) {
     result.mode = activeTab.mode
     result.taskTitle = activeTab.taskId
+
+    result.modeBarPolicy = computeModeBarPolicy({
+      currentMode: activeTab.mode,
+      previousMode: activeTab.previousMode,
+      activeAttemptId: activeTab.activeAttemptId,
+      activeRecallSessionId: activeTab.activeRecallSessionId,
+    })
   }
 
   if (ws.tabs.length > 0) {
