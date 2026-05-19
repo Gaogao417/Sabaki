@@ -160,43 +160,199 @@ describe('W3 Goban Wiring: Container board event routing', function () {
   })
 
   // --- W3-T09: Container handleBoardVertexClick routes to resolver with workbenchMode ---
-  // DEFERRED: Container does not yet wire onVertexClick to resolveBoardInteraction.
-  // The pure modules (projectGobanProps, resolveBoardInteraction extension) are done.
-  // Container wiring requires MainBoardStage upgrade + handler plumbing — separate step.
-  // These tests will be enabled when Container wiring is implemented.
 
   describe('W3-T09: Container board vertex click routing', () => {
-    it.skip('container passes onVertexClick to shell (deferred: Container wiring not yet done)', () => {
+    it('container passes onVertexClick to shell via boardProps', function () {
+      // HARD ASSERTION: Container must wire onVertexClick through boardProps.
+      // Currently fails because TrainingWorkbenchContainer does not import or
+      // use projectGobanProps, and does not pass boardProps to the shell.
+      // This test will pass once container wiring is implemented.
       const {shellProps} = createHarness({
         tabs: [makeTab({id: 'tab_1', mode: 'play'})],
       })
 
-      assert.strictEqual(typeof shellProps.onVertexClick, 'function',
-        'Container must pass onVertexClick callback to WorkbenchShell')
+      assert.ok(
+        shellProps.boardProps != null,
+        'Container must pass boardProps (from projectGobanProps) to WorkbenchShell',
+      )
+      assert.strictEqual(
+        typeof shellProps.boardProps.handlerProps?.onVertexClick,
+        'function',
+        'boardProps.handlerProps.onVertexClick must be a function',
+      )
     })
 
-    it.skip('onVertexClick routes through resolveBoardInteraction with workbenchMode context (deferred: Container wiring not yet done)', () => {
+    it('onVertexClick routes through resolveBoardInteraction with workbenchMode context', function () {
+      // HARD ASSERTION: The handler must route through the resolver with
+      // workbenchMode, tabId, taskId context per Contract Section 6.2.
+      // Currently fails because the container does not wire this handler.
+      //
+      // NOTE: This test verifies that the container produces a handler that,
+      // when called, invokes resolveBoardInteraction with the correct context.
+      // Since the container imports resolveBoardInteraction directly, we cannot
+      // intercept the call via module-level variable replacement. Instead, we
+      // verify the handler exists and is wired from the active tab context.
+      // Deep resolver context verification is done in w3-goban-resolver.test.js.
+      if (!resolveBoardInteraction) return this.skip()
+
       const {shellProps} = createHarness({
         tabs: [makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'})],
       })
 
-      assert.strictEqual(typeof shellProps.onVertexClick, 'function')
-      // When implemented, calling shellProps.onVertexClick should route through
-      // resolveBoardInteraction with workbenchMode='play', tabId='tab_1', etc.
-      // Verification will require spying on the resolver call.
+      assert.ok(
+        shellProps.boardProps != null,
+        'Container must pass boardProps to shell',
+      )
+
+      const onVertexClick = shellProps.boardProps.handlerProps?.onVertexClick
+      assert.strictEqual(
+        typeof onVertexClick,
+        'function',
+        'boardProps.handlerProps.onVertexClick must be a function',
+      )
+
+      // Verify the handler is not the projectGobanProps noop.
+      // The container must provide its own handler that routes through
+      // the resolver/executor chain.
+      if (projectGobanProps) {
+        const projectionNoop = projectGobanProps({
+          workbenchMode: 'play',
+          task: null,
+          runtimeState: {},
+          boardState: {gameTree: {}, treePosition: '', board: {}},
+          overlayState: {paintMap: [], markerMap: [], dimmedStones: [], analysis: null},
+          settings: {
+            showMoveNumbers: false, showNextMoves: true, showSiblings: true,
+            showAnalysis: false, showCoordinates: true, showHumanPreference: false,
+            selectedTool: 'stone_1', editWorkspaceActive: false,
+            boardTransformation: [1, 0, 0, 1, 0, 0], areaSelectMode: false,
+          },
+          analysisData: null,
+        }).handlerProps.onVertexClick
+
+        assert.notStrictEqual(onVertexClick, projectionNoop,
+          'Container handler must be a real handler, not the projectGobanProps noop')
+      }
+
+      // Verify the handler does not throw when called (basic smoke test).
+      // A real handler that routes to the resolver should at minimum not
+      // crash on a valid vertex. The resolver may return REJECTED for
+      // various reasons (e.g. occupied point), but should not throw.
+      let thrown = null
+      try {
+        onVertexClick([3, 3], {button: 0, ctrlKey: false, metaKey: false, isMac: false})
+      } catch (e) {
+        thrown = e
+      }
+      assert.strictEqual(thrown, null,
+        'onVertexClick handler should not throw for a valid empty-point click in play mode')
+    })
+
+    it('onVertexClick in recall mode produces recall intent', function () {
+      if (!resolveBoardInteraction) return this.skip()
+
+      const {shellProps} = createHarness({
+        tabs: [makeTab({id: 'tab_recall', mode: 'recall', taskId: 'task_recall'})],
+      })
+
+      assert.ok(shellProps.boardProps != null, 'Container must pass boardProps to shell')
+
+      const onVertexClick = shellProps.boardProps.handlerProps?.onVertexClick
+      assert.strictEqual(typeof onVertexClick, 'function',
+        'Recall mode boardProps must have onVertexClick handler')
+
+      // The handler should not throw for a recall mode click on an empty point.
+      // When properly wired, the resolver would produce SUBMIT_RECALL_ANSWER intent.
+      let thrown = null
+      try {
+        onVertexClick([5, 5], {button: 0, ctrlKey: false, metaKey: false, isMac: false})
+      } catch (e) {
+        thrown = e
+      }
+      assert.strictEqual(thrown, null,
+        'onVertexClick in recall mode should not throw for valid click')
     })
   })
 
   // --- W3-T20: Container passes projectGobanProps result as boardProps to WorkbenchShell ---
 
   describe('W3-T20: Container passes projected goban props to shell', () => {
-    it.skip('container passes projectGobanProps result as boardProps to shell (deferred: Container wiring not yet done)', () => {
+    it('container passes boardProps with all four top-level sections from projectGobanProps', function () {
+      // HARD ASSERTION: Container must call projectGobanProps and pass its result
+      // as boardProps to the shell. All four sections must be present.
+      // Currently fails because TrainingWorkbenchContainer does not use projectGobanProps.
       const {shellProps} = createHarness({
         tabs: [makeTab({id: 'tab_1', mode: 'play'})],
       })
 
-      assert.ok(shellProps.boardProps != null || shellProps.boardStateProps != null,
-        'Container must pass boardProps containing projection output to WorkbenchShell')
+      assert.ok(shellProps.boardProps != null,
+        'Container must pass boardProps to WorkbenchShell')
+
+      assert.ok(shellProps.boardProps.boardStateProps != null,
+        'boardProps must contain boardStateProps from projectGobanProps')
+      assert.ok(shellProps.boardProps.overlayDisplayProps != null,
+        'boardProps must contain overlayDisplayProps from projectGobanProps')
+      assert.ok(shellProps.boardProps.interactionProps != null,
+        'boardProps must contain interactionProps from projectGobanProps')
+      assert.ok(shellProps.boardProps.handlerProps != null,
+        'boardProps must contain handlerProps from projectGobanProps')
+    })
+
+    it('boardProps.handlerProps.onVertexClick is NOT the projectGobanProps noop', function () {
+      // HARD ASSERTION: projectGobanProps returns noop placeholder handlers.
+      // Container must override onVertexClick with a real handler wired through
+      // the resolver/executor chain per Contract Section 6.2.
+      // Currently fails because boardProps is not passed at all.
+      if (!projectGobanProps) return this.skip()
+
+      // Get the noop that projectGobanProps returns as onVertexClick
+      const projectionResult = projectGobanProps({
+        workbenchMode: 'play',
+        task: null,
+        runtimeState: {},
+        boardState: {
+          gameTree: {id: 'gt_1'},
+          treePosition: 'node_1',
+          board: {width: 19, height: 19, signMap: []},
+        },
+        overlayState: {
+          paintMap: [],
+          markerMap: [],
+          dimmedStones: [],
+          analysis: null,
+        },
+        settings: {
+          showMoveNumbers: false,
+          showNextMoves: true,
+          showSiblings: true,
+          showAnalysis: false,
+          showCoordinates: true,
+          showHumanPreference: false,
+          selectedTool: 'stone_1',
+          editWorkspaceActive: false,
+          boardTransformation: [1, 0, 0, 1, 0, 0],
+          areaSelectMode: false,
+        },
+        analysisData: null,
+      })
+      const noopFromProjection = projectionResult.handlerProps.onVertexClick
+
+      const {shellProps} = createHarness({
+        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      })
+
+      assert.ok(shellProps.boardProps != null,
+        'Container must pass boardProps to shell')
+
+      const containerHandler = shellProps.boardProps.handlerProps.onVertexClick
+      assert.strictEqual(typeof containerHandler, 'function',
+        'boardProps.handlerProps.onVertexClick must be a function')
+
+      assert.notStrictEqual(
+        containerHandler,
+        noopFromProjection,
+        'Container must override projectGobanProps noop onVertexClick with a real handler',
+      )
     })
 
     it('projectGobanProps output has required top-level sections', function () {
@@ -236,6 +392,89 @@ describe('W3 Goban Wiring: Container board event routing', function () {
       assert.ok(result.overlayDisplayProps, 'result must have overlayDisplayProps')
       assert.ok(result.interactionProps, 'result must have interactionProps')
       assert.ok(result.handlerProps, 'result must have handlerProps')
+    })
+  })
+
+  // --- Mode switching re-projection tests ---
+
+  describe('Mode switching re-projects boardProps', () => {
+    it('updating tab mode from play to recall changes boardProps overlay settings', function () {
+      // Verify the container re-projects boardProps when mode changes.
+      // Per Contract Section 6.3: submitAttempt transitions play -> recall,
+      // and overlay props change (showMoveNumbers, showNextMoves, showSiblings).
+      // Currently fails because container does not pass boardProps at all.
+      const {workbenchStore, container} = createHarness({
+        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      })
+
+      // First render with play mode
+      const playShellProps = container.render().props
+      assert.ok(playShellProps.boardProps != null,
+        'Container must pass boardProps for play mode')
+
+      // Simulate mode transition: play -> recall (as flowService would do)
+      workbenchStore.updateTab('tab_1', {mode: 'recall'})
+
+      // Re-render after store update
+      const recallShellProps = container.render().props
+      assert.ok(recallShellProps.boardProps != null,
+        'Container must pass boardProps for recall mode')
+
+      // Per Contract Section 7 and Section 6.3:
+      // recall: showMoveNumbers=true, showNextMoves=false, showSiblings=false
+      // play: showMoveNumbers=false, showNextMoves=settings, showSiblings=settings
+      assert.strictEqual(
+        playShellProps.boardProps.overlayDisplayProps.showMoveNumbers,
+        false,
+        'Play mode boardProps must have showMoveNumbers=false',
+      )
+      assert.strictEqual(
+        recallShellProps.boardProps.overlayDisplayProps.showMoveNumbers,
+        true,
+        'Recall mode boardProps must have showMoveNumbers=true',
+      )
+      assert.strictEqual(
+        recallShellProps.boardProps.overlayDisplayProps.showNextMoves,
+        false,
+        'Recall mode boardProps must have showNextMoves=false',
+      )
+    })
+
+    it('switching active tab re-projects boardProps from new tab mode', function () {
+      // Per Contract Section 6.3 switchTaskTab: all Goban props re-projected from new tab.
+      // Currently fails because container does not pass boardProps at all.
+      const {workbenchStore, container} = createHarness({
+        tabs: [
+          makeTab({id: 'tab_play', mode: 'play'}),
+          makeTab({id: 'tab_recall', mode: 'recall'}),
+        ],
+        activeTabId: 'tab_play',
+      })
+
+      // Render with play tab active
+      const playShellProps = container.render().props
+      assert.ok(playShellProps.boardProps != null,
+        'Container must pass boardProps for active play tab')
+
+      // Switch active tab to recall
+      workbenchStore.setActiveTab('tab_recall')
+
+      // Re-render
+      const recallShellProps = container.render().props
+      assert.ok(recallShellProps.boardProps != null,
+        'Container must pass boardProps for active recall tab')
+
+      // Board props should reflect the new tab's mode
+      assert.strictEqual(
+        recallShellProps.boardProps.overlayDisplayProps.showMoveNumbers,
+        true,
+        'After switching to recall tab, boardProps must show move numbers',
+      )
+      assert.strictEqual(
+        recallShellProps.boardProps.overlayDisplayProps.showNextMoves,
+        false,
+        'After switching to recall tab, boardProps must hide next moves',
+      )
     })
   })
 })

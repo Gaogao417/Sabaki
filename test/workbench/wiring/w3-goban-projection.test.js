@@ -3,7 +3,13 @@
  *
  * Test contract: docs/design/2026-05-19/workbench-wiring/w3-goban-wiring-contract-v0.1.md
  * Contracts covered: W3-T01, W3-T02, W3-T03, W3-T04, W3-T05, W3-T06, W3-T07, W3-T08,
- *                    W3-T19, W3-T21, W3-T23
+ *                    W3-T19, W3-T21, W3-T23,
+ *                    W3-T24 (problem mode projection), W3-T25 (play overlay policy),
+ *                    W3-T26 (recall overlay policy — CRITICAL), W3-T27 (analysis+editWS overlay policy),
+ *                    W3-T28 (analysis no editWS overlay policy), W3-T29 (submitAttempt full diff),
+ *                    W3-T30 (enterAnalysis full diff), W3-T31 (returnFromAnalysis -> play full restore),
+ *                    W3-T32 (returnFromAnalysis -> recall full restore), W3-T33 (settings passthrough),
+ *                    W3-T34 (problem overlay policy mirrors play)
  *
  * Source of truth alignment:
  *   - Contract Section 7: projectGobanProps Function Spec
@@ -497,6 +503,813 @@ describe('W3 Goban Projection: projectGobanProps', function () {
       const result = projectGobanProps(baseInput({workbenchMode: 'play'}))
       assert.strictEqual(typeof result.handlerProps.onVertexClick, 'function')
       assert.strictEqual(result.interactionProps.dragMode, false)
+    })
+  })
+
+  // ====================================================================
+  // EXPANDED PROJECTION MATRIX COVERAGE
+  // Contract: Section 7 Per-Mode Behavior table
+  // Matrix: Section 2.3 Overlay Activation, Section 3.1-3.3 Goban Props
+  // ====================================================================
+
+  // --- W3-T24: problem mode projection (Contract Section 7, play-equivalent) ---
+
+  describe('W3-T24: projectGobanProps(problem) — play-equivalent projection', () => {
+    it('returns showMoveNumbers=false', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, false)
+    })
+
+    it('returns showNextMoves from settings (true)', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showNextMoves: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showNextMoves, true)
+    })
+
+    it('returns showNextMoves from settings (false)', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showNextMoves: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showNextMoves, false)
+    })
+
+    it('returns showSiblings from settings (true)', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showSiblings: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showSiblings, true)
+    })
+
+    it('returns showSiblings from settings (false)', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showSiblings: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showSiblings, false)
+    })
+
+    it('returns analysis from overlayState when showAnalysis=true', () => {
+      const analysisObj = {type: 'winrate', data: [0.6]}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {
+          ...baseInput().overlayState,
+          analysis: analysisObj,
+        },
+        settings: {...baseInput().settings, showAnalysis: true},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.analysis, analysisObj)
+    })
+
+    it('returns analysis=null when showAnalysis=false', () => {
+      const analysisObj = {type: 'winrate', data: [0.6]}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {
+          ...baseInput().overlayState,
+          analysis: analysisObj,
+        },
+        settings: {...baseInput().settings, showAnalysis: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('returns dragMode=false', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.strictEqual(result.interactionProps.dragMode, false)
+    })
+
+    it('returns drawLineMode=null', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.strictEqual(result.interactionProps.drawLineMode, null)
+    })
+
+    it('returns dimmedStones as empty array', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.deepStrictEqual(result.overlayDisplayProps.dimmedStones, [])
+    })
+
+    it('returns crosshair=false', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.strictEqual(result.overlayDisplayProps.crosshair, false)
+    })
+
+    it('returns onStoneDragEnd=null', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.strictEqual(result.handlerProps.onStoneDragEnd, null)
+    })
+
+    it('returns onPlayVariationMoves=null', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.strictEqual(result.handlerProps.onPlayVariationMoves, null)
+    })
+
+    it('provides all three core handler props as functions', () => {
+      const result = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+      assert.strictEqual(typeof result.handlerProps.onVertexClick, 'function')
+      assert.strictEqual(typeof result.handlerProps.onLineDraw, 'function')
+      assert.strictEqual(typeof result.handlerProps.onAreaSelect, 'function')
+    })
+
+    it('produces identical overlayDisplayProps as play for same inputs', () => {
+      const sharedSettings = {
+        ...baseInput().settings,
+        showNextMoves: true,
+        showSiblings: true,
+        showAnalysis: true,
+      }
+      const sharedOverlay = {
+        ...baseInput().overlayState,
+        analysis: {type: 'winrate', data: [0.5]},
+      }
+      const playResult = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: sharedSettings,
+        overlayState: sharedOverlay,
+      }))
+      const problemResult = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: sharedSettings,
+        overlayState: sharedOverlay,
+      }))
+
+      assert.strictEqual(
+        problemResult.overlayDisplayProps.showMoveNumbers,
+        playResult.overlayDisplayProps.showMoveNumbers,
+        'showMoveNumbers should be identical for play and problem',
+      )
+      assert.strictEqual(
+        problemResult.overlayDisplayProps.showNextMoves,
+        playResult.overlayDisplayProps.showNextMoves,
+        'showNextMoves should be identical for play and problem',
+      )
+      assert.strictEqual(
+        problemResult.overlayDisplayProps.showSiblings,
+        playResult.overlayDisplayProps.showSiblings,
+        'showSiblings should be identical for play and problem',
+      )
+      assert.deepStrictEqual(
+        problemResult.overlayDisplayProps.analysis,
+        playResult.overlayDisplayProps.analysis,
+        'analysis should be identical for play and problem',
+      )
+    })
+
+    it('produces identical interactionProps as play for same inputs', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const problemResult = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+
+      assert.strictEqual(
+        problemResult.interactionProps.dragMode,
+        playResult.interactionProps.dragMode,
+      )
+      assert.strictEqual(
+        problemResult.interactionProps.drawLineMode,
+        playResult.interactionProps.drawLineMode,
+      )
+    })
+
+    it('produces identical handlerProps null/function pattern as play', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const problemResult = projectGobanProps(baseInput({workbenchMode: 'problem'}))
+
+      assert.strictEqual(
+        problemResult.handlerProps.onStoneDragEnd,
+        playResult.handlerProps.onStoneDragEnd,
+        'onStoneDragEnd should both be null for play and problem',
+      )
+      assert.strictEqual(
+        problemResult.handlerProps.onPlayVariationMoves,
+        playResult.handlerProps.onPlayVariationMoves,
+        'onPlayVariationMoves should both be null for play and problem',
+      )
+    })
+  })
+
+  // --- W3-T25: overlay activation policy — play mode (Matrix Section 2.3) ---
+
+  describe('W3-T25: overlay activation policy — play mode', () => {
+    it('showMoveNumbers=false regardless of settings.showMoveNumbers=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showMoveNumbers: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, false)
+    })
+
+    it('showMoveNumbers=false when settings.showMoveNumbers=false', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showMoveNumbers: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, false)
+    })
+
+    it('showNextMatches passes through from settings (true)', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showNextMoves: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showNextMoves, true)
+    })
+
+    it('showNextMatches passes through from settings (false)', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showNextMoves: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showNextMoves, false)
+    })
+
+    it('analysis=overlayState.analysis when showAnalysis=true', () => {
+      const analysisObj = {type: 'winrate', data: [0.55]}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, showAnalysis: true},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.analysis, analysisObj)
+    })
+
+    it('analysis=null when showAnalysis=false even if overlayState has analysis', () => {
+      const analysisObj = {type: 'winrate', data: [0.55]}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, showAnalysis: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('dimmedStones=[] always, even when overlayState.dimmedStones has entries', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, dimmedStones: [[3, 3], [4, 4]]},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.dimmedStones, [])
+    })
+  })
+
+  // --- W3-T26: overlay activation policy — recall mode (Matrix Section 2.3, CRITICAL) ---
+
+  describe('W3-T26: overlay activation policy — recall mode (CRITICAL: no analysis overlay)', () => {
+    it('showMoveNumbers=true regardless of settings.showMoveNumbers=false', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, showMoveNumbers: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, true)
+    })
+
+    it('showNextMoves=false regardless of settings.showNextMoves=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, showNextMoves: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showNextMoves, false)
+    })
+
+    it('showSiblings=false regardless of settings.showSiblings=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, showSiblings: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showSiblings, false)
+    })
+
+    it('analysis=null regardless of overlayState.analysis and showAnalysis=true', () => {
+      // CRITICAL: recall must NEVER show analysis overlay, per PRD Section 3.3
+      // and Arch v0.5 Section 14 (recall is read-only, no pollution).
+      const analysisObj = {type: 'winrate', data: [0.7]}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, showAnalysis: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('analysis=null when overlayState.analysis is null anyway', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        overlayState: {...baseInput().overlayState, analysis: null},
+        settings: {...baseInput().settings, showAnalysis: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+  })
+
+  // --- W3-T27: overlay activation policy — analysis+editWorkspace (Matrix Section 2.3) ---
+
+  describe('W3-T27: overlay activation policy — analysis+editWorkspace', () => {
+    function analysisEditInput(overrides = {}) {
+      return baseInput({
+        workbenchMode: 'analysis',
+        settings: {
+          ...baseInput().settings,
+          editWorkspaceActive: true,
+          ...overrides.settings,
+        },
+        ...overrides,
+      })
+    }
+
+    it('showMoveNumbers from settings (true)', () => {
+      const result = projectGobanProps(analysisEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: true, showMoveNumbers: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, true)
+    })
+
+    it('showMoveNumbers from settings (false)', () => {
+      const result = projectGobanProps(analysisEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: true, showMoveNumbers: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, false)
+    })
+
+    it('showNextMatches from settings (true)', () => {
+      const result = projectGobanProps(analysisEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: true, showNextMoves: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showNextMoves, true)
+    })
+
+    it('showSiblings from settings (true)', () => {
+      const result = projectGobanProps(analysisEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: true, showSiblings: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showSiblings, true)
+    })
+
+    it('analysis from overlayState when showAnalysis=true', () => {
+      const analysisObj = {type: 'score', data: {black: 50}}
+      const result = projectGobanProps(analysisEditInput({
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, editWorkspaceActive: true, showAnalysis: true},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.analysis, analysisObj)
+    })
+
+    it('analysis=null when showAnalysis=false', () => {
+      const analysisObj = {type: 'score', data: {black: 50}}
+      const result = projectGobanProps(analysisEditInput({
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, editWorkspaceActive: true, showAnalysis: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('dragMode=true', () => {
+      const result = projectGobanProps(analysisEditInput())
+      assert.strictEqual(result.interactionProps.dragMode, true)
+    })
+
+    it('drawLineMode=arrow when selectedTool=arrow', () => {
+      const result = projectGobanProps(analysisEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: true, selectedTool: 'arrow'},
+      }))
+      assert.strictEqual(result.interactionProps.drawLineMode, 'arrow')
+    })
+
+    it('drawLineMode=null when selectedTool is not arrow or line', () => {
+      const result = projectGobanProps(analysisEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: true, selectedTool: 'stone_1'},
+      }))
+      assert.strictEqual(result.interactionProps.drawLineMode, null)
+    })
+  })
+
+  // --- W3-T28: overlay activation policy — analysis without editWorkspace (Matrix Section 2.3) ---
+
+  describe('W3-T28: overlay activation policy — analysis (no editWorkspace)', () => {
+    function analysisNoEditInput(overrides = {}) {
+      return baseInput({
+        workbenchMode: 'analysis',
+        settings: {
+          ...baseInput().settings,
+          editWorkspaceActive: false,
+          ...overrides.settings,
+        },
+        ...overrides,
+      })
+    }
+
+    it('showMoveNumbers=false (hardcoded, not from settings)', () => {
+      const result = projectGobanProps(analysisNoEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: false, showMoveNumbers: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, false)
+    })
+
+    it('analysis=null even when showAnalysis=true and overlayState has analysis', () => {
+      const analysisObj = {type: 'winrate', data: [0.5]}
+      const result = projectGobanProps(analysisNoEditInput({
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, editWorkspaceActive: false, showAnalysis: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('dragMode=false', () => {
+      const result = projectGobanProps(analysisNoEditInput())
+      assert.strictEqual(result.interactionProps.dragMode, false)
+    })
+
+    it('drawLineMode=null', () => {
+      const result = projectGobanProps(analysisNoEditInput({
+        settings: {...baseInput().settings, editWorkspaceActive: false, selectedTool: 'arrow'},
+      }))
+      assert.strictEqual(result.interactionProps.drawLineMode, null)
+    })
+
+    it('onStoneDragEnd=null', () => {
+      const result = projectGobanProps(analysisNoEditInput())
+      assert.strictEqual(result.handlerProps.onStoneDragEnd, null)
+    })
+
+    it('onPlayVariationMoves=null', () => {
+      const result = projectGobanProps(analysisNoEditInput())
+      assert.strictEqual(result.handlerProps.onPlayVariationMoves, null)
+    })
+  })
+
+  // --- W3-T29: mode transition re-projection — submitAttempt (play -> recall, ALL changed fields) ---
+
+  describe('W3-T29: submitAttempt full field diff (play -> recall)', () => {
+    it('showMoveNumbers changes from false to true', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const recallResult = projectGobanProps(baseInput({workbenchMode: 'recall'}))
+      assert.strictEqual(playResult.overlayDisplayProps.showMoveNumbers, false)
+      assert.strictEqual(recallResult.overlayDisplayProps.showMoveNumbers, true)
+    })
+
+    it('showNextMoves changes from settings value to false', () => {
+      const input = baseInput({
+        settings: {...baseInput().settings, showNextMoves: true},
+      })
+      const playResult = projectGobanProps({...input, workbenchMode: 'play'})
+      const recallResult = projectGobanProps({...input, workbenchMode: 'recall'})
+      assert.strictEqual(playResult.overlayDisplayProps.showNextMoves, true)
+      assert.strictEqual(recallResult.overlayDisplayProps.showNextMoves, false)
+    })
+
+    it('showSiblings changes from settings value to false', () => {
+      const input = baseInput({
+        settings: {...baseInput().settings, showSiblings: true},
+      })
+      const playResult = projectGobanProps({...input, workbenchMode: 'play'})
+      const recallResult = projectGobanProps({...input, workbenchMode: 'recall'})
+      assert.strictEqual(playResult.overlayDisplayProps.showSiblings, true)
+      assert.strictEqual(recallResult.overlayDisplayProps.showSiblings, false)
+    })
+
+    it('analysis changes from conditional to null', () => {
+      const analysisObj = {type: 'winrate', data: [0.6]}
+      const sharedOverlay = {...baseInput().overlayState, analysis: analysisObj}
+      const sharedSettings = {...baseInput().settings, showAnalysis: true}
+      const playResult = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: sharedOverlay,
+        settings: sharedSettings,
+      }))
+      const recallResult = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        overlayState: sharedOverlay,
+        settings: sharedSettings,
+      }))
+      assert.deepStrictEqual(playResult.overlayDisplayProps.analysis, analysisObj)
+      assert.strictEqual(recallResult.overlayDisplayProps.analysis, null)
+    })
+
+    it('handlerProps.onStoneDragEnd stays null', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const recallResult = projectGobanProps(baseInput({workbenchMode: 'recall'}))
+      assert.strictEqual(playResult.handlerProps.onStoneDragEnd, null)
+      assert.strictEqual(recallResult.handlerProps.onStoneDragEnd, null)
+    })
+
+    it('handlerProps.onPlayVariationMoves stays null', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const recallResult = projectGobanProps(baseInput({workbenchMode: 'recall'}))
+      assert.strictEqual(playResult.handlerProps.onPlayVariationMoves, null)
+      assert.strictEqual(recallResult.handlerProps.onPlayVariationMoves, null)
+    })
+
+    it('interactionProps.dragMode stays false', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const recallResult = projectGobanProps(baseInput({workbenchMode: 'recall'}))
+      assert.strictEqual(playResult.interactionProps.dragMode, false)
+      assert.strictEqual(recallResult.interactionProps.dragMode, false)
+    })
+
+    it('interactionProps.drawLineMode stays null', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const recallResult = projectGobanProps(baseInput({workbenchMode: 'recall'}))
+      assert.strictEqual(playResult.interactionProps.drawLineMode, null)
+      assert.strictEqual(recallResult.interactionProps.drawLineMode, null)
+    })
+  })
+
+  // --- W3-T30: mode transition re-projection — enterAnalysis (play -> analysis+editWS, full field diff) ---
+
+  describe('W3-T30: enterAnalysis full field diff (play -> analysis+editWS)', () => {
+    it('showMoveNumbers changes from false (hardcoded) to settings value', () => {
+      const playResult = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showMoveNumbers: true},
+      }))
+      const analysisResult = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, showMoveNumbers: true},
+      }))
+      assert.strictEqual(playResult.overlayDisplayProps.showMoveNumbers, false)
+      assert.strictEqual(analysisResult.overlayDisplayProps.showMoveNumbers, true)
+    })
+
+    it('dragMode changes from false to true', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const analysisResult = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+      }))
+      assert.strictEqual(playResult.interactionProps.dragMode, false)
+      assert.strictEqual(analysisResult.interactionProps.dragMode, true)
+    })
+
+    it('drawLineMode changes from null to tool-dependent', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const analysisResult = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, selectedTool: 'line'},
+      }))
+      assert.strictEqual(playResult.interactionProps.drawLineMode, null)
+      assert.strictEqual(analysisResult.interactionProps.drawLineMode, 'line')
+    })
+
+    it('onStoneDragEnd changes from null to function', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const analysisResult = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+      }))
+      assert.strictEqual(playResult.handlerProps.onStoneDragEnd, null)
+      assert.strictEqual(typeof analysisResult.handlerProps.onStoneDragEnd, 'function')
+    })
+
+    it('onPlayVariationMoves changes from null to function', () => {
+      const playResult = projectGobanProps(baseInput({workbenchMode: 'play'}))
+      const analysisResult = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+      }))
+      assert.strictEqual(playResult.handlerProps.onPlayVariationMoves, null)
+      assert.strictEqual(typeof analysisResult.handlerProps.onPlayVariationMoves, 'function')
+    })
+  })
+
+  // --- W3-T31: mode transition re-projection — returnFromAnalysis (analysis -> play, full restore) ---
+
+  describe('W3-T31: returnFromAnalysis full field restore (analysis -> play)', () => {
+    it('all overlay props match original play projection', () => {
+      const originalPlay = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showMoveNumbers: true},
+      }))
+      const analysisResult = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, showMoveNumbers: true},
+      }))
+      const restoredPlay = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showMoveNumbers: true},
+      }))
+
+      // Verify analysis was different
+      assert.strictEqual(analysisResult.interactionProps.dragMode, true)
+      assert.strictEqual(analysisResult.overlayDisplayProps.showMoveNumbers, true)
+
+      // Verify restored matches original
+      assert.strictEqual(restoredPlay.overlayDisplayProps.showMoveNumbers, originalPlay.overlayDisplayProps.showMoveNumbers)
+      assert.strictEqual(restoredPlay.overlayDisplayProps.showNextMoves, originalPlay.overlayDisplayProps.showNextMoves)
+      assert.strictEqual(restoredPlay.overlayDisplayProps.showSiblings, originalPlay.overlayDisplayProps.showSiblings)
+      assert.strictEqual(restoredPlay.interactionProps.dragMode, originalPlay.interactionProps.dragMode)
+      assert.strictEqual(restoredPlay.interactionProps.drawLineMode, originalPlay.interactionProps.drawLineMode)
+      assert.strictEqual(restoredPlay.handlerProps.onStoneDragEnd, originalPlay.handlerProps.onStoneDragEnd)
+      assert.strictEqual(restoredPlay.handlerProps.onPlayVariationMoves, originalPlay.handlerProps.onPlayVariationMoves)
+    })
+  })
+
+  // --- W3-T32: mode transition re-projection — returnFromAnalysis (analysis -> recall, full restore) ---
+
+  describe('W3-T32: returnFromAnalysis full field restore (analysis -> recall)', () => {
+    it('all overlay props match original recall projection', () => {
+      const originalRecall = projectGobanProps(baseInput({workbenchMode: 'recall'}))
+      const analysisResult = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+      }))
+      const restoredRecall = projectGobanProps(baseInput({workbenchMode: 'recall'}))
+
+      // Verify analysis was different from recall
+      assert.strictEqual(analysisResult.interactionProps.dragMode, true)
+      assert.strictEqual(analysisResult.overlayDisplayProps.showMoveNumbers, false)
+
+      // Verify restored recall matches original recall
+      assert.strictEqual(restoredRecall.overlayDisplayProps.showMoveNumbers, originalRecall.overlayDisplayProps.showMoveNumbers)
+      assert.strictEqual(restoredRecall.overlayDisplayProps.showMoveNumbers, true)
+      assert.strictEqual(restoredRecall.overlayDisplayProps.showNextMoves, originalRecall.overlayDisplayProps.showNextMoves)
+      assert.strictEqual(restoredRecall.overlayDisplayProps.showNextMoves, false)
+      assert.strictEqual(restoredRecall.overlayDisplayProps.showSiblings, originalRecall.overlayDisplayProps.showSiblings)
+      assert.strictEqual(restoredRecall.overlayDisplayProps.showSiblings, false)
+      assert.strictEqual(restoredRecall.overlayDisplayProps.analysis, originalRecall.overlayDisplayProps.analysis)
+      assert.strictEqual(restoredRecall.overlayDisplayProps.analysis, null)
+      assert.strictEqual(restoredRecall.interactionProps.dragMode, originalRecall.interactionProps.dragMode)
+      assert.strictEqual(restoredRecall.interactionProps.dragMode, false)
+      assert.strictEqual(restoredRecall.interactionProps.drawLineMode, originalRecall.interactionProps.drawLineMode)
+      assert.strictEqual(restoredRecall.interactionProps.drawLineMode, null)
+      assert.strictEqual(restoredRecall.handlerProps.onStoneDragEnd, originalRecall.handlerProps.onStoneDragEnd)
+      assert.strictEqual(restoredRecall.handlerProps.onPlayVariationMoves, originalRecall.handlerProps.onPlayVariationMoves)
+    })
+  })
+
+  // --- W3-T33: settings passthrough verification ---
+
+  describe('W3-T33: settings passthrough in all modes', () => {
+    it('showCoordinates passes through in play mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showCoordinates: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, false)
+    })
+
+    it('showCoordinates passes through in recall mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, showCoordinates: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, false)
+    })
+
+    it('showCoordinates passes through in analysis mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, showCoordinates: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, false)
+    })
+
+    it('showCoordinates passes through in problem mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showCoordinates: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, false)
+    })
+
+    it('boardTransformation passes through in play mode', () => {
+      const transform = [0, 1, -1, 0, 5, 3]
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, boardTransformation: transform},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, transform)
+    })
+
+    it('boardTransformation passes through in recall mode', () => {
+      const transform = [0, -1, 1, 0, 2, 7]
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, boardTransformation: transform},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, transform)
+    })
+
+    it('boardTransformation passes through in analysis mode', () => {
+      const transform = [-1, 0, 0, -1, 10, 10]
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, boardTransformation: transform},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, transform)
+    })
+
+    it('boardTransformation passes through in problem mode', () => {
+      const transform = [0, 1, 1, 0, 0, 0]
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, boardTransformation: transform},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, transform)
+    })
+
+    it('areaSelectMode passes through in play mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, areaSelectMode: true},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, true)
+    })
+
+    it('areaSelectMode passes through in recall mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, areaSelectMode: true},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, true)
+    })
+
+    it('areaSelectMode passes through in analysis mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, areaSelectMode: true},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, true)
+    })
+
+    it('areaSelectMode passes through in problem mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, areaSelectMode: true},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, true)
+    })
+
+    it('showHumanPreference passes through in play mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+
+    it('showHumanPreference passes through in recall mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+
+    it('showHumanPreference passes through in analysis mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+
+    it('showHumanPreference passes through in problem mode', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+  })
+
+  // --- W3-T34: overlay activation policy — problem mode (Matrix Section 2.3, play-equivalent) ---
+
+  describe('W3-T34: overlay activation policy — problem mode mirrors play', () => {
+    it('showMoveNumbers=false regardless of settings.showMoveNumbers=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showMoveNumbers: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, false)
+    })
+
+    it('analysis from overlayState when showAnalysis=true', () => {
+      const analysisObj = {type: 'score', data: {black: 40}}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, showAnalysis: true},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.analysis, analysisObj)
+    })
+
+    it('analysis=null when showAnalysis=false', () => {
+      const analysisObj = {type: 'score', data: {black: 40}}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {...baseInput().overlayState, analysis: analysisObj},
+        settings: {...baseInput().settings, showAnalysis: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('dimmedStones=[] always, even when overlayState.dimmedStones has entries', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {...baseInput().overlayState, dimmedStones: [[5, 5]]},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.dimmedStones, [])
     })
   })
 })
