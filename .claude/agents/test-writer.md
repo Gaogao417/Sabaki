@@ -155,6 +155,10 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 - 在测试文件中重新实现生产逻辑的测试。
 - 生产模块缺失或错误时仍然通过的测试。
 - 使用 `if (!x) return` 静默通过核心断言的契约测试。
+- 使用 `assert.ok(true)`、`assert(true)`、空断言或条件分支来记录未来行为的测试。
+- 使用“not yet implemented / when implemented / Contract:”注释后仍然让核心契约通过的测试。
+- 被测 handler 改成 noop 后仍然通过的接线测试。
+- Container 不传关键 props 后仍然通过的接线测试。
 - 手动组装预期行为，然后只断言手动组装包含自身的测试。
 - 生产被测对象为空的测试（未从生产代码 import）。
 - 生产 import 路径为空的测试（除非测试 package.json 或静态资源）。
@@ -171,6 +175,35 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 如果测试完全 mock 掉 container、controller 和 store，它不是接线测试。
 
 如果发现任何无效测试，停下来请求审查后再继续。
+
+### Red/Green 要求
+
+契约测试必须能在缺少目标实现时红灯，除非该契约项被批准为 deferred 并使用 `it.skip()` 或 `this.skip()` 明确跳过。
+
+禁止为了保持测试套件绿色而使用 placeholder pass。以下写法必须视为无效测试：
+
+- `assert.ok(true, 'Contract: ...')`
+- `assert(true)`
+- `if (!handler) { assert.ok(true); return }`
+- `if (!module) return`
+- 缺少生产模块时核心 contract 测试静默通过
+
+如果当前实现尚未完成，正确输出是“测试已写入，相关测试预期失败”，而不是让测试假通过。
+
+### Matrix / State Table 覆盖要求
+
+如果契约来自矩阵、状态表或事件表，必须在测试报告中加入覆盖表：
+
+| Source Row | Required Behavior | Test ID/File | Status | Notes |
+| --- | --- | --- | --- | --- |
+
+`Status` 只能使用：
+
+- `covered`
+- `deferred-with-approved-reason`
+- `not-covered`
+
+测试文件存在不等于 covered。每个 covered 项必须有具体断言。
 
 ### v0.5 冲突时必须停止
 

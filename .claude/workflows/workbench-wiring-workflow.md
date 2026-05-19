@@ -77,13 +77,31 @@ If a task only implements the first half of this loop, it is incomplete unless t
      - state-return: store/service state projects back into UI props or rendered state.
    - Must not replace wiring with "callback was called" tests except as auxiliary checks.
 
-3. `implementation-agent`
+3. `test-auditor`
+   - Reviews the approved contract and generated tests before implementation starts.
+   - Does not write tests, does not write production code, and does not split or orchestrate tasks.
+   - Must reject placeholder pass tests, silent conditional passes, noop-handler tests, and wiring tests that do not verify a real boundary crossing.
+   - Must require a coverage table for matrix/state-table based work:
+     - `covered`
+     - `deferred-with-approved-reason`
+     - `not-covered`
+   - Must output APPROVE, APPROVE_WITH_NOTES, REQUEST_CHANGES, or BLOCK.
+   - If the auditor returns REQUEST_CHANGES or BLOCK, do not start implementation.
+   - If the auditor returns APPROVE or APPROVE_WITH_NOTES, a human must explicitly decide whether to proceed.
+
+4. Human gate
+   - Reviews the test-auditor report.
+   - Confirms any deferred rows and scope tradeoffs.
+   - Explicitly authorizes implementation to begin.
+   - This workflow intentionally does not add an orchestrator agent; task breakdown remains human-directed.
+
+5. `implementation-agent`
    - Implements minimal production wiring against the approved contract and tests.
    - Keeps panel components presentational.
    - Reads dependencies through `sabaki.getTrainingContext()` in container/controller boundaries, not inside panels.
    - Uses adapters for Sabaki, engine, analysis, board, and repository dependencies.
 
-4. `architecture-reviewer`
+6. `architecture-reviewer`
    - Reviews the diff for boundary leaks, duplicate state, direct service imports in UI components, store impurity, hidden globals, and weak tests.
    - Must explicitly trace at least one implemented loop from UI event to projected UI update.
 
@@ -211,6 +229,10 @@ Do not accept these as completed wiring:
 - Store methods call DB, engine, UI, IPC, or controller commands.
 - Tests only assert call count and never assert before/after state.
 - Tests mock the entire controller and therefore prove no production wiring.
+- Tests use `assert.ok(true)`, `assert(true)`, or empty assertions to document future behavior.
+- Tests use conditional branches to pass when the production path is missing.
+- Tests pass when a required handler is noop, a required prop is not passed, or a required store/projection update does not happen.
+- Matrix/state-table work claims coverage without a row-by-row coverage table.
 - Recall or scratch workflows mutate the formal game tree without an approved contract.
 
 ## Done Definition
