@@ -348,12 +348,13 @@ Container only subscribes to runtimeStore and workbenchStore, but many projectio
 
 Wiring for W1 should follow this order to maximize workflow coverage:
 
-1. **Name alignment** — resolve 10 name mismatches so existing container handlers reach the correct UI controls.
-2. **Mode switching** — wire S-06 switchWorkbenchMode. Required for navigation.
-3. **Problem submit/abandon** — wire LP-06, LP-07, S-12, S-13. These are stubs blocking problem completion.
-4. **Problem undo/redo/hint** — wire B-06 (partially done), B-07, B-09.
-5. **Recall panel actions** — wire LP-10 through LP-18. Recall workflow is largely unwired beyond hint/skip/end.
-6. **Snapshot** — wire all 5 snapshot entry points to snapshotService.
-7. **Analysis mode** — wire key point filter, annotation tool, return button.
-8. **Game tab bar** — wire tab select/close/add.
-9. **Play actions** — wire new game, end, resign, pass.
+1. **Service layer scaffolding** — instantiate workbenchFlowService, recallService, recallCheckpointService, problemFlowService with correct store wiring. All commands route through these, not legacy controller.
+2. **Mode switching** — wire S-06 to workbenchFlowService mode transition. Required for navigation. Legacy mode via adapter only.
+3. **Problem submit/abandon** — wire LP-06, LP-07, S-12, S-13 through workbenchFlowService.submit / abandon.
+4. **Problem undo/redo/hint** — wire B-06, B-07, B-09 through problemFlowService.
+5. **Recall panel actions** — wire LP-10 through LP-18 through recallService / recallCheckpointService.
+6. **Snapshot** — wire all 5 snapshot entry points to workbenchFlowService.snapshotFromCurrentContext (global command per PRD v0.5).
+7. **Analysis mode** — wire key point filter (local state), annotation tool (local state), return via workbenchFlowService.
+8. **Game tab bar** — wire tab select/close/add through workbenchTabService (openTask only, no source-specific APIs).
+9. **Play actions** — wire new game, end, resign, pass through workbenchFlowService and legacySabakiAdapter.
+10. **Player config** — wire play black/white and problem problemOpponent through workbenchFlowService.updatePlayerConfig (problemArea-gated for problem).
