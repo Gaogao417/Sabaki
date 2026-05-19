@@ -43,6 +43,13 @@ export function createBoardInteractionContext({
   sourceVertex,
   event,
   isMac = false,
+  workbenchMode,
+  tabId,
+  taskId,
+  playerConfig,
+  problemArea,
+  activeAttemptId,
+  activeRecallSessionId,
 }: {
   state: StateLike | null
   board: BoardLike | null
@@ -50,6 +57,14 @@ export function createBoardInteractionContext({
   sourceVertex?: [number, number] | null
   event: {button?: number; ctrlKey?: boolean; metaKey?: boolean}
   isMac?: boolean
+  // W3 WorkbenchMode extension fields
+  workbenchMode?: 'play' | 'problem' | 'recall' | 'analysis'
+  tabId?: string
+  taskId?: string
+  playerConfig?: { currentSide?: 'human' | 'ai'; [key: string]: unknown } | null
+  problemArea?: { vertices?: [number, number][]; [key: string]: unknown } | null
+  activeAttemptId?: string
+  activeRecallSessionId?: string
 }) {
   if (state == null || board == null) return null
 
@@ -94,5 +109,13 @@ export function createBoardInteractionContext({
     positionSource,
     mutationContract,
     editWorkspacePresent: state.editWorkspace != null,
+    // W3 WorkbenchMode extension fields — passed through from container
+    ...(workbenchMode != null ? {workbenchMode} : {}),
+    ...(tabId != null ? {tabId} : {}),
+    ...(taskId != null ? {taskId} : {}),
+    ...(playerConfig != null ? {playerConfig} : {}),
+    ...(problemArea != null ? {problemArea} : {}),
+    ...(activeAttemptId != null ? {activeAttemptId} : {}),
+    ...(activeRecallSessionId != null ? {activeRecallSessionId} : {}),
   }
 }

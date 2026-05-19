@@ -39,6 +39,14 @@ export type ResolverInput = {
   positionSource: PositionSource | null
   mutationContract: MutationContract | null
   editWorkspacePresent: boolean
+  // W3 WorkbenchMode extension fields
+  workbenchMode?: 'play' | 'problem' | 'recall' | 'analysis'
+  tabId?: string
+  taskId?: string
+  playerConfig?: { currentSide?: 'human' | 'ai'; [key: string]: unknown } | null
+  problemArea?: { vertices?: [number, number][]; [key: string]: unknown } | null
+  activeAttemptId?: string
+  activeRecallSessionId?: string
 }
 
 function noop(
@@ -246,12 +254,53 @@ function resolveRecall(input: ResolverInput): BoardInteractionResult {
   return noop('recall: occupied point', input)
 }
 
+// --- Helpers for workbench-mode routing ---
+
+function vertexInList(v: [number, number], list: [number, number][]): boolean {
+  return list.some(item => item[0] === v[0] && item[1] === v[1])
+}
+
 // --- Main resolver ---
 
 export function resolveBoardInteraction(
   input: ResolverInput,
 ): BoardInteractionResult {
-  let {mode, editWorkspacePresent} = input
+  let {mode, editWorkspacePresent, workbenchMode} = input
+
+  // When workbenchMode is present, use it for routing instead of legacy mode
+  if (workbenchMode != null) {
+    if (workbenchMode === 'play') {
+      // AI turn: board is read-only
+      if (input.playerConfig?.currentSide === 'ai') {
+        return noop('play: AI turn, board is read-only', input)
+      }
+      return resolvePlay(input)
+    }
+    if (workbenchMode === 'problem') {
+      // AI turn: board is read-only
+      if (input.playerConfig?.currentSide === 'ai') {
+        return noop('problem: AI turn, board is read-only', input)
+      }
+      // Check problemArea constraint if present
+      if (input.problemArea?.vertices != null) {
+        if (!vertexInList(input.vertex, input.problemArea.vertices)) {
+          return noop('problem: vertex outside problemArea', input)
+        }
+      }
+      return resolvePlay(input)
+    }
+    if (workbenchMode === 'recall') {
+      return resolveRecall(input)
+    }
+    if (workbenchMode === 'analysis') {
+      if (editWorkspacePresent) {
+        return resolveAnalysisEdit(input)
+      }
+      return legacy(BOARD_INTENTS.LEGACY_SGF_EDIT, input, 'analysis without editWorkspace')
+    }
+  }
+
+  // Legacy path: unchanged when workbenchMode is absent
 
   // Play / autoplay
   if (mode === 'play') {
