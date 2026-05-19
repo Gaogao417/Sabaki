@@ -51,6 +51,7 @@ import {
   createPositionSnapshotAdapter,
   createWorkbenchTabService,
   createWorkbenchPhaseService,
+  createWorkbenchFlowService,
   createAttemptService,
   createPlayTrainingMonitor,
   createRecallService,
@@ -60,6 +61,7 @@ import {
   createProblemService,
   createProblemFlowService,
   createLegacyTrainingFlowController,
+  evaluateAttempt,
   projectTrainingState,
 } from './training/index.ts'
 import {
@@ -985,6 +987,18 @@ class Sabaki extends EventEmitter {
         tabService,
         logger,
       })
+      const flowService = createWorkbenchFlowService({
+        workbenchStore,
+        repository,
+        attemptService,
+        recallService,
+        snapshotService,
+        tabService,
+        evaluationRules: { evaluateAttempt },
+        runtimeStore,
+        logger,
+      })
+
       const reviewService = createReviewService({ repository, workbenchTabService: tabService, logger })
       const problemService = createProblemService({ repository, reviewService, logger })
       const problemFlowService = createProblemFlowService({
@@ -1004,6 +1018,7 @@ class Sabaki extends EventEmitter {
         legacyAdapter,
         analysisResultAdapter,
         tabService,
+        flowService,
         phaseService,
         attemptService,
         monitor,
