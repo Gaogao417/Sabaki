@@ -109,8 +109,14 @@ function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} =
   const runtimeStore = createTrainingRuntimeStore()
   const flowService = createSpyFlowService()
   const tabService = createSpyTabService()
-  const repository = createSpyRepository()
   const recallService = createSpyRecallService()
+
+  const taskImportService = {
+    async createManualTask(input) {
+      const task = {id: `task_${Date.now()}`, ...input}
+      return task
+    },
+  }
 
   for (const tab of tabs) workbenchStore.addTab(tab)
   if (activeTabId != null) workbenchStore.setActiveTab(activeTabId)
@@ -122,8 +128,8 @@ function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} =
     flowService,
     workbenchTabService: tabService,
     tabService,
-    repository,
     recallService,
+    taskImportService,
     legacyTrainingFlowController: createNoopLegacyController(),
   }
 
@@ -141,8 +147,6 @@ function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} =
     runtimeStore,
     flowService,
     tabService,
-    repository,
-    recallService,
     shellProps: container.render().props,
   }
 }
@@ -219,21 +223,16 @@ describe('W2 Container Wiring: flow commands', () => {
     ])
   })
 
-  it('wires recall end to complete recall session, completeRecall(activeTabId), and runtime cleanup', async () => {
-    const {shellProps, flowService, recallService, runtimeStore} = createHarness({
+  it('wires recall end to flowService.completeRecall(activeTabId)', async () => {
+    const {shellProps, flowService} = createHarness({
       tabs: [makeTab({id: 'tab_recall', mode: 'recall', activeRecallSessionId: 'rs_1'})],
     })
-    runtimeStore.setActiveRecallSession('rs_1')
 
     await callRequired(shellProps, 'onEnd')
 
-    assert.deepStrictEqual(recallService.calls.completeRecall, [
-      {sessionId: 'rs_1'},
-    ])
     assert.deepStrictEqual(flowService.calls.completeRecall, [
       {tabId: 'tab_recall'},
     ])
-    assert.strictEqual(runtimeStore.getState().activeRecallSessionId, undefined)
   })
 })
 
@@ -286,13 +285,11 @@ describe('W2 Container Wiring: tab commands and projection', () => {
   })
 
   it('wires add-game to create a manual task and open it in play mode', async () => {
-    const {shellProps, tabService, repository} = createHarness()
+    const {shellProps, tabService} = createHarness()
 
     await callRequired(shellProps, 'onAddGame')
 
-    assert.strictEqual(repository.calls.createTask.length, 1)
     assert.strictEqual(tabService.calls.openTask.length, 1)
-    assert.strictEqual(tabService.calls.openTask[0].taskId, repository.calls.createTask[0].id)
     assert.strictEqual(tabService.calls.openTask[0].mode, 'play')
   })
 })

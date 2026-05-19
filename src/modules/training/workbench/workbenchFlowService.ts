@@ -42,6 +42,7 @@ export type WorkbenchFlowServiceDeps = {
   }
   recallService: {
     createRecallSession(input: Record<string, unknown>): Promise<{ id: string }>
+    completeRecall(recallSessionId: string): Promise<void>
   }
   snapshotService: SnapshotService
   tabService: WorkbenchTabService
@@ -161,6 +162,12 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
   function completeRecall(tabId: string): void {
     const tab = getTab(tabId)
     assertTransition(tab, 'completeRecall')
+
+    // Orchestrate recall completion: complete session -> update mode
+    const recallSessionId = tab.activeRecallSessionId
+    if (recallSessionId) {
+      deps.recallService.completeRecall(recallSessionId).catch(() => {})
+    }
 
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',

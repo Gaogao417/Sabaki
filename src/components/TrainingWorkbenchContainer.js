@@ -74,16 +74,7 @@ class TrainingWorkbenchContainer extends Component {
 
     function handleEndRecall() {
       if (!activeTab) return
-      // Orchestrate endRecall: recallService completes the session,
-      // flowService transitions the tab mode.
-      const recallSessionId = activeTab.activeRecallSessionId
-      if (recallSessionId) {
-        const {recallService} = sabaki.getTrainingContext()
-        recallService.completeRecall(recallSessionId)
-      }
       flowService.completeRecall(activeTab.id)
-      // Clear runtime store active recall session
-      runtimeStore.setActiveRecallSession(undefined)
     }
 
     async function handleSnapshot() {
@@ -102,16 +93,8 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleAddTask() {
-      // Basic flow: create a manual play task and open it in a new tab
-      const {repository} = sabaki.getTrainingContext()
-      const now = new Date().toISOString()
-      const task = {
-        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        rootPositionSgf: '',
-        createdAt: now,
-        updatedAt: now,
-      }
-      await repository.createTask(task)
+      const {taskImportService} = sabaki.getTrainingContext()
+      const task = await taskImportService.createManualTask({rootPositionSgf: ''})
       await tabService.openTask({taskId: task.id, mode: 'play'})
     }
 
@@ -122,18 +105,14 @@ class TrainingWorkbenchContainer extends Component {
 
     function handleResign() {
       // GAP-01: No dedicated resign method on flowService yet.
-      // Use submit as placeholder (freeze + finalize path).
       if (!activeTab) return
-      // For now, delegate to the existing freeze path via submit
-      // This is a minimal wiring; full resign flow needs product decision.
-      handleSubmit()
+      console.warn('W2 GAP-01: resign not yet implemented on flowService')
     }
 
     function handleAbandon() {
       // GAP-02: No dedicated abandon method on flowService yet.
-      // Minimal wiring: freeze attempt path.
       if (!activeTab) return
-      handleSubmit()
+      console.warn('W2 GAP-02: abandon not yet implemented on flowService')
     }
 
     // Legacy handlers preserved for existing recall/problem/review flows

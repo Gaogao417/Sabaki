@@ -126,6 +126,7 @@ function createMockDeps(overrides = {}) {
     },
     recallService: {
       createRecallSession: async input => ({id: 'rs_1', ...input}),
+      completeRecall: async () => {},
       ...overrides.recallService,
     },
     snapshotService: {
