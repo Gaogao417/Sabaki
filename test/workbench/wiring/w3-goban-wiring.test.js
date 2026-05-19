@@ -160,108 +160,43 @@ describe('W3 Goban Wiring: Container board event routing', function () {
   })
 
   // --- W3-T09: Container handleBoardVertexClick routes to resolver with workbenchMode ---
+  // DEFERRED: Container does not yet wire onVertexClick to resolveBoardInteraction.
+  // The pure modules (projectGobanProps, resolveBoardInteraction extension) are done.
+  // Container wiring requires MainBoardStage upgrade + handler plumbing — separate step.
+  // These tests will be enabled when Container wiring is implemented.
 
   describe('W3-T09: Container board vertex click routing', () => {
-    it('container exposes a handleBoardVertexClick method or passes onVertexClick to shell', () => {
+    it.skip('container passes onVertexClick to shell (deferred: Container wiring not yet done)', () => {
       const {shellProps} = createHarness({
         tabs: [makeTab({id: 'tab_1', mode: 'play'})],
       })
 
-      // The container must either:
-      // 1. Expose handleBoardVertexClick as a method, or
-      // 2. Pass an onVertexClick callback to the shell.
-      // Currently, W3 is not yet implemented, so this test serves as a contract
-      // that the implementation must satisfy.
-      const hasMethod = typeof shellProps.onVertexClick === 'function'
-
-      // If W3 is not yet implemented, onVertexClick won't be passed yet.
-      // This test will start passing once W3 wiring is complete.
-      if (!hasMethod && typeof shellProps.onVertexClick === 'undefined') {
-        // Contract test: assert that when implemented, container must pass onVertexClick
-        // For now, document the expected behavior
-        assert.ok(
-          true,
-          'Contract: container must pass onVertexClick to shell when W3 is implemented',
-        )
-      } else {
-        assert.strictEqual(typeof shellProps.onVertexClick, 'function')
-      }
+      assert.strictEqual(typeof shellProps.onVertexClick, 'function',
+        'Container must pass onVertexClick callback to WorkbenchShell')
     })
 
-    it('when onVertexClick is provided, it routes through resolveBoardInteraction with workbenchMode context', () => {
-      if (!resolveBoardInteraction || !RESOLVE_STATUSES) {
-        // Resolver exists but W3 extension may not yet be implemented.
-        // Test the resolver directly with workbenchMode context.
-        const result = resolveBoardInteraction({
-          mode: 'play',
-          selectedTool: 'stone_1',
-          event: {button: 0, ctrlKey: false, metaKey: false, isMac: false},
-          point: {sign: 0, markerType: null},
-          vertex: [3, 3],
-          positionSource: {kind: 'game-tree', treePosition: 'node_1'},
-          mutationContract: 'playMove',
-          editWorkspacePresent: false,
-          workbenchMode: 'play',
-          tabId: 'tab_1',
-          taskId: 'task_1',
-          playerConfig: null,
-          problemArea: null,
-        })
-
-        // If the resolver already handles workbenchMode, it should produce play-stone
-        if (result.intent === 'play-stone') {
-          assert.strictEqual(result.status, RESOLVE_STATUSES.RESOLVED)
-          assert.strictEqual(result.intent, 'play-stone')
-          assert.strictEqual(result.mutationContract, 'playMove')
-        }
-        return
-      }
-
-      // When fully implemented, the container's onVertexClick should call
-      // resolveBoardInteraction with workbenchMode context.
+    it.skip('onVertexClick routes through resolveBoardInteraction with workbenchMode context (deferred: Container wiring not yet done)', () => {
       const {shellProps} = createHarness({
         tabs: [makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'})],
       })
 
-      if (typeof shellProps.onVertexClick === 'function') {
-        // Call the handler and verify the resolver was invoked correctly
-        shellProps.onVertexClick([3, 3], {button: 0, ctrlKey: false, metaKey: false})
-        // Additional assertions on the side effects would go here
-        // once the executor routing is in place
-      }
+      assert.strictEqual(typeof shellProps.onVertexClick, 'function')
+      // When implemented, calling shellProps.onVertexClick should route through
+      // resolveBoardInteraction with workbenchMode='play', tabId='tab_1', etc.
+      // Verification will require spying on the resolver call.
     })
   })
 
   // --- W3-T20: Container passes projectGobanProps result as boardProps to WorkbenchShell ---
 
   describe('W3-T20: Container passes projected goban props to shell', () => {
-    it('when projectGobanProps is available, container passes boardProps to shell', () => {
-      if (!projectGobanProps) {
-        // projectGobanProps not yet implemented -- contract test documents expected behavior
-        assert.ok(
-          true,
-          'Contract: container must pass projectGobanProps result as boardProps to WorkbenchShell -> MainBoardStage',
-        )
-        return
-      }
-
+    it.skip('container passes projectGobanProps result as boardProps to shell (deferred: Container wiring not yet done)', () => {
       const {shellProps} = createHarness({
         tabs: [makeTab({id: 'tab_1', mode: 'play'})],
       })
 
-      // When projectGobanProps is implemented, the container should pass
-      // boardProps containing boardStateProps, overlayDisplayProps,
-      // interactionProps, and handlerProps to the shell.
-      const hasBoardProps = shellProps.boardProps != null ||
-        shellProps.boardStateProps != null
-
-      if (!hasBoardProps) {
-        // Container has not yet been updated to use projectGobanProps
-        assert.ok(
-          true,
-          'Contract: container must pass board/boardStateProps to shell once projectGobanProps is wired',
-        )
-      }
+      assert.ok(shellProps.boardProps != null || shellProps.boardStateProps != null,
+        'Container must pass boardProps containing projection output to WorkbenchShell')
     })
 
     it('projectGobanProps output has required top-level sections', function () {
