@@ -1312,4 +1312,682 @@ describe('W3 Goban Projection: projectGobanProps', function () {
       assert.deepStrictEqual(result.overlayDisplayProps.dimmedStones, [])
     })
   })
+
+  // ====================================================================
+  // MATRIX 3.1-3.3 EXPANDED INPUT/OUTPUT COVERAGE
+  // Tests W3-T35 through W3-T43
+  //
+  // These tests verify current projectGobanProps behavior for fields
+  // that are direct passthrough or hardcoded constants.
+  //
+  // Where Matrix 3.2 disagrees with current implementation, tests
+  // assert actual current behavior and document the GAP-G4 gap.
+  // ====================================================================
+
+  // --- W3-T35: paintMap per mode (current: passthrough) ---
+
+  describe('W3-T35: paintMap per mode — passthrough (Matrix 3.2)', () => {
+    // Matrix 3.2 says recall paintMap=[], but current impl passes
+    // overlayState.paintMap through without mode gating.
+    // GAP-G4: overlay pipeline not yet wired to WorkbenchMode.
+    // Tests assert current behavior, not the matrix future value.
+
+    const knownPaintMap = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+
+    it('play mode passes paintMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, paintMap: knownPaintMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.paintMap, knownPaintMap)
+    })
+
+    it('problem mode passes paintMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {...baseInput().overlayState, paintMap: knownPaintMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.paintMap, knownPaintMap)
+    })
+
+    it('recall mode passes paintMap through unchanged (GAP-G4: Matrix says [])', () => {
+      // GAP-G4: Matrix 3.2 says recall paintMap=[], but overlay pipeline
+      // is not yet WorkbenchMode-aware. Current impl passes through.
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        overlayState: {...baseInput().overlayState, paintMap: knownPaintMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.paintMap, knownPaintMap)
+    })
+
+    it('analysis+editWS mode passes paintMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+        overlayState: {...baseInput().overlayState, paintMap: knownPaintMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.paintMap, knownPaintMap)
+    })
+
+    it('analysis (no editWS) mode passes paintMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: false},
+        overlayState: {...baseInput().overlayState, paintMap: knownPaintMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.paintMap, knownPaintMap)
+    })
+
+    it('empty paintMap passes through as empty', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, paintMap: []},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.paintMap, [])
+    })
+  })
+
+  // --- W3-T36: markerMap per mode (current: passthrough) ---
+
+  describe('W3-T36: markerMap per mode — passthrough (Matrix 3.2)', () => {
+    // Matrix 3.2 says recall markerMap=null, but current impl passes
+    // overlayState.markerMap through without mode gating.
+    // GAP-G4: overlay pipeline not yet wired to WorkbenchMode.
+
+    const knownMarkerMap = [[null, {type: 'circle'}], [{type: 'triangle'}, null]]
+
+    it('play mode passes markerMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, markerMap: knownMarkerMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.markerMap, knownMarkerMap)
+    })
+
+    it('problem mode passes markerMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {...baseInput().overlayState, markerMap: knownMarkerMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.markerMap, knownMarkerMap)
+    })
+
+    it('recall mode passes markerMap through unchanged (GAP-G4: Matrix says null)', () => {
+      // GAP-G4: Matrix 3.2 says recall markerMap=null, but current impl
+      // passes through. Asserting actual behavior.
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        overlayState: {...baseInput().overlayState, markerMap: knownMarkerMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.markerMap, knownMarkerMap)
+    })
+
+    it('analysis+editWS mode passes markerMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+        overlayState: {...baseInput().overlayState, markerMap: knownMarkerMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.markerMap, knownMarkerMap)
+    })
+
+    it('analysis (no editWS) mode passes markerMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: false},
+        overlayState: {...baseInput().overlayState, markerMap: knownMarkerMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.markerMap, knownMarkerMap)
+    })
+
+    it('empty markerMap passes through as empty', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, markerMap: []},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.markerMap, [])
+    })
+  })
+
+  // --- W3-T37: overlayGhostStoneMap per mode (current: passthrough with nullish coalesce) ---
+
+  describe('W3-T37: overlayGhostStoneMap per mode — passthrough with ?? null', () => {
+    // overlayState.overlayGhostStoneMap ?? null
+    // Ghost stones are visually hidden in recall via showNextMoves=false,
+    // not by clearing overlayGhostStoneMap.
+    // Note: recall showNextMoves=false is tested in W3-T02/W3-T26.
+
+    const ghostMap = {0: {sign: 1}, 1: {sign: -1}}
+
+    it('play mode passes overlayGhostStoneMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, overlayGhostStoneMap: ghostMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.overlayGhostStoneMap, ghostMap)
+    })
+
+    it('problem mode passes overlayGhostStoneMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        overlayState: {...baseInput().overlayState, overlayGhostStoneMap: ghostMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.overlayGhostStoneMap, ghostMap)
+    })
+
+    it('recall mode passes overlayGhostStoneMap through unchanged (hidden via showNextMoves=false)', () => {
+      // Ghost stones in recall are gated by showNextMoves=false at the Goban
+      // rendering level, not by clearing overlayGhostStoneMap.
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        overlayState: {...baseInput().overlayState, overlayGhostStoneMap: ghostMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.overlayGhostStoneMap, ghostMap)
+      // Confirm showNextMoves=false which actually hides ghost rendering
+      assert.strictEqual(result.overlayDisplayProps.showNextMoves, false)
+    })
+
+    it('analysis+editWS mode passes overlayGhostStoneMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+        overlayState: {...baseInput().overlayState, overlayGhostStoneMap: ghostMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.overlayGhostStoneMap, ghostMap)
+    })
+
+    it('analysis (no editWS) mode passes overlayGhostStoneMap through unchanged', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: false},
+        overlayState: {...baseInput().overlayState, overlayGhostStoneMap: ghostMap},
+      }))
+      assert.deepStrictEqual(result.overlayDisplayProps.overlayGhostStoneMap, ghostMap)
+    })
+
+    it('null input produces null output', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {...baseInput().overlayState, overlayGhostStoneMap: null},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.overlayGhostStoneMap, null)
+    })
+
+    it('undefined input produces null output (?? null coalesce)', () => {
+      // When overlayGhostStoneMap is not provided (undefined), ?? null yields null
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        overlayState: {
+          ...baseInput().overlayState,
+          // overlayGhostStoneMap intentionally omitted (undefined)
+        },
+      }))
+      assert.strictEqual(result.overlayDisplayProps.overlayGhostStoneMap, null)
+    })
+  })
+
+  // --- W3-T38: analysisType per mode (current: passthrough from analysisData) ---
+
+  describe('W3-T38: analysisType per mode — passthrough from analysisData', () => {
+    // analysisType = analysisData?.analysisType ?? ''
+    // Mode does not gate analysisType; it always comes from input.
+    // When analysis prop is null (recall, analysis-noEditWS), analysisType
+    // is still output but has no visual effect since there is no overlay.
+
+    it('play mode passes analysisType from analysisData', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        analysisData: {activeAnalysis: {type: 'winrate'}, analysisType: 'ownership'},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysisType, 'ownership')
+    })
+
+    it('problem mode passes analysisType from analysisData', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        analysisData: {activeAnalysis: {type: 'winrate'}, analysisType: 'ownership'},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysisType, 'ownership')
+    })
+
+    it('recall mode passes analysisType from analysisData (though analysis is null)', () => {
+      // recall analysis=null (tested in W3-T26), but analysisType is still
+      // projected from input. It has no visual effect since analysis is null.
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        analysisData: {activeAnalysis: {type: 'winrate'}, analysisType: 'ownership'},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysisType, 'ownership')
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('analysis+editWS mode passes analysisType from analysisData', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+        analysisData: {activeAnalysis: {type: 'score'}, analysisType: 'scoreEstimate'},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysisType, 'scoreEstimate')
+    })
+
+    it('analysis (no editWS) passes analysisType even though analysis=null', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: false},
+        analysisData: {activeAnalysis: {type: 'winrate'}, analysisType: 'ownership'},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysisType, 'ownership')
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+    })
+
+    it('null analysisData produces empty string analysisType', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        analysisData: null,
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysisType, '')
+    })
+
+    it('analysisData with empty analysisType produces empty string', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        analysisData: {activeAnalysis: null, analysisType: ''},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.analysisType, '')
+    })
+  })
+
+  // --- W3-T39: showHumanPreference per mode (current: passthrough) ---
+
+  describe('W3-T39: showHumanPreference per mode — passthrough', () => {
+    // showHumanPreference is always from settings, no mode gating.
+
+    it('play mode passes showHumanPreference=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+
+    it('play mode passes showHumanPreference=false', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showHumanPreference: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, false)
+    })
+
+    it('problem mode passes showHumanPreference=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+
+    it('recall mode passes showHumanPreference=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+
+    it('analysis+editWS mode passes showHumanPreference=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+
+    it('analysis (no editWS) mode passes showHumanPreference=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: false, showHumanPreference: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
+    })
+  })
+
+  // --- W3-T40: showCoordinates per mode (current: passthrough) ---
+
+  describe('W3-T40: showCoordinates per mode — passthrough', () => {
+    // showCoordinates is always from settings, no mode gating.
+
+    it('play mode passes showCoordinates=false', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showCoordinates: false},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, false)
+    })
+
+    it('play mode passes showCoordinates=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, showCoordinates: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, true)
+    })
+
+    it('problem mode passes showCoordinates=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, showCoordinates: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, true)
+    })
+
+    it('recall mode passes showCoordinates=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, showCoordinates: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, true)
+    })
+
+    it('analysis+editWS mode passes showCoordinates=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, showCoordinates: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, true)
+    })
+
+    it('analysis (no editWS) mode passes showCoordinates=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: false, showCoordinates: true},
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showCoordinates, true)
+    })
+  })
+
+  // --- W3-T41: areaSelectMode and boardTransformation per mode (current: passthrough) ---
+
+  describe('W3-T41: areaSelectMode and boardTransformation per mode — passthrough', () => {
+    // Both areaSelectMode and boardTransformation come from settings
+    // with no mode gating. Tested here for completeness of Matrix 3.1-3.3
+    // coverage (some of this was already covered in W3-T33).
+
+    const customTransform = [0, -1, 1, 0, 5, 2]
+
+    it('play mode passes areaSelectMode=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, areaSelectMode: true},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, true)
+    })
+
+    it('recall mode passes areaSelectMode=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, areaSelectMode: true},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, true)
+    })
+
+    it('analysis+editWS mode passes areaSelectMode=true', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, areaSelectMode: true},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, true)
+    })
+
+    it('problem mode passes boardTransformation custom value', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'problem',
+        settings: {...baseInput().settings, boardTransformation: customTransform},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, customTransform)
+    })
+
+    it('recall mode passes boardTransformation custom value', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        settings: {...baseInput().settings, boardTransformation: customTransform},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, customTransform)
+    })
+
+    it('analysis+editWS mode passes boardTransformation custom value', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true, boardTransformation: customTransform},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, customTransform)
+    })
+
+    it('areaSelectMode=false passes through as false', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, areaSelectMode: false},
+      }))
+      assert.strictEqual(result.interactionProps.areaSelectMode, false)
+    })
+
+    it('identity boardTransformation passes through', () => {
+      const identity = [1, 0, 0, 1, 0, 0]
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {...baseInput().settings, boardTransformation: identity},
+      }))
+      assert.deepStrictEqual(result.interactionProps.transformation, identity)
+    })
+  })
+
+  // --- W3-T42: hardcoded fields per mode ---
+
+  describe('W3-T42: hardcoded fields per mode — always constant', () => {
+    // showMoveColorization, fuzzyStonePlacement, animateStonePlacement
+    // are hardcoded false; highlightVertices is hardcoded [].
+    // These do not depend on mode or settings.
+
+    const modes = ['play', 'problem', 'recall', 'analysis']
+
+    for (const mode of modes) {
+      describe(`mode=${mode}`, () => {
+        const input = mode === 'analysis'
+          ? baseInput({workbenchMode: mode, settings: {...baseInput().settings, editWorkspaceActive: true}})
+          : baseInput({workbenchMode: mode})
+
+        it('showMoveColorization is false', () => {
+          const result = projectGobanProps(input)
+          assert.strictEqual(result.overlayDisplayProps.showMoveColorization, false)
+        })
+
+        it('fuzzyStonePlacement is false', () => {
+          const result = projectGobanProps(input)
+          assert.strictEqual(result.overlayDisplayProps.fuzzyStonePlacement, false)
+        })
+
+        it('animateStonePlacement is false', () => {
+          const result = projectGobanProps(input)
+          assert.strictEqual(result.overlayDisplayProps.animateStonePlacement, false)
+        })
+
+        it('highlightVertices is empty array', () => {
+          const result = projectGobanProps(input)
+          assert.deepStrictEqual(result.overlayDisplayProps.highlightVertices, [])
+        })
+      })
+    }
+
+    it('hardcoded fields are constant even when settings are all true', () => {
+      // Verify that even with all boolean settings true, hardcoded fields
+      // remain at their constant values.
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        settings: {
+          showMoveNumbers: true,
+          showNextMoves: true,
+          showSiblings: true,
+          showAnalysis: true,
+          showCoordinates: true,
+          showHumanPreference: true,
+          selectedTool: 'stone_1',
+          editWorkspaceActive: false,
+          boardTransformation: [1, 0, 0, 1, 0, 0],
+          areaSelectMode: true,
+        },
+      }))
+      assert.strictEqual(result.overlayDisplayProps.showMoveColorization, false)
+      assert.strictEqual(result.overlayDisplayProps.fuzzyStonePlacement, false)
+      assert.strictEqual(result.overlayDisplayProps.animateStonePlacement, false)
+      assert.deepStrictEqual(result.overlayDisplayProps.highlightVertices, [])
+    })
+  })
+
+  // --- W3-T43: boardStateProps passthrough stability ---
+
+  describe('W3-T43: boardStateProps passthrough stability', () => {
+    // projectGobanProps is a pure passthrough for boardStateProps.
+    // The actual tree switching (formal vs editWorkspace) happens at the
+    // Container/caller level. These tests verify that whatever you put in
+    // comes out unchanged, regardless of mode or other settings.
+
+    it('gameTree passes through unchanged in play mode', () => {
+      const tree = {id: 'formal_tree_play', root: {data: {}}}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        boardState: {
+          gameTree: tree,
+          treePosition: 'pos_1',
+          board: {width: 19, height: 19, signMap: []},
+        },
+      }))
+      assert.strictEqual(result.boardStateProps.gameTree, tree)
+      assert.strictEqual(result.boardStateProps.gameTree.id, 'formal_tree_play')
+    })
+
+    it('gameTree passes through unchanged in recall mode', () => {
+      const tree = {id: 'formal_tree_recall', root: {data: {}}}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        boardState: {
+          gameTree: tree,
+          treePosition: 'recall_start',
+          board: {width: 19, height: 19, signMap: []},
+        },
+      }))
+      assert.strictEqual(result.boardStateProps.gameTree, tree)
+      assert.strictEqual(result.boardStateProps.gameTree.id, 'formal_tree_recall')
+    })
+
+    it('gameTree passes through unchanged in analysis+editWS mode', () => {
+      // In analysis mode, the caller (Container) is responsible for
+      // providing the editWorkspace tree as input. projectGobanProps
+      // just passes it through.
+      const tree = {id: 'edit_workspace_tree', root: {data: {}}}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'analysis',
+        settings: {...baseInput().settings, editWorkspaceActive: true},
+        boardState: {
+          gameTree: tree,
+          treePosition: 'edit_pos_1',
+          board: {width: 19, height: 19, signMap: []},
+        },
+      }))
+      assert.strictEqual(result.boardStateProps.gameTree, tree)
+      assert.strictEqual(result.boardStateProps.gameTree.id, 'edit_workspace_tree')
+    })
+
+    it('treePosition passes through unchanged regardless of mode', () => {
+      const positions = [
+        {mode: 'play', pos: 'current_move'},
+        {mode: 'problem', pos: 'problem_move'},
+        {mode: 'recall', pos: 'recall_start_node'},
+        {mode: 'analysis', pos: 'edit_workspace_position'},
+      ]
+      for (const {mode, pos} of positions) {
+        const result = projectGobanProps(baseInput({
+          workbenchMode: mode,
+          settings: mode === 'analysis'
+            ? {...baseInput().settings, editWorkspaceActive: true}
+            : baseInput().settings,
+          boardState: {
+            gameTree: {id: 'gt'},
+            treePosition: pos,
+            board: {width: 19, height: 19, signMap: []},
+          },
+        }))
+        assert.strictEqual(result.boardStateProps.treePosition, pos,
+          `treePosition should pass through unchanged in ${mode} mode`)
+      }
+    })
+
+    it('board passes through unchanged regardless of mode', () => {
+      const customBoard = {width: 9, height: 9, signMap: [[1, -1], [0, 0]]}
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'recall',
+        boardState: {
+          gameTree: {id: 'gt'},
+          treePosition: 'pos',
+          board: customBoard,
+        },
+      }))
+      assert.strictEqual(result.boardStateProps.board, customBoard)
+      assert.strictEqual(result.boardStateProps.board.width, 9)
+      assert.strictEqual(result.boardStateProps.board.height, 9)
+    })
+
+    it('null gameTree passes through as null without throwing', () => {
+      const result = projectGobanProps(baseInput({
+        workbenchMode: 'play',
+        boardState: {
+          gameTree: null,
+          treePosition: '',
+          board: {width: 19, height: 19, signMap: []},
+        },
+      }))
+      assert.strictEqual(result.boardStateProps.gameTree, null)
+    })
+
+    it('boardStateProps is unaffected by overlayState changes', () => {
+      const tree = {id: 'gt_stable'}
+      const boardA = {gameTree: tree, treePosition: 'n1', board: {width: 19, height: 19, signMap: []}}
+
+      const result1 = projectGobanProps(baseInput({
+        boardState: boardA,
+        overlayState: {...baseInput().overlayState, paintMap: [], analysis: null},
+      }))
+      const result2 = projectGobanProps(baseInput({
+        boardState: boardA,
+        overlayState: {
+          ...baseInput().overlayState,
+          paintMap: [[1]],
+          analysis: {type: 'winrate', data: [0.5]},
+        },
+      }))
+
+      assert.strictEqual(result1.boardStateProps.gameTree, result2.boardStateProps.gameTree)
+      assert.strictEqual(result1.boardStateProps.treePosition, result2.boardStateProps.treePosition)
+      assert.strictEqual(result1.boardStateProps.board, result2.boardStateProps.board)
+    })
+
+    it('boardStateProps is unaffected by settings changes', () => {
+      const boardInput = {
+        gameTree: {id: 'gt_settings_test'},
+        treePosition: 'pos_settings',
+        board: {width: 19, height: 19, signMap: []},
+      }
+
+      const result1 = projectGobanProps(baseInput({
+        boardState: boardInput,
+        settings: {...baseInput().settings, showMoveNumbers: false, showNextMoves: false},
+      }))
+      const result2 = projectGobanProps(baseInput({
+        boardState: boardInput,
+        settings: {...baseInput().settings, showMoveNumbers: true, showNextMoves: true},
+      }))
+
+      assert.strictEqual(result1.boardStateProps.gameTree, result2.boardStateProps.gameTree)
+      assert.strictEqual(result1.boardStateProps.treePosition, result2.boardStateProps.treePosition)
+      assert.strictEqual(result1.boardStateProps.board, result2.boardStateProps.board)
+    })
+  })
 })
