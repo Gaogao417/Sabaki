@@ -7,6 +7,18 @@ Status: draft
 
 Connect the finished Workbench UI to the finished training services/stores through a testable wiring layer.
 
+## Source Of Truth
+
+This document is a planning aid only. It is not a product or architecture source of truth.
+
+The only product and architecture sources of truth are:
+
+1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
+2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
+3. `docs/design/workbench-ui-ux-spec.md`, only for visible UI/control placement after the two sources above.
+
+If any phase, task split, command name, owner, or suggested implementation in this document conflicts with PRD v0.5 or Architecture v0.5, this document is wrong and must be updated before work continues.
+
 The target loop is:
 
 ```text
@@ -27,6 +39,7 @@ UI control event
 
 Deliverables:
 
+- Read and cite PRD v0.5 and Architecture v0.5 before listing commands.
 - Inventory every control in `src/components/workbench/**` and `src/components/WorkbenchShell.js`.
 - Mark each control as active, display-only, disabled, or deferred.
 - Define command names and payloads.
@@ -40,6 +53,7 @@ Deliverables:
 Acceptance:
 
 - No control has an ambiguous owner.
+- Every owner is traced to Architecture v0.5, not inferred from current component shape.
 - Deferred controls have a reason and later exit condition.
 
 ### Phase W1: Projection and Subscription Foundation

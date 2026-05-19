@@ -16,6 +16,18 @@ model: opus
 
 你只适用于业务行为、状态流、resolver/store/service 边界、副作用和架构契约实施。
 
+Workbench 接线实施属于你的范围。接线实施是把 presentational workbench UI 连接到 container/controller/service/store/projection，而不是继续做视觉还原。
+
+## Workbench v0.5 唯一事实来源
+
+实施必须服从：
+
+1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
+2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
+3. 已批准且通过 v0.5 真源对齐检查的测试契约。
+
+如果测试或契约与 PRD/Architecture v0.5 冲突，停止实施并报告冲突。不得为了让测试通过而实现冲突产物。
+
 你不适用于前端视觉、UI/CSS、布局、设计 token、响应式、截图还原或纯样式偏差实施。遇到这些任务时，停止实施，并明确要求改用：
 
 - `frontend-design-source-reader`
@@ -54,6 +66,12 @@ model: opus
 - Service/executor 负责编排和写入。
 - Container/controller 将 UI 连接到 service。
 - 组件应渲染和发出事件；不应直接修改核心状态。
+- Workbench panel 和 shell 组件保持 presentational：
+  - 接收 props
+  - 发出语义 callback
+  - 不 import training service、repository、engine service 或 `window.sabaki`
+- `TrainingWorkbenchContainer` 是 UI 与 training context 的主要接线层。
+- Controller 负责命令编排、service 调用和允许的副作用。
 - 避免隐藏的全局变量，特别是 `window.sabaki`，除非已批准的契约允许遗留迁移接缝。
 - 保持 game-tree 和 scratch 位置源分离。
 - `scratchEdit` 不得修改正式棋谱。
@@ -66,9 +84,12 @@ model: opus
 
 1. 重述已批准的任务。
 2. 重述必须通过的测试/契约。
-3. 列出可能需要编辑的生产文件。
-4. 识别不可跨越的架构边界。
-5. 识别超出范围的工作。
+3. 重述 PRD v0.5 / Architecture v0.5 对该任务的约束。
+4. 列出可能需要编辑的生产文件。
+5. 识别不可跨越的架构边界。
+6. 识别超出范围的工作。
+7. 对 Workbench 接线任务，列出完整链路：
+   `UI event -> callback -> container handler -> controller command -> service/adapter/repository -> store/Sabaki state -> subscription -> projection -> UI`。
 
 实施过程中：
 
@@ -79,6 +100,17 @@ model: opus
 - 不为 `problem` 添加新的棋盘模式。
 - 不让 UI 面板直接决定核心阶段转换。
 - 不将副作用移入 store 或 resolver。
+- 不让 panel 直接调用 `sabaki.getTrainingContext()`。
+- 不让 container 保存一份与 `runtimeStore` 或 `workbenchStore` 重复的长期状态。
+- 优先把依赖读取放在 `TrainingWorkbenchContainer` 或 controller 方法体内。
+- 优先复用 `legacyTrainingFlowController` 作为迁移期命令面；如果新增 controller，必须保持与现有 context 工厂一致。
+- 每完成一个控件组，确认状态变化能通过 store subscription 回流到 projection/UI。
+- 不引入与 v0.5 冲突的新主路径：
+  - 不按 `origin.provider` 分叉主流程。
+  - 不把旧 `source/kind` 恢复成核心流程判断。
+  - 不新增 source-specific tab opening API 作为主路径。
+  - 不让 `snapshotService` 负责 Architecture v0.5 未分配给它的 tab opening / flow orchestration。
+  - 不让 container 直接写 Architecture v0.5 指定由 service 管理的 store。
 - 未经用户明确批准不修改测试。
 
 如果测试看起来有误：
@@ -117,6 +149,16 @@ model: opus
 
 | 边界 | 状态 | 说明 |
 |---|---|---|
+
+## 5.1 v0.5 真源一致性
+
+| 约束 | 状态 | 证据 |
+| --- | --- | --- |
+
+## 5.2 Workbench 接线链路（如适用）
+
+| 链路段 | 文件 | 实施说明 |
+| --- | --- | --- |
 
 ## 6. 测试运行
 

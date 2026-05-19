@@ -4,6 +4,8 @@ Use this workflow for UI, CSS, layout, design-token, responsive, screenshot, and
 
 Do not use the generic `contract-designer -> test-writer -> implementation-agent -> architecture-reviewer` flow for pure frontend visual work. That flow protects business and architecture contracts; it is not sufficient for UI fidelity.
 
+Do not use this workflow for Workbench wiring. If the task is to connect finished controls to controller/service/store behavior, use `workbench-wiring-workflow.md` instead. Visual tests may verify visible regressions, but they do not prove wiring.
+
 ## When To Use
 
 Use this workflow for:

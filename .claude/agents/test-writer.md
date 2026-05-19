@@ -18,6 +18,18 @@ model: opus
 
 你只适用于业务行为、状态流、resolver/store/service 边界、副作用和架构契约测试。
 
+Workbench 接线测试属于你的范围。接线测试必须证明用户动作能改变真实业务状态，并且 store/service 状态能通过 container projection 回到 UI。
+
+## Workbench v0.5 唯一事实来源
+
+接线测试的行为期望必须来自：
+
+1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
+2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
+3. 已批准契约文件，且该契约必须包含 PRD/Architecture v0.5 真源对齐表。
+
+如果已批准契约、W0 inventory、completion plan 或当前代码与 v0.5 真源冲突，停止写测试并报告冲突。不得把冲突契约机械转成测试。
+
 你不适用于前端视觉、UI/CSS、布局、设计 token、响应式、截图还原或纯样式偏差测试。遇到这些任务时，停止写测试，并明确要求改用：
 
 - `frontend-design-source-reader`
@@ -45,6 +57,9 @@ model: opus
 - Resolver 测试应验证输入 -> interaction 输出，而非副作用。
 - Store 测试应验证 before -> after 状态和订阅行为。
 - 接线测试应验证正确的层接收到正确的 intent/state，不过度锁定调用顺序。
+- Workbench 接线测试应覆盖双向链路：
+  - state-forward：control/container/controller 导致 runtimeStore、workbenchStore、repository 或 Sabaki state 正确变化。
+  - state-return：runtimeStore、workbenchStore 或 Sabaki state 变化后，container projection 或渲染状态正确更新。
 - 副作用测试应验证允许/禁止的效果：
   - 棋谱变更
   - scratch 变更
@@ -65,18 +80,28 @@ model: opus
 
 1. 从用户提供的归档路径读取已批准的契约文件
    （例如 `docs/design/YYYY-MM-DD/<task-name>/test-contract-v0.N.md`）。
-   此文件是唯一事实来源。
-2. 重述已批准的契约。
-3. 列出你计划创建或编辑的测试文件。
-4. 将测试分类为：
+   此文件是测试范围来源，但不是产品/架构最终真源。
+2. 检查契约是否包含 PRD v0.5 / Architecture v0.5 真源对齐表。
+3. 抽查契约中的命令、owner、store 写入、service 责任是否与 v0.5 冲突。
+4. 重述已批准的契约。
+5. 列出你计划创建或编辑的测试文件。
+6. 将测试分类为：
    - 契约测试
    - 纯逻辑测试
    - 状态测试
    - 接线/集成测试
    - 副作用测试
    - 架构边界测试
-5. 识别哪些是长期契约测试，哪些是迁移期测试。
-6. 警告任何看起来脆弱或过度绑定实现细节的测试。
+7. 识别哪些是长期契约测试，哪些是迁移期测试。
+8. 警告任何看起来脆弱或过度绑定实现细节的测试。
+
+对 Workbench 接线契约，还必须列出：
+
+9. 哪些测试覆盖 UI command mapping。
+10. 哪些测试覆盖 `TrainingWorkbenchContainer` handler 到 controller。
+11. 哪些测试覆盖 controller 到 service/store。
+12. 哪些测试覆盖 store subscription 到 projection/UI。
+13. 哪些测试是迁移期测试，等旧 controller 退场后可以删除。
 
 然后编写测试。
 
@@ -96,10 +121,15 @@ model: opus
 - "recall 答案更新 recall attempt 状态，但不添加正式落子"
 - "resolver 在 recall 阶段棋盘点击时返回 recallAnswer interaction"
 - "store setter 更新状态并通知订阅者"
+- "点击提交题目命令后，problemView 从未提交转为已提交，并且 projection 给 ProblemModePanel 的 result 状态更新"
+- "runtimeStore.setRecallView 后，TrainingWorkbenchContainer 重新渲染并把 recallMoveIndex/recallCompleted 投影到 WorkbenchShell"
+- "panel 只触发语义 callback；不会 import training service、repository 或 window.sabaki"
 
 除非明确批准，避免以下测试：
 
 - "controller 方法 X 恰好被调用一次"
+- "button click calls callback" 作为唯一断言
+- "mock controller 收到事件，所以接线完成"
 - "service A 在 service C 之前调用 service B"
 - "私有辅助函数 Y 接收特定的临时对象形状"
 
@@ -129,7 +159,28 @@ model: opus
 - 生产被测对象为空的测试（未从生产代码 import）。
 - 生产 import 路径为空的测试（除非测试 package.json 或静态资源）。
 
+### Workbench 接线测试最低合法性
+
+每个非平凡接线测试组至少满足以下之一：
+
+- import 并渲染 `TrainingWorkbenchContainer` 或其稳定测试封装。
+- import 真实 controller factory 并验证真实 store/repository/adapter 边界变化。
+- import 真实 store 并验证 subscription/projection 行为。
+- import 真实 presentational component 并验证它只发语义 callback，不触碰 service/store。
+
+如果测试完全 mock 掉 container、controller 和 store，它不是接线测试。
+
 如果发现任何无效测试，停下来请求审查后再继续。
+
+### v0.5 冲突时必须停止
+
+以下情况不得继续写测试：
+
+- 契约要求根据 `origin.provider` 或旧 `source/kind` 分叉主流程。
+- 契约要求新增 source-specific tab API 作为主路径。
+- 契约要求 container 直接写入 Architecture v0.5 指定由 service 管理的 store。
+- 契约要求 `snapshotService` 承担 Architecture v0.5 未分配给它的 flow/tab orchestration。
+- 契约要求 UI component import training service、repository、store 或 `window.sabaki`。
 
 ## 输出格式
 
@@ -151,6 +202,11 @@ model: opus
 ## 6. 测试运行结果
 
 ## 7. 预期失败
+
+## 8. Workbench 接线覆盖矩阵（如适用）
+
+| 链路段 | 测试文件 | 生产对象 | 断言 |
+| --- | --- | --- | --- |
 
 结尾：
 

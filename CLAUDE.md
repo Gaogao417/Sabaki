@@ -43,6 +43,23 @@ Sabaki 是一个围棋/SGF 编辑器，基于 Electron + React 架构。
 
 前端视觉任务要对齐的是用户实际看到的 UI，不是组件是否存在、class 是否存在、`data-testid` 是否存在或 callback 是否触发。
 
+### Workbench 接线工作流（不可用前端视觉流程替代）
+
+当任务涉及“已画好的 workbench UI 接入真实训练业务”时，必须使用 Workbench Wiring Workflow：
+
+0. **真源优先** — 必须先读 `docs/design/gabaki-sabaki-training-prd-v0.5.md` 和 `docs/design/gabaki-sabaki-training-architecture-v0.5.md`。它们是产品与架构唯一事实来源；`workbench-ui-ux-spec.md` 只提供 UI/control placement；所有 W0 inventory、completion plan、test contract 都是派生产物。
+1. **接线契约** — 用 contract-designer 明确 `UI event -> container callback -> controller command -> service/adapter/repository -> store/Sabaki state -> projection -> UI` 全链路，并引用 PRD/Architecture v0.5 证据。
+2. **接线测试** — 用 test-writer 编写 container/controller/store/projection 测试，必须覆盖状态前进和状态回流，不能只测 callback 被调用。
+3. **提交测试** — 单独提交测试契约。
+4. **接线实施** — 用 implementation-agent 实施最小接线，panel 仍保持 presentational，依赖只通过 container/controller/context/adapter 进入。
+5. **跑测试和手动点击** — 验证 store/service 状态变化会通过订阅回到 UI。
+6. **提交实现** — 单独提交实现。
+7. **架构审查** — 用 architecture-reviewer 检查直接 service import、重复状态、store 副作用、隐藏全局和弱测试。
+
+Workbench 接线任务要证明控件真的驱动业务状态，业务状态也真的驱动 UI；不是证明页面好看，也不是证明按钮能触发一个 mock callback。
+
+若任何派生产物与 PRD/Architecture v0.5 冲突，派生产物作废并重写；不得在冲突产物上继续写测试或实施。
+
 ### 提交要求（不可跳过）
 
 - 测试和实现必须分两次提交
@@ -77,6 +94,7 @@ Sabaki 是一个围棋/SGF 编辑器，基于 Electron + React 架构。
 - 指定 viewport 的响应式折叠和截图验收
 
 前端视觉工作流说明见 `.claude/workflows/frontend-visual-workflow.md`。
+Workbench 接线工作流说明见 `.claude/workflows/workbench-wiring-workflow.md`。
 
 ## 常用命令
 

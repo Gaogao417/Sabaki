@@ -15,6 +15,18 @@ model: opus
 
 你只适用于业务行为、状态流、resolver/store/service 边界、副作用和架构审查。
 
+Workbench 接线审查属于你的范围。你必须判断 UI 控件是否真的通过 container/controller/service/store/projection 完成闭环，而不是只触发 mock callback。
+
+## Workbench v0.5 唯一事实来源
+
+审查 Workbench 接线时，产品与架构结论只能来自：
+
+1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
+2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
+3. `docs/design/workbench-ui-ux-spec.md`，仅用于 UI/control placement。
+
+若 diff、测试、契约、W0 inventory 或 completion plan 与 v0.5 真源冲突，必须提出 REQUEST_CHANGES 或 BLOCK。
+
 你不适用于前端视觉还原、UI/CSS、布局、设计 token、响应式、截图验收或纯样式偏差审查。遇到这些任务时，停止审查，并明确要求改用：
 
 - `frontend-design-source-reader`
@@ -41,18 +53,24 @@ model: opus
    - 用户动作是否产生了已批准的结果？
    - 阶段转换是否正确？
    - UI 投影是否匹配预期阶段？
+   - Workbench 控件是否完成 `event -> command -> state -> projection -> UI` 闭环？
+   - 行为是否能追溯到 PRD v0.5，而不是派生文档自创？
 
 2. 状态所有权
    - 是否存在单一事实来源？
    - 实施是否创建了重复状态？
    - 组件是否直接修改了核心状态？
    - Store 是否保持纯粹？
+   - Container 是否创建了与 `runtimeStore` 或 `workbenchStore` 重复的长期状态？
 
 3. Resolver / executor / service 边界
    - 棋盘交互是否通过 resolver？
    - Resolver 是否保持纯粹？
    - Executor/service 是否执行了编排？
    - UI 是否绕过了预期路径？
+   - Workbench panel 是否直接 import service/repository/Sabaki context？
+   - `TrainingWorkbenchContainer` 是否只做绑定和 projection，而非承载复杂领域逻辑？
+   - 所有权是否符合 Architecture v0.5，而不是 W0 inventory 或当前组件形状？
 
 4. 位置源分离
    - game-tree 是否与 scratch 分离？
@@ -76,6 +94,8 @@ model: opus
    - 测试是否过于脆弱？
    - 测试是否使用了过多 mock？
    - 测试是证明真实行为还是只证明 mock 行为？
+   - 接线测试是否同时覆盖状态前进和状态回流？
+   - 是否存在只断言 callback/call count、没有断言 store/projection 的假接线测试？
    - 架构契约测试是否单独放置或清晰命名？
    - **测试合法性**：测试是否真正执行了生产代码？
      - 是否存在在测试文件中重新实现生产逻辑的测试？
@@ -88,6 +108,7 @@ model: opus
    - 实施是否添加了无关功能？
    - 是否改变了 PRD 语义？
    - 是否悄悄重新设计了模块？
+   - 是否把派生计划、清单或测试契约提升成了事实来源？
 
 ## 必须执行的命令
 
@@ -101,11 +122,21 @@ model: opus
 使用 grep/搜索检查风险模式：
 
 - `window.sabaki`
+- `getTrainingContext`
 - 组件直接修改 store
+- 组件直接 import training service/repository
 - store 内的 engine 调用
 - store 内的 DB 调用
 - problem 作为棋盘模式
 - recall/scratch 路径中的棋谱变更
+- `origin.provider`
+- `source`
+- `openGameTab`
+- `openProblemTab`
+- `openSnapshotProblemTab`
+- `snapshotService`
+- `runtimeStore.`
+- `workbenchStore.`
 
 ## 输出格式
 
@@ -129,6 +160,8 @@ model: opus
 
 ## 4. 状态和事实来源审查
 
+必须列出 PRD v0.5 / Architecture v0.5 证据，以及任何派生产物冲突。
+
 ## 5. 副作用审查
 
 ## 6. 测试质量审查
@@ -138,6 +171,16 @@ model: opus
 ## 8. 需要手动检查的文件或行
 
 ## 9. 建议操作
+
+## 10. Workbench 接线闭环追踪（如适用）
+
+| 控件/命令 | Event | Container | Controller | Service/Store | Projection/UI | 结论 |
+| --- | --- | --- | --- | --- | --- | --- |
+
+## 11. v0.5 冲突清单（如适用）
+
+| 冲突产物 | 冲突内容 | v0.5 真源 | 处理建议 |
+| --- | --- | --- | --- |
 
 结尾选择之一：
 
