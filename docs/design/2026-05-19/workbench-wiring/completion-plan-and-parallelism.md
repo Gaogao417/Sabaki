@@ -33,6 +33,22 @@ UI control event
   -> UI state update
 ```
 
+## Prerequisite: Goban/Overlay State Matrix
+
+Before Phase W3 board interaction wiring begins, all workers must reference:
+
+- `docs/design/2026-05-19/workbench-wiring/goban-overlay-state-matrix-v0.1.md`
+
+This document defines the contract for how each WorkbenchMode controls Goban event bindings and overlay rendering. It covers:
+
+- Event binding matrix (click/drag/hover → intent per mode)
+- Overlay activation matrix (which visual layers are active per mode)
+- Goban props projection by mode
+- Mode transition effects on Goban state
+- Current wiring gaps (GAP-G1 through GAP-G7)
+
+Phase W3–W6 board interaction wiring must follow the bindings and overlays defined in this matrix. If implementation reveals a conflict between the matrix and PRD/Architecture v0.5, the matrix must be updated before implementation continues.
+
 ## Completion Plan
 
 ### Phase W0: Control Inventory and Command Map
