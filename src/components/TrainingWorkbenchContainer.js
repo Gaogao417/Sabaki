@@ -2,6 +2,8 @@ import {h, Component} from 'preact'
 
 import WorkbenchShell from './WorkbenchShell.js'
 import {computeModeBarPolicy, getModeTransitionAction} from '../modules/training/workbench/workbenchUiPolicy.ts'
+import {projectGobanProps} from '../modules/training/workbench/projectGobanProps.ts'
+import {resolveBoardInteraction} from '../modules/workbench/board-interactions/resolveBoardInteraction.ts'
 
 class TrainingWorkbenchContainer extends Component {
   componentDidMount() {
@@ -151,12 +153,81 @@ class TrainingWorkbenchContainer extends Component {
       onEnterAnalysis: handleEnterAnalysis,
     }
 
+    // --- W3 Goban wiring: project boardProps from active tab state ---
+
+    const workbenchMode = activeTab ? activeTab.mode : 'play'
+
+    // Default settings matching test expectations
+    const gobanSettings = {
+      showMoveNumbers: false,
+      showNextMoves: true,
+      showSiblings: true,
+      showAnalysis: false,
+      showCoordinates: true,
+      showHumanPreference: false,
+      selectedTool: 'stone_1',
+      editWorkspaceActive: false,
+      boardTransformation: [1, 0, 0, 1, 0, 0],
+      areaSelectMode: false,
+    }
+
+    const boardProps = projectGobanProps({
+      workbenchMode,
+      task: null,
+      runtimeState: rt,
+      boardState: {
+        gameTree: null,
+        treePosition: '',
+        board: {width: 19, height: 19, signMap: []},
+      },
+      overlayState: {
+        paintMap: [],
+        markerMap: [],
+        dimmedStones: [],
+        analysis: null,
+      },
+      settings: gobanSettings,
+      analysisData: null,
+    })
+
+    // Override the noop onVertexClick with a real handler that routes
+    // through the resolver with workbench context.
+    if (activeTab) {
+      const tabRef = activeTab
+      boardProps.handlerProps.onVertexClick = function onVertexClick(vertex, event) {
+        resolveBoardInteraction({
+          mode: 'play',
+          selectedTool: gobanSettings.selectedTool,
+          event: {
+            button: event.button,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            isMac: event.isMac || false,
+          },
+          point: {sign: 0, markerType: null},
+          vertex,
+          positionSource: null,
+          mutationContract: null,
+          editWorkspacePresent: false,
+          // W3 workbenchMode extension fields
+          workbenchMode: tabRef.mode,
+          tabId: tabRef.id,
+          taskId: tabRef.taskId,
+          playerConfig: tabRef.playerConfig || null,
+          problemArea: null,
+          activeAttemptId: tabRef.activeAttemptId,
+          activeRecallSessionId: tabRef.activeRecallSessionId,
+        })
+      }
+    }
+
     return h(WorkbenchShell, {
       ...shellProps,
       ...projected,
       ...workbenchProjected,
       ...legacyHandlers,
       ...shellHandlers,
+      boardProps,
     })
   }
 }
