@@ -119,6 +119,12 @@ UI event / board event
 - `callback was called`
 - `calledOnce`
 - `typeof .* === 'function'`
+- `current behavior`
+- `current implementation`
+- `Matrix says`
+- `but current`
+- `passthrough`
+- `GAP`
 
 命中不一定都是错误，但你必须逐项判断是否导致弱测试或虚假通过。
 
@@ -144,6 +150,33 @@ UI event / board event
 - `BLOCK`：存在虚假测试、核心测试静默通过、契约冲突或测试会误导实现进度。
 
 只要发现核心 in-scope 契约使用 placeholder pass 或未实现也能绿，必须 `BLOCK`。
+
+## 逆向契约测试审计
+
+你必须拒绝任何“断言 GAP/bug 当前错误行为为正确”的测试。
+
+这类测试的典型信号：
+
+- 测试名或注释包含 `GAP`、`current behavior`、`current implementation`、`passthrough`、`Matrix says`、`but current`
+- 同一段注释承认矩阵/契约期望值是 A，但断言当前实现值 B
+- 测试把未实现的目标行为写成绿色“现状测试”
+
+审计时必须检查：
+
+| 检查 | BLOCK 条件 |
+| --- | --- |
+| 已知 GAP 行 | 测试断言当前错误行为而非期望行为 |
+| 矩阵/契约冲突 | 注释承认冲突但断言 current implementation |
+| deferred 项 | 没有 approved reason 和退出条件，却用 passing test 固化 |
+| 红灯目标 | 应该红的 contract test 被改成绿灯 passthrough test |
+
+示例：如果矩阵要求 `recall markerMap=null`，测试断言 `recall markerMap` 透传为输入 map，即使测试注释写了 `GAP-G4`，也必须 `BLOCK`。
+
+允许的写法：
+
+- 断言矩阵/契约期望值，当前未实现则红灯。
+- 使用 `it.skip()` 明确 deferred，并写 approved reason 与退出条件。
+- 在覆盖矩阵中标记 `not-covered` 或 `deferred-with-approved-reason`，而不是写绿色逆向测试。
 
 ## 输出格式
 

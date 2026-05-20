@@ -69,6 +69,8 @@ If a task only implements the first half of this loop, it is incomplete unless t
    - Must first produce a "source alignment" section citing PRD v0.5 and Architecture v0.5.
    - Must list control events, controller commands, service calls, store before/after state, projection results, allowed side effects, forbidden side effects, and manual acceptance.
    - Must mark any command or state not present in v0.5 as `PROPOSED_GAP`, not as an approved behavior.
+   - For any matrix/state-table based task, must convert each in-scope row into an explicit expected value/behavior with a test status: `GREEN`, `RED`, or `DEFERRED`.
+   - Must not leave test-writer to infer whether a matrix/current-code conflict should test current behavior. Known GAP rows must be `RED` or `DEFERRED`, never green current-behavior tests.
 
 2. `test-writer`
    - Writes tests from the approved wiring contract.
@@ -76,11 +78,13 @@ If a task only implements the first half of this loop, it is incomplete unless t
      - state-forward: UI/container command changes store/service/repository state.
      - state-return: store/service state projects back into UI props or rendered state.
    - Must not replace wiring with "callback was called" tests except as auxiliary checks.
+   - Must not assert known GAP/bug current behavior as correct. If the approved matrix/contract says expected=A and current implementation returns B, write a RED test for A or stop and request contract clarification.
 
 3. `test-auditor`
    - Reviews the approved contract and generated tests before implementation starts.
    - Does not write tests, does not write production code, and does not split or orchestrate tasks.
    - Must reject placeholder pass tests, silent conditional passes, noop-handler tests, and wiring tests that do not verify a real boundary crossing.
+   - Must reject reverse-contract tests that acknowledge a matrix/GAP conflict but assert the current wrong behavior as green.
    - Must require a coverage table for matrix/state-table based work:
      - `covered`
      - `deferred-with-approved-reason`

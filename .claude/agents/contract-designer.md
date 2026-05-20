@@ -166,6 +166,33 @@ Workbench 接线任务也属于你的范围。接线任务指：把已经完成�
 不要为简单的 getter、单行布尔检查或纯 UI 样式推荐测试，
 除非它们保护了真正的产品或架构风险。
 
+### 矩阵/状态表契约展开规则
+
+如果需求引用矩阵、状态表、事件表或 overlay/state matrix，你必须把每一条 in-scope 行转化为明确测试契约。不得只说“覆盖 Matrix §3.1-3.3”。
+
+每个矩阵行必须给出：
+
+| 字段/事件 | Mode/State | 期望值/行为 | 测试 ID | 测试状态 | GAP/Deferred |
+| --- | --- | --- | --- | --- | --- |
+
+`测试状态` 只能是：
+
+- `GREEN`：当前实现应满足，test-writer 应写通过测试。
+- `RED`：当前实现尚未满足，但矩阵/契约已定义目标行为；test-writer 必须写红测试。
+- `DEFERRED`：本轮不测，必须写 approved reason 和退出条件。
+
+如果当前实现与矩阵/契约不一致，契约必须明确标记为 `RED` 或 `DEFERRED`，不得要求 test-writer “assert current behavior”。已知 GAP 的当前错误行为不能成为绿色契约。
+
+示例：
+
+| 字段/事件 | Mode/State | 期望值/行为 | 测试 ID | 测试状态 | GAP/Deferred |
+| --- | --- | --- | --- | --- | --- |
+| `paintMap` | recall | `[]` | W3-T35 | RED | GAP-G4 |
+| `markerMap` | recall | `null` | W3-T35 | RED | GAP-G4 |
+| `overlayGhostStoneMap` | recall | `null` if defense-in-depth approved | W3-T35 | RED | GAP-G4 |
+
+如果某个期望值不是矩阵原文而是防御性加强，必须标注为 `projection consistency`、`defense in depth` 或 `PROPOSED_GAP`，让 human 决定是否批准。
+
 ## 契约归档
 
 生成契约后，你必须将完整输出写入归档文件：

@@ -138,6 +138,30 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 
 如果你发现已批准的契约有歧义，停下来询问。
 
+### 已知 GAP / bug 测试规则
+
+不得断言已知 GAP、bug 或矩阵冲突的当前错误行为为正确。
+
+如果矩阵、状态表、事件表或已批准契约定义了期望行为，而当前实现尚未满足，测试必须断言期望行为并红灯；不得为了保持绿色而断言当前实现。红灯测试必须在注释或测试名中引用：
+
+- 来源段落，例如 `Matrix §3.2`、`Contract §12.1`
+- GAP ID，例如 `GAP-G4`
+- 为什么这是目标行为而不是当前行为
+
+禁止以下测试写法：
+
+```txt
+Matrix says recall markerMap=null, but current implementation passes markerMap through, so assert passthrough.
+```
+
+正确写法：
+
+```txt
+Matrix §3.2 requires recall markerMap=null. This is RED until GAP-G4 is fixed.
+```
+
+如果契约没有把矩阵行转化为明确断言，不要猜测“测当前实现”。停下来要求 contract-designer 补充契约行，包括期望值、测试状态（RED/GREEN/deferred）和 GAP ID。
+
 ## 测试合法性检查（必须执行）
 
 在最终确定测试之前，生成测试合法性报告。
@@ -162,6 +186,8 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 - 手动组装预期行为，然后只断言手动组装包含自身的测试。
 - 生产被测对象为空的测试（未从生产代码 import）。
 - 生产 import 路径为空的测试（除非测试 package.json 或静态资源）。
+- 断言已知 GAP/bug 当前错误行为为正确的测试。
+- 测试描述或注释写着 `GAP`、`current behavior`、`Matrix says ... but current implementation ...`，但断言值与矩阵/契约期望值相反的测试。
 
 ### Workbench 接线测试最低合法性
 
