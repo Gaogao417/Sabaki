@@ -178,7 +178,7 @@ class TrainingWorkbenchContainer extends Component {
       boardState: {
         gameTree: null,
         treePosition: '',
-        board: {width: 19, height: 19, signMap: []},
+        board: {width: 19, height: 19, signMap: Array(19).fill(null).map(() => Array(19).fill(0)), markers: [], lines: [], siblingsInfo: {}, childrenInfo: {}},
       },
       overlayState: {
         paintMap: [],
