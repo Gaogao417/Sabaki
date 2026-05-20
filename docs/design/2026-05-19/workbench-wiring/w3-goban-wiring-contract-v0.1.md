@@ -348,6 +348,10 @@ type GobanPropsOutput = {
 | showNextMoves | settings | settings | false | settings | settings |
 | showSiblings | settings | settings | false | settings | settings |
 | analysis | if showAnalysis | if showAnalysis | null | if showAnalysis | null |
+| paintMap | passthrough | passthrough | [] | passthrough | passthrough |
+| markerMap | passthrough | passthrough | null | passthrough | passthrough |
+| overlayGhostStoneMap | passthrough | passthrough | null | passthrough | passthrough |
+| analysisType | from analysisData | from analysisData | '' when analysis=null | from analysisData | '' when analysis=null |
 | dragMode | false | false | false | true | false |
 | drawLineMode | null | null | null | tool ∈ [arrow,line] ? tool : null | null |
 | dimmedStones | [] | [] | [] | [] | [] |
@@ -503,6 +507,11 @@ Legacy compatibility allowed (migration seam):
 
 ## 12. Test/Verification Contract
 
+Contract tests must assert the expected behavior from this contract and the
+matrix, not whatever the current implementation happens to return. If a row is
+marked `RED`, test-writer must write a failing test for the expected behavior
+and cite the GAP. Do not write green tests that assert known GAP behavior.
+
 ### 12.1 State Transition Tests (MUST_AUTOMATE)
 
 | ID | Contract | Criticality |
@@ -519,6 +528,35 @@ Legacy compatibility allowed (migration seam):
 | W3-T19 | submitAttempt: projectGobanProps re-projection shows recall start position | critical |
 | W3-T21 | projectGobanProps with null gameTree returns safe defaults | medium |
 | W3-T23 | play mode AI turn: projectGobanProps returns handler that rejects clicks | medium |
+| W3-T24 | projectGobanProps(problem) mirrors play-mode projection for move numbers, next/sibling ghosts, analysis visibility, drag/line disabled | high |
+| W3-T25 | projectGobanProps(play) overlay policy: move numbers always false; next/sibling ghosts and analysis follow settings | high |
+| W3-T26 | projectGobanProps(recall) overlay policy: move numbers true; next/sibling ghosts false; analysis null regardless of input | critical |
+| W3-T27 | projectGobanProps(analysis + editWS) overlay policy: move numbers, next/sibling ghosts, analysis, dragMode, drawLineMode follow analysis/edit settings | high |
+| W3-T28 | projectGobanProps(analysis + no editWS) overlay policy: no workbench analysis overlay, dragMode=false, drawLineMode=null | high |
+| W3-T29 | submitAttempt full projection diff: play/problem → recall disables ghost/analysis overlays and enables move numbers | critical |
+| W3-T30 | enterAnalysis full projection diff: play/recall/problem → analysis+editWS enables edit interactions and settings-based analysis overlays | high |
+| W3-T31 | returnFromAnalysis restores play projection fields | high |
+| W3-T32 | returnFromAnalysis restores recall projection fields | high |
+| W3-T33 | settings passthrough fields (`showCoordinates`, `boardTransformation`, `areaSelectMode`, `showHumanPreference`) remain stable across modes unless explicitly gated | medium |
+| W3-T34 | problem overlay policy mirrors play overlay policy for same inputs | high |
+| W3-T35 | RED until GAP-G4: projectGobanProps(recall) sanitizes answer-leaking overlay inputs: `paintMap=[]`, `markerMap=null`, `overlayGhostStoneMap=null` | critical |
+| W3-T36 | RED until GAP-G4/projection consistency: when `analysis=null`, `analysisType=''` so UI does not advertise a hidden overlay type | high |
+| W3-T37 | projectGobanProps passes `boardStateProps` through unchanged; mode switching happens by changing input, not inside projection | high |
+| W3-T38 | hardcoded visual fields remain constant across modes: `showMoveColorization=false`, `fuzzyStonePlacement=false`, `animateStonePlacement=false`, `highlightVertices=[]` | medium |
+
+### 12.1a Projection Matrix Expansion
+
+This table resolves matrix rows that must not be left to test-writer inference.
+
+| Field / Event | Mode / State | Expected Value / Behavior | Test ID | Test Status | GAP / Notes |
+| --- | --- | --- | --- | --- | --- |
+| `paintMap` | recall | `[]` | W3-T35 | RED | GAP-G4; Matrix §3.2 says recall paintMap is empty |
+| `markerMap` | recall | `null` | W3-T35 | RED | GAP-G4; Matrix §3.2 says recall markerMap is null |
+| `overlayGhostStoneMap` | recall | `null` | W3-T35 | RED | Defense in depth for Matrix §2.3 recall ghost stones disabled |
+| `analysis` | recall | `null` regardless of `overlayState.analysis` or `showAnalysis` | W3-T26 | GREEN | Matrix §2.3 recall heatmap disabled |
+| `analysisType` | any mode where `analysis=null` | `''` | W3-T36 | RED | Projection consistency; prevents hidden overlay type from being advertised |
+| `gameTree`, `treePosition`, `board` | all WorkbenchModes | Pass through from `boardState` input unchanged | W3-T37 | GREEN | Container/adapter owns formal vs editWorkspace selection |
+| `showMoveColorization`, `fuzzyStonePlacement`, `animateStonePlacement`, `highlightVertices` | all WorkbenchModes | Constant false/false/false/[] | W3-T38 | GREEN | Workbench projection currently does not own these features |
 
 ### 12.2 Wiring Tests (MUST_AUTOMATE)
 
@@ -565,7 +603,7 @@ Legacy compatibility allowed (migration seam):
 | --- | --- |
 | MainBoardStage CSS/layout | Frontend visual workflow |
 | Goban component internal rendering | Existing component, not workbench wiring scope |
-| BoardOverlayStack internal overlay composition | Overlay pipeline separate workflow (GAP-G4) |
+| BoardOverlayStack internal overlay composition | Overlay pipeline separate workflow (GAP-G4); projection-level recall sanitization is still covered by W3-T35 |
 | Stone placement animation | Frontend visual workflow |
 | Sound effect on play | Frontend behavior, not business contract |
 | Legacy mode string fallback compatibility | Migration seam, exit condition defined |
@@ -575,7 +613,7 @@ Legacy compatibility allowed (migration seam):
 
 ## 14. Fragile Test Warnings
 
-1. **projectGobanProps field-by-field assertions**: Don't test every field name exists. Test behavioral contracts: play dragMode=false, recall showMoveNumbers=true, analysis+editWS dragMode=true.
+1. **projectGobanProps field-by-field assertions**: Don't test every field name exists. Test behavioral contracts: play dragMode=false, recall showMoveNumbers=true, analysis+editWS dragMode=true. Field-level tests are allowed when a matrix row or leak-prevention rule explicitly names the field, such as W3-T35 through W3-T38.
 2. **Handler reference tests**: Don't test onVertexClick points to a specific function. Test that container handleBoardVertexClick routes correctly with workbenchMode.
 3. **Resolver input field name tests**: Don't lock on workbenchMode field name. Test "click in play mode produces play-stone intent".
 4. **Container internal method name tests**: Don't test handleBoardVertexClick method name. Test "board click event routed through container arrives at resolver with workbench context".
@@ -585,7 +623,7 @@ Legacy compatibility allowed (migration seam):
 
 | Scope | Reason |
 | --- | --- |
-| Overlay pipeline WorkbenchMode wiring (GAP-G4) | W5 analysis wiring |
+| Overlay pipeline WorkbenchMode wiring (GAP-G4) | W5 analysis wiring; W3 only asserts projection-level guards that prevent recall overlay leakage |
 | Problem area visual indicator (GAP-G5) | Needs product decision |
 | Recall progress visual indicator (GAP-G6) | Product unspecified |
 | AI auto-move chain | Needs engine adapter |
@@ -605,6 +643,7 @@ Legacy compatibility allowed (migration seam):
 | GAP-W3-03 | Analysis mode full scratch wiring depends on editWorkspace adapter | W5 scope. W3 only ensures projectGobanProps returns correct analysis interactionProps |
 | GAP-W3-04 | Recall start position retrieval from Attempt | Needs positionSnapshotAdapter or rebuild from Attempt.rootPositionSgf + userLine. MVP: container navigates to attempt root position |
 | GAP-W3-05 | Legacy DEFERRED fallback exit condition | Exit when play/problem/recall/analysis WorkbenchMode branches all implemented, then remove legacy fallback |
+| GAP-G4 | Overlay pipeline/projection is not yet fully WorkbenchMode-aware; projection currently leaks recall overlay inputs (`paintMap`, `markerMap`, `overlayGhostStoneMap`) and stale `analysisType` when `analysis=null` | Exit condition: projectGobanProps returns `paintMap=[]`, `markerMap=null`, `overlayGhostStoneMap=null` in recall mode; projectGobanProps returns `analysisType=''` whenever `analysis=null`; tests W3-T35 and W3-T36 are green |
 
 ## 17. v0.5 Conflict Check
 
