@@ -49,7 +49,10 @@ Container / Controller 读 Store、调 Service；
 Service 编排业务动作；
 Repository 是唯一训练 DB 入口；
 Adapter 隔离 legacy Sabaki API；
-Existing Core 不知道 training 业务。
+Existing Core 不知道 training 业务；
+Container 不直接拼装 boardState / overlayState / settings 数据；
+Goban 需要的数据由专门的 adapter 输出 snapshot，Container 订阅 adapter 并传递；
+点击写入统一走 boardInteractionController → resolver → executor，不走 legacy 双路径。
 ```
 
 MVP 保持 Service 数量可控：
@@ -673,12 +676,33 @@ src/components/bars/RecallBar.js
 
 关键任务：
 
-1. 顶部 / 左栏 / 右栏 / 底部按 `tab.mode` 读取 view model。
-2. Play / Problem 的主操作是 Submit / Enter Analysis / Snapshot。
-3. Recall 的主操作是 Recall move / Checkpoint / Complete / Enter Analysis /
+0. **gobanDataAdapter**（输出 GobanPropsInput）：
+   - 订阅 documentStore / editWorkspace → 输出 boardState snapshot
+   - 订阅 overlayStore / engine → 输出 overlayState snapshot
+   - 读取用户设置 → 输出 settings snapshot
+   - 暴露 subscribe(callback) → Container 订阅
+   - 输出格式 = projectGobanProps 的 GobanPropsInput 类型
+
+1. **boardInteractionController**（统一点击路径）：
+   - 接收 Container 传来的 click event + vertex
+   - 调 resolveBoardInteraction → 结果路由到 executor
+   - playInteractionExecutor 调 documentStore.playMove
+   - recallInteractionExecutor 调 recallService
+   - scratchEditInteractionExecutor 调 working-position ops
+   - workbench 路径不调 sabaki.clickVertex
+
+2. **Container 接线**：
+   - 订阅 gobanDataAdapter，传输出给 projectGobanProps
+   - onVertexClick 转发给 boardInteractionController
+   - 移除所有硬编码输入
+   - 移除 `...state` 全量透传依赖
+
+3. 顶部 / 左栏 / 右栏 / 底部按 `tab.mode` 读取 view model。
+4. Play / Problem 的主操作是 Submit / Enter Analysis / Snapshot。
+5. Recall 的主操作是 Recall move / Checkpoint / Complete / Enter Analysis /
    Snapshot。
-4. Analysis 的主操作是 Snapshot / Return。
-5. Play Mode UI 提供黑方 / 白方 human|ai selector 和 AI 走法设置。
+6. Analysis 的主操作是 Snapshot / Return。
+7. Play Mode UI 提供黑方 / 白方 human|ai selector 和 AI 走法设置。
 6. Problem Mode UI 提供对方 self|ai selector，并在 opponent=ai 时显示题目范围 /
    analysis area 状态。
 7. Problem Mode 禁止在没有 problemArea 时启用 AI 应手。
@@ -702,7 +726,9 @@ Problem AI 应手必须受题目 analysis area 限制；
 Recall 可进入 Checkpoint；
 所有模式可通过快捷键 / 按钮 Snapshot；
 Review 打开 due item 后进入 Play 或 Problem；
-UI 不直接写 business store。
+UI 不直接写 business store；
+Container 不直接拼装 board 数据，通过 adapter 订阅；
+点击写入走统一 executor 路径，不调 sabaki.clickVertex。
 ```
 
 测试：
@@ -788,10 +814,13 @@ Analysis 自动写 Attempt
 # 13. 总体里程碑
 
 ```text
-Phase 0  v0.5 模型收敛                 1-2 周
-Phase 1  Workbench Mode + openTask      1-2 周
-Phase 2  taskImportService              1-2 周
-Phase 3  Attempt + AI Move + Recall     2-3 周
+Phase 0  v0.5 模型收敛                 已完成
+Phase 1  Workbench Mode + openTask      已完成
+Phase 2  taskImportService              已完成 (skeleton)
+Phase 3  Attempt + AI Move + Recall     进行中
+         - attemptService, recallService 已有
+         - aiMoveService 待实现
+         - W3 Goban 管道层已完成，数据源层待做
 Phase 4  MoveEvaluation + BadMove       2-3 周
 Phase 5  Recall Checkpoint              2-3 周
 Phase 6  Analysis + Global Snapshot     2-3 周
@@ -814,6 +843,33 @@ Phase 9 只在新路径稳定后做。
 ---
 
 # 14. 当前最小实现切面
+
+## 已完成（2026-05-20）
+
+```text
+W0 控件清单: w0-control-inventory-and-command-map-v0.1.md ✅
+W1 状态所有权: w1-state-ownership-and-wiring-contract-v0.1.md ✅
+  - workbenchStore / runtimeStore 订阅 ✅
+  - Container projection 基础 ✅
+W2 Shell/Tab 接线: w2-shell-and-tab-wiring-contract-v0.1.md ✅
+  - mode bar, tab bar, bottom bar handlers ✅
+  - flowService (submit/enterAnalysis/returnFromAnalysis) ✅
+W3 Goban 接线管道层: w3-goban-wiring-contract-v0.1.md ✅
+  - projectGobanProps 纯投影函数 ✅ (289 tests passing)
+  - resolveBoardInteraction WorkbenchMode 扩展 ✅
+  - MainBoardStage 渲染真实 Goban ✅
+  - WorkbenchShell 透传 boardProps ✅
+  - GAP-G4 recall overlay 泄露防护 ✅
+```
+
+## W3 待做（数据源层 + 点击控制器）
+
+```text
+gobanDataAdapter: 订阅 board/overlay/settings 数据源，输出 GobanPropsInput snapshot + subscribe
+boardInteractionController: 统一 click → resolver → executor 路径
+Container: 订阅 adapter + 转发 click，移除所有硬编码
+playInteractionExecutor: 接通 documentStore.playMove（替代 sabaki.clickVertex 降级）
+```
 
 第一轮必须完成：
 

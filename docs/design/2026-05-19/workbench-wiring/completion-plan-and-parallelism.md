@@ -111,6 +111,23 @@ Acceptance:
 - Problem controls update `problemView`, attempt state, repository state, and projected panel state as contracted.
 - No direct service imports in problem panels.
 
+### Phase W3.5: Goban Data Source + Click Controller
+
+Deliverables:
+
+- gobanDataAdapter: 订阅 board/overlay/settings 数据源，输出 GobanPropsInput snapshot + subscribe
+- boardInteractionController: 统一 click → resolver → executor 路径
+- Container 订阅 adapter + 转发 click，移除所有硬编码
+
+Acceptance:
+
+- Container 不直接读 sabaki.state，不拼装 board 数据
+- Play 模式落子走 playInteractionExecutor（不调 sabaki.clickVertex）
+- Recall 模式走 recallInteractionExecutor（不写 game tree）
+- Analysis 模式走 scratchEditInteractionExecutor（不写 Attempt.userLine）
+- 模式转换后 adapter snapshot 自动更新，Container 重投影
+- 289+ W3 tests 通过
+
 ### Phase W4: Recall Mode Wiring
 
 Deliverables:
