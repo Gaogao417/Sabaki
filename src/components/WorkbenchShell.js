@@ -99,7 +99,7 @@ export default function WorkbenchShell({
 
         // Center: board stage with children
         h('div', {class: 'workbench-shell__center'},
-          h(MainBoardStage, {mode}, children),
+          h(MainBoardStage, {mode, boardProps: rest.boardProps}, children),
         ),
 
         // Right panel: mode-specific
