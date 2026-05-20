@@ -754,8 +754,12 @@ describe('W3 Goban Overlay Policy — activation/deactivation by WorkbenchMode',
       assert.strictEqual(result.overlayDisplayProps.showHumanPreference, true)
     })
 
-    it('passes through analysisType from analysisData', () => {
+    it('passes through analysisType from analysisData when analysis overlay is present', () => {
       const result = projectGobanProps(analysisEditInput({
+        overlayState: {
+          ...baseInput().overlayState,
+          analysis: {type: 'winrate', data: {}},
+        },
         analysisData: {
           activeAnalysis: null,
           analysisType: 'winrate',
@@ -763,6 +767,18 @@ describe('W3 Goban Overlay Policy — activation/deactivation by WorkbenchMode',
       }))
 
       assert.strictEqual(result.overlayDisplayProps.analysisType, 'winrate')
+    })
+
+    it('clears analysisType when analysis overlay is null (per W3-T36)', () => {
+      const result = projectGobanProps(analysisEditInput({
+        analysisData: {
+          activeAnalysis: null,
+          analysisType: 'winrate',
+        },
+      }))
+
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
+      assert.strictEqual(result.overlayDisplayProps.analysisType, '')
     })
 
     it('returns empty string analysisType when analysisData is null', () => {

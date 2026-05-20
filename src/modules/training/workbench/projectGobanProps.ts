@@ -133,22 +133,24 @@ export function projectGobanProps(input: GobanPropsInput): GobanPropsOutput {
   const showSiblings = computeShowSiblings(workbenchMode, settings)
   const analysis = computeAnalysis(workbenchMode, overlayState, settings)
 
+  const isRecall = workbenchMode === 'recall'
+
   const overlayDisplayProps = {
-    paintMap: overlayState.paintMap,
-    markerMap: overlayState.markerMap,
+    paintMap: isRecall ? ([] as number[][]) : overlayState.paintMap,
+    markerMap: isRecall ? null : overlayState.markerMap,
     dimmedStones: [] as [number, number][],
     analysis,
     showMoveNumbers,
     showNextMoves,
     showSiblings,
     crosshair: false,
-    overlayGhostStoneMap: overlayState.overlayGhostStoneMap ?? null,
+    overlayGhostStoneMap: isRecall ? null : (overlayState.overlayGhostStoneMap ?? null),
     showCoordinates: settings.showCoordinates,
     showMoveColorization: false,
     fuzzyStonePlacement: false,
     animateStonePlacement: false,
     highlightVertices: [] as [number, number][],
-    analysisType: analysisData?.analysisType ?? '',
+    analysisType: analysis ? (analysisData?.analysisType ?? '') : '',
     showHumanPreference: settings.showHumanPreference,
   }
 
