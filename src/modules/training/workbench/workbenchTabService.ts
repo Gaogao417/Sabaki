@@ -122,8 +122,11 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
   }
 
   async function openProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab> {
+    logger?.info('tab.openProblemTab', 'Opening problem tab', { problemId, parentTabId: options?.parentTabId, legacyCompatibility: options?.legacyCompatibility })
+
     const problem = await repository.getProblem(problemId)
     if (!problem) {
+      logger?.info('tab.openProblemTab.error', 'Problem not found', { problemId })
       throw new Error(`workbenchTabService.openProblemTab: problem not found (id=${problemId})`)
     }
 
@@ -185,12 +188,17 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     workbenchStore.addTab(tab)
     workbenchStore.setActiveTab(tab.id)
 
+    logger?.info('tab.openProblemTab.created', 'Problem tab created', { tabId: tab.id, problemId, taskId: savedTask.id, attemptId: attempt?.id ?? null })
+
     return tab
   }
 
   async function openGameTab(gameId: string): Promise<WorkbenchTab> {
+    logger?.info('tab.openGameTab', 'Opening game tab', { gameId })
+
     const game = await repository.getGame(gameId)
     if (!game) {
+      logger?.info('tab.openGameTab.error', 'Game not found', { gameId })
       throw new Error(`workbenchTabService.openGameTab: game not found (id=${gameId})`)
     }
 
@@ -200,12 +208,17 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     workbenchStore.addTab(tab)
     workbenchStore.setActiveTab(tab.id)
 
+    logger?.info('tab.openGameTab.created', 'Game tab created', { tabId: tab.id, gameId, taskId: task.id })
+
     return tab
   }
 
   async function openTask(opts: OpenTaskOptions): Promise<WorkbenchTab> {
+    logger?.info('tab.openTask', 'Opening task tab', { taskId: opts.taskId, mode: opts.mode, parentTabId: opts.parentTabId })
+
     const task = await repository.loadTask(opts.taskId)
     if (!task) {
+      logger?.info('tab.openTask.error', 'Task not found', { taskId: opts.taskId })
       throw new Error(`workbenchTabService.openTask: task not found (id=${opts.taskId})`)
     }
 
@@ -214,6 +227,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     if (opts.parentTabId) {
       const parent = workbenchStore.getState().tabs.find(t => t.id === opts.parentTabId)
       if (!parent) {
+        logger?.info('tab.openTask.error', 'Parent tab not found', { parentTabId: opts.parentTabId })
         throw new Error(`workbenchTabService.openTask: parent tab not found (id=${opts.parentTabId})`)
       }
     }
@@ -239,14 +253,22 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
 
     workbenchStore.addTab(tab)
     workbenchStore.setActiveTab(tab.id)
+
+    logger?.info('tab.openTask.created', 'Task tab created', { tabId: tab.id, taskId: task.id, mode })
+
     return tab
   }
 
   async function openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab> {
-    return openProblemTab(problemId, { parentTabId: options.parentTabId })
+    logger?.info('tab.openSnapshotProblemTab', 'Opening snapshot problem tab', { problemId, parentTabId: options.parentTabId })
+    const tab = await openProblemTab(problemId, { parentTabId: options.parentTabId })
+    logger?.info('tab.openSnapshotProblemTab.created', 'Snapshot problem tab created', { tabId: tab.id, problemId })
+    return tab
   }
 
   async function closeTab(tabId: string): Promise<void> {
+    logger?.info('tab.closeTab', 'Closing tab', { tabId })
+
     const state = workbenchStore.getState()
     const tab = state.tabs.find(t => t.id === tabId)
     if (!tab) return
@@ -267,15 +289,20 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     }
 
     workbenchStore.removeTab(tabId)
+
+    logger?.info('tab.closeTab.closed', 'Tab closed', { tabId, taskId: tab.taskId, childCount: tab.childTabIds.length })
   }
 
   function switchTab(tabId: string): void {
     const state = workbenchStore.getState()
     const tab = state.tabs.find(t => t.id === tabId)
     if (!tab) {
+      logger?.info('tab.switchTab.error', 'Tab not found', { tabId })
       throw new Error(`workbenchTabService.switchTab: tab not found (id=${tabId})`)
     }
     workbenchStore.setActiveTab(tabId)
+
+    logger?.info('tab.switchTab', 'Tab switched', { tabId, taskId: tab.taskId, mode: tab.mode })
   }
 
   return {

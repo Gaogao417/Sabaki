@@ -17,6 +17,10 @@ import * as gametree from '../../gametree.js'
 // ---------------------------------------------------------------------------
 
 export type GobanDataAdapterDeps = {
+  logger?: {
+    info(channel: string, message: string, data?: Record<string, unknown>): void
+    warn?(channel: string, message: string, data?: Record<string, unknown>): void
+  }
   getSabakiState: () => {
     treePosition: string
     gameTrees: unknown[]
@@ -104,6 +108,7 @@ function defaultString(value: string | null | undefined, fallback: string): stri
 // ---------------------------------------------------------------------------
 
 export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAdapter {
+  const { logger } = deps
   // Adapter-internal listeners for data-source changes
   const listeners = new Set<() => void>()
 
@@ -151,8 +156,12 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
         cachedTask = task
         notifyListeners()
       }
-    }).catch(() => {
-      // Silently ignore load failures; cachedTask remains null
+    }).catch((err) => {
+      // Log load failures; cachedTask remains null
+      logger?.warn('gobanDataAdapter.task_load_failed', 'Failed to load task', {
+        taskId,
+        error: String(err),
+      })
     })
   }
 
@@ -166,6 +175,8 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
   unsubscribes.push(deps.subscribeToWorkbenchStore(onSourceChange))
   unsubscribes.push(deps.subscribeToRuntimeStore(onSourceChange))
   unsubscribes.push(deps.subscribeToAnalysisUpdates(onSourceChange))
+
+  logger?.info('gobanDataAdapter.created', 'GobanDataAdapter created and subscribed to data sources')
 
   // Kick off initial task load (deferred so sentinel deps in T15 do not crash)
   // Use microtask to allow the constructor to return first.
@@ -264,6 +275,7 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
     }
     unsubscribes.length = 0
     listeners.clear()
+    logger?.info('gobanDataAdapter.destroyed', 'GobanDataAdapter destroyed and subscriptions cleaned up')
   }
 
   return {

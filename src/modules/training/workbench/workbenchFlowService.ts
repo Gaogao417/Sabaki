@@ -95,8 +95,17 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     const tab = getTab(tabId)
     assertTransition(tab, 'submit')
 
+    logger?.info('flow.submit', 'Submit attempt', {
+      tabId,
+      mode: tab.mode,
+      attemptId: tab.activeAttemptId ?? null,
+    })
+
     if (!tab.activeAttemptId) {
       workbenchStore.updateTab(tabId, { mode: 'recall' })
+      logger?.info('flow.submit', 'Submit completed (no active attempt, direct recall)', {
+        tabId,
+      })
       return Promise.resolve()
     }
 
@@ -137,12 +146,25 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       // Step 7: Update runtime store
       runtimeStore?.setProblemView(null)
       runtimeStore?.setActiveRecallSession(session.id)
+
+      logger?.info('flow.submit', 'Submit completed', {
+        tabId,
+        attemptId: tab.activeAttemptId,
+        result,
+        sessionId: session.id,
+      })
     })()
   }
 
   function enterAnalysis(tabId: string): void {
     const tab = getTab(tabId)
     assertTransition(tab, 'enterAnalysis')
+
+    logger?.info('flow.enterAnalysis', 'Enter analysis mode', {
+      tabId,
+      from: tab.mode,
+      attemptId: tab.activeAttemptId ?? null,
+    })
 
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
@@ -153,15 +175,31 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
         attemptId: tab.activeAttemptId,
       },
     })
+
+    logger?.info('flow.enterAnalysis', 'Analysis mode entered', {
+      tabId,
+      previousMode: tab.mode,
+    })
   }
 
   function returnFromAnalysis(tabId: string, toMode: WorkbenchMode): void {
     const tab = getTab(tabId)
     assertTransition(tab, 'returnFromAnalysis')
 
+    logger?.info('flow.returnFromAnalysis', 'Return from analysis', {
+      tabId,
+      toMode,
+      previousMode: tab.previousMode ?? null,
+    })
+
     workbenchStore.updateTab(tabId, {
       mode: toMode,
       previousMode: undefined,
+    })
+
+    logger?.info('flow.returnFromAnalysis', 'Returned from analysis', {
+      tabId,
+      toMode,
     })
   }
 
@@ -169,10 +207,21 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     const tab = getTab(tabId)
     assertTransition(tab, 'completeRecall')
 
+    logger?.info('flow.completeRecall', 'Complete recall', {
+      tabId,
+      recallSessionId: tab.activeRecallSessionId ?? null,
+    })
+
     // Orchestrate recall completion: complete session -> update mode
     const recallSessionId = tab.activeRecallSessionId
     if (recallSessionId) {
-      deps.recallService.completeRecall(recallSessionId).catch(() => {})
+      deps.recallService.completeRecall(recallSessionId).catch((err) => {
+        logger?.info('flow.completeRecall', 'Recall session completion failed', {
+          tabId,
+          recallSessionId,
+          error: String(err),
+        })
+      })
     }
 
     // Clear recall view model state
@@ -182,18 +231,40 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
     })
+
+    logger?.info('flow.completeRecall', 'Recall completed, transitioned to analysis', {
+      tabId,
+    })
   }
 
   function restartAttempt(tabId: string): void {
     const tab = getTab(tabId)
     const targetMode = tab.previousMode ?? 'play'
+
+    logger?.info('flow.restartAttempt', 'Restart attempt', {
+      tabId,
+      currentMode: tab.mode,
+      targetMode,
+    })
+
     workbenchStore.updateTab(tabId, {
       mode: targetMode,
+    })
+
+    logger?.info('flow.restartAttempt', 'Attempt restarted', {
+      tabId,
+      targetMode,
     })
   }
 
   async function startAttempt(tabId: string): Promise<void> {
     const tab = getTab(tabId)
+
+    logger?.info('flow.startAttempt', 'Start attempt', {
+      tabId,
+      taskId: tab.taskId,
+    })
+
     const task = await repository.loadTask(tab.taskId)
 
     const attempt = await attemptService.createAttempt({
@@ -205,10 +276,22 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     workbenchStore.updateTab(tabId, {
       activeAttemptId: attempt.id,
     })
+
+    logger?.info('flow.startAttempt', 'Attempt started', {
+      tabId,
+      attemptId: attempt.id,
+    })
   }
 
   async function snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab> {
     const tab = getTab(tabId)
+
+    logger?.info('flow.snapshotFromCurrentContext', 'Snapshot from current context', {
+      tabId,
+      mode: tab.mode,
+      taskId: tab.taskId,
+      attemptId: tab.activeAttemptId ?? null,
+    })
 
     const snapshotInput = await snapshotService.captureSnapshotInput({
       tabId,
@@ -239,6 +322,12 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       taskId: snapshotTask.id,
       mode: 'problem',
       parentTabId: tabId,
+    })
+
+    logger?.info('flow.snapshotFromCurrentContext', 'Snapshot created, new tab opened', {
+      tabId,
+      snapshotTaskId: snapshotTask.id,
+      newTabId: newTab.id,
     })
 
     return newTab

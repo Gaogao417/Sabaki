@@ -349,6 +349,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!documentStore) return // Cannot build adapter without documentStore
 
       this._gobanAdapter = createGobanDataAdapter({
+        logger: sabaki.logger || undefined,
         getSabakiState: () => ({
           treePosition: sabakiState.treePosition || '',
           gameTrees: sabakiState.gameTrees || [],

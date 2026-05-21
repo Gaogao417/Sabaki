@@ -960,8 +960,8 @@ class Sabaki extends EventEmitter {
 
   getTrainingContext() {
     if (this._trainingServices == null) {
-      const workbenchStore = createWorkbenchStore()
-      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore({ logger })
+      const runtimeStore = createTrainingRuntimeStore({ logger })
       const repository = createTrainingRepository(window.sabaki.db)
       const legacyAdapter = createLegacySabakiAdapter(this)
 
