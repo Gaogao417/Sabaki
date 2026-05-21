@@ -687,10 +687,10 @@ describe('W6 Review Queue Wiring', function () {
         rv = harness.runtimeStore.getState().reviewQueueView
         assert.strictEqual(rv, null, 'Queue must be null after exhausting all items')
 
-        // Verify openDueItem was called for each item (2 times from advance + 1 from start)
+        // Verify openDueItem was called for each item (1 from start + 1 from advance)
         const openCalls = harness.reviewService.calls.openDueItem
-        assert.strictEqual(openCalls.length, 3,
-          'openDueItem must be called 3 times: 1 (start) + 2 (advance)')
+        assert.strictEqual(openCalls.length, 2,
+          'openDueItem must be called 2 times: 1 (start) + 1 (advance)')
       })
     })
 

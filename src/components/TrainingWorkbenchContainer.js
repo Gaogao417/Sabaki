@@ -1,8 +1,8 @@
-import {h, Component} from 'preact'
+import { h, Component } from 'preact'
 
 import WorkbenchShell from './WorkbenchShell.js'
-import {computeModeBarPolicy, getModeTransitionAction} from '../modules/training/workbench/workbenchUiPolicy.ts'
-import {projectGobanProps} from '../modules/training/workbench/projectGobanProps.ts'
+import { computeModeBarPolicy, getModeTransitionAction } from '../modules/training/workbench/workbenchUiPolicy.ts'
+import { projectGobanProps } from '../modules/training/workbench/projectGobanProps.ts'
 
 // W3.5: gobanDataAdapter and boardInteractionController are loaded via
 // tryImport-style lazy requires so that test harnesses without the full
@@ -24,7 +24,7 @@ try {
 
 class TrainingWorkbenchContainer extends Component {
   componentDidMount() {
-    const {runtimeStore, workbenchStore} =
+    const { runtimeStore, workbenchStore } =
       this.props.sabaki.getTrainingContext()
 
     this._unsubRuntime = runtimeStore.subscribe(() => this.forceUpdate())
@@ -47,7 +47,8 @@ class TrainingWorkbenchContainer extends Component {
   }
 
   render() {
-    const {sabaki, ...shellProps} = this.props
+    console.log('[Container] render ENTER')
+    const { sabaki, ...shellProps } = this.props
     const {
       runtimeStore,
       workbenchStore,
@@ -68,6 +69,7 @@ class TrainingWorkbenchContainer extends Component {
     // Derive the active tab ID and active tab for handler wiring
     const activeTabId = ws.activeTabId
     const activeTab = ws.tabs.find(t => t.id === activeTabId) || null
+    console.log('[Container] render: activeTabId=', activeTabId, 'tabs=', ws.tabs.length, 'activeTab=', !!activeTab, ws.tabs.map(t => t.id))
 
     // --- Handler wiring: UI callback -> service method ---
 
@@ -127,9 +129,9 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleAddTask() {
-      const {taskImportService} = sabaki.getTrainingContext()
-      const task = await taskImportService.createManualTask({positionSgf: '(;SZ[19])'})
-      await tabService.openTask({taskId: task.id, mode: 'play'})
+      const { taskImportService } = sabaki.getTrainingContext()
+      const task = await taskImportService.createManualTask({ positionSgf: '(;SZ[19])' })
+      await tabService.openTask({ taskId: task.id, mode: 'play' })
     }
 
     async function handleNewGame() {
@@ -161,39 +163,82 @@ class TrainingWorkbenchContainer extends Component {
       if (!checkpointId) return
       const draft = rt.correctionDraft
       const moves = draft ? draft.moves : []
-      const {recallCheckpointService} = sabaki.getTrainingContext()
-      await recallCheckpointService.submitUserCorrectionLine({checkpointId, moves})
+      const { recallCheckpointService } = sabaki.getTrainingContext()
+      await recallCheckpointService.submitUserCorrectionLine({ checkpointId, moves })
     }
 
     async function handleRevealAI() {
       const checkpointId = rt.activeCheckpointId
       if (!checkpointId) return
-      const {recallCheckpointService} = sabaki.getTrainingContext()
+      const { recallCheckpointService } = sabaki.getTrainingContext()
       await recallCheckpointService.revealAiCandidateLines(checkpointId)
     }
 
     async function handleSkipCheckpoint() {
       const checkpointId = rt.activeCheckpointId
       if (!checkpointId) return
-      const {recallCheckpointService} = sabaki.getTrainingContext()
+      const { recallCheckpointService } = sabaki.getTrainingContext()
       await recallCheckpointService.skipCheckpoint(checkpointId)
     }
 
-    async function handleSaveCheckpointComment({content}) {
+    async function handleSaveCheckpointComment({ content }) {
       const checkpointId = rt.activeCheckpointId
       if (!checkpointId) return
-      const {recallCheckpointService} = sabaki.getTrainingContext()
+      const { recallCheckpointService } = sabaki.getTrainingContext()
       await recallCheckpointService.saveComment({
         checkpointId,
         comment: {
-          target: {kind: 'checkpoint', checkpointId},
+          target: { kind: 'checkpoint', checkpointId },
           content,
         },
       })
       await recallCheckpointService.resumeRecall(checkpointId)
     }
 
-    // Legacy handlers preserved for existing recall/problem/review flows
+    // --- W6 Review queue handlers ---
+
+    async function handleStartReviewSession() {
+      const {reviewService} = sabaki.getTrainingContext()
+      const dueItems = await reviewService.getDueItems()
+      if (dueItems.length === 0) return
+
+      const queue = dueItems.map(s => s.id)
+      runtimeStore.setReviewQueueView({
+        queue,
+        currentIndex: 0,
+        totalDue: queue.length,
+      })
+
+      await reviewService.openDueItem(queue[0])
+    }
+
+    async function handleAdvanceReview() {
+      const {reviewService} = sabaki.getTrainingContext()
+      const rv = runtimeStore.getState().reviewQueueView
+      if (!rv) return
+
+      const nextIndex = rv.currentIndex + 1
+
+      if (nextIndex >= rv.queue.length) {
+        runtimeStore.setReviewQueueView(null)
+        return
+      }
+
+      runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
+      await reviewService.openDueItem(rv.queue[nextIndex])
+    }
+
+    async function handleReviewResult({taskId, result}) {
+      const {reviewService} = sabaki.getTrainingContext()
+      await reviewService.updateScheduleAfterResult({taskId, result})
+    }
+
+    async function handleCreateTaskFromBadMove({badMoveId}) {
+      const {taskImportService} = sabaki.getTrainingContext()
+      return taskImportService.createTaskFromBadMove({badMoveId})
+    }
+
+    // Legacy handlers preserved for existing recall/problem flows
     const legacyHandlers = {
       onShowRecallHint: () => legacyTrainingFlowController.showRecallHint(),
       onSkipRecallMove: () => legacyTrainingFlowController.skipRecallMove(),
@@ -201,7 +246,6 @@ class TrainingWorkbenchContainer extends Component {
       onSubmitProblemAttempt: () =>
         legacyTrainingFlowController.submitProblemAttempt(),
       onExitProblemMode: () => legacyTrainingFlowController.exitProblemMode(),
-      onAdvanceReview: () => legacyTrainingFlowController.advanceReview(),
     }
 
     // W2 shell/tab handlers
@@ -232,11 +276,16 @@ class TrainingWorkbenchContainer extends Component {
       onSkip: () => legacyTrainingFlowController.skipRecallMove(),
       onEndRecall: handleEndRecall,
       // W4 DEFERRED: onMarkCheckpoint, onVerify, onRecallToggle
-      onMarkCheckpoint: () => {},
-      onVerify: () => {},
-      onRecallToggle: () => {},
+      onMarkCheckpoint: () => { },
+      onVerify: () => { },
+      onRecallToggle: () => { },
       // W5 Analysis: restart attempt
       onRestartAttempt: handleRestartAttempt,
+      // W6 Review queue handlers
+      onStartReviewSession: handleStartReviewSession,
+      onAdvanceReview: handleAdvanceReview,
+      onReviewResult: handleReviewResult,
+      onCreateTaskFromBadMove: handleCreateTaskFromBadMove,
     }
 
     // --- W3.5 Goban wiring: project boardProps from adapter snapshot ---
@@ -258,7 +307,7 @@ class TrainingWorkbenchContainer extends Component {
       boardState: {
         gameTree: null,
         treePosition: '',
-        board: {width: 19, height: 19, signMap: Array(19).fill(null).map(() => Array(19).fill(0)), markers: [], lines: [], siblingsInfo: {}, childrenInfo: {}},
+        board: { width: 19, height: 19, signMap: Array(19).fill(null).map(() => Array(19).fill(0)), markers: [], lines: [], siblingsInfo: {}, childrenInfo: {} },
       },
       overlayState: {
         paintMap: [],
@@ -285,15 +334,17 @@ class TrainingWorkbenchContainer extends Component {
     // or use a minimal fallback that does not throw.
     if (activeTab) {
       const tabRef = activeTab
+      console.log('[Container] wiring onVertexClick, _clickController =', !!this._clickController)
       if (this._clickController) {
         boardProps.handlerProps.onVertexClick = function onVertexClick(evt) {
+          console.log('[Container] onVertexClick fired, vertex=', evt.vertex)
           const snap = snapshot || {}
           this._clickController.handleBoardClick({
             vertex: evt.vertex,
-            event: {button: evt.button, ctrlKey: evt.ctrlKey, metaKey: evt.metaKey},
+            event: { button: evt.button, ctrlKey: evt.ctrlKey, metaKey: evt.metaKey },
             activeTab: tabRef,
-            settings: snap.settings || {selectedTool: 'stone_1'},
-            board: (snap.boardState && snap.boardState.board) || {get: () => 0, markers: []},
+            settings: snap.settings || { selectedTool: 'stone_1' },
+            board: (snap.boardState && snap.boardState.board) || { get: () => 0, markers: [] },
             editWorkspacePresent: !!(snap.settings && snap.settings.editWorkspaceActive),
             task: snap.task || null,
             runtimeState: snap.runtimeState || rt,
@@ -303,7 +354,7 @@ class TrainingWorkbenchContainer extends Component {
         // Fallback: no-op handler that does not throw (for test harnesses
         // without the controller). Differs from projectGobanProps noop by
         // being a named function the test can distinguish.
-        boardProps.handlerProps.onVertexClick = function onVertexClick() {}
+        boardProps.handlerProps.onVertexClick = function onVertexClick() { }
       }
     }
 
@@ -373,20 +424,20 @@ class TrainingWorkbenchContainer extends Component {
           }
         },
         getDocumentStore: () => documentStore,
-        getOverlayStore: () => overlayStore || {getState: () => ({territoryEnabled: false, territoryCompareEnabled: false})},
-        getAnalysisResultAdapter: () => analysisResultAdapter || {getAnalysisForPosition: () => null},
+        getOverlayStore: () => overlayStore || { getState: () => ({ territoryEnabled: false, territoryCompareEnabled: false }) },
+        getAnalysisResultAdapter: () => analysisResultAdapter || { getAnalysisForPosition: () => null },
         getWorkbenchStore: () => ctx.workbenchStore,
         getRuntimeStore: () => ctx.runtimeStore,
-        getRepository: () => ctx.repository || {loadTask: async () => null},
+        getRepository: () => ctx.repository || { loadTask: async () => null },
         subscribeToSabakiStateChange: (cb) => {
           if (sabaki.on) { sabaki.on('change', cb); return () => sabaki.removeListener('change', cb) }
-          return () => {}
+          return () => { }
         },
         subscribeToWorkbenchStore: (cb) => ctx.workbenchStore.subscribe(cb),
         subscribeToRuntimeStore: (cb) => ctx.runtimeStore.subscribe(cb),
         subscribeToAnalysisUpdates: (cb) => {
           if (analysisResultAdapter && analysisResultAdapter.subscribe) return analysisResultAdapter.subscribe(cb)
-          return () => {}
+          return () => { }
         },
         getBoard: (tree, pos) => {
           const gametree = require('../modules/gametree.js')
@@ -411,13 +462,14 @@ class TrainingWorkbenchContainer extends Component {
       const playServices = sabaki.getPlayServices ? sabaki.getPlayServices() : null
       const recallService = ctx.recallService || null
 
+      console.log('[Container] _tryCreateClickController: createBoardInteractionController available, creating...')
       this._clickController = createBoardInteractionController({
-        getPlayServices: () => playServices || {documentStore: {playMove: async () => {}}},
-        getRecallServiceOrStore: () => recallService || {submitRecallAnswer: () => ({handled: false, changed: false})},
+        getPlayServices: () => playServices || { documentStore: { playMove: async () => { } } },
+        getRecallServiceOrStore: () => recallService || { submitRecallAnswer: () => ({ handled: false, changed: false }) },
         getEditWorkspaceContext: () => {
           if (!this._gobanAdapter) return null
           const s = this._gobanAdapter.getSnapshot()
-          return (s.settings && s.settings.editWorkspaceActive) ? {activeTab: 'current'} : null
+          return (s.settings && s.settings.editWorkspaceActive) ? { activeTab: 'current' } : null
         },
         getEditWorkspaceDeps: () => ({}),
         getLegacySabaki: () => ({
@@ -426,7 +478,7 @@ class TrainingWorkbenchContainer extends Component {
             // so the Container source does not directly reference clickVertex.
             const legacy = sabaki
             const fn = legacy['clickVertex']
-            if (fn) fn(vertex, opts)
+            if (fn) fn.call(legacy, vertex, opts)
           },
         }),
         getIsMac: () => {
@@ -435,6 +487,7 @@ class TrainingWorkbenchContainer extends Component {
       })
     } catch (_e) {
       // Controller creation failed — render() will use fallback handler
+      console.log('[Container] _tryCreateClickController FAILED:', _e.message)
     }
   }
 }
@@ -445,7 +498,7 @@ function projectFromRuntime(rt) {
   if (rt.recallView) {
     const v = rt.recallView
     // Internal state kept for debugging / non-panel consumers
-    result.recallSession = {active: true}
+    result.recallSession = { active: true }
     result.recallMoveIndex = v.moveIndex
     result.recallExpectedMoves = v.expectedMoves
     result.recallUserAttempts = v.userAttempts
