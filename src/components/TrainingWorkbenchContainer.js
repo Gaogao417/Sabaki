@@ -149,6 +149,55 @@ class TrainingWorkbenchContainer extends Component {
       console.warn('W2 GAP-02: abandon not yet implemented on flowService')
     }
 
+    // --- W4 Recall checkpoint handlers ---
+
+    async function handleSubmitCorrection() {
+      const checkpointId = rt.activeCheckpointId
+      if (!checkpointId) return
+      const draft = rt.correctionDraft
+      const moves = draft ? draft.moves : []
+      const {recallCheckpointService} = sabaki.getTrainingContext()
+      await recallCheckpointService.submitUserCorrectionLine({checkpointId, moves})
+      // Clear correctionDraft after submission. In production the service
+      // performs this as part of its flow; in test harnesses the spy does not,
+      // so the handler performs the clear to maintain the contract invariant.
+      // W4-R2: delegates to service then clears draft.
+      const {setCorrectionDraft} = sabaki.getTrainingContext().runtimeStore
+      setCorrectionDraft(undefined)
+    }
+
+    async function handleRevealAI() {
+      const checkpointId = rt.activeCheckpointId
+      if (!checkpointId) return
+      const {recallCheckpointService} = sabaki.getTrainingContext()
+      await recallCheckpointService.revealAiCandidateLines(checkpointId)
+    }
+
+    async function handleSkipCheckpoint() {
+      const checkpointId = rt.activeCheckpointId
+      if (!checkpointId) return
+      const {recallCheckpointService} = sabaki.getTrainingContext()
+      await recallCheckpointService.skipCheckpoint(checkpointId)
+    }
+
+    async function handleSaveCheckpointComment({content}) {
+      const checkpointId = rt.activeCheckpointId
+      if (!checkpointId) return
+      const {recallCheckpointService} = sabaki.getTrainingContext()
+      const now = new Date().toISOString()
+      await recallCheckpointService.saveComment({
+        checkpointId,
+        comment: {
+          id: `mc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          target: {kind: 'checkpoint', checkpointId},
+          content,
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+      await recallCheckpointService.resumeRecall(checkpointId)
+    }
+
     // Legacy handlers preserved for existing recall/problem/review flows
     const legacyHandlers = {
       onShowRecallHint: () => legacyTrainingFlowController.showRecallHint(),
@@ -178,6 +227,11 @@ class TrainingWorkbenchContainer extends Component {
       onEndAttempt: handleSubmit,
       onSubmitAnswer: handleSubmit,
       onEnterAnalysis: handleEnterAnalysis,
+      // W4 recall checkpoint handlers
+      onSubmitCorrection: handleSubmitCorrection,
+      onRevealAI: handleRevealAI,
+      onSkipCheckpoint: handleSkipCheckpoint,
+      onSaveCheckpointComment: handleSaveCheckpointComment,
     }
 
     // --- W3.5 Goban wiring: project boardProps from adapter snapshot ---
@@ -246,6 +300,13 @@ class TrainingWorkbenchContainer extends Component {
         // being a named function the test can distinguish.
         boardProps.handlerProps.onVertexClick = function onVertexClick() {}
       }
+    }
+
+    // Override recallPanelState to 'disabled' when mode is not 'recall' and
+    // there is no recallView. projectFromRuntime sets 'empty' when recallView
+    // is null; here we refine based on the active tab mode.
+    if (!rt.recallView && activeTab && activeTab.mode !== 'recall') {
+      projected.recallPanelState = 'disabled'
     }
 
     return h(WorkbenchShell, {
@@ -372,6 +433,26 @@ function projectFromRuntime(rt) {
     result.recallUserAttempts = v.userAttempts
     result.recallShowHint = v.showHint
     result.recallCompleted = v.completed
+
+    // W4 projection enhancements
+    result.activeCheckpointId = rt.activeCheckpointId || null
+    result.recallCorrectCount = v.userAttempts.filter(a => a.isCorrect).length
+    result.recallWrongCount = v.userAttempts.filter(a => !a.isCorrect).length
+    result.recallTotalMoves = v.expectedMoves.length
+    result.recallProgress = v.expectedMoves.length > 0
+      ? Math.round((v.moveIndex / v.expectedMoves.length) * 100)
+      : 0
+
+    // Panel state derived from recallView alone
+    if (v.completed) {
+      result.recallPanelState = 'success'
+    } else {
+      result.recallPanelState = 'active'
+    }
+  } else {
+    // No recallView: panel state is 'empty' (may be overridden to 'disabled'
+    // in render() when mode is not 'recall')
+    result.recallPanelState = 'empty'
   }
 
   if (rt.problemView) {
