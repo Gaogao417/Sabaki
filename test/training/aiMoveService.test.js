@@ -232,7 +232,7 @@ describeIf('aiMoveService', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockAdapter })
+      const service = createAiMoveService({ engineService: mockAdapter })
       const tab = makeTab({
         mode: 'play',
         playerConfig: { black: 'human', white: 'ai', ai: { autoPlay: true } },
@@ -253,7 +253,7 @@ describeIf('aiMoveService', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockAdapter })
+      const service = createAiMoveService({ engineService: mockAdapter })
       const tab = makeTab({ mode: 'play' })
       const attempt = makeAttempt({ userLine: ['D4'] })
       const task = makeTask()
@@ -269,11 +269,17 @@ describeIf('aiMoveService', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockAdapter })
+      const service = createAiMoveService({ engineService: mockAdapter })
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ userLine: ['D4'] })
-      // problemArea covering top-left corner of a 9x9 board (0-indexed coords)
-      const task = makeTask({ problemArea: { x1: 0, y1: 0, x2: 5, y2: 5 } })
+      // problemArea: top-left 6x6 region (0-indexed [x,y] pairs)
+      const areaCoords = []
+      for (let x = 0; x <= 5; x++) {
+        for (let y = 0; y <= 5; y++) {
+          areaCoords.push([x, y])
+        }
+      }
+      const task = makeTask({ problemArea: areaCoords })
 
       const result = await service.requestAiMove({ tab, attempt, task })
       // C3 at coord (2,2) is within area (0,0)-(5,5)
@@ -288,11 +294,17 @@ describeIf('aiMoveService', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockAdapter })
+      const service = createAiMoveService({ engineService: mockAdapter })
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ userLine: ['D4'] })
-      // problemArea covering only top-left corner
-      const task = makeTask({ problemArea: { x1: 0, y1: 0, x2: 5, y2: 5 } })
+      // problemArea: top-left 6x6 region — Q16 (15,15) is outside
+      const smallArea = []
+      for (let x = 0; x <= 5; x++) {
+        for (let y = 0; y <= 5; y++) {
+          smallArea.push([x, y])
+        }
+      }
+      const task = makeTask({ problemArea: smallArea })
 
       const result = await service.requestAiMove({ tab, attempt, task })
       assert.strictEqual(result, null)
@@ -305,7 +317,7 @@ describeIf('aiMoveService', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockAdapter })
+      const service = createAiMoveService({ engineService: mockAdapter })
       const tab = makeTab({ mode: 'problem' })
       const attempt = makeAttempt({ userLine: ['D4'] })
       // task without problemArea
@@ -322,7 +334,7 @@ describeIf('aiMoveService', () => {
         },
       }
 
-      const service = createAiMoveService({ engineMoveAdapter: mockAdapter })
+      const service = createAiMoveService({ engineService: mockAdapter })
       const tab = makeTab({ mode: 'play' })
       const attempt = makeAttempt({ userLine: ['D4'] })
       const task = makeTask()
