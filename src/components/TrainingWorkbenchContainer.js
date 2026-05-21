@@ -286,11 +286,11 @@ class TrainingWorkbenchContainer extends Component {
     if (activeTab) {
       const tabRef = activeTab
       if (this._clickController) {
-        boardProps.handlerProps.onVertexClick = function onVertexClick(vertex, event) {
+        boardProps.handlerProps.onVertexClick = function onVertexClick(evt) {
           const snap = snapshot || {}
           this._clickController.handleBoardClick({
-            vertex,
-            event: {button: event.button, ctrlKey: event.ctrlKey, metaKey: event.metaKey},
+            vertex: evt.vertex,
+            event: {button: evt.button, ctrlKey: evt.ctrlKey, metaKey: evt.metaKey},
             activeTab: tabRef,
             settings: snap.settings || {selectedTool: 'stone_1'},
             board: (snap.boardState && snap.boardState.board) || {get: () => 0, markers: []},
@@ -420,6 +420,7 @@ class TrainingWorkbenchContainer extends Component {
         getIsMac: () => {
           try { return require('../modules/helper.js').isMac } catch (_) { return false }
         },
+        logger: sabaki.logger || undefined,
       })
     } catch (_e) {
       // Controller creation failed — render() will use fallback handler

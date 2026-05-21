@@ -356,9 +356,11 @@ describe('W3.5 Container Wiring', function () {
       })
 
       const onVertexClick = shellProps.boardProps.handlerProps.onVertexClick
+      // Goban calls onVertexClick(evt) where evt.vertex = [row, col]
+      const evt = {vertex: [3, 3], button: 0, ctrlKey: false, metaKey: false}
       let thrown = null
       try {
-        onVertexClick([3, 3], {button: 0, ctrlKey: false, metaKey: false, isMac: false})
+        onVertexClick(evt)
       } catch (e) {
         thrown = e
       }
@@ -490,10 +492,11 @@ describe('W3.5 Container Wiring', function () {
       const onVertexClick = shellProps.boardProps.handlerProps?.onVertexClick
       assert.strictEqual(typeof onVertexClick, 'function')
 
-      // Verify the handler does not throw -- proving the resolver context assembly works
+      // Goban calls onVertexClick(evt) where evt.vertex = [row, col]
+      const evt = {vertex: [3, 3], button: 0, ctrlKey: false, metaKey: false}
       let thrown = null
       try {
-        onVertexClick([3, 3], {button: 0, ctrlKey: false, metaKey: false, isMac: false})
+        onVertexClick(evt)
       } catch (e) {
         thrown = e
       }
