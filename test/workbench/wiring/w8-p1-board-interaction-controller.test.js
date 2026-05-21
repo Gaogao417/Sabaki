@@ -188,10 +188,29 @@ function createControllerDeps(options = {}) {
   }
 
   return {
-    getPlayServices: () => ({documentStore}),
-    getRecallServiceOrStore: () => recallServiceShape,
-    getRecallServiceOrStore_store: () => recallServiceStore,
-    getEditWorkspaceContext: () => null,
+    getPlayServices: () => ({
+      documentStore,
+      engineService: undefined,
+      analysisService: undefined,
+    }),
+    getRecallServiceOrStore: () => recallServiceStore,
+    getEditWorkspaceContext: () => ({
+      activeTab: 'current',
+      currentSnapshot: {
+        id: 'snap_1',
+        role: 'current',
+        signMap: Array(19).fill(null).map(() => Array(19).fill(0)),
+        nextPlayer: 1,
+        width: 19,
+        height: 19,
+      },
+      referenceSnapshot: null,
+      currentMarkerMap: Array(19).fill(null).map(() => Array(19).fill(null)),
+      referenceMarkerMap: null,
+      currentLines: [],
+      referenceLines: null,
+      lineFirstVertex: null,
+    }),
     getEditWorkspaceDeps: () => editWorkspaceDeps,
     getLegacySabaki: () => legacySabaki,
     getIsMac: () => false,
@@ -473,8 +492,8 @@ describe('W8-P1 Board Interaction Controller', function () {
       assert.deepStrictEqual(deps._calls.documentStorePlayMove[0].vertex, [3, 3])
     })
 
-    // W8P1-T11: recall resolved -> recallService.submitRecallMove is called
-    it('W8P1-T11: recall resolved routes to recallService.submitRecallMove', async function () {
+    // W8P1-T11: recall resolved -> trainingStore.submitRecallAnswer is called via executor
+    it('W8P1-T11: recall resolved routes to trainingStore.submitRecallAnswer', async function () {
       const deps = createControllerDeps()
       const controller = createBoardInteractionController(deps)
 
@@ -492,12 +511,11 @@ describe('W8-P1 Board Interaction Controller', function () {
         runtimeState: {},
       })
 
-      assert.strictEqual(deps._calls.recallSubmitRecallMove.length, 1,
-        'recallService.submitRecallMove must be called exactly once for recall resolved')
-      const call = deps._calls.recallSubmitRecallMove[0]
-      assert.strictEqual(call.recallSessionId, 'rs_123')
-      assert.strictEqual(call.userMove, 'ff',
-        'userMove must be SGF format from vertex coordinates (e.g. [5,5] -> "ff")')
+      assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 1,
+        'trainingStore.submitRecallAnswer must be called exactly once for recall resolved')
+      const call = deps._calls.recallSubmitRecallAnswer[0]
+      assert.deepStrictEqual(call.vertex, [5, 5],
+        'submitRecallAnswer must receive vertex [5,5]')
     })
 
     // W8P1-T12: deferred -> legacySabaki.clickVertex is called
@@ -829,11 +847,14 @@ describe('W8-P1 Board Interaction Controller', function () {
           documentStore: {
             playMove: async (vertex, opts) => {
               received.push({type: 'playMove', vertex, opts})
+              return {valid: true, changed: true, treePosition: 'node_2'}
             },
           },
+          engineService: undefined,
+          analysisService: undefined,
         }),
         getRecallServiceOrStore: () => ({
-          submitRecallMove: async () => ({}),
+          submitRecallAnswer: () => ({handled: true, changed: true}),
         }),
         getEditWorkspaceContext: () => null,
         getEditWorkspaceDeps: () => ({}),
@@ -869,11 +890,13 @@ describe('W8-P1 Board Interaction Controller', function () {
       const deps = {
         getPlayServices: () => ({
           documentStore: {
-            playMove: async () => { received.push('playMove') },
+            playMove: async () => { received.push('playMove'); return {valid: true, changed: false} },
           },
+          engineService: undefined,
+          analysisService: undefined,
         }),
         getRecallServiceOrStore: () => ({
-          submitRecallMove: async () => ({}),
+          submitRecallAnswer: () => ({handled: false, changed: false}),
         }),
         getEditWorkspaceContext: () => null,
         getEditWorkspaceDeps: () => ({}),

@@ -66,6 +66,7 @@ export type WorkbenchFlowService = {
   restartAttempt(tabId: string): void
   startAttempt(tabId: string): Promise<void>
   snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab>
+  updatePlayerConfig(tabId: string, patch: Partial<import('../types/tab').PlayerConfig>): void
 }
 
 export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): WorkbenchFlowService {
@@ -333,6 +334,12 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     return newTab
   }
 
+  function updatePlayerConfig(tabId: string, patch: Partial<import('../types/tab').PlayerConfig>): void {
+    const tab = getTab(tabId)
+    const merged = { ...tab.playerConfig, ...patch }
+    workbenchStore.updateTab(tabId, { playerConfig: merged })
+  }
+
   return {
     submit,
     enterAnalysis,
@@ -341,5 +348,6 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     restartAttempt,
     startAttempt,
     snapshotFromCurrentContext,
+    updatePlayerConfig,
   }
 }

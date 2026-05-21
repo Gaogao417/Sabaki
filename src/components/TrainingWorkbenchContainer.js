@@ -167,6 +167,25 @@ class TrainingWorkbenchContainer extends Component {
       flowService.restartAttempt(activeTab.id)
     }
 
+    // --- W8-P3 Player config handlers ---
+
+    function handleBlackPlayerChange(value) {
+      if (!activeTab) return
+      const mapped = value === 'self' ? 'human' : value
+      flowService.updatePlayerConfig(activeTab.id, { black: mapped })
+    }
+
+    function handleWhitePlayerChange(value) {
+      if (!activeTab) return
+      const mapped = value === 'self' ? 'human' : value
+      flowService.updatePlayerConfig(activeTab.id, { white: mapped })
+    }
+
+    function handleProblemOpponentChange(value) {
+      if (!activeTab) return
+      flowService.updatePlayerConfig(activeTab.id, { problemOpponent: value })
+    }
+
     // --- W4 Recall checkpoint handlers ---
 
     async function handleSubmitCorrection() {
@@ -276,6 +295,13 @@ class TrainingWorkbenchContainer extends Component {
       onAdvanceReview: handleAdvanceReview,
       onReviewResult: handleReviewResult,
       onCreateTaskFromBadMove: handleCreateTaskFromBadMove,
+      // W8-P3 Player config handlers
+      onBlackPlayerChange: handleBlackPlayerChange,
+      onWhitePlayerChange: handleWhitePlayerChange,
+      onProblemOpponentChange: handleProblemOpponentChange,
+      // W8-P3 GAP fixes: onAbandonAnswer and onVerifySkip wiring
+      onAbandonAnswer: handleAbandon,
+      onVerifySkip: () => legacyTrainingFlowController.skipRecallMove(),
     }
 
     // --- W3.5 Goban wiring: project boardProps from adapter snapshot ---

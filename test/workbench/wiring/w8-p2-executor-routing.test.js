@@ -822,15 +822,16 @@ describe('W8-P2 Executor Routing: Architecture (T-ARCH-01)', function () {
       )
     }
 
-    // "submitRecallMove(" or "submitRecallAnswer(" as direct calls
+    // "submitRecallMove(" or "submitRecallAnswer(" as direct method calls (with preceding dot)
+    // The regex requires a preceding dot to distinguish from type declarations.
     assert.ok(
-      !source.match(/\bsubmitRecallAnswer\s*\(\s*vertex/),
-      'boardInteractionController must NOT directly call submitRecallAnswer(vertex). ' +
+      !source.match(/\.submitRecallAnswer\s*\(\s*vertex/),
+      'boardInteractionController must NOT directly call .submitRecallAnswer(vertex). ' +
       'Contract Section 6.2: recall writes must go through executeRecallInteraction.'
     )
     assert.ok(
-      !source.match(/\bsubmitRecallMove\s*\(\s*\{/),
-      'boardInteractionController must NOT directly call submitRecallMove({...}). ' +
+      !source.match(/\.submitRecallMove\s*\(\s*\{/),
+      'boardInteractionController must NOT directly call .submitRecallMove({...}). ' +
       'Contract Section 6.2: recall writes must go through executeRecallInteraction.'
     )
 

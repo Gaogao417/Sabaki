@@ -16,14 +16,18 @@
 import {resolveBoardInteraction} from '../../workbench/board-interactions/resolveBoardInteraction.ts'
 import {RESOLVE_STATUSES, BOARD_INTENTS} from '../../workbench/board-interactions/intents.ts'
 import {createBoardInteractionContext} from '../../workbench/board-interactions/createBoardInteractionContext.ts'
+import {executePlayInteraction} from '../../workbench/board-interactions/executors/playInteractionExecutor.js'
+import {executeRecallInteraction} from '../../workbench/board-interactions/executors/recallInteractionExecutor.js'
+import {executeScratchEdit} from '../../workbench/board-interactions/executors/scratchEditInteractionExecutor.js'
 
 export type BoardInteractionControllerDeps = {
   getPlayServices: () => {
     documentStore: {playMove(vertex: [number, number], options?: unknown): Promise<unknown>}
+    engineService?: {generateReply(treePosition: string, player: unknown): void}
+    analysisService?: {scheduleLiveAnalysis(treePosition: string): void}
   }
   getRecallServiceOrStore: () =>
-    | {submitRecallMove(input: {recallSessionId: string; userMove: string}): Promise<unknown>}
-    | {submitRecallAnswer(vertex: [number, number]): {handled: boolean; changed: boolean}}
+    {submitRecallAnswer(vertex: [number, number]): {handled: boolean; changed: boolean; isCorrect?: boolean; completed?: boolean; recallMoveIndex?: number; attempt?: unknown}}
   getEditWorkspaceContext: () => unknown | null
   getEditWorkspaceDeps: () => {
     invalidateEditAnalysis?: () => void
@@ -54,7 +58,7 @@ export type BoardInteractionController = {
     editWorkspacePresent: boolean
     task: {problemArea?: unknown} | null
     runtimeState: {activeCheckpointId?: string; correctionDraft?: unknown}
-  }): Promise<void>
+  }): Promise<unknown>
 }
 
 /**
@@ -178,45 +182,26 @@ export function createBoardInteractionController(
       const effectiveContract = result.mutationContract ?? inferContractFromIntent(result.intent)
 
       if (effectiveContract === 'playMove') {
-        // playInteractionExecutor: write to documentStore
         const playServices = deps.getPlayServices()
-        await playServices.documentStore.playMove(vertex, {
-          player: result.payload?.player ?? null,
+        const playResult = await executePlayInteraction(result, {player: (result.payload?.player as number) ?? undefined}, {
+          documentStore: playServices.documentStore,
+          engineService: playServices.engineService,
+          analysisService: playServices.analysisService,
         })
-        return
+        return playResult
       }
 
       if (effectiveContract === 'recallAnswer') {
-        // recallInteractionExecutor: write to recall service/store, NOT documentStore
-        const recallServiceOrStore = deps.getRecallServiceOrStore()
-        if ('submitRecallAnswer' in recallServiceOrStore) {
-          recallServiceOrStore.submitRecallAnswer(vertex)
-        } else if ('submitRecallMove' in recallServiceOrStore) {
-          // Service shape: build a userMove string from vertex in SGF coord format
-          // recallService.submitRecallMove compares userMove against expectedMoves
-          // derived from SGF parsing (e.g. "dd"). The vertex [x,y] maps to
-          // String.fromCharCode(97+x)+String.fromCharCode(97+y) per SGF spec.
-          const userMove = String.fromCharCode(97 + vertex[0]) + String.fromCharCode(97 + vertex[1])
-          await recallServiceOrStore.submitRecallMove({
-            recallSessionId: activeTab.activeRecallSessionId ?? '',
-            userMove,
-          })
-        }
-        return
+        const trainingStore = deps.getRecallServiceOrStore()
+        const recallResult = executeRecallInteraction(result, {}, {trainingStore})
+        return recallResult
       }
 
       if (effectiveContract === 'scratchEdit') {
-        // scratchEditInteractionExecutor: operate on edit workspace
-        // For W3.5, minimal stub: trigger edit analysis invalidation/scheduling.
-        // Must NOT write to the formal game tree or Attempt.userLine.
+        const editWorkspaceContext = deps.getEditWorkspaceContext()
         const editWorkspaceDeps = deps.getEditWorkspaceDeps()
-        if (editWorkspaceDeps.invalidateEditAnalysis) {
-          editWorkspaceDeps.invalidateEditAnalysis()
-        }
-        if (editWorkspaceDeps.scheduleEditWorkspaceAnalysis) {
-          editWorkspaceDeps.scheduleEditWorkspaceAnalysis('current')
-        }
-        return
+        const scratchResult = executeScratchEdit(result, editWorkspaceContext as any, editWorkspaceDeps)
+        return scratchResult
       }
 
       // Unknown contract: no action

@@ -6,6 +6,7 @@ export type WorkbenchPhase = 'play' | 'recall' | 'analysis'
 export type PlayerConfig = {
   black: 'human' | 'ai'
   white: 'human' | 'ai'
+  problemOpponent?: 'self' | 'ai'
   ai?: {
     engineId?: string
     timeLimitMs?: number
