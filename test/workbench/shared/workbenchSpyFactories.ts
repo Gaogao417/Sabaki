@@ -5,6 +5,9 @@ import type {
   OpenTaskOptions,
   WorkbenchTabService,
 } from '../../../src/modules/training/workbench/workbenchTabService'
+import type { ReviewService, ReviewServiceDeps } from '../../../src/modules/training/review/reviewService'
+import type { RecallCheckpointService } from '../../../src/modules/training/recall/recallCheckpointService'
+import type { TaskImportService } from '../../../src/modules/training/import/taskImportService'
 import type { PlayerConfig, Problem, WorkbenchMode, WorkbenchTab } from '../../../src/modules/training/types/index'
 
 type Call<T = Record<string, unknown>> = T
@@ -170,6 +173,215 @@ export function createSpyTabService(): SpyWorkbenchTabService {
 
   return service
 }
+
+// --- SpyReviewService ---
+
+export type SpyReviewServiceCalls = {
+  getDueItems: Array<{now?: string}>
+  openDueItem: Array<{scheduleId: string}>
+  updateScheduleAfterResult: Array<{taskId: string; result: string}>
+  addToReviewQueue: Array<{taskId: string}>
+  startSession: Array<{runtimeStoreOverride?: ReviewServiceDeps['runtimeStore']}>
+  advanceReview: Array<{runtimeStoreOverride?: ReviewServiceDeps['runtimeStore']}>
+}
+
+export type SpyReviewService = ReviewService & {
+  calls: SpyReviewServiceCalls
+}
+
+export function createSpyReviewService(
+  overrides: Partial<ReviewService> = {},
+): SpyReviewService {
+  const calls: SpyReviewServiceCalls = {
+    getDueItems: [],
+    openDueItem: [],
+    updateScheduleAfterResult: [],
+    addToReviewQueue: [],
+    startSession: [],
+    advanceReview: [],
+  }
+
+  const service = {
+    calls,
+    async getDueItems(now?: string) {
+      calls.getDueItems.push({now})
+      return []
+    },
+    async openDueItem(scheduleId: string) {
+      calls.openDueItem.push({scheduleId})
+      return {id: 'tab_new', taskId: 'task_a', mode: 'play'}
+    },
+    async updateScheduleAfterResult(input: {taskId: string; result: string}) {
+      calls.updateScheduleAfterResult.push(input)
+    },
+    async addToReviewQueue(input: {taskId: string}) {
+      calls.addToReviewQueue.push(input)
+      return {
+        id: 'sched_new',
+        taskId: input.taskId,
+        dueAt: new Date().toISOString(),
+        intervalDays: 1,
+        consecutivePassCount: 0,
+        totalFailCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+    },
+    async startSession(runtimeStoreOverride?: ReviewServiceDeps['runtimeStore']) {
+      calls.startSession.push({runtimeStoreOverride})
+    },
+    async advanceReview(runtimeStoreOverride?: ReviewServiceDeps['runtimeStore']) {
+      calls.advanceReview.push({runtimeStoreOverride})
+    },
+    ...overrides,
+  } satisfies SpyReviewService
+
+  return service
+}
+
+// --- SpyRecallCheckpointService ---
+
+export type SpyRecallCheckpointServiceCalls = {
+  shouldTriggerCheckpoint: Array<{recallSessionId: string; moveIndex: number}>
+  startCheckpoint: Array<{recallSessionId: string; badMoveId: string}>
+  submitUserCorrectionLine: Array<{checkpointId: string; moves: string[]}>
+  revealAiCandidateLines: Array<string>
+  saveComment: Array<{checkpointId: string; comment: unknown}>
+  skipCheckpoint: Array<string>
+  resumeRecall: Array<string>
+}
+
+export type SpyRecallCheckpointService = RecallCheckpointService & {
+  calls: SpyRecallCheckpointServiceCalls
+}
+
+export function createSpyRecallCheckpointService(
+  overrides: Partial<RecallCheckpointService> = {},
+): SpyRecallCheckpointService {
+  const calls: SpyRecallCheckpointServiceCalls = {
+    shouldTriggerCheckpoint: [],
+    startCheckpoint: [],
+    submitUserCorrectionLine: [],
+    revealAiCandidateLines: [],
+    saveComment: [],
+    skipCheckpoint: [],
+    resumeRecall: [],
+  }
+
+  const service = {
+    calls,
+    async shouldTriggerCheckpoint(input: {recallSessionId: string; moveIndex: number}) {
+      calls.shouldTriggerCheckpoint.push(input)
+      return null
+    },
+    async startCheckpoint(input: {recallSessionId: string; badMoveId: string}) {
+      calls.startCheckpoint.push(input)
+      return {
+        id: `cp_${Date.now()}`,
+        recallSessionId: input.recallSessionId,
+        badMoveId: input.badMoveId,
+        status: 'pending_correction',
+        userCorrectionLine: [],
+        aiCandidateLines: [],
+        createdAt: new Date().toISOString(),
+      }
+    },
+    async submitUserCorrectionLine(input: {checkpointId: string; moves: string[]}) {
+      calls.submitUserCorrectionLine.push(input)
+    },
+    async revealAiCandidateLines(checkpointId: string) {
+      calls.revealAiCandidateLines.push(checkpointId)
+      return []
+    },
+    async saveComment(input: {checkpointId: string; comment: unknown}) {
+      calls.saveComment.push(input)
+    },
+    async skipCheckpoint(checkpointId: string) {
+      calls.skipCheckpoint.push(checkpointId)
+    },
+    async resumeRecall(checkpointId: string) {
+      calls.resumeRecall.push(checkpointId)
+    },
+    ...overrides,
+  } satisfies SpyRecallCheckpointService
+
+  return service
+}
+
+// --- SpyTaskImportService ---
+
+export type SpyTaskImportServiceCalls = {
+  importFoxGame: Array<{gameId: string}>
+  importLocalSgf: Array<{filePath: string; title?: string}>
+  import101Problem: Array<{problemId: string}>
+  createManualTask: Array<Record<string, unknown>>
+  createTaskFromSnapshot: Array<Record<string, unknown>>
+  createTaskFromBadMove: Array<{badMoveId: string}>
+}
+
+export type SpyTaskImportService = TaskImportService & {
+  calls: SpyTaskImportServiceCalls
+}
+
+export function createSpyTaskImportService(
+  overrides: Partial<TaskImportService> = {},
+): SpyTaskImportService {
+  const calls: SpyTaskImportServiceCalls = {
+    importFoxGame: [],
+    importLocalSgf: [],
+    import101Problem: [],
+    createManualTask: [],
+    createTaskFromSnapshot: [],
+    createTaskFromBadMove: [],
+  }
+
+  const service = {
+    calls,
+    async importFoxGame(input: {gameId: string}) {
+      calls.importFoxGame.push(input)
+      return {id: `task_fox_${Date.now()}`}
+    },
+    async importLocalSgf(input: {filePath: string; title?: string}) {
+      calls.importLocalSgf.push(input)
+      return {id: `task_local_${Date.now()}`}
+    },
+    async import101Problem(input: {problemId: string}) {
+      calls.import101Problem.push(input)
+      return {id: `task_101_${Date.now()}`}
+    },
+    async createManualTask(input: Record<string, unknown>) {
+      calls.createManualTask.push(input)
+      return {id: `task_manual_${Date.now()}`, ...input}
+    },
+    async createTaskFromSnapshot(input: Record<string, unknown>) {
+      calls.createTaskFromSnapshot.push(input)
+      return {id: `task_snapshot_${Date.now()}`}
+    },
+    async createTaskFromBadMove(input: {badMoveId: string}) {
+      calls.createTaskFromBadMove.push(input)
+      return {id: `task_badmove_${Date.now()}`}
+    },
+    ...overrides,
+  } satisfies SpyTaskImportService
+
+  return service
+}
+
+// --- Noop legacy controller (shared stub) ---
+
+export function createNoopLegacyController() {
+  return {
+    showRecallHint() {},
+    skipRecallMove() {},
+    endRecallSession() {},
+    undoProblemMove() {},
+    submitProblemAttempt() {},
+    exitProblemMode() {},
+    advanceReview() {},
+  }
+}
+
+// --- createSpySnapshotService ---
 
 export function createSpySnapshotService(
   snapshot: Partial<ProblemSnapshotInput> = {},
