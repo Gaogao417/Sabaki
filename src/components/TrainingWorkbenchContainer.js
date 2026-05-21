@@ -47,7 +47,6 @@ class TrainingWorkbenchContainer extends Component {
   }
 
   render() {
-    console.log('[Container] render ENTER')
     const { sabaki, ...shellProps } = this.props
     const {
       runtimeStore,
@@ -69,7 +68,6 @@ class TrainingWorkbenchContainer extends Component {
     // Derive the active tab ID and active tab for handler wiring
     const activeTabId = ws.activeTabId
     const activeTab = ws.tabs.find(t => t.id === activeTabId) || null
-    console.log('[Container] render: activeTabId=', activeTabId, 'tabs=', ws.tabs.length, 'activeTab=', !!activeTab, ws.tabs.map(t => t.id))
 
     // --- Handler wiring: UI callback -> service method ---
 
@@ -334,10 +332,8 @@ class TrainingWorkbenchContainer extends Component {
     // or use a minimal fallback that does not throw.
     if (activeTab) {
       const tabRef = activeTab
-      console.log('[Container] wiring onVertexClick, _clickController =', !!this._clickController)
       if (this._clickController) {
         boardProps.handlerProps.onVertexClick = function onVertexClick(evt) {
-          console.log('[Container] onVertexClick fired, vertex=', evt.vertex)
           const snap = snapshot || {}
           this._clickController.handleBoardClick({
             vertex: evt.vertex,
@@ -462,7 +458,6 @@ class TrainingWorkbenchContainer extends Component {
       const playServices = sabaki.getPlayServices ? sabaki.getPlayServices() : null
       const recallService = ctx.recallService || null
 
-      console.log('[Container] _tryCreateClickController: createBoardInteractionController available, creating...')
       this._clickController = createBoardInteractionController({
         getPlayServices: () => playServices || { documentStore: { playMove: async () => { } } },
         getRecallServiceOrStore: () => recallService || { submitRecallAnswer: () => ({ handled: false, changed: false }) },
@@ -487,7 +482,6 @@ class TrainingWorkbenchContainer extends Component {
       })
     } catch (_e) {
       // Controller creation failed — render() will use fallback handler
-      console.log('[Container] _tryCreateClickController FAILED:', _e.message)
     }
   }
 }
