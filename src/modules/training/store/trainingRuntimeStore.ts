@@ -53,6 +53,13 @@ export type TrainingRuntimeState = {
   reviewQueueView: ReviewQueueView | null
 }
 
+export type TrainingRuntimeStoreDeps = {
+  logger?: {
+    info(channel: string, message: string, data?: Record<string, unknown>): void
+    warn?(channel: string, message: string, data?: Record<string, unknown>): void
+  }
+}
+
 export type TrainingRuntimeStore = {
   getState(): TrainingRuntimeState
   subscribe(listener: () => void): () => void
@@ -72,7 +79,8 @@ export type TrainingRuntimeStore = {
   setReviewQueueView(view: ReviewQueueView | null): void
 }
 
-export function createTrainingRuntimeStore(): TrainingRuntimeStore {
+export function createTrainingRuntimeStore(deps?: TrainingRuntimeStoreDeps): TrainingRuntimeStore {
+  const { logger } = deps ?? {}
   let state: TrainingRuntimeState = {
     pendingMoveEvaluations: {},
     visibleBadMoveIds: [],
@@ -102,16 +110,25 @@ export function createTrainingRuntimeStore(): TrainingRuntimeStore {
     },
 
     setActiveAttempt(id?: string) {
+      if (id) {
+        logger?.info('runtime.attempt_activated', 'Active attempt changed', { attemptId: id })
+      }
       state = { ...state, activeAttemptId: id }
       notify()
     },
 
     setActiveRecallSession(id?: string) {
+      if (id) {
+        logger?.info('runtime.recall_session_activated', 'Active recall session changed', { sessionId: id })
+      }
       state = { ...state, activeRecallSessionId: id }
       notify()
     },
 
     setActiveCheckpoint(id?: string) {
+      if (id) {
+        logger?.info('runtime.checkpoint_activated', 'Active checkpoint changed', { checkpointId: id })
+      }
       state = { ...state, activeCheckpointId: id }
       notify()
     },
@@ -144,16 +161,35 @@ export function createTrainingRuntimeStore(): TrainingRuntimeStore {
     },
 
     setRecallView(view: RecallView | null) {
+      if (view) {
+        logger?.info('runtime.recall_view_activated', 'Recall view activated', {
+          sessionId: view.recallSessionId,
+          taskId: view.taskId,
+          moveIndex: view.moveIndex,
+        })
+      }
       state = { ...state, recallView: view }
       notify()
     },
 
     setProblemView(view: ProblemView | null) {
+      if (view) {
+        logger?.info('runtime.problem_view_activated', 'Problem view activated', {
+          taskId: view.taskId,
+          attemptId: view.attemptId,
+        })
+      }
       state = { ...state, problemView: view }
       notify()
     },
 
     setReviewQueueView(view: ReviewQueueView | null) {
+      if (view) {
+        logger?.info('runtime.review_queue_view_activated', 'Review queue view activated', {
+          totalDue: view.totalDue,
+          queueLength: view.queue.length,
+        })
+      }
       state = { ...state, reviewQueueView: view }
       notify()
     },

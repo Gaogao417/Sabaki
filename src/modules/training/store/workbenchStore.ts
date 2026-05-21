@@ -5,6 +5,13 @@ export type WorkbenchStoreState = {
   activeTabId: string | null
 }
 
+export type WorkbenchStoreDeps = {
+  logger?: {
+    info(channel: string, message: string, data?: Record<string, unknown>): void
+    warn?(channel: string, message: string, data?: Record<string, unknown>): void
+  }
+}
+
 export type WorkbenchStore = {
   getState(): WorkbenchStoreState
   subscribe(listener: () => void): () => void
@@ -17,7 +24,8 @@ export type WorkbenchStore = {
   setActiveTab(tabId: string | null): void
 }
 
-export function createWorkbenchStore(): WorkbenchStore {
+export function createWorkbenchStore(deps?: WorkbenchStoreDeps): WorkbenchStore {
+  const { logger } = deps ?? {}
   let state: WorkbenchStoreState = {
     tabs: [],
     activeTabId: null,
@@ -76,6 +84,7 @@ export function createWorkbenchStore(): WorkbenchStore {
       }
       const normalized = normalizeTab(tab)
       state = { ...state, tabs: [...state.tabs, normalized] }
+      logger?.info('workbench.tab_added', 'Tab added', { tabId: tab.id, mode: normalized.mode })
       notify()
     },
 
@@ -83,6 +92,7 @@ export function createWorkbenchStore(): WorkbenchStore {
       if (!findTab(tabId)) {
         throw new Error(`workbenchStore.updateTab: tab not found (id="${tabId}")`)
       }
+      const prevTab = findTab(tabId)
       state = {
         ...state,
         tabs: state.tabs.map((t) => {
@@ -91,15 +101,25 @@ export function createWorkbenchStore(): WorkbenchStore {
           return normalizeTab(merged)
         }),
       }
+      const updatedTab = findTab(tabId)
+      if (prevTab && updatedTab && prevTab.mode !== updatedTab.mode) {
+        logger?.info('workbench.tab_mode_changed', 'Tab mode changed', {
+          tabId,
+          from: prevTab.mode,
+          to: updatedTab.mode,
+        })
+      }
       notify()
     },
 
     removeTab(tabId: string) {
+      const removedTab = findTab(tabId)
       state = {
         ...state,
         tabs: state.tabs.filter((t) => t.id !== tabId),
         activeTabId: state.activeTabId === tabId ? null : state.activeTabId,
       }
+      logger?.info('workbench.tab_removed', 'Tab removed', { tabId, mode: removedTab?.mode })
       notify()
     },
 
@@ -107,6 +127,8 @@ export function createWorkbenchStore(): WorkbenchStore {
       if (tabId != null && !findTab(tabId)) {
         throw new Error(`workbenchStore.setActiveTab: tab not found (id="${tabId}")`)
       }
+      const targetTab = tabId != null ? findTab(tabId) : undefined
+      logger?.info('workbench.tab_switched', 'Active tab changed', { tabId, mode: targetTab?.mode })
       state = { ...state, activeTabId: tabId }
       notify()
     },

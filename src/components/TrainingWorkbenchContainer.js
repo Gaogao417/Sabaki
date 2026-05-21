@@ -348,6 +348,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!documentStore) return // Cannot build adapter without documentStore
 
       this._gobanAdapter = createGobanDataAdapter({
+        logger: sabaki.logger || undefined,
         // Live read: re-read sabaki.state on every call so adapter never holds stale state
         getSabakiState: () => {
           const s = sabaki.state || {}
@@ -431,7 +432,6 @@ class TrainingWorkbenchContainer extends Component {
         getIsMac: () => {
           try { return require('../modules/helper.js').isMac } catch (_) { return false }
         },
-        logger: sabaki.logger || undefined,
       })
     } catch (_e) {
       // Controller creation failed — render() will use fallback handler

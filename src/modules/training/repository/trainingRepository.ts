@@ -15,6 +15,10 @@ import type {
 
 type Db = typeof window.sabaki.db
 
+type RepositoryLogger = {
+  info(channel: string, message: string, data?: Record<string, unknown>): void
+}
+
 export type TrainingRepository = {
   // --- Existing legacy table wrappers ---
 
@@ -111,7 +115,7 @@ export type TrainingRepository = {
   transaction<T>(fn: () => Promise<T>): Promise<T>
 }
 
-export function createTrainingRepository(db: Db): TrainingRepository {
+export function createTrainingRepository(db: Db, logger?: RepositoryLogger): TrainingRepository {
   if (!db) throw new Error('createTrainingRepository requires db')
 
   // --- Existing legacy table wrappers ---
@@ -129,14 +133,17 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function saveRecallSession(session: Record<string, unknown>) {
+    logger?.info('repo.saveRecallSession', 'Saving recall session', { sessionId: session.id as string | undefined })
     return db.saveRecallSession(session)
   }
 
   async function saveRecallAttempts(attempts: Record<string, unknown>[]) {
+    logger?.info('repo.saveRecallAttempts', 'Saving recall attempts', { count: attempts.length })
     await db.saveRecallAttempts(attempts)
   }
 
   async function saveProblem(problem: Record<string, unknown>) {
+    logger?.info('repo.saveProblem', 'Saving problem', { problemId: problem.id as string | undefined })
     return db.saveProblem(problem)
   }
 
@@ -149,14 +156,17 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function saveProblemAttempt(attempt: Record<string, unknown>) {
+    logger?.info('repo.saveProblemAttempt', 'Saving problem attempt', { attemptId: attempt.id as string | undefined })
     return db.saveProblemAttempt(attempt)
   }
 
   async function saveBadMove(badMove: Record<string, unknown>) {
+    logger?.info('repo.saveBadMove', 'Saving bad move (legacy)', { badMoveId: badMove.id as string | undefined })
     return db.saveBadMove(badMove)
   }
 
   async function updateBadMoveGeneratedProblem(badMoveId: string, problemId: string) {
+    logger?.info('repo.updateBadMoveGeneratedProblem', 'Updating bad move generated problem', { badMoveId, problemId })
     await db.updateBadMoveGeneratedProblem(badMoveId, problemId)
   }
 
@@ -165,6 +175,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function upsertReviewSchedule(item: Record<string, unknown>) {
+    logger?.info('repo.upsertReviewSchedule', 'Upserting review schedule (legacy)', { itemId: item.id as string | undefined })
     await db.upsertReviewSchedule(item)
   }
 
@@ -175,6 +186,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   // --- New training domain (Phase 2: connected to DB) ---
 
   async function createTask(task: TrainingTask): Promise<TrainingTask> {
+    logger?.info('repo.createTask', 'Creating task', { kind: task.kind, source: task.source })
     // Merge origin into task for DB layer; v0.5 fields passed through
     const dbTask = {
       ...task,
@@ -190,7 +202,9 @@ export function createTrainingRepository(db: Db): TrainingRepository {
       status: task.status,
     }
     const row = await db.createTrainingTask(dbTask)
-    return mapTaskRow(row)
+    const result = mapTaskRow(row)
+    logger?.info('repo.createTask', 'Task created', { taskId: result.id })
+    return result
   }
 
   async function loadTask(taskId: string): Promise<TrainingTask | null> {
@@ -210,10 +224,12 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.rootPositionSgf !== undefined) mapped.rootPositionSgf = patch.rootPositionSgf
     if (patch.sideToMove !== undefined) mapped.sideToMove = patch.sideToMove
     if (patch.title !== undefined) mapped.title = patch.title
+    logger?.info('repo.updateTask', 'Updating task', { taskId, fields: Object.keys(mapped) })
     await db.updateTrainingTask(taskId, mapped)
   }
 
   async function createAttempt(attempt: TrainingAttempt): Promise<TrainingAttempt> {
+    logger?.info('repo.createAttempt', 'Creating attempt', { attemptId: attempt.id, taskId: attempt.taskId })
     const row = await db.createTrainingAttempt({
       ...attempt,
       moveActors: attempt.moveActors,
@@ -243,15 +259,18 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.recallCompleted !== undefined) mapped.recallCompleted = patch.recallCompleted
     if (patch.analysisOpened !== undefined) mapped.analysisOpened = patch.analysisOpened
     if (patch.moveActors !== undefined) mapped.moveActors = patch.moveActors
+    logger?.info('repo.updateAttempt', 'Updating attempt', { attemptId, fields: Object.keys(mapped) })
     await db.updateTrainingAttempt(attemptId, mapped)
   }
 
   async function createMoveEvaluation(evaluation: MoveEvaluation): Promise<MoveEvaluation> {
+    logger?.info('repo.createMoveEvaluation', 'Creating move evaluation', { evaluationId: evaluation.id, attemptId: evaluation.attemptId })
     const row = await db.createMoveEvaluation(evaluation)
     return mapEvaluationRow(row)
   }
 
   async function updateMoveEvaluation(evaluationId: string, patch: Partial<MoveEvaluation>): Promise<void> {
+    logger?.info('repo.updateMoveEvaluation', 'Updating move evaluation', { evaluationId, fields: Object.keys(patch) })
     await db.updateMoveEvaluation(evaluationId, patch as Record<string, unknown>)
   }
 
@@ -263,6 +282,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   // --- BadMove (new domain) ---
 
   async function createBadMove(badMove: BadMove): Promise<BadMove> {
+    logger?.info('repo.createBadMove', 'Creating bad move', { badMoveId: badMove.id, taskId: badMove.taskId, moveIndex: badMove.moveIndex })
     const row = await db.createTrainingBadMove({
       id: badMove.id,
       moveEvaluationId: badMove.moveEvaluationId,
@@ -293,6 +313,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function markBadMoveAsNotBad(badMoveId: string): Promise<void> {
+    logger?.info('repo.markBadMoveAsNotBad', 'Marking bad move as not bad', { badMoveId })
     await db.markTrainingBadMoveAsNotBad(badMoveId)
   }
 
@@ -302,12 +323,14 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.generatedProblemId !== undefined) mapped.generatedProblemId = patch.generatedProblemId
     if (patch.generatedTaskId !== undefined) mapped.generatedTaskId = patch.generatedTaskId
     if (patch.userMarkedAsNotBad !== undefined) mapped.userMarkedAsNotBad = patch.userMarkedAsNotBad
+    logger?.info('repo.updateBadMove', 'Updating bad move', { badMoveId, fields: Object.keys(mapped) })
     await db.updateTrainingBadMove(badMoveId, mapped)
   }
 
   // --- Remaining stubs (Phase 3+) ---
 
   async function createRecallSession(session: RecallSession): Promise<RecallSession> {
+    logger?.info('repo.createRecallSession', 'Creating recall session', { sessionId: session.id, taskId: session.taskId })
     const row = await db.createTrainingRecallSession({
       id: session.id,
       taskId: session.taskId,
@@ -335,10 +358,12 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.currentMoveIndex !== undefined) mapped.currentMoveIndex = patch.currentMoveIndex
     if (patch.completed !== undefined) mapped.completed = patch.completed
     if (patch.completedAt !== undefined) mapped.completedAt = patch.completedAt
+    logger?.info('repo.updateRecallSession', 'Updating recall session', { sessionId, fields: Object.keys(mapped) })
     await db.updateTrainingRecallSession(sessionId, mapped)
   }
 
   async function createRecallAttempt(attempt: RecallAttempt): Promise<RecallAttempt> {
+    logger?.info('repo.createRecallAttempt', 'Creating recall attempt', { attemptId: attempt.id, sessionId: attempt.recallSessionId })
     const row = await db.createTrainingRecallAttempt({
       id: attempt.id,
       recallSessionId: attempt.recallSessionId,
@@ -357,6 +382,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function createRecallCheckpoint(checkpoint: RecallCheckpoint): Promise<RecallCheckpoint> {
+    logger?.info('repo.createRecallCheckpoint', 'Creating recall checkpoint', { checkpointId: checkpoint.id, sessionId: checkpoint.recallSessionId })
     const row = await db.createTrainingRecallCheckpoint({
       id: checkpoint.id,
       recallSessionId: checkpoint.recallSessionId,
@@ -382,6 +408,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.aiCandidateLines !== undefined) mapped.aiCandidateLines = patch.aiCandidateLines
     if (patch.userCommentId !== undefined) mapped.userCommentId = patch.userCommentId
     if (patch.completedAt !== undefined) mapped.completedAt = patch.completedAt
+    logger?.info('repo.updateRecallCheckpoint', 'Updating recall checkpoint', { checkpointId, fields: Object.keys(mapped) })
     await db.updateTrainingRecallCheckpoint(checkpointId, mapped)
   }
 
@@ -391,6 +418,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function createProblem(problem: Problem): Promise<Problem> {
+    logger?.info('repo.createProblem', 'Creating problem', { problemId: problem.id, type: problem.type })
     const row = await db.saveProblem(problem)
     return mapProblemRow(row)
   }
@@ -420,14 +448,17 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.sourceAttemptId !== undefined) mapped.sourceAttemptId = patch.sourceAttemptId
     if (patch.parentProblemId !== undefined) mapped.parentProblemId = patch.parentProblemId
     if (patch.parentSnapshotReason !== undefined) mapped.parentSnapshotReason = patch.parentSnapshotReason
+    logger?.info('repo.updateProblem', 'Updating problem', { problemId, fields: Object.keys(mapped) })
     await db.updateProblem(problemId, mapped)
   }
 
   async function archiveProblem(problemId: string): Promise<void> {
+    logger?.info('repo.archiveProblem', 'Archiving problem', { problemId })
     await db.archiveProblem(problemId)
   }
 
   async function createMoveComment(comment: MoveComment): Promise<MoveComment> {
+    logger?.info('repo.createMoveComment', 'Creating move comment', { commentId: comment.id })
     const row = await db.createTrainingMoveComment({
       id: comment.id,
       target: comment.target,
@@ -446,10 +477,12 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     const mapped: Record<string, unknown> = {}
     if (patch.content !== undefined) mapped.content = patch.content
     if (patch.templateAnswers !== undefined) mapped.templateAnswers = patch.templateAnswers
+    logger?.info('repo.updateMoveComment', 'Updating move comment', { commentId, fields: Object.keys(mapped) })
     await db.updateTrainingMoveComment(commentId, mapped)
   }
 
   async function createReviewSchedule(schedule: ReviewSchedule): Promise<ReviewSchedule> {
+    logger?.info('repo.createReviewSchedule', 'Creating review schedule', { scheduleId: schedule.id, taskId: schedule.taskId })
     const row = await db.upsertReviewSchedule({
       id: schedule.id,
       taskId: schedule.taskId,
@@ -490,6 +523,7 @@ export function createTrainingRepository(db: Db): TrainingRepository {
     if (patch.consecutivePassCount !== undefined) mapped.consecutivePassCount = patch.consecutivePassCount
     if (patch.totalFailCount !== undefined) mapped.totalFailCount = patch.totalFailCount
     if (patch.lastReviewedAt !== undefined) mapped.lastReviewedAt = patch.lastReviewedAt
+    logger?.info('repo.updateReviewSchedule', 'Updating review schedule', { id, fields: Object.keys(mapped) })
     await db.updateReviewSchedule(id, mapped)
   }
 
@@ -509,7 +543,10 @@ export function createTrainingRepository(db: Db): TrainingRepository {
   }
 
   async function transaction<T>(fn: () => Promise<T>): Promise<T> {
-    return db.transaction(() => fn())
+    logger?.info('repo.transaction', 'Transaction started')
+    const result = await db.transaction(() => fn())
+    logger?.info('repo.transaction', 'Transaction completed')
+    return result
   }
 
   // --- Row mappers ---

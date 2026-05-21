@@ -7,6 +7,7 @@ import {
   InvalidPhaseTransitionError,
 } from '../../src/modules/training/workbench/workbenchPhaseService.ts'
 import {createWorkbenchStore} from '../../src/modules/training/store/workbenchStore.ts'
+import {createTestLogger} from '../helpers/createTestLogger.ts'
 
 function makeTab(overrides = {}) {
   return {
@@ -156,17 +157,13 @@ describe('workbenchPhaseService', () => {
   })
 
   it('logs rejected transitions when logger provided', () => {
-    const logs = []
+    const {logger, logs} = createTestLogger()
     const loggedService = createWorkbenchPhaseService({
       workbenchStore: store,
       repository: { loadTask: async () => null, createTask: async t => t, transaction: async fn => fn() },
       snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
       tabService: { openSnapshotProblemTab: async () => ({}) },
-      logger: {
-        info(channel, message, data) {
-          logs.push({channel, message, data})
-        },
-      },
+      logger,
     })
     store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
     try {
@@ -189,17 +186,13 @@ describe('workbenchPhaseService', () => {
     })
 
     it('logs snapshot event', () => {
-      const logs = []
+      const {logger, logs} = createTestLogger()
       const loggedService = createWorkbenchPhaseService({
         workbenchStore: store,
         repository: { loadTask: async () => null, createTask: async t => t, transaction: async fn => fn() },
         snapshotService: { captureSnapshotInput: async () => ({}), createProblemFromCurrentAnalysisPosition: async () => ({}) },
         tabService: { openSnapshotProblemTab: async () => ({}) },
-        logger: {
-          info(channel, message, data) {
-            logs.push({channel, message, data})
-          },
-        },
+        logger,
       })
       store.addTab(makeTab({id: 'tab_1', mode: 'analysis'}))
       loggedService.transition('tab_1', 'snapshot')
