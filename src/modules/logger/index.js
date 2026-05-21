@@ -7,6 +7,7 @@
 export {createLoggerService} from './LoggerService.js'
 export {formatTimestamp, toSource} from './logFormatting.js'
 export {createWinstonWriter} from './winstonWriter.js'
+export {createConsoleWriter} from './consoleWriter.js'
 export {safeSerialize} from './safeSerialize.js'
 
 import {createLoggerService} from './LoggerService.js'

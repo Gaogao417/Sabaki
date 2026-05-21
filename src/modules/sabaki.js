@@ -17,7 +17,7 @@ import * as fileformats from './fileformats/index.js'
 import * as gametree from './gametree.js'
 import * as gobantransformer from './gobantransformer.js'
 import * as gtplogger from './gtplogger.js'
-import {logger, createWinstonWriter} from './logger/index.js'
+import {logger, createWinstonWriter, createConsoleWriter} from './logger/index.js'
 import * as helper from './helper.js'
 import {
   MUTATION_CONTRACTS,
@@ -191,7 +191,9 @@ class Sabaki extends EventEmitter {
       showWarning: (msg, type) => dialog.showMessageBox(msg, type),
     })
 
-    logger.reconfigure({writers: [this._winstonWriter]})
+    this._consoleWriter = createConsoleWriter()
+
+    logger.reconfigure({writers: [this._winstonWriter, this._consoleWriter]})
 
     // App info will be set via IPC - use defaults initially
     this.appName = 'Sabaki'

@@ -119,6 +119,19 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 
 ## 测试编写规则
 
+### Wiring 测试必须注入真实 LoggerService
+
+Wiring 测试 mock sabaki 对象时，**必须**创建带 consoleWriter 的真实 LoggerService，不能跳过日志链路。
+
+```js
+import {createLoggerService, createConsoleWriter} from '../../../src/modules/logger/index.js'
+const logger = createLoggerService({writers: [createConsoleWriter()]})
+```
+
+将此 logger 注入到 Container 或被测模块。不要 mock logger，让生产代码的 `logger.info/warn/error` 真实流到终端，这样引擎同步失败、状态异常等 bug 不会藏在日志里。
+
+### 契约优先于调用顺序
+
 优先测试外部可见的契约，而非内部函数调用顺序。
 
 好的例子：
