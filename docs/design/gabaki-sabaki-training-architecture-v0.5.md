@@ -664,6 +664,8 @@ analysis --restartAttempt--> play/problem
 Submit 必须 freeze Attempt。
 Analysis 不得隐式修改 Attempt.userLine。
 Snapshot 不得复用当前 Tab 作为新 Task。
+Snapshot 必须允许没有 taskId 的自由落子 Tab；这种情况下新 Task 的
+origin.provider='snapshot'，但 origin.parentTaskId 省略。
 非法转换必须 throw / reject 并记录日志。
 ```
 
@@ -923,6 +925,8 @@ type SnapshotService = {
   captureSnapshotInput(input: {
     tabId: string
     mode: WorkbenchMode
+    sourceTaskId?: string
+    sourceAttemptId?: string
     analysisContext?: AnalysisContext
     reason?: string
   }): Promise<SnapshotTaskInput>
@@ -931,6 +935,11 @@ type SnapshotService = {
 
 `SnapshotService` 不创建 Tab。
 
+`sourceTaskId` 是可选来源追溯字段，不是 Snapshot 的前置条件。对于自由落子 /
+free-play Tab，`captureSnapshotInput` 必须跳过 source task 加载，不能调用
+`repository.loadTask(null)` 或 `repository.loadTask(undefined)`，并返回可用于创建
+普通 snapshot Task 的输入。
+
 完整流程由 `workbenchFlowService.snapshotFromCurrentContext` 编排：
 
 ```text
@@ -938,6 +947,10 @@ snapshotService.captureSnapshotInput
 → taskImportService.createTaskFromSnapshot
 → workbenchTabService.openTask(newTaskId)
 ```
+
+当源 Tab 没有 `taskId` 时，`workbenchFlowService.snapshotFromCurrentContext` 仍走同一条
+命令路径：捕获当前局面、创建 `origin.provider='snapshot'` 的新 Task、通过
+`workbenchTabService.openTask` 打开新 Tab；只是不写 `origin.parentTaskId`。
 
 ## 5.11 reviewService
 

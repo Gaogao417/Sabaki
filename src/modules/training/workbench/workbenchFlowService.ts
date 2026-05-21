@@ -304,7 +304,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
 
     const snapshotInput = await snapshotService.captureSnapshotInput({
       tabId,
-      sourceTaskId: tab.taskId,
+      sourceTaskId: tab.taskId ?? undefined,
       sourceAttemptId: tab.activeAttemptId,
     })
 
@@ -315,7 +315,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       sideToMove: snapshotInput.sideToMove,
       origin: {
         provider: 'snapshot' as const,
-        parentTaskId: tab.taskId,
+        parentTaskId: tab.taskId ?? undefined,
         parentAttemptId: tab.activeAttemptId,
         parentMoveIndex: undefined,
       },

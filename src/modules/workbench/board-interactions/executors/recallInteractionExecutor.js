@@ -1,7 +1,7 @@
 /**
  * Recall interaction executor: handles submit-recall-answer results.
  *
- * Delegates to trainingStore.submitRecallAnswer(vertex).
+ * Delegates to adapter.submitBoardClick(vertex) which wraps recallService.
  * Does NOT call documentStore, engineService, analysisService, or scratch edit.
  * Returns a narrow result object for the caller to commit state changes.
  */
@@ -13,10 +13,10 @@ const SUPPORTED_INTENTS = Object.freeze(['submit-recall-answer'])
 /**
  * @param {import('../intents.ts').BoardInteractionResult} result
  * @param {Record<string, unknown>} [_context]
- * @param {{trainingStore: {submitRecallAnswer: function}}} services
- * @returns {{handled: boolean, changed: boolean, reason?: string, isCorrect?: boolean, completed?: boolean, recallMoveIndex?: number, attempt?: object}}
+ * @param {{adapter: {submitBoardClick(vertex: [number, number]): Promise<{handled: boolean; changed: boolean; isCorrect?: boolean; completed?: boolean; recallMoveIndex?: number; attempt?: unknown}>}}} services
+ * @returns {Promise<{handled: boolean, changed: boolean, reason?: string, isCorrect?: boolean, completed?: boolean, recallMoveIndex?: number, attempt?: object}>}
  */
-export function executeRecallInteraction(result, _context, services) {
+export async function executeRecallInteraction(result, _context, services) {
   if (result.status !== RESOLVE_STATUSES.RESOLVED) {
     return {handled: false, changed: false, reason: result.reason ?? `status: ${result.status}`}
   }
@@ -30,9 +30,9 @@ export function executeRecallInteraction(result, _context, services) {
   }
 
   let vertex = result.payload.vertex
-  let {trainingStore} = services
+  let {adapter} = services
 
-  let answerResult = trainingStore.submitRecallAnswer(vertex)
+  let answerResult = await adapter.submitBoardClick(vertex)
 
   return {
     handled: answerResult.handled,

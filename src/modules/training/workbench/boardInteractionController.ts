@@ -26,8 +26,8 @@ export type BoardInteractionControllerDeps = {
     engineService?: {generateReply(treePosition: string, player: unknown): void}
     analysisService?: {scheduleLiveAnalysis(treePosition: string): void}
   }
-  getRecallServiceOrStore: () =>
-    {submitRecallAnswer(vertex: [number, number]): {handled: boolean; changed: boolean; isCorrect?: boolean; completed?: boolean; recallMoveIndex?: number; attempt?: unknown}}
+  getRecallAdapter: () =>
+    {submitBoardClick(vertex: [number, number]): Promise<{handled: boolean; changed: boolean; isCorrect?: boolean; completed?: boolean; recallMoveIndex?: number; attempt?: unknown}>}
   getEditWorkspaceContext: () => unknown | null
   getEditWorkspaceDeps: () => {
     invalidateEditAnalysis?: () => void
@@ -192,8 +192,8 @@ export function createBoardInteractionController(
       }
 
       if (effectiveContract === 'recallAnswer') {
-        const trainingStore = deps.getRecallServiceOrStore()
-        const recallResult = executeRecallInteraction(result, {}, {trainingStore})
+        const adapter = deps.getRecallAdapter()
+        const recallResult = await executeRecallInteraction(result, {}, {adapter})
         return recallResult
       }
 

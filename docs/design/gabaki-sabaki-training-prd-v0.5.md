@@ -317,6 +317,10 @@ Analysis 中的自由摆棋默认是 exploration，不写回当前 Attempt。
 Snapshot 不是 Analysis 独占能力。Play / Problem / Recall /
 Analysis 中都可以通过快捷键或按钮捕获当前局面，创建新的 TrainingTask；Analysis 只是最常发生深度派生的空间。
 
+没有已关联 TrainingTask 的自由落子 / free-play Tab 也支持 Snapshot。此时 Snapshot
+仍从当前棋盘局面创建新的 TrainingTask，但新 Task 只有
+`origin.provider = 'snapshot'`；`origin.parentTaskId` 省略。
+
 只有 Snapshot 才会把当前探索局面变成新的 TrainingTask。
 
 ## 2.7 Review 是入口，不是棋盘模式
@@ -1104,9 +1108,9 @@ Snapshot 生成的是普通 `TrainingTask`，只是：
 
 ```ts
 origin.provider = 'snapshot'
-origin.parentTaskId = currentTaskId
-origin.parentAttemptId = currentAttemptId
-origin.parentMoveIndex = currentMoveIndex
+origin.parentTaskId = currentTaskId        // 可选；free-play Tab 可为空
+origin.parentAttemptId = currentAttemptId  // 可选
+origin.parentMoveIndex = currentMoveIndex  // 可选
 ```
 
 不再生成特殊 `snapshot_problem` task kind。

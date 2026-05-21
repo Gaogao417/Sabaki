@@ -4,7 +4,7 @@ import type { PositionSnapshotAdapter, PositionSnapshot } from '../adapter/posit
 import type { WorkbenchStore } from '../store/workbenchStore'
 
 export type ProblemSnapshotInput = {
-  sourceTaskId: string
+  sourceTaskId?: string
   sourceAttemptId?: string
   sourceGameId?: string
   sourceProblemId?: string
@@ -22,7 +22,7 @@ export type ProblemSnapshotInput = {
 export type SnapshotService = {
   captureSnapshotInput(input: {
     tabId: string
-    sourceTaskId: string
+    sourceTaskId?: string
     sourceAttemptId?: string
   }): Promise<ProblemSnapshotInput>
 
@@ -54,7 +54,7 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
 
   async function captureSnapshotInput(input: {
     tabId: string
-    sourceTaskId: string
+    sourceTaskId?: string
     sourceAttemptId?: string
   }): Promise<ProblemSnapshotInput> {
     const tab = workbenchStore.getState().tabs.find(t => t.id === input.tabId)
@@ -62,27 +62,29 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
       throw new Error(`snapshotService.captureSnapshotInput: tab not found (id=${input.tabId})`)
     }
 
-    if (tab.taskId !== input.sourceTaskId) {
-      throw new Error(
-        `snapshotService.captureSnapshotInput: sourceTaskId (${input.sourceTaskId}) does not match tab.taskId (${tab.taskId})`,
-      )
-    }
-
-    const task = await repository.loadTask(input.sourceTaskId)
-    if (!task) {
-      throw new Error(`snapshotService.captureSnapshotInput: task not found (id=${input.sourceTaskId})`)
-    }
-
-    const snapshot: PositionSnapshot = positionSnapshotAdapter.captureCurrentPosition()
-
     let sourceGameId: string | undefined
     let sourceProblemId: string | undefined
 
-    if (task.origin?.provider === 'fox') {
-      sourceGameId = task.origin.externalId
-    } else if (task.origin?.provider === '101') {
-      sourceProblemId = task.origin.externalId
+    if (input.sourceTaskId != null) {
+      if (tab.taskId !== input.sourceTaskId) {
+        throw new Error(
+          `snapshotService.captureSnapshotInput: sourceTaskId (${input.sourceTaskId}) does not match tab.taskId (${tab.taskId})`,
+        )
+      }
+
+      const task = await repository.loadTask(input.sourceTaskId)
+      if (!task) {
+        throw new Error(`snapshotService.captureSnapshotInput: task not found (id=${input.sourceTaskId})`)
+      }
+
+      if (task.origin?.provider === 'fox') {
+        sourceGameId = task.origin.externalId
+      } else if (task.origin?.provider === '101') {
+        sourceProblemId = task.origin.externalId
+      }
     }
+
+    const snapshot: PositionSnapshot = positionSnapshotAdapter.captureCurrentPosition()
 
     logger?.info('snapshot.capture', 'Snapshot input captured', {
       tabId: input.tabId,

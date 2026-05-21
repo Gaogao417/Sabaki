@@ -530,7 +530,58 @@ class TrainingWorkbenchContainer extends Component {
 
       this._clickController = createBoardInteractionController({
         getPlayServices: () => playServices || { documentStore: { playMove: async () => { } } },
-        getRecallServiceOrStore: () => recallService || { submitRecallAnswer: () => ({ handled: false, changed: false }) },
+        getRecallAdapter: () => {
+          const ws = ctx.workbenchStore.getState()
+          const activeTabId = ws.activeTabId
+          const activeTab = ws.tabs.find(t => t.id === activeTabId)
+          const activeRecallSessionId = activeTab?.activeRecallSessionId
+
+          if (!activeRecallSessionId) {
+            return {
+              submitBoardClick: async () => ({
+                handled: false,
+                changed: false,
+                isCorrect: false,
+                completed: false,
+                recallMoveIndex: 0,
+                attempt: null,
+              }),
+            }
+          }
+
+          if (!recallService) {
+            return {
+              submitBoardClick: async () => ({
+                handled: false,
+                changed: false,
+                isCorrect: false,
+                completed: false,
+                recallMoveIndex: 0,
+                attempt: null,
+              }),
+            }
+          }
+
+          return {
+            submitBoardClick: async (vertex) => {
+              const [x, y] = vertex
+              const userMove = String.fromCharCode(97 + x) + String.fromCharCode(97 + y)
+              const attempt = await recallService.submitRecallMove({
+                recallSessionId: activeRecallSessionId,
+                userMove,
+              })
+              const session = await ctx.repository.loadRecallSession(activeRecallSessionId)
+              return {
+                handled: true,
+                changed: true,
+                isCorrect: attempt.isCorrect,
+                completed: session ? session.completed : false,
+                recallMoveIndex: session ? session.currentMoveIndex : 0,
+                attempt,
+              }
+            },
+          }
+        },
         getEditWorkspaceContext: () => {
           if (!this._gobanAdapter) return null
           const s = this._gobanAdapter.getSnapshot()
