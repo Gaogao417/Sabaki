@@ -553,8 +553,8 @@ function projectFromWorkbench(ws, repository, container) {
     result.taskTitle = activeTab.taskId
 
     // W8-P3: Project playerConfig fields
-    result.blackPlayer = activeTab.playerConfig?.black || 'human'
-    result.whitePlayer = activeTab.playerConfig?.white || 'human'
+    result.blackPlayer = (activeTab.playerConfig?.black === 'human' ? 'self' : activeTab.playerConfig?.black) || 'self'
+    result.whitePlayer = (activeTab.playerConfig?.white === 'human' ? 'self' : activeTab.playerConfig?.white) || 'self'
     result.problemOpponent = activeTab.playerConfig?.problemOpponent || 'ai'
 
     // W8-P3: Project problemArea from task cache or repository

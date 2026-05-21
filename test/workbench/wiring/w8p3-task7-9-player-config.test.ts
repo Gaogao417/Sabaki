@@ -422,11 +422,28 @@ describe('W8-P3 Tasks 7-9: Player Config Wiring', function () {
       // Re-render and check projected props
       const newShellProps = (container as any).render().props
 
-      // GAP-P4: projectFromWorkbench does not yet project playerConfig.
       assert.strictEqual(newShellProps.blackPlayer, 'ai',
-        'shellProps.blackPlayer should be "ai" after updatePlayerConfig. GAP-P4: projection not yet implemented.')
+        'shellProps.blackPlayer should be "ai" after updatePlayerConfig.')
       assert.strictEqual(newShellProps.whitePlayer, 'ai',
-        'shellProps.whitePlayer should be "ai" after updatePlayerConfig. GAP-P4: projection not yet implemented.')
+        'shellProps.whitePlayer should be "ai" after updatePlayerConfig.')
+    })
+
+    it('T7-05b: projectFromWorkbench maps store "human" back to "self" for OpponentControl', function () {
+      const harness = createHarness()
+      const { workbenchStore, container } = harness
+
+      // Store 'human' (internal representation) should project as 'self' (OpponentControl value)
+      const tab = workbenchStore.getState().tabs[0]
+      workbenchStore.updateTab(tab.id, {
+        playerConfig: { ...tab.playerConfig, black: 'human', white: 'human' } as any,
+      })
+
+      const newShellProps = (container as any).render().props
+
+      assert.strictEqual(newShellProps.blackPlayer, 'self',
+        'shellProps.blackPlayer should be "self" when store has "human" — reverse mapping for OpponentControl.')
+      assert.strictEqual(newShellProps.whitePlayer, 'self',
+        'shellProps.whitePlayer should be "self" when store has "human" — reverse mapping for OpponentControl.')
     })
 
     // T7-11: After updatePlayerConfig, projectFromWorkbench returns correct problemOpponent
