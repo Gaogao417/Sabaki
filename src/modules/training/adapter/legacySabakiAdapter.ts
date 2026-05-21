@@ -18,8 +18,11 @@ type SabakiLike = {
   setCurrentTreePosition(tree: unknown, treePosition: string, options?: Record<string, unknown>): void
   getPlayServices(): {
     documentStore: {
-      getCurrentTree(): unknown
-      getCurrentTreePosition(): string
+      getCurrent(): {
+        tree: unknown
+        treePosition: string
+        [key: string]: unknown
+      }
     }
     engineService: {
       ensureAnalyzerForProblemMode(): void
@@ -75,7 +78,7 @@ export function createLegacySabakiAdapter(sabaki: SabakiLike): LegacySabakiAdapt
     },
 
     getCurrentTree() {
-      return sabaki.getPlayServices().documentStore.getCurrentTree()
+      return sabaki.getPlayServices().documentStore.getCurrent().tree
     },
 
     getSabaki() {

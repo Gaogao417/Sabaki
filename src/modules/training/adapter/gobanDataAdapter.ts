@@ -10,6 +10,7 @@
  */
 
 import type { GobanPropsInput } from '../workbench/projectGobanProps'
+import * as gametree from '../../gametree.js'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -36,17 +37,10 @@ export type GobanDataAdapterDeps = {
     areaSelectMode: boolean
   }
   getDocumentStore: () => {
-    getCurrentTree(): unknown
-    getCurrentTreePosition(): string
-    getCurrentBoard(): {
-      width: number
-      height: number
-      signMap: number[][]
-      get(vertex: [number, number]): number
-      markers: (null | { type: string; label?: string })[][]
-      lines: unknown[]
-      siblingsInfo: Record<string, unknown>
-      childrenInfo: Record<string, unknown>
+    getCurrent(): {
+      tree: unknown
+      treePosition: string
+      [key: string]: unknown
     }
   }
   getOverlayStore: () => {
@@ -189,10 +183,11 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
 
     const activeTab = ws.tabs.find(t => t.id === ws.activeTabId)
 
-    // boardState
-    const gameTree = documentStore.getCurrentTree()
-    const treePosition = documentStore.getCurrentTreePosition()
-    const board = documentStore.getCurrentBoard()
+    // boardState — use documentStore.getCurrent() to get {tree, treePosition}
+    const current = documentStore.getCurrent()
+    const gameTree = current.tree
+    const treePosition = current.treePosition
+    const board = gameTree ? gametree.getBoard(gameTree, treePosition) : null
 
     // workbenchMode from activeTab
     const workbenchMode = (activeTab?.mode || 'play') as GobanPropsInput['workbenchMode']
