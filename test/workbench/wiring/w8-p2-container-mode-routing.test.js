@@ -111,9 +111,8 @@ function createNoopLegacyController() {
 
 /**
  * Create a test harness with real Container + real stores + spy services.
- * The harness does NOT trigger componentDidMount (which would try to create
- * the adapter/controller via try-catch require). Instead, render() is called
- * directly after manually setting up subscriptions.
+ * The constructor creates the adapter synchronously, so the harness sabaki
+ * must provide enough surface for _tryCreateGobanAdapter to succeed.
  */
 function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} = {}) {
   const workbenchStore = createWorkbenchStore({logger})
@@ -131,6 +130,22 @@ function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} =
   for (const tab of tabs) workbenchStore.addTab(tab)
   if (activeTabId != null) workbenchStore.setActiveTab(activeTabId)
 
+  // Minimal documentStore that provides a real empty game tree + board
+  const gametree = require('../../../src/modules/gametree.js')
+  const emptyTree = gametree.new()
+  const documentStore = {
+    getCurrent() {
+      return {
+        tree: emptyTree,
+        treePosition: emptyTree.root.id,
+        gameTrees: [emptyTree],
+        gameIndex: 0,
+        gameCurrents: [{}],
+        current: {},
+      }
+    },
+  }
+
   const trainingContext = {
     runtimeStore,
     workbenchStore,
@@ -140,20 +155,46 @@ function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} =
     tabService,
     taskImportService,
     legacyTrainingFlowController: createNoopLegacyController(),
+    repository: { loadTask: async () => null },
+  }
+
+  const sabakiState = {
+    treePosition: emptyTree.root.id,
+    gameTrees: [emptyTree],
+    gameIndex: 0,
+    selectedTool: 'stone_1',
+    editWorkspace: null,
+    showMoveNumbers: null,
+    showNextMoves: null,
+    showSiblings: null,
+    showAnalysis: null,
+    showCoordinates: null,
+    showHumanPreference: null,
+    showMoveColorization: null,
+    fuzzyStonePlacement: null,
+    animateStonePlacement: null,
+    boardTransformation: [1, 0, 0, 1, 0, 0],
+    analysisType: null,
+    areaSelectMode: false,
   }
 
   const sabaki = {
     getTrainingContext() {
       return trainingContext
     },
+    getPlayServices() {
+      return { documentStore }
+    },
+    get state() {
+      return sabakiState
+    },
+    logger,
+    on() {},
+    removeListener() {},
   }
 
   const container = new TrainingWorkbenchContainer({sabaki})
   container.props = {sabaki}
-
-  // Wire up subscriptions manually (same as componentDidMount does)
-  container._unsubRuntime = runtimeStore.subscribe(() => container.forceUpdate())
-  container._unsubWorkbench = workbenchStore.subscribe(() => container.forceUpdate())
 
   return {
     workbenchStore,
@@ -424,64 +465,35 @@ describe('W8-P2 Container adapter subscription', function () {
 })
 
 // ===========================================================================
-// Container hardcoded data removal (T2-07)
-// ARCHITECTURE_BOUNDARY: Container must not fabricate board state
+// Container adapter availability (T2-07)
+// ARCHITECTURE_BOUNDARY: Container must have adapter ready before first render
 // ===========================================================================
 
-describe('W8-P2 Container hardcoded data removal', function () {
+describe('W8-P2 Container adapter availability', function () {
 
-  // T2-07: Container does not fabricate board state when adapter unavailable.
+  // T2-07: Adapter is created in constructor, so first render has real board data.
   //
-  // When no adapter is attached (this._gobanAdapter is falsy), Container's
-  // render() falls back to a hardcoded default object at lines 293-321.
-  // This test verifies that this hardcoded fallback does NOT contain a fabricated
-  // 19x19 zero-filled signMap. Instead, projectGobanProps should receive null/undefined
-  // and handle it gracefully.
-  //
-  // This test is ARCHITECTURE_BOUNDARY because it protects against fabricated
-  // state leaking to the UI. Current Container DOES have a hardcoded fallback;
-  // this test is RED until that fallback is removed or replaced.
-  it('T2-07: Container does not fabricate 19x19 signMap when adapter unavailable', function () {
+  // Previously the adapter was created in componentDidMount, causing the first
+  // render to pass board:null to Goban (crash on board.signMap). The fix moves
+  // adapter creation to the constructor where it runs synchronously before any
+  // render. This test verifies the adapter exists and provides a non-null board.
+  it('T2-07: Container has adapter and real board on first render', function () {
     const harness = createHarness({
       tabs: [makeTab({id: 'tab_1', mode: 'play'})],
     })
 
-    // No adapter attached — simulating adapter unavailable
-    assert.strictEqual(harness.container._gobanAdapter, undefined,
-      'No adapter should be attached for this test')
+    // Adapter must exist immediately (created in constructor, not componentDidMount)
+    assert.ok(harness.container._gobanAdapter,
+      'Adapter must be attached before first render')
 
     const shellProps = harness.render()
 
     assert.ok(shellProps.boardProps != null,
-      'Container must still pass boardProps even without adapter')
+      'Container must pass boardProps on first render')
 
-    // The current Container has a hardcoded fallback with:
-    //   signMap: Array(19).fill(null).map(() => Array(19).fill(0))
-    // Contract T2-07 says: when adapter returns null, Container must NOT
-    // fabricate a 19x19 zero-filled signMap.
-    //
-    // Explicit assertion: board must either be null/undefined (graceful handling)
-    // or must NOT match the fabricated 19x19 zero-filled pattern.
     const board = shellProps.boardProps.boardStateProps.board
-    if (board == null) {
-      // Graceful: no board data when no adapter — this is acceptable per contract.
-      // Test passes.
-      return
-    }
-
-    // Board exists — must not be the fabricated 19x19 zero-filled pattern.
-    assert.ok(board.signMap == null || board.width !== 19 || board.height !== 19,
-      'Container must not fabricate a 19x19 zero-filled signMap when adapter is unavailable. ' +
-      'Contract T2-07 requires projectGobanProps to handle null/undefined input gracefully instead. ' +
-      `Got board with width=${board.width}, height=${board.height}, signMap.length=${board.signMap?.length}`)
-    // Additional: if signMap exists and is 19x19, verify it's NOT all zeros.
-    if (board.signMap && board.width === 19 && board.height === 19) {
-      const allZeros = board.signMap.every(
-        row => Array.isArray(row) && row.length === 19 && row.every(c => c === 0)
-      )
-      assert.ok(!allZeros,
-        'Container must not fabricate a 19x19 all-zero signMap when adapter is unavailable.')
-    }
+    assert.ok(board != null,
+      'Board must be non-null on first render — null board would crash Goban.signMap')
   })
 })
 

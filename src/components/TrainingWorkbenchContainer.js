@@ -23,19 +23,32 @@ try {
 } catch (_) { /* controller not yet available */ }
 
 class TrainingWorkbenchContainer extends Component {
-  componentDidMount() {
-    const { runtimeStore, workbenchStore } =
-      this.props.sabaki.getTrainingContext()
+  constructor(props) {
+    super(props)
+    this._gobanAdapter = null
+    this._clickController = null
 
+    // W8-P4: Dashboard data held in Container local state, not in stores.
+    // Per Architecture v0.5 Section 4.1: MVP only needs workbenchStore +
+    // trainingRuntimeStore. Dashboard data is loaded on-demand.
+    this.state = {
+      dashboardData: null,
+    }
+
+    // Subscribe to store changes
+    const { runtimeStore, workbenchStore } =
+      props.sabaki.getTrainingContext()
     this._unsubRuntime = runtimeStore.subscribe(() => this.forceUpdate())
     this._unsubWorkbench = workbenchStore.subscribe(() => this.forceUpdate())
 
-    // W3.5: Wire gobanDataAdapter and boardInteractionController when available.
-    // Both factories are optional — test harnesses may not provide the full
-    // sabaki service surface, in which case we fall back to defaults in render().
-    this._tryCreateGobanAdapter(this.props.sabaki)
-    this._tryCreateClickController(this.props.sabaki)
+    // Create adapter/controller in constructor so the first render() has a
+    // snapshot with a real board.  Adapter creation is synchronous — it only
+    // reads sabaki objects and subscribes to stores.
+    this._tryCreateGobanAdapter(props.sabaki)
+    this._tryCreateClickController(props.sabaki)
   }
+
+  componentDidMount() {}
 
   componentWillUnmount() {
     this._unsubRuntime?.()
@@ -248,6 +261,79 @@ class TrainingWorkbenchContainer extends Component {
       return taskImportService.createTaskFromBadMove({badMoveId})
     }
 
+    // --- W8-P4 Dashboard handlers ---
+
+    async function handleOpenDueReviewItem(scheduleId) {
+      const {reviewService} = sabaki.getTrainingContext()
+      await reviewService.openDueItem(scheduleId)
+    }
+
+    async function handleOpenInboxTask(taskId) {
+      await tabService.openTask({taskId})
+    }
+
+    async function handleOpenIncompleteAttempt(attemptId) {
+      const {repository} = sabaki.getTrainingContext()
+      const attempt = await repository.loadAttempt(attemptId)
+      if (attempt && attempt.taskId) {
+        await tabService.openTask({taskId: attempt.taskId})
+      }
+    }
+
+    async function handleOpenIncompleteRecallSession(sessionId) {
+      const {repository} = sabaki.getTrainingContext()
+      const session = await repository.loadRecallSession(sessionId)
+      if (session && session.taskId) {
+        await tabService.openTask({taskId: session.taskId, mode: 'recall'})
+      }
+    }
+
+    async function handleOpenBadMoveTask(taskId) {
+      await tabService.openTask({taskId, mode: 'problem'})
+    }
+
+    const _container = this
+
+    async function handleRefreshDashboard() {
+      const {reviewService, repository} = sabaki.getTrainingContext()
+
+      const [
+        dueItems,
+        inboxTasks,
+        incompleteAttempts,
+        incompleteRecallSessions,
+        recentBadMoveTasks,
+      ] = await Promise.all([
+        reviewService.getDueItems(),
+        typeof repository.listTasksByStatus === 'function'
+          ? repository.listTasksByStatus('inbox')
+          : Promise.resolve([]),
+        repository.listIncompleteAttempts(),
+        repository.listIncompleteRecallSessions(),
+        typeof repository.listTasksByOriginProvider === 'function'
+          ? repository.listTasksByOriginProvider('bad_move')
+          : Promise.resolve([]),
+      ])
+
+      const newDashboardData = {
+        dueItems,
+        inboxTasks,
+        incompleteAttempts,
+        incompleteRecallSessions,
+        recentBadMoveTasks,
+        loading: false,
+        error: null,
+      }
+
+      // Use direct state assignment so that render() can read the updated
+      // state immediately, even when the Container is used outside a Preact
+      // VDOM tree (e.g. in test harnesses that call container.render()
+      // directly).  setState alone would queue a microtask that may not
+      // resolve before the next render() call.
+      _container.state.dashboardData = newDashboardData
+      _container.setState({})
+    }
+
     // Legacy handlers preserved for existing recall/problem flows
     const legacyHandlers = {
       onShowRecallHint: () => legacyTrainingFlowController.showRecallHint(),
@@ -303,6 +389,13 @@ class TrainingWorkbenchContainer extends Component {
       // W8-P3 GAP fixes: onAbandonAnswer and onVerifySkip wiring
       onAbandonAnswer: handleAbandon,
       onVerifySkip: () => legacyTrainingFlowController.skipRecallMove(),
+      // W8-P4 Dashboard handlers
+      onOpenDueReviewItem: handleOpenDueReviewItem,
+      onOpenInboxTask: handleOpenInboxTask,
+      onOpenIncompleteAttempt: handleOpenIncompleteAttempt,
+      onOpenIncompleteRecallSession: handleOpenIncompleteRecallSession,
+      onOpenBadMoveTask: handleOpenBadMoveTask,
+      onRefreshDashboard: handleRefreshDashboard,
     }
 
     // --- W3.5 Goban wiring: project boardProps from adapter snapshot ---
@@ -361,6 +454,7 @@ class TrainingWorkbenchContainer extends Component {
       ...workbenchProjected,
       ...legacyHandlers,
       ...shellHandlers,
+      dashboardData: this.state.dashboardData,
       boardProps,
     })
   }

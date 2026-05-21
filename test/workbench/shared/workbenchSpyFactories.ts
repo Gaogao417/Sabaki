@@ -205,7 +205,16 @@ export function createSpyReviewService(
     calls,
     async getDueItems(now?: string) {
       calls.getDueItems.push({now})
-      return []
+      return [{
+        id: 'sched_spy_default',
+        taskId: 'task_spy_due',
+        dueAt: new Date().toISOString(),
+        intervalDays: 1,
+        consecutivePassCount: 0,
+        totalFailCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }]
     },
     async openDueItem(scheduleId: string) {
       calls.openDueItem.push({scheduleId})

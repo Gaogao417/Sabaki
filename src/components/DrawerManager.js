@@ -10,7 +10,6 @@ import GameChooserDrawer from './drawers/GameChooserDrawer.js'
 import CleanMarkupDrawer from './drawers/CleanMarkupDrawer.js'
 import AdvancedPropertiesDrawer from './drawers/AdvancedPropertiesDrawer.js'
 import ProblemEditorDrawer from './drawers/ProblemEditorDrawer.js'
-import TrainingDashboardDrawer from './drawers/TrainingDashboardDrawer.js'
 // import FoxGameImportDrawer from './drawers/FoxGameImportDrawer.js'
 import NewGameDialog from './drawers/NewGameDialog.js'
 
@@ -162,10 +161,6 @@ export default class DrawerManager extends Component {
 
       h(ProblemEditorDrawer, {
         show: openDrawer === 'problemEditor',
-      }),
-
-      h(TrainingDashboardDrawer, {
-        show: openDrawer === 'training',
       }),
 
       // h(FoxGameImportDrawer, {

@@ -12,6 +12,7 @@ import {
   RecallModePanel,
   AnalysisModePanel,
 } from './workbench/index.js'
+import TrainingDashboardDrawer from './drawers/TrainingDashboardDrawer.js'
 
 /**
  * @callback onModeChangeCallback
@@ -113,5 +114,10 @@ export default function WorkbenchShell({
         h(BottomActionBar, {mode, ...rest}),
       ),
     ),
+
+    // W8-P4: Training dashboard drawer (moved from DrawerManager to WorkbenchShell)
+    h(TrainingDashboardDrawer, {
+      ...rest,
+    }),
   )
 }
