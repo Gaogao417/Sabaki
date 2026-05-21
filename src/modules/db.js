@@ -494,7 +494,7 @@ function createTrainingTask(task) {
     id, task.kind || 'free_play', JSON.stringify(source), source.kind || null,
     source.gameId || null, source.problemId || null, source.segmentId || null,
     source.parentTaskId || null, source.parentAttemptId || null,
-    task.rootPositionSgf, task.sideToMove || null, task.title || null,
+    task.rootPositionSgf || null, task.sideToMove || null, task.title || null,
     originJson, task.initialPositionSgf || null, task.prompt || null, task.goal || null,
     passRuleJson, referenceLinesJson, problemAreaJson, tagsJson,
     task.difficulty ?? null, task.status || null,
