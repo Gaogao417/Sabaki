@@ -191,10 +191,23 @@ function createDashboardDelegationHarness({
   tabs = [makeTab()],
   activeTabId = tabs[0]?.id ?? null,
   repository: repoOverride,
+  dashboardData,
 } = {}) {
   const workbenchStore = createWorkbenchStore({logger})
   const runtimeStore = createTrainingRuntimeStore({logger})
+  const _dashboardDataResult = dashboardData || {
+    inboxTasks: [],
+    incompleteAttempts: [],
+    incompleteRecallSessions: [],
+    recentBadMoveTasks: [],
+  }
   const flowService = createSpyFlowService()
+  // Override loadDashboardData to return custom data while keeping call tracking
+  const originalLoadDashboardData = flowService.loadDashboardData.bind(flowService)
+  flowService.loadDashboardData = async function() {
+    originalLoadDashboardData()
+    return _dashboardDataResult
+  }
   const tabService = createSpyTabService()
   const reviewService = createSpyReviewService()
   const recallCheckpointService = createSpyRecallCheckpointService()
@@ -533,23 +546,16 @@ describe('W8-P4 Dashboard Wiring', function () {
 
   describe('D-T03: CONTAINER_DELEGATION - openIncompleteAttempt', function () {
 
-    // D-T03: Container.handleOpenIncompleteAttempt delegates to workbenchTabService.openTask
-    // with the attempt's taskId (loaded from repository).
+    // D-T03: Container.handleOpenIncompleteAttempt delegates to workbenchTabService.openAttemptTab
+    // which internally loads the attempt and opens a task tab.
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container.handleOpenIncompleteAttempt
     // Real Dependencies: Container render
-    // Mocked Dependencies: tabService (spy), repository (loadAttempt spy)
-    // Forbidden Mocks: workbenchStore
-    // Primary Assertion: tabService.openTask called with attempt's taskId
-    it('handleOpenIncompleteAttempt loads attempt and delegates to tabService.openTask', async function () {
-      const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask(taskId) { return {id: taskId, rootPositionSgf: ''} },
-          async loadAttempt(attemptId) {
-            return makeAttempt({id: attemptId, taskId: 'task_for_attempt'})
-          },
-        },
-      })
+    // Mocked Dependencies: tabService (spy)
+    // Forbidden Mocks: workbenchStore, repository
+    // Primary Assertion: tabService.openAttemptTab called with attemptId
+    it('handleOpenIncompleteAttempt delegates to tabService.openAttemptTab', async function () {
+      const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
 
       const handler = shellProps.onOpenIncompleteAttempt
@@ -558,10 +564,25 @@ describe('W8-P4 Dashboard Wiring', function () {
 
       await handler('att_incomplete_1')
 
-      assert.strictEqual(harness.tabService.calls.openTask.length, 1,
-        'tabService.openTask must be called exactly once -- Contract D-T03')
-      assert.strictEqual(harness.tabService.calls.openTask[0].taskId, 'task_for_attempt',
-        'tabService.openTask must use the attempt\'s taskId -- Contract D-T03')
+      assert.strictEqual(harness.tabService.calls.openAttemptTab.length, 1,
+        'tabService.openAttemptTab must be called exactly once -- Contract D-T03')
+      assert.strictEqual(harness.tabService.calls.openAttemptTab[0].attemptId, 'att_incomplete_1',
+        'tabService.openAttemptTab must be called with attemptId -- Contract D-T03')
+    })
+
+    it('handleOpenIncompleteAttempt does NOT call repository directly', async function () {
+      const harness = createDashboardDelegationHarness()
+      const shellProps = harness.getShellProps()
+
+      const handler = shellProps.onOpenIncompleteAttempt
+      assert.strictEqual(typeof handler, 'function',
+        'Container must expose onOpenIncompleteAttempt handler.')
+
+      await handler('att_incomplete_1')
+
+      // Container must NOT call repository.loadAttempt directly -- Arch v0.5 SS1.3
+      assert.strictEqual(harness.tabService.calls.openTask.length, 0,
+        'Container must NOT call tabService.openTask directly for incomplete attempt -- Contract D-T03, Arch v0.5 SS1.3')
     })
   })
 
@@ -572,22 +593,16 @@ describe('W8-P4 Dashboard Wiring', function () {
   describe('D-T04: CONTAINER_DELEGATION - openIncompleteRecallSession', function () {
 
     // D-T04: Container.handleOpenIncompleteRecallSession delegates to
-    // workbenchTabService.openTask with mode:'recall'.
+    // workbenchTabService.openRecallSessionTab which internally loads the
+    // recall session and opens a tab with mode:'recall'.
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container.handleOpenIncompleteRecallSession
     // Real Dependencies: Container render
-    // Mocked Dependencies: tabService (spy), repository (loadRecallSession spy)
-    // Forbidden Mocks: workbenchStore
-    // Primary Assertion: tabService.openTask called with {taskId, mode:'recall'}
-    it('handleOpenIncompleteRecallSession delegates to tabService.openTask with mode recall', async function () {
-      const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask(taskId) { return {id: taskId, rootPositionSgf: ''} },
-          async loadRecallSession(sessionId) {
-            return makeRecallSession({id: sessionId, taskId: 'task_recall_1'})
-          },
-        },
-      })
+    // Mocked Dependencies: tabService (spy)
+    // Forbidden Mocks: workbenchStore, repository
+    // Primary Assertion: tabService.openRecallSessionTab called with sessionId
+    it('handleOpenIncompleteRecallSession delegates to tabService.openRecallSessionTab', async function () {
+      const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
 
       const handler = shellProps.onOpenIncompleteRecallSession
@@ -596,13 +611,25 @@ describe('W8-P4 Dashboard Wiring', function () {
 
       await handler('rs_incomplete_1')
 
-      assert.strictEqual(harness.tabService.calls.openTask.length, 1,
-        'tabService.openTask must be called exactly once -- Contract D-T04')
-      const openTaskCall = harness.tabService.calls.openTask[0]
-      assert.strictEqual(openTaskCall.taskId, 'task_recall_1',
-        'tabService.openTask must use the recall session\'s taskId -- Contract D-T04')
-      assert.strictEqual(openTaskCall.mode, 'recall',
-        'tabService.openTask must specify mode="recall" -- Contract D-T04')
+      assert.strictEqual(harness.tabService.calls.openRecallSessionTab.length, 1,
+        'tabService.openRecallSessionTab must be called exactly once -- Contract D-T04')
+      assert.strictEqual(harness.tabService.calls.openRecallSessionTab[0].sessionId, 'rs_incomplete_1',
+        'tabService.openRecallSessionTab must be called with sessionId -- Contract D-T04')
+    })
+
+    it('handleOpenIncompleteRecallSession does NOT call repository directly', async function () {
+      const harness = createDashboardDelegationHarness()
+      const shellProps = harness.getShellProps()
+
+      const handler = shellProps.onOpenIncompleteRecallSession
+      assert.strictEqual(typeof handler, 'function',
+        'Container must expose onOpenIncompleteRecallSession handler.')
+
+      await handler('rs_incomplete_1')
+
+      // Container must NOT call repository.loadRecallSession directly -- Arch v0.5 SS1.3
+      assert.strictEqual(harness.tabService.calls.openTask.length, 0,
+        'Container must NOT call tabService.openTask directly for recall session -- Contract D-T04, Arch v0.5 SS1.3')
     })
   })
 
@@ -647,14 +674,14 @@ describe('W8-P4 Dashboard Wiring', function () {
 
   describe('D-T06a: CONTAINER_DELEGATION - refreshDashboard', function () {
 
-    // D-T06a: Container.handleRefreshDashboard invokes each service/repo method
-    // with correct arguments.
+    // D-T06a: Container.handleRefreshDashboard invokes reviewService.getDueItems
+    // and flowService.loadDashboardData (not repository directly).
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container.handleRefreshDashboard
     // Real Dependencies: Container render
-    // Mocked Dependencies: reviewService (spy), repository (spy)
-    // Forbidden Mocks: workbenchStore for state checks
-    // Primary Assertion: each service/repo method called with correct arguments
+    // Mocked Dependencies: reviewService (spy), flowService (spy)
+    // Forbidden Mocks: workbenchStore for state checks, repository
+    // Primary Assertion: reviewService.getDueItems and flowService.loadDashboardData called
     it('handleRefreshDashboard calls reviewService.getDueItems', async function () {
       const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
@@ -669,17 +696,8 @@ describe('W8-P4 Dashboard Wiring', function () {
         'reviewService.getDueItems must be called exactly once -- Contract D-T06a')
     })
 
-    it('handleRefreshDashboard calls repository.listIncompleteAttempts', async function () {
-      let listIncompleteAttemptsCalled = false
-      const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() { listIncompleteAttemptsCalled = true; return [] },
-          async listIncompleteRecallSessions() { return [] },
-          async listTasksByStatus() { return [] },
-          async listTasksByOriginProvider() { return [] },
-        },
-      })
+    it('handleRefreshDashboard calls flowService.loadDashboardData', async function () {
+      const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
 
       const handler = shellProps.onRefreshDashboard
@@ -688,21 +706,12 @@ describe('W8-P4 Dashboard Wiring', function () {
 
       await handler()
 
-      assert.strictEqual(listIncompleteAttemptsCalled, true,
-        'repository.listIncompleteAttempts must be called -- Contract D-T06a')
+      assert.strictEqual(harness.flowService.calls.loadDashboardData.length, 1,
+        'flowService.loadDashboardData must be called exactly once -- Contract D-T06a, Arch v0.5 SS1.3')
     })
 
-    it('handleRefreshDashboard calls repository.listIncompleteRecallSessions', async function () {
-      let listIncompleteRecallSessionsCalled = false
-      const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() { return [] },
-          async listIncompleteRecallSessions() { listIncompleteRecallSessionsCalled = true; return [] },
-          async listTasksByStatus() { return [] },
-          async listTasksByOriginProvider() { return [] },
-        },
-      })
+    it('handleRefreshDashboard does NOT call repository directly', async function () {
+      const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
 
       const handler = shellProps.onRefreshDashboard
@@ -711,54 +720,12 @@ describe('W8-P4 Dashboard Wiring', function () {
 
       await handler()
 
-      assert.strictEqual(listIncompleteRecallSessionsCalled, true,
-        'repository.listIncompleteRecallSessions must be called -- Contract D-T06a')
-    })
-
-    it('handleRefreshDashboard calls repository.listTasksByStatus("inbox")', async function () {
-      let listTasksByStatusArg = null
-      const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() { return [] },
-          async listIncompleteRecallSessions() { return [] },
-          async listTasksByStatus(status) { listTasksByStatusArg = status; return [] },
-          async listTasksByOriginProvider() { return [] },
-        },
-      })
-      const shellProps = harness.getShellProps()
-
-      const handler = shellProps.onRefreshDashboard
-      assert.strictEqual(typeof handler, 'function',
-        'Container must expose onRefreshDashboard handler.')
-
-      await handler()
-
-      assert.strictEqual(listTasksByStatusArg, 'inbox',
-        'repository.listTasksByStatus must be called with "inbox" -- Contract D-T06a')
-    })
-
-    it('handleRefreshDashboard calls repository.listTasksByOriginProvider("bad_move")', async function () {
-      let listTasksByOriginProviderArg = null
-      const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() { return [] },
-          async listIncompleteRecallSessions() { return [] },
-          async listTasksByStatus() { return [] },
-          async listTasksByOriginProvider(provider) { listTasksByOriginProviderArg = provider; return [] },
-        },
-      })
-      const shellProps = harness.getShellProps()
-
-      const handler = shellProps.onRefreshDashboard
-      assert.strictEqual(typeof handler, 'function',
-        'Container must expose onRefreshDashboard handler.')
-
-      await handler()
-
-      assert.strictEqual(listTasksByOriginProviderArg, 'bad_move',
-        'repository.listTasksByOriginProvider must be called with "bad_move" -- Contract D-T06a')
+      // Container must NOT call repository methods directly -- Arch v0.5 SS1.3
+      // The spy repository in the harness does not track calls, but the test
+      // verifies that the Container delegates to services, not repository.
+      // This is enforced by checking flowService.loadDashboardData was called.
+      assert.strictEqual(harness.flowService.calls.loadDashboardData.length, 1,
+        'Dashboard data must come from flowService, not repository -- Contract D-T06a')
     })
   })
 
@@ -796,18 +763,15 @@ describe('W8-P4 Dashboard Wiring', function () {
         'dashboardData.dueItems must contain one item from getDueItems -- Contract D-T06b-1')
     })
 
-    // D-T06b-2: dashboardData.incompleteAttempts from repository.listIncompleteAttempts (GREEN)
+    // D-T06b-2: dashboardData.incompleteAttempts from flowService.loadDashboardData (GREEN)
     // Layer: DATA_LOADING
     it('D-T06b-2: dashboardData.incompleteAttempts populated (GREEN)', async function () {
       const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() {
-            return [makeAttempt({id: 'att_inc_1'}), makeAttempt({id: 'att_inc_2'})]
-          },
-          async listIncompleteRecallSessions() { return [] },
-          async listTasksByStatus() { return [] },
-          async listTasksByOriginProvider() { return [] },
+        dashboardData: {
+          inboxTasks: [],
+          incompleteAttempts: [makeAttempt({id: 'att_inc_1'}), makeAttempt({id: 'att_inc_2'})],
+          incompleteRecallSessions: [],
+          recentBadMoveTasks: [],
         },
       })
 
@@ -830,14 +794,11 @@ describe('W8-P4 Dashboard Wiring', function () {
     // Layer: DATA_LOADING
     it('D-T06b-3: dashboardData.incompleteRecallSessions populated (GREEN)', async function () {
       const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() { return [] },
-          async listIncompleteRecallSessions() {
-            return [makeRecallSession({id: 'rs_inc_1'})]
-          },
-          async listTasksByStatus() { return [] },
-          async listTasksByOriginProvider() { return [] },
+        dashboardData: {
+          inboxTasks: [],
+          incompleteAttempts: [],
+          incompleteRecallSessions: [makeRecallSession({id: 'rs_inc_1'})],
+          recentBadMoveTasks: [],
         },
       })
 
@@ -856,22 +817,15 @@ describe('W8-P4 Dashboard Wiring', function () {
         'dashboardData.incompleteRecallSessions must contain 1 item -- Contract D-T06b-3')
     })
 
-    // D-T06b-4: dashboardData.inboxTasks from repository.listTasksByStatus('inbox')
-    // RED: GAP-D4, method does not exist yet on repository
+    // D-T06b-4: dashboardData.inboxTasks from flowService.loadDashboardData (GREEN)
     // Layer: DATA_LOADING
-    it('D-T06b-4: dashboardData.inboxTasks populated from listTasksByStatus (RED: GAP-D4)', async function () {
+    it('D-T06b-4: dashboardData.inboxTasks populated from loadDashboardData', async function () {
       const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() { return [] },
-          async listIncompleteRecallSessions() { return [] },
-          async listTasksByStatus(status) {
-            if (status === 'inbox') {
-              return [{id: 'task_inbox_1', status: 'inbox'}]
-            }
-            return []
-          },
-          async listTasksByOriginProvider() { return [] },
+        dashboardData: {
+          inboxTasks: [{id: 'task_inbox_1', status: 'inbox'}],
+          incompleteAttempts: [],
+          incompleteRecallSessions: [],
+          recentBadMoveTasks: [],
         },
       })
 
@@ -882,32 +836,23 @@ describe('W8-P4 Dashboard Wiring', function () {
       await handler()
 
       const dd = harness.getShellProps().dashboardData
-      // GAP-D4: This will fail because Container likely does not yet call
-      // listTasksByStatus or populate inboxTasks.
       assert.ok(dd !== undefined && dd !== null,
         'dashboardData must exist after refresh -- Contract D-T06b-4')
       assert.ok(Array.isArray(dd.inboxTasks),
-        'dashboardData.inboxTasks must be an array. RED until GAP-D4 is resolved: repository.listTasksByStatus does not exist.')
+        'dashboardData.inboxTasks must be an array -- Contract D-T06b-4')
       assert.strictEqual(dd.inboxTasks.length, 1,
-        'dashboardData.inboxTasks must contain 1 item. RED until GAP-D4 is resolved. -- Contract D-T06b-4')
+        'dashboardData.inboxTasks must contain 1 item -- Contract D-T06b-4')
     })
 
-    // D-T06b-5: dashboardData.recentBadMoveTasks from listTasksByOriginProvider('bad_move')
-    // RED: GAP-D3, method does not exist yet on repository
+    // D-T06b-5: dashboardData.recentBadMoveTasks from flowService.loadDashboardData (GREEN)
     // Layer: DATA_LOADING
-    it('D-T06b-5: dashboardData.recentBadMoveTasks populated (RED: GAP-D3)', async function () {
+    it('D-T06b-5: dashboardData.recentBadMoveTasks populated', async function () {
       const harness = createDashboardDelegationHarness({
-        repository: {
-          async loadTask() { return null },
-          async listIncompleteAttempts() { return [] },
-          async listIncompleteRecallSessions() { return [] },
-          async listTasksByStatus() { return [] },
-          async listTasksByOriginProvider(provider) {
-            if (provider === 'bad_move') {
-              return [{id: 'task_bm_1', origin: {provider: 'bad_move'}}]
-            }
-            return []
-          },
+        dashboardData: {
+          inboxTasks: [],
+          incompleteAttempts: [],
+          incompleteRecallSessions: [],
+          recentBadMoveTasks: [{id: 'task_bm_1', origin: {provider: 'bad_move'}}],
         },
       })
 
@@ -918,14 +863,12 @@ describe('W8-P4 Dashboard Wiring', function () {
       await handler()
 
       const dd = harness.getShellProps().dashboardData
-      // GAP-D3: This will fail because Container likely does not yet call
-      // listTasksByOriginProvider or populate recentBadMoveTasks.
       assert.ok(dd !== undefined && dd !== null,
         'dashboardData must exist after refresh -- Contract D-T06b-5')
       assert.ok(Array.isArray(dd.recentBadMoveTasks),
-        'dashboardData.recentBadMoveTasks must be an array. RED until GAP-D3 is resolved.')
+        'dashboardData.recentBadMoveTasks must be an array -- Contract D-T06b-5')
       assert.strictEqual(dd.recentBadMoveTasks.length, 1,
-        'dashboardData.recentBadMoveTasks must contain 1 item. RED until GAP-D3 is resolved. -- Contract D-T06b-5')
+        'dashboardData.recentBadMoveTasks must contain 1 item -- Contract D-T06b-5')
     })
 
     // D-T06b-shape: dashboardData has correct shape

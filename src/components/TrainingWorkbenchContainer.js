@@ -273,19 +273,11 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleOpenIncompleteAttempt(attemptId) {
-      const {repository} = sabaki.getTrainingContext()
-      const attempt = await repository.loadAttempt(attemptId)
-      if (attempt && attempt.taskId) {
-        await tabService.openTask({taskId: attempt.taskId})
-      }
+      await tabService.openAttemptTab(attemptId)
     }
 
     async function handleOpenIncompleteRecallSession(sessionId) {
-      const {repository} = sabaki.getTrainingContext()
-      const session = await repository.loadRecallSession(sessionId)
-      if (session && session.taskId) {
-        await tabService.openTask({taskId: session.taskId, mode: 'recall'})
-      }
+      await tabService.openRecallSessionTab(sessionId)
     }
 
     async function handleOpenBadMoveTask(taskId) {
@@ -295,32 +287,22 @@ class TrainingWorkbenchContainer extends Component {
     const _container = this
 
     async function handleRefreshDashboard() {
-      const {reviewService, repository} = sabaki.getTrainingContext()
+      const {reviewService} = sabaki.getTrainingContext()
 
       const [
         dueItems,
-        inboxTasks,
-        incompleteAttempts,
-        incompleteRecallSessions,
-        recentBadMoveTasks,
+        dashboardData,
       ] = await Promise.all([
         reviewService.getDueItems(),
-        typeof repository.listTasksByStatus === 'function'
-          ? repository.listTasksByStatus('inbox')
-          : Promise.resolve([]),
-        repository.listIncompleteAttempts(),
-        repository.listIncompleteRecallSessions(),
-        typeof repository.listTasksByOriginProvider === 'function'
-          ? repository.listTasksByOriginProvider('bad_move')
-          : Promise.resolve([]),
+        flowService.loadDashboardData(),
       ])
 
       const newDashboardData = {
         dueItems,
-        inboxTasks,
-        incompleteAttempts,
-        incompleteRecallSessions,
-        recentBadMoveTasks,
+        inboxTasks: dashboardData.inboxTasks,
+        incompleteAttempts: dashboardData.incompleteAttempts,
+        incompleteRecallSessions: dashboardData.incompleteRecallSessions,
+        recentBadMoveTasks: dashboardData.recentBadMoveTasks,
         loading: false,
         error: null,
       }

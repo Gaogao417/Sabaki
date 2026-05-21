@@ -27,6 +27,8 @@ export type WorkbenchTabService = {
   openProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab>
   openTask(opts: OpenTaskOptions): Promise<WorkbenchTab>
   openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab>
+  openAttemptTab(attemptId: string): Promise<WorkbenchTab>
+  openRecallSessionTab(sessionId: string): Promise<WorkbenchTab>
   closeTab(tabId: string): Promise<void>
   switchTab(tabId: string): void
 }
@@ -303,11 +305,31 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     logger?.info('tab.switchTab', 'Tab switched', { tabId, taskId: tab.taskId, mode: tab.mode })
   }
 
+  async function openAttemptTab(attemptId: string): Promise<WorkbenchTab> {
+    logger?.info('tab.openAttemptTab', 'Opening attempt tab', { attemptId })
+    const attempt = await repository.loadAttempt(attemptId)
+    if (!attempt || !attempt.taskId) {
+      throw new Error(`workbenchTabService.openAttemptTab: attempt not found or has no taskId (id=${attemptId})`)
+    }
+    return openTask({ taskId: attempt.taskId })
+  }
+
+  async function openRecallSessionTab(sessionId: string): Promise<WorkbenchTab> {
+    logger?.info('tab.openRecallSessionTab', 'Opening recall session tab', { sessionId })
+    const session = await repository.loadRecallSession(sessionId)
+    if (!session || !session.taskId) {
+      throw new Error(`workbenchTabService.openRecallSessionTab: session not found or has no taskId (id=${sessionId})`)
+    }
+    return openTask({ taskId: session.taskId, mode: 'recall' })
+  }
+
   return {
     openProblemTab,
     openGameTab,
     openTask,
     openSnapshotProblemTab,
+    openAttemptTab,
+    openRecallSessionTab,
     closeTab,
     switchTab,
   }

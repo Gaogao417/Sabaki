@@ -21,6 +21,7 @@ export type SpyFlowServiceCalls = {
   startAttempt: Array<Call<{tabId: string}>>
   snapshotFromCurrentContext: Array<Call<{tabId: string}>>
   updatePlayerConfig: Array<Call<{tabId: string; patch: Partial<PlayerConfig>}>>
+  loadDashboardData: Array<Call<{}>>
 }
 
 export type SpyWorkbenchFlowService = WorkbenchFlowService & {
@@ -32,6 +33,8 @@ export type SpyTabServiceCalls = {
   openProblemTab: Array<Call<{problemId: string; options?: OpenProblemTabOptions}>>
   openTask: OpenTaskOptions[]
   openSnapshotProblemTab: Array<Call<{problemId: string; options: {parentTabId: string}}>>
+  openAttemptTab: Array<Call<{attemptId: string}>>
+  openRecallSessionTab: Array<Call<{sessionId: string}>>
   closeTab: Array<Call<{tabId: string}>>
   switchTab: Array<Call<{tabId: string}>>
 }
@@ -75,6 +78,7 @@ export function createSpyFlowService(
     startAttempt: [],
     snapshotFromCurrentContext: [],
     updatePlayerConfig: [],
+    loadDashboardData: [],
   }
 
   const service = {
@@ -108,6 +112,15 @@ export function createSpyFlowService(
     updatePlayerConfig(tabId: string, patch: Partial<PlayerConfig>) {
       calls.updatePlayerConfig.push({tabId, patch})
     },
+    async loadDashboardData() {
+      calls.loadDashboardData.push({})
+      return {
+        inboxTasks: [],
+        incompleteAttempts: [],
+        incompleteRecallSessions: [],
+        recentBadMoveTasks: [],
+      }
+    },
     ...overrides,
   } satisfies SpyWorkbenchFlowService
 
@@ -120,6 +133,8 @@ export function createSpyTabService(): SpyWorkbenchTabService {
     openProblemTab: [],
     openTask: [],
     openSnapshotProblemTab: [],
+    openAttemptTab: [],
+    openRecallSessionTab: [],
     closeTab: [],
     switchTab: [],
   }
@@ -161,6 +176,22 @@ export function createSpyTabService(): SpyWorkbenchTabService {
         taskId: problemId,
         mode: 'problem',
         parentTabId: options.parentTabId,
+      })
+    },
+    async openAttemptTab(attemptId: string) {
+      calls.openAttemptTab.push({attemptId})
+      return makeTab({
+        id: `tab_attempt_${++tabCounter}`,
+        taskId: 'task_from_attempt',
+        mode: 'play',
+      })
+    },
+    async openRecallSessionTab(sessionId: string) {
+      calls.openRecallSessionTab.push({sessionId})
+      return makeTab({
+        id: `tab_recall_${++tabCounter}`,
+        taskId: 'task_from_session',
+        mode: 'recall',
       })
     },
     async closeTab(tabId: string) {

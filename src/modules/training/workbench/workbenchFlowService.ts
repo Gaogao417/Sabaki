@@ -58,6 +58,13 @@ export type WorkbenchFlowServiceDeps = {
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
 }
 
+export type DashboardData = {
+  inboxTasks: unknown[]
+  incompleteAttempts: unknown[]
+  incompleteRecallSessions: unknown[]
+  recentBadMoveTasks: unknown[]
+}
+
 export type WorkbenchFlowService = {
   submit(tabId: string): Promise<void>
   enterAnalysis(tabId: string): void
@@ -67,6 +74,7 @@ export type WorkbenchFlowService = {
   startAttempt(tabId: string): Promise<void>
   snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab>
   updatePlayerConfig(tabId: string, patch: Partial<import('../types/tab').PlayerConfig>): void
+  loadDashboardData(): Promise<DashboardData>
 }
 
 export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): WorkbenchFlowService {
@@ -340,6 +348,26 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     workbenchStore.updateTab(tabId, { playerConfig: merged })
   }
 
+  async function loadDashboardData(): Promise<DashboardData> {
+    const [
+      inboxTasks,
+      incompleteAttempts,
+      incompleteRecallSessions,
+      recentBadMoveTasks,
+    ] = await Promise.all([
+      typeof repository.listTasksByStatus === 'function'
+        ? repository.listTasksByStatus('inbox')
+        : Promise.resolve([]),
+      repository.listIncompleteAttempts(),
+      repository.listIncompleteRecallSessions(),
+      typeof repository.listTasksByOriginProvider === 'function'
+        ? repository.listTasksByOriginProvider('bad_move')
+        : Promise.resolve([]),
+    ])
+
+    return { inboxTasks, incompleteAttempts, incompleteRecallSessions, recentBadMoveTasks }
+  }
+
   return {
     submit,
     enterAnalysis,
@@ -349,5 +377,6 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     startAttempt,
     snapshotFromCurrentContext,
     updatePlayerConfig,
+    loadDashboardData,
   }
 }

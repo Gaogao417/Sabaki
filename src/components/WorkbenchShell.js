@@ -118,6 +118,7 @@ export default function WorkbenchShell({
     // W8-P4: Training dashboard drawer (moved from DrawerManager to WorkbenchShell)
     h(TrainingDashboardDrawer, {
       ...rest,
+      show: rest.openDrawer === 'training',
     }),
   )
 }
