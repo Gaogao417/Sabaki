@@ -79,6 +79,24 @@ UI event / board event
 - store 没有变化仍然通过。
 - 只验证 mock controller 收到了调用。
 
+## 测试层级与 Mock 边界审计
+
+你必须检查每个测试组是否声明了 Layer、Production Subject、真实依赖、mock 依赖和主断言。如果测试文件没有声明 harness/mock manifest，Workbench wiring 测试至少 `REQUEST_CHANGES`。
+
+以下情况必须 `BLOCK`：
+
+- 测试或覆盖表声称覆盖 `CONTROLLER_STATE_TRANSITION`、`SERVICE_REPOSITORY_TRANSITION`、`STORE_SUBSCRIPTION`、state-forward 或 store transition，但负责状态变化的 controller/service/store 是 mock/spy。
+- 测试调用 action 后，又手动修改被断言的 store/repository 状态，并把该断言记为 action 导致的状态迁移。
+- 测试只断言 mock controller/service 被调用，却在覆盖表中标记为 state transition、projection return 或 rendered UI covered。
+- 测试只检查 `TrainingWorkbenchContainer.render().props`，却声称覆盖真实 `RecallModePanel`/Shell 渲染行为。
+- 测试 mock 掉 Container、controller、store 三者中的关键生产对象，却声称完成 Workbench wiring 闭环。
+
+以下情况通常 `REQUEST_CHANGES`：
+
+- harness manifest 没写清哪些对象真实、哪些是假。
+- 测试名称比实际断言承诺更多，例如标题说 “sets store state”，但主断言只是 “callback called”。
+- coverage table 的 `covered` 没有指出具体断言和具体生产对象。
+
 ## Matrix / Contract 覆盖审计
 
 如果任务基于矩阵、状态表或测试契约，你必须要求覆盖表。

@@ -102,6 +102,12 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 11. 哪些测试覆盖 controller 到 service/store。
 12. 哪些测试覆盖 store subscription 到 projection/UI。
 13. 哪些测试是迁移期测试，等旧 controller 退场后可以删除。
+14. 每个测试夹具/harness 的真实性清单：
+   - 真实生产模块。
+   - fake/spy/mock 模块。
+   - 此 harness 允许证明的 Layer。
+   - 此 harness 禁止证明的 Layer。
+15. 每个测试 ID 的 Layer、Production Subject、Real Dependencies、Mocked Dependencies、Forbidden Mocks、Primary Assertion。
 
 然后编写测试。
 
@@ -202,6 +208,26 @@ Matrix §3.2 requires recall markerMap=null. This is RED until GAP-G4 is fixed.
 
 如果发现任何无效测试，停下来请求审查后再继续。
 
+### Harness / Mock 策略
+
+每个 `createHarness()`、`setup()` 或共享测试夹具旁边必须有简短 manifest。示例：
+
+```txt
+Harness manifest:
+- Real production modules: TrainingWorkbenchContainer, createWorkbenchStore, createTrainingRuntimeStore
+- Fake/spy modules: legacyTrainingFlowController, flowService
+- Valid for: CONTAINER_DELEGATION, PROJECTION_RETURN
+- Not valid for: CONTROLLER_STATE_TRANSITION, SERVICE_REPOSITORY_TRANSITION, RENDERED_UI_RETURN
+```
+
+硬规则：
+
+- mock 掉某一层，就不能声称证明该层或该层之后的真实行为。
+- 如果 action 后测试手动调用 `runtimeStore.setXxx()`、`workbenchStore.updateXxx()` 或 repository update，这只能作为 setup 或独立 store 测试动作；不能作为“UI action/controller action 导致状态变化”的证据。
+- fake service/controller 可以模拟 downstream state change，但测试名和覆盖表必须明确它是 fake behavior；此类测试不能替代真实 service/controller state-transition 测试。
+- callback call count 只能作为 `UI_COMMAND_MAPPING` 或 `CONTAINER_DELEGATION` 的主断言，不能覆盖 `STATE`、`PROJECTION_RETURN` 或 `RENDERED_UI_RETURN`。
+- shell props 断言只能覆盖 `PROJECTION_RETURN`；若契约要求 panel 可见状态，必须渲染真实 Shell/Panel 并断言 rendered output 或交互。
+
 ### Red/Green 要求
 
 契约测试必须能在缺少目标实现时红灯，除非该契约项被批准为 deferred 并使用 `it.skip()` 或 `this.skip()` 明确跳过。
@@ -251,8 +277,8 @@ Matrix §3.2 requires recall markerMap=null. This is RED until GAP-G4 is fixed.
 
 ## 3. 新增测试
 
-| 测试名称 | 类型 | 长期或迁移 | 保护的契约 |
-| --------- | ---- | ---------------------- | ------------------ |
+| 测试名称 | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Primary Assertion | 长期或迁移 | 保护的契约 |
+| --------- | ---- | ------------------ | ----------------- | ------------------- | ----------------- | ---------- | ---------- |
 
 ## 4. 有意不添加的测试
 
@@ -266,6 +292,11 @@ Matrix §3.2 requires recall markerMap=null. This is RED until GAP-G4 is fixed.
 
 | 链路段 | 测试文件 | 生产对象 | 断言 |
 | --- | --- | --- | --- |
+
+## 9. Harness / Mock Manifest（如适用）
+
+| Harness | Real production modules | Fake/spy/mock modules | Valid Layers | Invalid Layers |
+| --- | --- | --- | --- | --- |
 
 结尾：
 

@@ -68,22 +68,42 @@ If a task only implements the first half of this loop, it is incomplete unless t
    - Archives it at `docs/design/YYYY-MM-DD/<task>/test-contract-v0.N.md`.
    - Must first produce a "source alignment" section citing PRD v0.5 and Architecture v0.5.
    - Must list control events, controller commands, service calls, store before/after state, projection results, allowed side effects, forbidden side effects, and manual acceptance.
+   - Must classify every automated Test ID by Layer, Production Subject, Real Dependencies, Mocked Dependencies, Forbidden Mocks, Primary Assertion, and Downstream Covered By.
    - Must mark any command or state not present in v0.5 as `PROPOSED_GAP`, not as an approved behavior.
    - For any matrix/state-table based task, must convert each in-scope row into an explicit expected value/behavior with a test status: `GREEN`, `RED`, or `DEFERRED`.
    - Must not leave test-writer to infer whether a matrix/current-code conflict should test current behavior. Known GAP rows must be `RED` or `DEFERRED`, never green current-behavior tests.
 
-2. `test-writer`
+2. `contract-auditor`
+   - Reviews the approved-source contract before any test code is written.
+   - Does not write contracts, tests, or production code.
+   - Must reject contract rows that mix delegation, state transition, projection, and rendered UI without a clear Layer and mock policy.
+   - Must reject any contract that allows the production object responsible for the claimed behavior to be mocked.
+   - Must require a per-Test-ID table:
+     - Layer
+     - Production Subject
+     - Real Dependencies
+     - Mocked Dependencies
+     - Forbidden Mocks
+     - Primary Assertion
+     - Downstream Covered By
+   - Must output APPROVE, APPROVE_WITH_NOTES, REQUEST_CHANGES, or BLOCK.
+   - If the auditor returns REQUEST_CHANGES or BLOCK, do not start test writing.
+
+3. `test-writer`
    - Writes tests from the approved wiring contract.
    - Must cover at least one state-forward path and one state-return path for every non-trivial control group:
      - state-forward: UI/container command changes store/service/repository state.
      - state-return: store/service state projects back into UI props or rendered state.
    - Must not replace wiring with "callback was called" tests except as auxiliary checks.
    - Must not assert known GAP/bug current behavior as correct. If the approved matrix/contract says expected=A and current implementation returns B, write a RED test for A or stop and request contract clarification.
+   - Must include a harness/mock manifest for every shared test setup, naming which modules are real, which are fake, and which Layers the harness can and cannot prove.
+   - Must not mark a test as state-forward if it manually mutates the asserted store state after invoking the action.
 
-3. `test-auditor`
+4. `test-auditor`
    - Reviews the approved contract and generated tests before implementation starts.
    - Does not write tests, does not write production code, and does not split or orchestrate tasks.
    - Must reject placeholder pass tests, silent conditional passes, noop-handler tests, and wiring tests that do not verify a real boundary crossing.
+   - Must reject Layer/mock mismatches: e.g. state transition tests with mocked state owner, rendered UI claims that only assert shell props, or callback-count tests marked as store/projection coverage.
    - Must reject reverse-contract tests that acknowledge a matrix/GAP conflict but assert the current wrong behavior as green.
    - Must require a coverage table for matrix/state-table based work:
      - `covered`
@@ -93,19 +113,19 @@ If a task only implements the first half of this loop, it is incomplete unless t
    - If the auditor returns REQUEST_CHANGES or BLOCK, do not start implementation.
    - If the auditor returns APPROVE or APPROVE_WITH_NOTES, a human must explicitly decide whether to proceed.
 
-4. Human gate
+5. Human gate
    - Reviews the test-auditor report.
    - Confirms any deferred rows and scope tradeoffs.
    - Explicitly authorizes implementation to begin.
    - This workflow intentionally does not add an orchestrator agent; task breakdown remains human-directed.
 
-5. `implementation-agent`
+6. `implementation-agent`
    - Implements minimal production wiring against the approved contract and tests.
    - Keeps panel components presentational.
    - Reads dependencies through `sabaki.getTrainingContext()` in container/controller boundaries, not inside panels.
    - Uses adapters for Sabaki, engine, analysis, board, and repository dependencies.
 
-6. `architecture-reviewer`
+7. `architecture-reviewer`
    - Reviews the diff for boundary leaks, duplicate state, direct service imports in UI components, store impurity, hidden globals, and weak tests.
    - Must explicitly trace at least one implemented loop from UI event to projected UI update.
 
@@ -148,11 +168,14 @@ For a workbench wiring project, complete phases in this order:
      - `analysis-mode-command-wiring`
      - `workbench-tab-and-shell-wiring`
      - `projection-and-store-subscription`
+   - Every Test ID must declare its Layer and mock policy before test writing starts.
+   - Callback-only rows may cover command mapping or container delegation, but must not be counted as store transition or projection return.
 
 4. **Write tests first**
    - Add container/controller/store tests before production wiring.
    - Keep visual tests separate from wiring tests.
    - Prefer tests that fail when store state no longer reaches UI.
+   - Require every shared harness to document real modules, fake modules, valid Layers, and invalid Layers.
 
 5. **Implement by vertical slice**
    - One mode or workflow at a time.
@@ -245,6 +268,8 @@ Workbench wiring is done only when:
 
 - Every in-scope control is active, disabled with a reason, display-only, or documented as deferred.
 - Non-trivial controls have tests for command mapping, state transition, and projection return.
+- Each contract/test row declares the Layer it proves, the production subject, real dependencies, mocked dependencies, forbidden mocks, and primary assertion.
+- No test row claims state transition, projection, or rendered UI coverage for behavior owned by a mocked production object.
 - Store subscription updates are tested or manually verified.
 - Panels remain presentational.
 - Controller/service/store boundaries pass architecture review.

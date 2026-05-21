@@ -150,6 +150,35 @@ Workbench 接线任务也属于你的范围。接线任务指：把已经完成�
    - 是否让 container 直接写 store，而不是通过 v0.5 指定 service。
    - 是否让 UI component 直接依赖 service/store/repository/Sabaki。
 
+## 测试分层契约要求
+
+每个自动化测试 ID 必须声明它证明哪一层。禁止用一个测试同时声称证明 callback delegation、真实状态迁移和渲染回流，除非测试确实执行了完整生产链路。
+
+`Layer` 只能使用以下枚举：
+
+- `UI_COMMAND_MAPPING`：presentational component 发出语义 callback 和 payload。
+- `CONTAINER_DELEGATION`：`TrainingWorkbenchContainer` 把 callback 绑定到 controller/service 命令。
+- `CONTROLLER_STATE_TRANSITION`：真实 controller 导致 store/Sabaki state 改变。
+- `SERVICE_REPOSITORY_TRANSITION`：真实 service 导致 repository/session/attempt/checkpoint 改变。
+- `STORE_SUBSCRIPTION`：真实 store setter 通知 subscriber。
+- `PROJECTION_RETURN`：store state 被 container projection 映射成正确 props。
+- `RENDERED_UI_RETURN`：store/projection 变化在真实 Shell/Panel 渲染中可见。
+- `SIDE_EFFECT_BOUNDARY`：允许/禁止副作用发生在正确边界。
+- `ARCHITECTURE_BOUNDARY`：模块 import、全局依赖、store 纯粹性等边界。
+
+每个测试契约行必须包含：
+
+| Test ID | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Forbidden Mocks | Primary Assertion | Downstream Covered By |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+规则：
+
+- 如果测试声称覆盖 `CONTROLLER_STATE_TRANSITION`、`SERVICE_REPOSITORY_TRANSITION` 或 `STORE_SUBSCRIPTION`，负责该状态变化的生产 controller/service/store 不得被 mock。
+- 如果测试声称覆盖 `RENDERED_UI_RETURN`，不能只断言 `container.render().props`；必须渲染真实 Shell/Panel 或明确降级为 `PROJECTION_RETURN`。
+- 如果测试只断言 mock controller/service 被调用，只能标为 `CONTAINER_DELEGATION`，不能标为 state-forward。
+- 如果一项用户动作需要完整闭环，必须拆成多条测试行，而不是把不同层塞进同一个“state-forward”测试。
+- `Downstream Covered By` 必须指向后续层测试 ID；如果没有后续测试，标记 `not-covered` 或 `DEFERRED`，并说明 approved reason 和退出条件。
+
 ## 测试设计规则
 
 优先使用契约测试，例如：
