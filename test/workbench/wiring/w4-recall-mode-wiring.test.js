@@ -135,7 +135,7 @@ function createSpyTabService() {
   }
 }
 
-function createSpyRecallCheckpointService() {
+function createSpyRecallCheckpointService(runtimeStore) {
   const calls = {
     submitUserCorrectionLine: [],
     revealAiCandidateLines: [],
@@ -149,6 +149,8 @@ function createSpyRecallCheckpointService() {
     calls,
     async submitUserCorrectionLine(input) {
       calls.submitUserCorrectionLine.push(input)
+      // Mimic real service: clears correctionDraft
+      if (runtimeStore) runtimeStore.setCorrectionDraft(undefined)
     },
     async revealAiCandidateLines(checkpointId) {
       calls.revealAiCandidateLines.push({checkpointId})
@@ -156,12 +158,16 @@ function createSpyRecallCheckpointService() {
     },
     async skipCheckpoint(checkpointId) {
       calls.skipCheckpoint.push({checkpointId})
+      // Mimic real service: clears activeCheckpointId
+      if (runtimeStore) runtimeStore.setActiveCheckpoint(undefined)
     },
     async saveComment(input) {
       calls.saveComment.push(input)
     },
     async resumeRecall(checkpointId) {
       calls.resumeRecall.push({checkpointId})
+      // Mimic real service: clears activeCheckpointId
+      if (runtimeStore) runtimeStore.setActiveCheckpoint(undefined)
     },
     async shouldTriggerCheckpoint(input) {
       calls.shouldTriggerCheckpoint.push(input)
@@ -230,7 +236,7 @@ function createHarness({
   const flowService = createSpyFlowService()
   const tabService = createSpyTabService()
   const legacyController = createSpyLegacyController()
-  const checkpointService = createSpyRecallCheckpointService()
+  const checkpointService = createSpyRecallCheckpointService(runtimeStore)
   const documentStore = createSpyDocumentStore()
   const attemptService = createSpyAttemptService()
 

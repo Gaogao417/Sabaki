@@ -158,12 +158,6 @@ class TrainingWorkbenchContainer extends Component {
       const moves = draft ? draft.moves : []
       const {recallCheckpointService} = sabaki.getTrainingContext()
       await recallCheckpointService.submitUserCorrectionLine({checkpointId, moves})
-      // Clear correctionDraft after submission. In production the service
-      // performs this as part of its flow; in test harnesses the spy does not,
-      // so the handler performs the clear to maintain the contract invariant.
-      // W4-R2: delegates to service then clears draft.
-      const {setCorrectionDraft} = sabaki.getTrainingContext().runtimeStore
-      setCorrectionDraft(undefined)
     }
 
     async function handleRevealAI() {
@@ -184,15 +178,11 @@ class TrainingWorkbenchContainer extends Component {
       const checkpointId = rt.activeCheckpointId
       if (!checkpointId) return
       const {recallCheckpointService} = sabaki.getTrainingContext()
-      const now = new Date().toISOString()
       await recallCheckpointService.saveComment({
         checkpointId,
         comment: {
-          id: `mc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           target: {kind: 'checkpoint', checkpointId},
           content,
-          createdAt: now,
-          updatedAt: now,
         },
       })
       await recallCheckpointService.resumeRecall(checkpointId)
