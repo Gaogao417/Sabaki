@@ -209,8 +209,12 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     const store = runtimeStoreOverride ?? deps.runtimeStore
     if (!store) return
     const items = await getDueItems()
-    if (items.length === 0) return
+    if (items.length === 0) {
+      logger?.info('review.session', 'No due items, session skipped', {})
+      return
+    }
     const queue = items.map(s => s.id)
+    logger?.info('review.session', 'Starting review session', { totalDue: queue.length })
     store.setReviewQueueView({
       queue,
       currentIndex: 0,
@@ -226,9 +230,11 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     if (!rv) return
     const nextIndex = rv.currentIndex + 1
     if (nextIndex >= rv.queue.length) {
+      logger?.info('review.advance', 'Review queue completed', { totalItems: rv.queue.length })
       store.setReviewQueueView(null)
       return
     }
+    logger?.info('review.advance', 'Advancing to next item', { index: nextIndex, total: rv.queue.length })
     store.setReviewQueueView({...rv, currentIndex: nextIndex})
     await openDueItem(rv.queue[nextIndex])
   }
