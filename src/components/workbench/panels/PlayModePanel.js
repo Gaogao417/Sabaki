@@ -92,7 +92,7 @@ export default function PlayModePanel({
     // Card 3: 当前任务 — stats + action buttons
     return [
       h('div', {class: 'wb-card', key: 'card-mode'},
-        h('div', {class: 'wb-panel-title'}, '当前模式'),
+        h('div', {class: 'wb-panel-title'}, '对局模式'),
         h('div', {class: 'wb-panel-body'},
           h('div', {style: 'font-weight: 500; margin-bottom: 4px'}, '对局模式'),
           h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '普通对局、续弈或实战模拟'),
@@ -101,6 +101,7 @@ export default function PlayModePanel({
             h('div', {style: 'font-size: 13px; font-weight: 500'}, taskTitle || '准备开始'),
           ),
           h('div', {style: 'margin-top: 8px; border-top: 1px solid var(--ui-border); padding-top: 8px'},
+            taskDescription && h('div', {style: 'font-size: 13px; color: var(--ui-text-tertiary); margin-bottom: 4px'}, taskDescription),
             h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary); margin-bottom: 4px'}, '对局状态'),
             h('div', {style: 'font-size: 13px'},
               h('span', {style: 'color: var(--ui-text-secondary)'}, moveCount === 0 ? '准备开始' : '对局中'),

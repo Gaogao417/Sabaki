@@ -59,7 +59,7 @@ export default function AnalysisModePanel({
     return [
       // Card 1: 当前模式
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '当前模式'),
+        h('div', {class: 'wb-panel-title'}, '复盘模式'),
         h('div', {class: 'wb-panel-body'},
           h('div', {style: 'font-weight: 500; margin-bottom: 4px'}, '复盘模式'),
           h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '自由研究、比较变化、沉淀笔记'),
@@ -77,6 +77,10 @@ export default function AnalysisModePanel({
             h('span', {class: 'wb-analysis-mode-panel__stat-item'},
               h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '当前手数'),
               h('span', {class: 'wb-analysis-mode-panel__move-count'}, moveCount),
+            ),
+            h('span', {class: 'wb-analysis-mode-panel__stat-item'},
+              h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '提子'),
+              h('span', null, '黑 ', captures.black, ' / 白 ', captures.white),
             ),
             h('span', {class: 'wb-analysis-mode-panel__stat-item'},
               h('span', {class: 'wb-analysis-mode-panel__stat-label'}, '关联评论'),

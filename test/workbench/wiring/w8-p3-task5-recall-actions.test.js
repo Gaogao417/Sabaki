@@ -764,30 +764,34 @@ describe('W8-P3 Task5: UI Command Mapping (T5-12, T5-13)', function () {
   // Production subject: ModeActions (mode='recall')
   // Real: ModeActions, preact render
   // No mocks needed
-  it('T5-12: ModeActions recall renders analysis, end, and snapshot buttons', function () {
+  it('T5-12: ModeActions recall renders mark, hint, verify, and analysis buttons', function () {
     const { queryByTestId, queryAllByTestId } = renderToDom(
       h(ModeActions, {
         mode: 'recall',
+        onMark: () => {},
+        onHint: () => {},
+        onVerify: () => {},
         onAnalysis: () => {},
-        onEnd: () => {},
-        onSnapshot: () => {},
       })
     )
 
-    // Recall mode must render exactly 3 buttons (Contract T5-12)
+    // Recall mode must render exactly 4 buttons
     const buttons = queryAllByTestId('mode-action-btn')
-    assert.strictEqual(buttons.length, 3,
-      'ModeActions recall must render 3 buttons')
+    assert.strictEqual(buttons.length, 4,
+      'ModeActions recall must render 4 buttons')
 
     // Verify each button by testId
+    const markBtn = queryByTestId('mode-action-mark')
+    assert.ok(markBtn, 'ModeActions recall must have button[data-testid="mode-action-mark"]')
+
+    const hintBtn = queryByTestId('mode-action-hint')
+    assert.ok(hintBtn, 'ModeActions recall must have button[data-testid="mode-action-hint"]')
+
+    const verifyBtn = queryByTestId('mode-action-verify')
+    assert.ok(verifyBtn, 'ModeActions recall must have button[data-testid="mode-action-verify"]')
+
     const analysisBtn = queryByTestId('mode-action-analysis')
     assert.ok(analysisBtn, 'ModeActions recall must have button[data-testid="mode-action-analysis"]')
-
-    const endBtn = queryByTestId('mode-action-end')
-    assert.ok(endBtn, 'ModeActions recall must have button[data-testid="mode-action-end"]')
-
-    const snapshotBtn = queryByTestId('mode-action-snapshot')
-    assert.ok(snapshotBtn, 'ModeActions recall must have button[data-testid="mode-action-snapshot"]')
   })
 
   // T5-13: BottomActionBar recall renders onMarkCheckpoint + onHint + onVerifySkip + onEnterAnalysis

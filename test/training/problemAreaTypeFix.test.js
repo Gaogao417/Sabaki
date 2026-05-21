@@ -472,25 +472,17 @@ describe('problemAreaTypeFix - Group D: Repository mapTaskRow Backward Compat', 
       // A rectangle {x1:1,y1:1,x2:3,y2:3} should expand to:
       // [1,1],[2,1],[3,1],[1,2],[2,2],[3,2],[1,3],[2,3],[3,3] (9 vertices)
       const area = task.problemArea
-      if (area) {
-        // If it's already been converted to vertex list
-        if (Array.isArray(area)) {
-          assert.ok(area.length > 0, 'vertex list should not be empty')
-          // Verify it contains the expected vertices from the rectangle
-          // The rectangle x1:1,y1:1,x2:3,y2:3 should produce 9 vertices
-          const hasVertex = (x, y) => area.some(v => v[0] === x && v[1] === y)
-          assert.ok(hasVertex(1, 1), 'should contain [1,1]')
-          assert.ok(hasVertex(3, 3), 'should contain [3,3]')
-          assert.ok(hasVertex(2, 2), 'should contain [2,2]')
-          // Should NOT contain vertices outside the rectangle
-          assert.ok(!hasVertex(0, 0), 'should NOT contain [0,0]')
-          assert.ok(!hasVertex(4, 4), 'should NOT contain [4,4]')
-        } else {
-          // Pre-fix: it may still be rectangle format
-          // This assertion will fail post-fix, which is the desired outcome
-          assert.ok(area.x1 !== undefined, 'pre-fix: still rectangle format')
-        }
-      }
+      assert.ok(Array.isArray(area), 'problemArea should be normalized to vertex list')
+      assert.strictEqual(area.length, 9, '3x3 rectangle should expand to 9 vertices')
+      // Verify it contains the expected vertices from the rectangle
+      // The rectangle x1:1,y1:1,x2:3,y2:3 should produce 9 vertices
+      const hasVertex = (x, y) => area.some(v => v[0] === x && v[1] === y)
+      assert.ok(hasVertex(1, 1), 'should contain [1,1]')
+      assert.ok(hasVertex(3, 3), 'should contain [3,3]')
+      assert.ok(hasVertex(2, 2), 'should contain [2,2]')
+      // Should NOT contain vertices outside the rectangle
+      assert.ok(!hasVertex(0, 0), 'should NOT contain [0,0]')
+      assert.ok(!hasVertex(4, 4), 'should NOT contain [4,4]')
     })
   })
 

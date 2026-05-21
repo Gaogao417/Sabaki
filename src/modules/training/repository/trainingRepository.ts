@@ -569,7 +569,7 @@ export function createTrainingRepository(db: Db, logger?: RepositoryLogger): Tra
     // Already a vertex list (array of arrays)
     if (Array.isArray(area)) return area as TrainingTask['problemArea']
 
-    // Legacy rectangle format {x1, y1, x2, y2}
+    // Legacy rectangle format {x1, y1, x2, y2} -> expand to vertex list
     if (typeof area === 'object' && 'x1' in area && 'y1' in area && 'x2' in area && 'y2' in area) {
       const vertices: [number, number][] = []
       for (let x = area.x1; x <= area.x2; x++) {

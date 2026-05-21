@@ -393,9 +393,30 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     // When the adapter is unavailable (null snapshot), Container does NOT
-    // fabricate a 19x19 zero-filled board state. Instead, pass null to
-    // projectGobanProps, which handles it gracefully (Contract T2-07).
-    const boardProps = projectGobanProps(snapshot || null)
+    // fabricate a 19x19 zero-filled board state. Instead, pass a minimal
+    // input with the current workbenchMode so projectGobanProps can compute
+    // mode-specific overlay settings (e.g. showMoveNumbers for recall).
+    const minimalInput = {
+      workbenchMode,
+      task: null,
+      runtimeState: {},
+      boardState: { gameTree: null, treePosition: '', board: null },
+      overlayState: { paintMap: [], markerMap: [], dimmedStones: [], analysis: null },
+      settings: {
+        showMoveNumbers: false,
+        showNextMoves: true,
+        showSiblings: true,
+        showAnalysis: false,
+        showCoordinates: true,
+        showHumanPreference: false,
+        selectedTool: 'stone_1',
+        editWorkspaceActive: false,
+        boardTransformation: [1, 0, 0, 1, 0, 0],
+        areaSelectMode: false,
+      },
+      analysisData: null,
+    }
+    const boardProps = projectGobanProps(snapshot || minimalInput)
 
     // Wire onVertexClick through the boardInteractionController when available,
     // or use a minimal fallback that does not throw.

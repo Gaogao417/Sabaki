@@ -58,19 +58,20 @@ describe('ModeActions (T-3)', () => {
     assert.strictEqual(buttons.length, 4, `Expected 4 buttons for problem mode, got ${buttons.length}`)
   })
 
-  // --- T-3c: mode='recall' renders 3 buttons ---
-  it('T-3c: mode=recall renders 3 buttons (analysis, end, snapshot)', () => {
+  // --- T-3c: mode='recall' renders 4 buttons ---
+  it('T-3c: mode=recall renders 4 buttons (mark, hint, verify, analysis)', () => {
     const {queryAllByTestId} = renderToDom(
       h(ModeActions, {
         mode: 'recall',
+        onMark: () => {},
+        onHint: () => {},
+        onVerify: () => {},
         onAnalysis: () => {},
-        onEnd: () => {},
-        onSnapshot: () => {},
       })
     )
 
     const buttons = queryAllByTestId('mode-action-btn')
-    assert.strictEqual(buttons.length, 3, `Expected 3 buttons for recall mode, got ${buttons.length}`)
+    assert.strictEqual(buttons.length, 4, `Expected 4 buttons for recall mode, got ${buttons.length}`)
   })
 
   // --- T-3d: mode='analysis' renders 3 buttons ---

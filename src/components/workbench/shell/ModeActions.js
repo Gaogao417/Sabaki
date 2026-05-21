@@ -18,9 +18,10 @@ const MODE_BUTTONS = {
     {testId: 'mode-action-analysis', label: '进入复盘', callback: 'onAnalysis'},
   ],
   recall: [
+    {testId: 'mode-action-mark', label: '标记', callback: 'onMark'},
+    {testId: 'mode-action-hint', label: '提示', callback: 'onHint'},
+    {testId: 'mode-action-verify', label: '校对', callback: 'onVerify'},
     {testId: 'mode-action-analysis', label: '进入复盘', callback: 'onAnalysis'},
-    {testId: 'mode-action-end', label: '结束', callback: 'onEnd'},
-    {testId: 'mode-action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},
   ],
   analysis: [
     {testId: 'mode-action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},

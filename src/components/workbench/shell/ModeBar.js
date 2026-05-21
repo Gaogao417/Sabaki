@@ -3,11 +3,13 @@ import StoneStatus from './StoneStatus.js'
 import ModeActions from './ModeActions.js'
 
 const MODES = [
-  {key: 'play', label: '对局模式'},
-  {key: 'problem', label: '做题模式'},
-  {key: 'recall', label: '回忆模式'},
-  {key: 'analysis', label: '复盘模式'},
+  {key: 'play', label: '对局模式', color: 'var(--ui-play)'},
+  {key: 'problem', label: '做题模式', color: 'var(--ui-problem)'},
+  {key: 'recall', label: '回忆模式', color: 'var(--ui-recall-mode)'},
+  {key: 'analysis', label: '复盘模式', color: 'var(--ui-analysis)'},
 ]
+
+export {MODES}
 
 export default function ModeBar({
   activeMode = 'problem',

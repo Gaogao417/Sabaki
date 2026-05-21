@@ -682,7 +682,11 @@ describe('Phase 0 Migration - Group 3: Repository Roundtrip (real SQLite)', () =
     assert.deepStrictEqual(task.passRule, { allowed: false })
     assert.strictEqual(task.referenceLines.length, 1)
     assert.strictEqual(task.referenceLines[0].moves[0], 'D4')
-    assert.deepStrictEqual(task.problemArea, { x1: 3, y1: 3, x2: 15, y2: 15 })
+    // problemArea rectangle is normalized to vertex list on roundtrip
+    assert.ok(Array.isArray(task.problemArea), 'problemArea should be a vertex list')
+    assert.strictEqual(task.problemArea.length, 169, '13x13 rectangle should expand to 169 vertices')
+    assert.deepStrictEqual(task.problemArea[0], [3, 3])
+    assert.deepStrictEqual(task.problemArea[task.problemArea.length - 1], [15, 15])
     assert.deepStrictEqual(task.tags, ['tesuji', 'life-death'])
     assert.strictEqual(task.difficulty, 5)
     assert.strictEqual(task.status, 'active')
@@ -692,12 +696,15 @@ describe('Phase 0 Migration - Group 3: Repository Roundtrip (real SQLite)', () =
     assert.strictEqual(loaded.origin.provider, 'inferred')
     assert.strictEqual(loaded.origin.externalId, 'ext_14')
     assert.strictEqual(loaded.prompt, 'Find the best move for Black')
-    assert.deepStrictEqual(loaded.problemArea, { x1: 3, y1: 3, x2: 15, y2: 15 })
+    assert.ok(Array.isArray(loaded.problemArea), 'loaded problemArea should be a vertex list')
+    assert.strictEqual(loaded.problemArea.length, 169, 'loaded problemArea should preserve all rectangle vertices')
+    assert.deepStrictEqual(loaded.problemArea[0], [3, 3])
+    assert.deepStrictEqual(loaded.problemArea[loaded.problemArea.length - 1], [15, 15])
     assert.deepStrictEqual(loaded.tags, ['tesuji', 'life-death'])
   })
 
-  // T-15: problemArea with exact coordinates roundtrips
-  it('T-15: problemArea {x1:3, y1:3, x2:15, y2:15} roundtrips exactly', async () => {
+  // T-15: problemArea rectangle is normalized to vertex list on roundtrip
+  it('T-15: problemArea {x1:3, y1:3, x2:15, y2:15} normalizes to vertex list', async () => {
     await repo.createTask({
       id: 'task_15',
       rootPositionSgf: '(;SZ[19])',
@@ -706,10 +713,12 @@ describe('Phase 0 Migration - Group 3: Repository Roundtrip (real SQLite)', () =
 
     const loaded = await repo.loadTask('task_15')
     assert.ok(loaded)
-    assert.strictEqual(loaded.problemArea.x1, 3)
-    assert.strictEqual(loaded.problemArea.y1, 3)
-    assert.strictEqual(loaded.problemArea.x2, 15)
-    assert.strictEqual(loaded.problemArea.y2, 15)
+    assert.ok(Array.isArray(loaded.problemArea), 'problemArea should be normalized to vertex list')
+    const area = loaded.problemArea
+    assert.strictEqual(area.length, 169, '13x13 rectangle should expand to 169 vertices')
+    // First vertex should be [3,3] (x1,y1), last should be [15,15] (x2,y2)
+    assert.deepStrictEqual(area[0], [3, 3])
+    assert.deepStrictEqual(area[area.length - 1], [15, 15])
   })
 
   // T-16: origin with nested raw record roundtrips

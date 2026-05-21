@@ -72,7 +72,7 @@ export default function ProblemModePanel({
     return [
       // Card 1: Current mode
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '当前模式'),
+        h('div', {class: 'wb-panel-title'}, '做题模式'),
         h('div', {class: 'wb-panel-body'},
           h('div', {style: 'font-weight: 500; margin-bottom: 4px'}, '做题模式'),
           h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '阅读题面，完成有目标和提交标准的作答'),
@@ -108,7 +108,7 @@ export default function ProblemModePanel({
       ),
       // Card 4: Answer actions
       h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '作答'),
+        h('div', {class: 'wb-panel-title'}, '作答操作'),
         h('div', {class: 'wb-panel-body'},
           h('div', {style: 'display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px'},
             h('span', {style: 'color: var(--ui-text-secondary)'}, '当前手数'),

@@ -24,6 +24,16 @@
   --wb-card-radius: var(--radius-card);
   --wb-card-padding: var(--card-padding);
   --wb-card-gap: 16px;
+
+  /* Mode accent color tokens (accessible from :root for tests) */
+  --ui-play: #2563ff;
+  --ui-problem: #d97706;
+  --ui-recall-mode: #169b55;
+  --ui-analysis: #7c3aed;
+  --ui-play-soft: #eef4ff;
+  --ui-problem-soft: #fff7ed;
+  --ui-recall-mode-soft: #eaf8f0;
+  --ui-analysis-soft: #f2edff;
 }
 
 /* ===== Mode accent via data-mode ===== */
@@ -137,7 +147,7 @@
   height: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent-play), var(--accent-analysis));
-  color: #fff;
+  color: white;
   font-size: 13px;
   font-weight: 600;
   display: grid;
@@ -965,8 +975,8 @@
 .wb-card {
   background: var(--ui-card);
   border: 1px solid var(--ui-border);
-  border-radius: var(--wb-card-radius);
-  box-shadow: var(--shadow-panel);
+  border-radius: var(--radius-md);
+  box-shadow: var(--ui-shadow-sm);
   padding: var(--wb-card-padding);
 }
 
@@ -1020,7 +1030,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 18px;
+  padding: 8px 14px;
   border-radius: calc(var(--radius-md) - 2px);
   cursor: pointer;
   font-size: 13px;
@@ -1037,8 +1047,8 @@
 }
 
 .wb-segmented-control__item--active {
-  background: var(--mode-accent, var(--accent-play));
-  color: #fff;
+  background: var(--segment-color, var(--mode-accent));
+  color: white;
 }
 
 .wb-segmented-control__item--disabled {
@@ -1089,7 +1099,7 @@
 }
 
 .wb-status-text__label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ui-text-secondary);
 }
@@ -1613,10 +1623,7 @@
    ======================================================================== */
 
 .wb-main-board-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: block;
   min-height: 0;
   flex: 1;
   position: relative;

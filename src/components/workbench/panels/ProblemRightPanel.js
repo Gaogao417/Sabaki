@@ -35,7 +35,7 @@ export default function ProblemRightPanel({
         h('div', {class: 'wb-problem-right-panel__stat'},
           h('span', {class: 'wb-problem-right-panel__stat-label'}, '对方'),
           h('span', {class: 'wb-problem-right-panel__stat-value'},
-            opponentMode === 'ai' ? 'AI 应手' : '自己控制',
+            opponentMode === 'ai' ? 'AI' : opponentMode,
           ),
         ),
       ),

@@ -44,8 +44,19 @@ const VIEW_ACTIONS = [
   {testId: 'action-fullscreen', label: '全屏', callback: 'onFullscreen'},
 ]
 
-/** Reuse SVG-based annotation tools from AnnotationToolbar */
-const ANNOTATION_TOOLS = ANNOTATION_TOOL_DEFS
+/** Annotation tools for analysis mode — stone placement, markers, lines, labels */
+const ANNOTATION_TOOLS = [
+  {id: 'black', title: '黑子'},
+  {id: 'white', title: '白子'},
+  {id: 'cross', title: '叉'},
+  {id: 'triangle', title: '三角'},
+  {id: 'square', title: '方'},
+  {id: 'circle', title: '圆'},
+  {id: 'line', title: '线'},
+  {id: 'arrow', title: '箭头'},
+  {id: 'label-A', title: '标签A'},
+  {id: 'label-1', title: '标签1'},
+]
 
 const WORKSPACE_LABELS = {
   play: '对局工作区',
@@ -204,7 +215,7 @@ export default function BottomActionBar({
               title: tool.title,
               class: `wb-btn wb-btn--sm wb-btn-ghost${activeAnnotationTool === tool.id ? ' active' : ''}`,
               onClick: () => onAnnotationToolChange(tool.id),
-            }, tool.icon()),
+            }, tool.icon ? tool.icon() : tool.title),
           ),
         ),
     ),

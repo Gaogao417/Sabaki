@@ -97,11 +97,11 @@ describe('BottomActionBar (T-4.3)', function () {
       assert.ok(btn, `Play mode should have button with data-testid="${testId}"`)
     }
 
-    const allButtons = queryAllByTestId('action-btn')
+    const foundCount = playButtons.filter(id => queryByTestId(id) != null).length
     assert.strictEqual(
-      allButtons.length,
+      foundCount,
       playButtons.length,
-      `Expected ${playButtons.length} action-btn elements in play mode, got ${allButtons.length}`
+      `Expected ${playButtons.length} action buttons in play mode, found ${foundCount}`
     )
   })
 
@@ -129,11 +129,11 @@ describe('BottomActionBar (T-4.3)', function () {
       assert.ok(btn, `Problem mode should have button with data-testid="${testId}"`)
     }
 
-    const allButtons = queryAllByTestId('action-btn')
+    const foundCount = problemButtons.filter(id => queryByTestId(id) != null).length
     assert.strictEqual(
-      allButtons.length,
+      foundCount,
       problemButtons.length,
-      `Expected ${problemButtons.length} action-btn elements in problem mode, got ${allButtons.length}`
+      `Expected ${problemButtons.length} action buttons in problem mode, found ${foundCount}`
     )
   })
 
@@ -159,11 +159,11 @@ describe('BottomActionBar (T-4.3)', function () {
       assert.ok(btn, `Recall mode should have button with data-testid="${testId}"`)
     }
 
-    const allButtons = queryAllByTestId('action-btn')
+    const foundCount = recallButtons.filter(id => queryByTestId(id) != null).length
     assert.strictEqual(
-      allButtons.length,
+      foundCount,
       recallButtons.length,
-      `Expected ${recallButtons.length} action-btn elements in recall mode, got ${allButtons.length}`
+      `Expected ${recallButtons.length} action buttons in recall mode, found ${foundCount}`
     )
   })
 

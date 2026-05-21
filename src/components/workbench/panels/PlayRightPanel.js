@@ -57,7 +57,7 @@ export default function PlayRightPanel({
       h(EmptyStatePanel, {
         icon: 'search',
         title: '暂无分析数据',
-        description: '连接引擎后可查看胜率、目数和候选点等分析结果',
+        description: '连接引擎后可查看分析结果',
       }),
     ),
 

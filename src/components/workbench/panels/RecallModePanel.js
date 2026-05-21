@@ -96,7 +96,7 @@ export default function RecallModePanel({
     // Card 1: Mode toggle (always shown)
     cards.push(
       h('div', {class: 'wb-card', key: 'mode-toggle-card'},
-        h('div', {class: 'wb-panel-title'}, '当前模式'),
+        h('div', {class: 'wb-panel-title'}, '回忆模式'),
         h('div', {class: 'wb-panel-body'},
           h('div', {style: 'margin-bottom: 4px'}, '回忆模式'),
           h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '先复现原线'),
