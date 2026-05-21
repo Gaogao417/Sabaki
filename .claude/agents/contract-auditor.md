@@ -44,8 +44,8 @@ Workbench wiring 契约必须从属于：
 
 每个自动化测试 ID 必须包含以下字段：
 
-| Test ID | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Forbidden Mocks | Primary Assertion | Downstream Covered By |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| Test ID | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Mock Contract Source | Forbidden Mocks | Primary Assertion | Downstream Covered By |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 `Layer` 只能使用：
 
@@ -70,6 +70,8 @@ Workbench wiring 契约必须从属于：
 - 测试目标写成 “complete wiring loop”，但没有覆盖 `event -> command -> state -> projection -> UI` 的至少一条真实链路。
 - 用 “mock controller called” 作为主验收，却把 coverage 标成 store transition 或 projection return。
 - 把一个测试行同时写成 delegation、state transition、rendered UI，而没有说明哪些生产对象真实。
+- 契约允许为生产 service/controller/store/adapter/repository 手写 per-file spy，却没有 shared typed factory 或生产接口绑定。
+- 契约没有说明 fake/spy 如何与生产接口保持同步。
 
 允许的拆分方式：
 
@@ -79,6 +81,22 @@ Workbench wiring 契约必须从属于：
 - `SERVICE_REPOSITORY_TRANSITION` 必须使用真实 service；可以用 in-memory repository。
 - `PROJECTION_RETURN` 必须使用真实 projection/Container；可以只断言 props。
 - `RENDERED_UI_RETURN` 必须渲染真实 Shell/Panel 或稳定测试封装，并断言 rendered output/交互。
+
+## Test Double Contract Binding 审计
+
+你必须审查 `Mock Contract Source` 是否足以防止 mock drift。
+
+以下情况至少 `REQUEST_CHANGES`：
+
+- TypeScript 测试中的生产接口 spy 没有 `satisfies ProductionInterface`、显式返回类型或 shared typed factory。
+- JS 测试只靠 JSDoc 约束生产接口 spy，但仓库未启用 `checkJs` 或文件未启用 `// @ts-check`。
+- 契约允许每个测试文件复制 `createSpyFlowService`、`createSpyTabService`、`createSpySnapshotService` 等生产 service spy。
+- `Mocked Dependencies` 写了 service/controller/store/repository，但 `Mock Contract Source` 为空或只写 “mock”。
+
+以下情况必须 `BLOCK`：
+
+- 核心 state-forward、controller/service transition 或 side-effect boundary 测试依赖未绑定生产接口的手写 spy，并把该测试标为 covered。
+- 契约把未绑定接口的 mock 当作真实 contract provider，例如用手写 `documentStore.playMove` 返回结构证明 engine/analysis 编排正确，却没有 provider contract 或 shared fixture。
 
 ## 覆盖完整性审计
 
@@ -140,8 +158,8 @@ APPROVE / APPROVE_WITH_NOTES / REQUEST_CHANGES / BLOCK
 
 ## 4. 分层与 Mock 策略审计
 
-| Test ID | Layer | Production Subject | Mock 策略是否匹配 | 结论 | 备注 |
-| --- | --- | --- | --- | --- | --- |
+| Test ID | Layer | Production Subject | Mock Contract Source | Mock 策略是否匹配 | 结论 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- |
 
 ## 5. 覆盖缺口
 

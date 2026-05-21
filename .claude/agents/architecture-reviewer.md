@@ -91,6 +91,11 @@ Workbench 接线审查属于你的范围。你必须判断 UI 控件是否真的
    - 测试是证明真实行为还是只证明 mock 行为？
    - 接线测试是否同时覆盖状态前进和状态回流？
    - 是否存在只断言 callback/call count、没有断言 store/projection 的假接线测试？
+   - 是否存在 per-file 手写生产 service/controller/store spy？
+   - 生产接口 mock 是否来自 shared typed factory，或用生产接口 `satisfies` / 显式返回类型绑定？
+   - 生产接口新增/删除方法时，这些 test double 是否会类型失败？
+   - JS 测试是否误以为 JSDoc 会被 CI 检查？如果 `checkJs: false`，JSDoc 不能作为唯一契约。
+   - `documentStore.playMove`、recall service、snapshot service 等返回结构是否由 shared contract fixture/provider test 保护，而不是散落在测试文件中手写。
    - 架构契约测试是否单独放置或清晰命名？
    - **测试合法性**：测试是否真正执行了生产代码？
      - 是否存在在测试文件中重新实现生产逻辑的测试？

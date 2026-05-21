@@ -143,8 +143,39 @@ UI event / board event
 - `but current`
 - `passthrough`
 - `GAP`
+- `function createSpy.*Service`
+- `const createSpy.*Service`
+- `calls = {`
+- `as any`
+- `: any`
+- `Promise<unknown>`
 
 命中不一定都是错误，但你必须逐项判断是否导致弱测试或虚假通过。
+
+## Test Double Contract Drift 审计
+
+你必须检查 fake/spy/mock 是否与生产接口绑定，而不是只检查 mock 是否“分层合理”。
+
+必查问题：
+
+1. 测试文件是否本地定义了生产 service/controller/store/adapter spy，例如 `createSpyFlowService`、`createSpyTabService`、`createSpySnapshotService`、`createSpyDocumentStore`、`createSpyRecallService`。
+2. 该 spy 是否来自 shared typed factory，或是否用生产接口 `satisfies ProductionInterface` / 显式返回类型绑定。
+3. JS 测试是否只靠 JSDoc 标注生产接口；如果仓库 `tsconfig.json` 中 `checkJs: false`，JSDoc 不算 CI 级约束。
+4. spy 是否漏实现生产接口方法却仍被测试接受。
+5. mock 返回结构是否手写复制生产返回值，例如 `documentStore.playMove` result、recall/session result、snapshot result；若是，是否有 provider contract 或 shared fixture 保护。
+
+结论规则：
+
+- Workbench wiring 测试本地定义生产 service spy，且已有 shared typed factory 可复用：`REQUEST_CHANGES`。
+- TypeScript 测试中的生产接口 spy 未绑定生产接口：`REQUEST_CHANGES`。
+- JS 测试中的生产接口 spy 只靠 JSDoc，但没有 `// @ts-check` 和类型检查覆盖：`REQUEST_CHANGES`。
+- 核心 state-forward / side-effect / service transition 测试依赖未绑定接口的手写 spy，并声称 covered：`BLOCK`。
+
+允许例外：
+
+- 单个测试内的一次性 tiny stub，不模拟完整生产接口。
+- in-memory repository fake，但必须有明确状态模型和被测服务真实调用路径。
+- shared typed factory 内部记录 calls；calls 属性可以是测试扩展，但生产接口本身必须完整实现。
 
 ## 上游调用签名一致性审计
 

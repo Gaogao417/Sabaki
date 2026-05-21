@@ -69,7 +69,7 @@ If a task only implements the first half of this loop, it is incomplete unless t
    - Must first produce a "source alignment" section citing PRD v0.5 and Architecture v0.5.
    - Must list control events, controller commands, service calls, store before/after state, projection results, allowed side effects, forbidden side effects, and manual acceptance.
    - Must name the specific UI component (e.g., ProblemBar, RecallModePanel, TrainingDashboardDrawer) that triggers each handler. If no UI component exists, the handler must be marked `DEFERRED` with the missing UI control described.
-   - Must classify every automated Test ID by Layer, Production Subject, Real Dependencies, Mocked Dependencies, Forbidden Mocks, Primary Assertion, and Downstream Covered By.
+   - Must classify every automated Test ID by Layer, Production Subject, Real Dependencies, Mocked Dependencies, Mock Contract Source, Forbidden Mocks, Primary Assertion, and Downstream Covered By.
    - Must mark any command or state not present in v0.5 as `PROPOSED_GAP`, not as an approved behavior.
    - For any matrix/state-table based task, must convert each in-scope row into an explicit expected value/behavior with a test status: `GREEN`, `RED`, or `DEFERRED`.
    - Must not leave test-writer to infer whether a matrix/current-code conflict should test current behavior. Known GAP rows must be `RED` or `DEFERRED`, never green current-behavior tests.
@@ -84,6 +84,7 @@ If a task only implements the first half of this loop, it is incomplete unless t
      - Production Subject
      - Real Dependencies
      - Mocked Dependencies
+     - Mock Contract Source
      - Forbidden Mocks
      - Primary Assertion
      - Downstream Covered By
@@ -178,6 +179,9 @@ For a workbench wiring project, complete phases in this order:
    - Keep visual tests separate from wiring tests.
    - Prefer tests that fail when store state no longer reaches UI.
    - Require every shared harness to document real modules, fake modules, valid Layers, and invalid Layers.
+   - Before adding new Workbench wiring tests, inspect existing shared spy factories. If a test needs a production service/controller/store/adapter/repository fake, add or update a shared typed factory first.
+   - Per-file production service spy factories are not allowed for `WorkbenchFlowService`, `WorkbenchTabService`, `SnapshotService`, `documentStore.playMove` ports, `RecallService`, `AttemptService`, `ReviewService`, or repository ports.
+   - Test doubles for production interfaces must be bound to the production type with `satisfies ProductionInterface`, an explicit `ProductionInterface & { calls: ... }` return type, or an approved provider contract/shared fixture. JS JSDoc alone is not enough unless JS type checking is enabled.
 
 5. **Implement by vertical slice**
    - One mode or workflow at a time.

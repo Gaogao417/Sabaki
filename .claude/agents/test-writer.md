@@ -99,9 +99,10 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 14. 每个测试夹具/harness 的真实性清单：
    - 真实生产模块。
    - fake/spy/mock 模块。
+   - fake/spy/mock 的契约来源（生产接口、shared typed factory、in-memory fake 或 local tiny stub）。
    - 此 harness 允许证明的 Layer。
    - 此 harness 禁止证明的 Layer。
-15. 每个测试 ID 的 Layer、Production Subject、Real Dependencies、Mocked Dependencies、Forbidden Mocks、Primary Assertion。
+15. 每个测试 ID 的 Layer、Production Subject、Real Dependencies、Mocked Dependencies、Mock Contract Source、Forbidden Mocks、Primary Assertion。
 
 然后编写测试。
 
@@ -246,6 +247,30 @@ Harness manifest:
 - callback call count 只能作为 `UI_COMMAND_MAPPING` 或 `CONTAINER_DELEGATION` 的主断言，不能覆盖 `STATE`、`PROJECTION_RETURN` 或 `RENDERED_UI_RETURN`。
 - shell props 断言只能覆盖 `PROJECTION_RETURN`；若契约要求 panel 可见状态，必须渲染真实 Shell/Panel 并断言 rendered output 或交互。
 
+### Test Double Contract Binding（必须遵守）
+
+任何 fake/spy/mock 只要模拟生产 service/controller/store/adapter/repository 接口，必须与生产契约绑定，不能只靠开发者手写同名方法。
+
+优先级：
+
+1. 优先复用 `test/**/shared/*SpyFactories.ts`、`test/**/helpers/**` 中已有的 shared typed factory。
+2. 如果需要新增生产接口 spy，必须放在 shared helper 中，并用生产接口约束：
+   - TypeScript：`satisfies ProductionInterface`
+   - 或显式返回类型：`ProductionInterface & { calls: ... }`
+3. JS 测试不得在本文件内手写 `createSpyFlowService`、`createSpyTabService`、`createSpySnapshotService` 等生产接口 spy；应 import TS shared factory。
+4. 只允许在单个测试内部手写“一次性、局部、非生产接口”的 tiny stub，例如单个 callback、单个 logger writer、单个无状态 adapter 方法。
+
+禁止：
+
+- 每个测试文件复制一份 `createSpyXxxService()`。
+- spy 返回值未绑定生产接口。
+- 使用 `any`、`unknown` 或 `{[key: string]: any}` 绕过接口完整性。
+- 用 JSDoc 作为唯一约束，除非该 JS 文件启用了 `// @ts-check` 且 CI/本地类型检查会覆盖 JS。
+
+本仓库 `tsconfig.json` 当前 `checkJs: false`，所以 JS 文件里的 JSDoc 默认不是 CI 级契约。Workbench wiring 的生产 service spy 应优先由 TS shared factory 提供。
+
+新增或修改生产接口时，相关 shared spy factory 必须同步更新；否则类型检查应失败。若还没有对应 helper，先补 helper，再写测试。
+
 ### Red/Green 要求
 
 契约测试必须能在缺少目标实现时红灯，除非该契约项被批准为 deferred 并使用 `it.skip()` 或 `this.skip()` 明确跳过。
@@ -295,8 +320,8 @@ Harness manifest:
 
 ## 3. 新增测试
 
-| 测试名称 | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Primary Assertion | 长期或迁移 | 保护的契约 |
-| --------- | ---- | ------------------ | ----------------- | ------------------- | ----------------- | ---------- | ---------- |
+| 测试名称 | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Mock Contract Source | Primary Assertion | 长期或迁移 | 保护的契约 |
+| --------- | ---- | ------------------ | ----------------- | ------------------- | -------------------- | ----------------- | ---------- | ---------- |
 
 ## 4. 有意不添加的测试
 
@@ -313,8 +338,8 @@ Harness manifest:
 
 ## 9. Harness / Mock Manifest（如适用）
 
-| Harness | Real production modules | Fake/spy/mock modules | Valid Layers | Invalid Layers |
-| --- | --- | --- | --- | --- |
+| Harness | Real production modules | Fake/spy/mock modules | Mock Contract Source | Valid Layers | Invalid Layers |
+| --- | --- | --- | --- | --- | --- |
 
 结尾：
 

@@ -164,8 +164,8 @@ Workbench 接线任务也属于你的范围。接线任务指：把已经完成�
 
 每个测试契约行必须包含：
 
-| Test ID | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Forbidden Mocks | Primary Assertion | Downstream Covered By |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| Test ID | Layer | Production Subject | Real Dependencies | Mocked Dependencies | Mock Contract Source | Forbidden Mocks | Primary Assertion | Downstream Covered By |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 规则：
 
@@ -174,6 +174,19 @@ Workbench 接线任务也属于你的范围。接线任务指：把已经完成�
 - 如果测试只断言 mock controller/service 被调用，只能标为 `CONTAINER_DELEGATION`，不能标为 state-forward。
 - 如果一项用户动作需要完整闭环，必须拆成多条测试行，而不是把不同层塞进同一个“state-forward”测试。
 - `Downstream Covered By` 必须指向后续层测试 ID；如果没有后续测试，标记 `not-covered` 或 `DEFERRED`，并说明 approved reason 和退出条件。
+
+### Mock Contract Source 规则
+
+`Mock Contract Source` 必须说明每个 fake/spy/mock 如何与生产契约保持同步，只能使用以下类别：
+
+- `real production interface/type`：由生产 TypeScript interface/type 约束。
+- `shared typed spy factory`：复用 `test/**/shared/*SpyFactories.ts` 或同级 helper，helper 内部用生产接口约束。
+- `in-memory repository fake`：用于 repository/service transition，必须实现被测服务实际调用的方法，并记录状态变化。
+- `local tiny stub`：只允许模拟单个 callback、logger writer 或局部无状态函数；不能模拟完整生产 service/controller/store。
+
+如果测试需要模拟生产 service/controller/store/adapter/repository，但没有生产接口或 shared typed factory 约束，契约必须要求先补 test helper，不能让 test-writer 在测试文件内临时手写。
+
+Workbench wiring 中以下依赖默认不得 per-file 手写 spy：`WorkbenchFlowService`、`WorkbenchTabService`、`SnapshotService`、`documentStore.playMove` port、`RecallService`、`AttemptService`、`ReviewService`、repository ports。若确实需要临时 stub，契约必须说明为什么它不是生产接口替身、为什么不会产生 mock drift。
 
 ## 接口边界签名规则
 
