@@ -61,6 +61,7 @@ import {
   createProblemService,
   createProblemFlowService,
   createLegacyTrainingFlowController,
+  createTaskImportService,
   evaluateAttempt,
   projectTrainingState,
 } from './training/index.ts'
@@ -1001,6 +1002,7 @@ class Sabaki extends EventEmitter {
 
       const reviewService = createReviewService({ repository, workbenchTabService: tabService, logger })
       const problemService = createProblemService({ repository, reviewService, logger })
+      const taskImportService = createTaskImportService({ repository, logger })
       const problemFlowService = createProblemFlowService({
         runtimeStore,
         repository,
@@ -1028,6 +1030,7 @@ class Sabaki extends EventEmitter {
         reviewService,
         problemService,
         problemFlowService,
+        taskImportService,
         projectTrainingState: () => projectTrainingState({
           trainingRuntimeState: runtimeStore.getState(),
         }),

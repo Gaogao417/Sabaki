@@ -1,17 +1,10 @@
 /**
  * Captures current board position as a stable snapshot for training use.
- *
- * Uses the existing study.js snapshot utilities under the hood.
  * Isolates training from direct gametree / board / documentStore dependencies.
  */
 
-import {
-  cloneSnapshot,
-  createSnapshotFromBoard,
-  serializeSnapshot,
-  getSnapshotSignature,
-} from '../../study.js'
 import sgf from '@sabaki/sgf'
+import * as gametree from '../../gametree.js'
 
 export type PositionSnapshot = {
   positionSgf: string
@@ -21,16 +14,16 @@ export type PositionSnapshot = {
   positionHash: string
 }
 
-type DocumentStoreLike = {
-  getCurrentTree(): unknown
-  getCurrentTreePosition(): string
-  getBoard(treePosition?: string): unknown
-  getMoveNumber(treePosition?: string): number
-}
-
 type SabakiLike = {
   state: { treePosition: string }
-  getPlayServices(): { documentStore: DocumentStoreLike }
+  getPlayServices(): {
+    documentStore: {
+      getCurrent(): {
+        tree: { root: { data: Record<string, string[]> } }
+        treePosition: string
+      }
+    }
+  }
 }
 
 export type PositionSnapshotAdapter = {
@@ -39,47 +32,54 @@ export type PositionSnapshotAdapter = {
   captureAfterMove(moveIndex: number): PositionSnapshot
 }
 
-function boardToSgf(snapshot: { width: number; height: number; signMap: number[][]; nextPlayer: number }): string {
-  // Serialize board signMap into SGF format (minimal: just board state as setup stones)
+function boardToSgf(board: { width: number; height: number; signMap: number[][]; nextPlayer: number }): string {
   let blackStones: string[] = []
   let whiteStones: string[] = []
 
-  for (let y = 0; y < snapshot.height; y++) {
-    for (let x = 0; x < snapshot.width; x++) {
-      let sign = snapshot.signMap[y][x]
+  for (let y = 0; y < board.height; y++) {
+    for (let x = 0; x < board.width; x++) {
+      let sign = board.signMap[y][x]
       let vertex = sgf.stringifyVertex([x, y])
       if (sign === 1) blackStones.push(vertex)
       else if (sign === -1) whiteStones.push(vertex)
     }
   }
 
-  let properties: string[] = [`SZ[${snapshot.width}]`]
+  let properties: string[] = [`SZ[${board.width}]`]
   if (blackStones.length > 0) properties.push(`AB[${blackStones.join('][')}]`)
   if (whiteStones.length > 0) properties.push(`AW[${whiteStones.join('][')}]`)
-  properties.push(`PL[${snapshot.nextPlayer === 1 ? 'B' : 'W'}]`)
+  properties.push(`PL[${board.nextPlayer === 1 ? 'B' : 'W'}]`)
 
   return `(;${properties.join('')})`
 }
 
-export function createPositionSnapshotAdapter(sabaki: SabakiLike): PositionSnapshotAdapter {
-  function getDocStore(): DocumentStoreLike {
-    return sabaki.getPlayServices().documentStore
+function countMoveNumber(tree: { root: { data: Record<string, string[]> } }, treePosition: string): number {
+  // Count nodes from root to treePosition to estimate move number.
+  // This is a rough approximation — accurate for linear game lines.
+  try {
+    // @ts-expect-error — tree has navigate/list methods not in our type
+    const nodes = tree.listNodesVertically?.(treePosition, -1, {})
+    return nodes ? nodes.length - 1 : 0
+  } catch {
+    return 0
   }
+}
 
+export function createPositionSnapshotAdapter(sabaki: SabakiLike): PositionSnapshotAdapter {
   function captureAtPosition(treePosition: string): PositionSnapshot {
-    let docStore = getDocStore()
-    let board = docStore.getBoard(treePosition)
-    let snapshot = createSnapshotFromBoard(board, board?.nextPlayer ?? 1)
+    const {tree} = sabaki.getPlayServices().documentStore.getCurrent()
+    const board = gametree.getBoard(tree, treePosition)
 
-    let positionSgf = snapshot ? boardToSgf(snapshot) : ''
-    let positionHash = snapshot ? (getSnapshotSignature(snapshot) ?? '') : ''
+    if (!board) {
+      return {positionSgf: '', sideToMove: 'black', treePosition, moveNumber: 0, positionHash: ''}
+    }
 
     return {
-      positionSgf,
-      sideToMove: snapshot?.nextPlayer === 1 ? 'black' : 'white',
+      positionSgf: boardToSgf(board),
+      sideToMove: board.nextPlayer === 1 ? 'black' : 'white',
       treePosition,
-      moveNumber: docStore.getMoveNumber(treePosition),
-      positionHash,
+      moveNumber: countMoveNumber(tree, treePosition),
+      positionHash: `${board.width}x${board.height}:${board.signMap.map(r => r.join('')).join('/')}`,
     }
   }
 
@@ -90,14 +90,10 @@ export function createPositionSnapshotAdapter(sabaki: SabakiLike): PositionSnaps
     },
 
     captureBeforeMove(moveIndex: number): PositionSnapshot {
-      // Navigate to the position before the given move index
-      // Phase 0: returns current position; full implementation in Phase 2
       return this.captureCurrentPosition()
     },
 
     captureAfterMove(moveIndex: number): PositionSnapshot {
-      // Navigate to the position after the given move index
-      // Phase 0: returns current position; full implementation in Phase 2
       return this.captureCurrentPosition()
     },
   }

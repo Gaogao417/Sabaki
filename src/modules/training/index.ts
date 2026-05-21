@@ -53,6 +53,8 @@ export {
   projectTrainingState,
 } from './adapter/trainingStateProjection'
 
+export { createTaskImportService } from './import/taskImportService'
+
 export {
   createLegacyTrainingFlowController,
 } from './controller/legacyTrainingFlowController'
