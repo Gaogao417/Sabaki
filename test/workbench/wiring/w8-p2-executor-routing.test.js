@@ -188,7 +188,7 @@ function createPlayTestDeps(documentStoreResult) {
           scheduleLiveAnalysis: (...args) => analysisCalls.push(args),
         },
       }),
-      getRecallServiceOrStore: () => ({submitRecallAnswer: () => ({handled: false})}),
+      getRecallAdapter: () => ({submitBoardClick: async () => ({handled: false})}),
       getEditWorkspaceContext: () => null,
       getEditWorkspaceDeps: () => ({}),
       getLegacySabaki: () => ({clickVertex: () => {}}),
@@ -219,8 +219,8 @@ function createRecallTestDeps(recallAnswerResult = {handled: true, changed: true
           },
         },
       }),
-      getRecallServiceOrStore: () => ({
-        submitRecallAnswer: (vertex) => {
+      getRecallAdapter: () => ({
+        submitBoardClick: async (vertex) => {
           recallAnswerCalls.push({vertex})
           return recallAnswerResult
         },
@@ -276,8 +276,8 @@ function createScratchTestDeps() {
           },
         },
       }),
-      getRecallServiceOrStore: () => ({
-        submitRecallAnswer: (vertex) => {
+      getRecallAdapter: () => ({
+        submitBoardClick: async (vertex) => {
           recallAnswerCalls.push({vertex})
           return {handled: false, changed: false}
         },
@@ -327,8 +327,8 @@ function createDeferredTestDeps() {
           scheduleLiveAnalysis: (...args) => analysisCalls.push(args),
         },
       }),
-      getRecallServiceOrStore: () => ({
-        submitRecallAnswer: (vertex) => {
+      getRecallAdapter: () => ({
+        submitBoardClick: async (vertex) => {
           recallAnswerCalls.push({vertex})
           return {handled: false, changed: false}
         },
@@ -529,7 +529,7 @@ describe('W8-P2 Executor Routing: Recall (T-RECALL-01..T-RECALL-02)', function (
       'Recall result.handled must be true. ' +
       'Contract Section 4.2: executeRecallInteraction returns {handled:true} on success.')
     assert.strictEqual(result.isCorrect, true,
-      'Recall result.isCorrect must be true (from trainingStore.submitRecallAnswer). ' +
+      'Recall result.isCorrect must be true (from adapter.submitBoardClick). ' +
       'Contract Section 4.2: executor forwards isCorrect from store.')
 
     assert.strictEqual(harness.documentStoreCalls.length, 0,
@@ -571,9 +571,9 @@ describe('W8-P2 Executor Routing: Recall (T-RECALL-01..T-RECALL-02)', function (
     // trainingStore.submitRecallAnswer must have been called with vertex [3,3]
     // Contract Section 4.2: executeRecallInteraction passes vertex through
     assert.strictEqual(harness.recallAnswerCalls.length, 1,
-      'trainingStore.submitRecallAnswer must be called exactly once')
+      'adapter.submitBoardClick must be called exactly once')
     assert.deepStrictEqual(harness.recallAnswerCalls[0].vertex, [3, 3],
-      'submitRecallAnswer must receive vertex [3,3] from the executor')
+      'submitBoardClick must receive vertex [3,3] from the executor')
 
     // Return value must reflect executor output, not undefined.
     // The defective controller does `return` without the executor result (line 205).
@@ -648,7 +648,7 @@ describe('W8-P2 Executor Routing: Scratch (T-SCRATCH-01..T-SCRATCH-02)', functio
 
     // trainingStore must NOT be called
     assert.strictEqual(harness.recallAnswerCalls.length, 0,
-      'trainingStore.submitRecallAnswer must NOT be called for scratch edit. ' +
+      'adapter.submitBoardClick must NOT be called for scratch edit. ' +
       'Arch v0.5 SS14: scratch does NOT modify Attempt.')
   })
 
@@ -743,7 +743,7 @@ describe('W8-P2 Executor Routing: Deferred (T-DEFERRED-01)', function () {
     assert.strictEqual(harness.analysisCalls.length, 0,
       'analysisService.scheduleLiveAnalysis must NOT be called for deferred')
     assert.strictEqual(harness.recallAnswerCalls.length, 0,
-      'trainingStore.submitRecallAnswer must NOT be called for deferred')
+      'adapter.submitBoardClick must NOT be called for deferred')
     assert.strictEqual(harness.invalidateCalls.length, 0,
       'invalidateEditAnalysis must NOT be called for deferred')
     assert.strictEqual(harness.scheduleCalls.length, 0,

@@ -162,8 +162,8 @@ function createControllerDeps(options = {}) {
     },
   }
 
-  const recallServiceStore = {
-    submitRecallAnswer: (vertex) => {
+  const recallAdapter = {
+    async submitBoardClick(vertex) {
       calls.recallSubmitRecallAnswer.push({vertex})
       return recallAnswerResult
     },
@@ -193,7 +193,7 @@ function createControllerDeps(options = {}) {
       engineService: undefined,
       analysisService: undefined,
     }),
-    getRecallServiceOrStore: () => recallServiceStore,
+    getRecallAdapter: () => recallAdapter,
     getEditWorkspaceContext: () => ({
       activeTab: 'current',
       currentSnapshot: {
@@ -217,7 +217,7 @@ function createControllerDeps(options = {}) {
     _calls: calls,
     _documentStore: documentStore,
     _recallService: recallServiceShape,
-    _recallServiceStore: recallServiceStore,
+    _recallServiceStore: recallAdapter,
     _legacySabaki: legacySabaki,
   }
 }
@@ -492,8 +492,8 @@ describe('W8-P1 Board Interaction Controller', function () {
       assert.deepStrictEqual(deps._calls.documentStorePlayMove[0].vertex, [3, 3])
     })
 
-    // W8P1-T11: recall resolved -> trainingStore.submitRecallAnswer is called via executor
-    it('W8P1-T11: recall resolved routes to trainingStore.submitRecallAnswer', async function () {
+    // W8P1-T11: recall resolved -> adapter.submitBoardClick is called via executor
+    it('W8P1-T11: recall resolved routes to adapter.submitBoardClick', async function () {
       const deps = createControllerDeps()
       const controller = createBoardInteractionController(deps)
 
@@ -512,10 +512,10 @@ describe('W8-P1 Board Interaction Controller', function () {
       })
 
       assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 1,
-        'trainingStore.submitRecallAnswer must be called exactly once for recall resolved')
+        'adapter.submitBoardClick must be called exactly once for recall resolved')
       const call = deps._calls.recallSubmitRecallAnswer[0]
       assert.deepStrictEqual(call.vertex, [5, 5],
-        'submitRecallAnswer must receive vertex [5,5]')
+        'submitBoardClick must receive vertex [5,5]')
     })
 
     // W8P1-T12: deferred -> legacySabaki.clickVertex is called
@@ -853,8 +853,8 @@ describe('W8-P1 Board Interaction Controller', function () {
           engineService: undefined,
           analysisService: undefined,
         }),
-        getRecallServiceOrStore: () => ({
-          submitRecallAnswer: () => ({handled: true, changed: true}),
+        getRecallAdapter: () => ({
+          submitBoardClick: async () => ({handled: true, changed: true}),
         }),
         getEditWorkspaceContext: () => null,
         getEditWorkspaceDeps: () => ({}),
@@ -895,8 +895,8 @@ describe('W8-P1 Board Interaction Controller', function () {
           engineService: undefined,
           analysisService: undefined,
         }),
-        getRecallServiceOrStore: () => ({
-          submitRecallAnswer: () => ({handled: false, changed: false}),
+        getRecallAdapter: () => ({
+          submitBoardClick: async () => ({handled: false, changed: false}),
         }),
         getEditWorkspaceContext: () => null,
         getEditWorkspaceDeps: () => ({}),

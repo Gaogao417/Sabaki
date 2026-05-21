@@ -282,7 +282,7 @@ describe('W3-T16: play-stone executor side effect targets', () => {
 // --- W3-T17: recall answer executor does NOT write to documentStore or game tree ---
 
 describe('W3-T17: recall executor does NOT write to documentStore or game tree', () => {
-  it('recallInteractionExecutor calls trainingStore.submitRecallAnswer', async () => {
+  it('recallInteractionExecutor calls adapter.submitBoardClick', async () => {
     const executorMod = await tryImport(
       'src/modules/workbench/board-interactions/executors/recallInteractionExecutor.js',
     )
@@ -293,8 +293,8 @@ describe('W3-T17: recall executor does NOT write to documentStore or game tree',
 
     const recallAnswerCalls = []
     const services = {
-      trainingStore: {
-        submitRecallAnswer: (vertex) => {
+      adapter: {
+        async submitBoardClick(vertex) {
           recallAnswerCalls.push({vertex})
           return {
             handled: true,
@@ -307,7 +307,7 @@ describe('W3-T17: recall executor does NOT write to documentStore or game tree',
       },
     }
 
-    const result = executeRecallInteraction(
+    const result = await executeRecallInteraction(
       {
         status: 'resolved',
         intent: 'submit-recall-answer',
@@ -334,14 +334,16 @@ describe('W3-T17: recall executor does NOT write to documentStore or game tree',
 
     const documentStoreCalls = []
     const services = {
-      trainingStore: {
-        submitRecallAnswer: () => ({
-          handled: true,
-          changed: true,
-          isCorrect: true,
-          completed: false,
-          recallMoveIndex: 0,
-        }),
+      adapter: {
+        async submitBoardClick() {
+          return {
+            handled: true,
+            changed: true,
+            isCorrect: true,
+            completed: false,
+            recallMoveIndex: 0,
+          }
+        },
       },
       documentStore: {
         playMove: (...args) => {
@@ -350,7 +352,7 @@ describe('W3-T17: recall executor does NOT write to documentStore or game tree',
       },
     }
 
-    executeRecallInteraction(
+    await executeRecallInteraction(
       {
         status: 'resolved',
         intent: 'submit-recall-answer',
@@ -377,7 +379,7 @@ describe('W3-T17: recall executor does NOT write to documentStore or game tree',
     const executeRecallInteraction = executorMod.executeRecallInteraction || executorMod.default
     if (typeof executeRecallInteraction !== 'function') return
 
-    const result = executeRecallInteraction(
+    const result = await executeRecallInteraction(
       {
         status: 'resolved',
         intent: 'submit-recall-answer',
@@ -386,8 +388,8 @@ describe('W3-T17: recall executor does NOT write to documentStore or game tree',
       },
       {},
       {
-        trainingStore: {
-          submitRecallAnswer: () => ({handled: true, changed: true}),
+        adapter: {
+          submitBoardClick: async () => ({handled: true, changed: true}),
         },
       },
     )

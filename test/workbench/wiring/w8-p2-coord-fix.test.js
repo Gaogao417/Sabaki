@@ -35,7 +35,7 @@
  *   - Real production modules: createBoardInteractionController,
  *     resolveBoardInteraction, createBoardInteractionContext, BOARD_INTENTS,
  *     RESOLVE_STATUSES, createLoggerService, createConsoleWriter
- *   - Fake/spy modules: mock executor deps with spy on submitRecallMove
+ *   - Fake/spy modules: mock executor deps with spy on submitBoardClick
  *   - Valid for: SIDE_EFFECT_BOUNDARY (controller -> service call format)
  *   - Not valid for: CONTAINER_DELEGATION, RENDERED_UI_RETURN, STORE_SUBSCRIPTION
  *
@@ -90,18 +90,17 @@ function makeTab(overrides = {}) {
 }
 
 /**
- * Create controller deps with submitRecallAnswer spy.
+ * Create controller deps with adapter spy.
  * The spy captures the vertex argument for format verification.
  * With executor routing, the controller calls executeRecallInteraction which
- * calls trainingStore.submitRecallAnswer(vertex) with the raw vertex.
- * SGF coordinate conversion happens inside trainingStore, not the controller.
+ * calls adapter.submitBoardClick(vertex) with the raw vertex.
  */
 function createCoordTestDeps() {
-  const submitRecallAnswerCalls = []
+  const submitBoardClickCalls = []
 
-  const trainingStore = {
-    submitRecallAnswer: (vertex) => {
-      submitRecallAnswerCalls.push({vertex})
+  const adapter = {
+    async submitBoardClick(vertex) {
+      submitBoardClickCalls.push({vertex})
       return {handled: true, changed: true, isCorrect: true}
     },
   }
@@ -116,26 +115,25 @@ function createCoordTestDeps() {
       engineService: undefined,
       analysisService: undefined,
     }),
-    getRecallServiceOrStore: () => trainingStore,
+    getRecallAdapter: () => adapter,
     getEditWorkspaceContext: () => null,
     getEditWorkspaceDeps: () => ({}),
     getLegacySabaki: () => ({clickVertex: () => {}}),
     getIsMac: () => false,
-    _submitRecallAnswerCalls: submitRecallAnswerCalls,
+    _submitBoardClickCalls: submitBoardClickCalls,
   }
 }
 
 // ===========================================================================
 // T2-04, T2-05, T2-06: Vertex passthrough verification
 // Real boardInteractionController, real resolver, real executeRecallInteraction.
-// The executor passes the raw vertex to trainingStore.submitRecallAnswer(vertex).
-// SGF coordinate conversion happens inside trainingStore, not in the controller.
+// The executor passes the raw vertex to adapter.submitBoardClick(vertex).
 // ===========================================================================
 
 describe('W8-P2 GAP-Coord: vertex passthrough (T2-04..T2-06)', function () {
 
-  // T2-04: vertex [3,3] is passed through executor to submitRecallAnswer
-  it('T2-04: vertex [3,3] is passed through executor to trainingStore.submitRecallAnswer', async function () {
+  // T2-04: vertex [3,3] is passed through executor to submitBoardClick
+  it('T2-04: vertex [3,3] is passed through executor to adapter.submitBoardClick', async function () {
     const deps = createCoordTestDeps()
     const controller = createBoardInteractionController(deps)
 
@@ -150,14 +148,14 @@ describe('W8-P2 GAP-Coord: vertex passthrough (T2-04..T2-06)', function () {
       runtimeState: {},
     })
 
-    assert.strictEqual(deps._submitRecallAnswerCalls.length, 1,
-      'submitRecallAnswer must be called exactly once')
-    assert.deepStrictEqual(deps._submitRecallAnswerCalls[0].vertex, [3, 3],
-      'submitRecallAnswer must receive vertex [3,3]')
+    assert.strictEqual(deps._submitBoardClickCalls.length, 1,
+      'submitBoardClick must be called exactly once')
+    assert.deepStrictEqual(deps._submitBoardClickCalls[0].vertex, [3, 3],
+      'submitBoardClick must receive vertex [3,3]')
   })
 
   // T2-05: vertex [0,0] and [18,18] are passed through correctly
-  it('T2-05: vertex [0,0] and vertex [18,18] are passed through to submitRecallAnswer', async function () {
+  it('T2-05: vertex [0,0] and vertex [18,18] are passed through to submitBoardClick', async function () {
     // First click: [0,0]
     const depsA = createCoordTestDeps()
     const controllerA = createBoardInteractionController(depsA)
@@ -173,9 +171,9 @@ describe('W8-P2 GAP-Coord: vertex passthrough (T2-04..T2-06)', function () {
       runtimeState: {},
     })
 
-    assert.strictEqual(depsA._submitRecallAnswerCalls.length, 1)
-    assert.deepStrictEqual(depsA._submitRecallAnswerCalls[0].vertex, [0, 0],
-      'submitRecallAnswer must receive vertex [0,0]')
+    assert.strictEqual(depsA._submitBoardClickCalls.length, 1)
+    assert.deepStrictEqual(depsA._submitBoardClickCalls[0].vertex, [0, 0],
+      'submitBoardClick must receive vertex [0,0]')
 
     // Second click: [18,18]
     const depsB = createCoordTestDeps()
@@ -192,13 +190,13 @@ describe('W8-P2 GAP-Coord: vertex passthrough (T2-04..T2-06)', function () {
       runtimeState: {},
     })
 
-    assert.strictEqual(depsB._submitRecallAnswerCalls.length, 1)
-    assert.deepStrictEqual(depsB._submitRecallAnswerCalls[0].vertex, [18, 18],
-      'submitRecallAnswer must receive vertex [18,18]')
+    assert.strictEqual(depsB._submitBoardClickCalls.length, 1)
+    assert.deepStrictEqual(depsB._submitBoardClickCalls[0].vertex, [18, 18],
+      'submitBoardClick must receive vertex [18,18]')
   })
 
   // T2-06: vertex [0,18] and [18,0] are passed through correctly
-  it('T2-06: vertex [0,18] and vertex [18,0] are passed through to submitRecallAnswer', async function () {
+  it('T2-06: vertex [0,18] and vertex [18,0] are passed through to submitBoardClick', async function () {
     // First click: [0,18]
     const depsC = createCoordTestDeps()
     const controllerC = createBoardInteractionController(depsC)
@@ -214,9 +212,9 @@ describe('W8-P2 GAP-Coord: vertex passthrough (T2-04..T2-06)', function () {
       runtimeState: {},
     })
 
-    assert.strictEqual(depsC._submitRecallAnswerCalls.length, 1)
-    assert.deepStrictEqual(depsC._submitRecallAnswerCalls[0].vertex, [0, 18],
-      'submitRecallAnswer must receive vertex [0,18]')
+    assert.strictEqual(depsC._submitBoardClickCalls.length, 1)
+    assert.deepStrictEqual(depsC._submitBoardClickCalls[0].vertex, [0, 18],
+      'submitBoardClick must receive vertex [0,18]')
 
     // Second click: [18,0]
     const depsD = createCoordTestDeps()
@@ -233,8 +231,8 @@ describe('W8-P2 GAP-Coord: vertex passthrough (T2-04..T2-06)', function () {
       runtimeState: {},
     })
 
-    assert.strictEqual(depsD._submitRecallAnswerCalls.length, 1)
-    assert.deepStrictEqual(depsD._submitRecallAnswerCalls[0].vertex, [18, 0],
-      'submitRecallAnswer must receive vertex [18,0]')
+    assert.strictEqual(depsD._submitBoardClickCalls.length, 1)
+    assert.deepStrictEqual(depsD._submitBoardClickCalls[0].vertex, [18, 0],
+      'submitBoardClick must receive vertex [18,0]')
   })
 })

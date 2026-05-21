@@ -22,12 +22,12 @@ function resolvedRecallResult(vertex, overrides = {}) {
   }
 }
 
-function trackTrainingStore(answerResult = {handled: true, changed: true, isCorrect: true, completed: false, recallMoveIndex: 1, attempt: {moveNumber: 0, isCorrect: true}}) {
-  let calls = {submitRecallAnswer: []}
+function trackAdapter(answerResult = {handled: true, changed: true, isCorrect: true, completed: false, recallMoveIndex: 1, attempt: {moveNumber: 0, isCorrect: true}}) {
+  let calls = {submitBoardClick: []}
   return {
-    trainingStore: {
-      submitRecallAnswer(vertex) {
-        calls.submitRecallAnswer.push({vertex})
+    adapter: {
+      async submitBoardClick(vertex) {
+        calls.submitBoardClick.push({vertex})
         return answerResult
       },
     },
@@ -39,19 +39,19 @@ function trackTrainingStore(answerResult = {handled: true, changed: true, isCorr
 
 describe('executeRecallInteraction', () => {
   describe('valid submit-recall-answer', () => {
-    it('calls trainingStore.submitRecallAnswer(vertex)', () => {
-      let {trainingStore, calls} = trackTrainingStore()
+    it('calls adapter.submitBoardClick(vertex)', async () => {
+      let {adapter, calls} = trackAdapter()
       let result = resolvedRecallResult([3, 3])
 
-      let exec = executeRecallInteraction(result, {}, {trainingStore})
+      let exec = await executeRecallInteraction(result, {}, {adapter})
 
       assert.equal(exec.handled, true)
       assert.equal(exec.changed, true)
-      assert.equal(calls.submitRecallAnswer.length, 1)
-      assert.deepEqual(calls.submitRecallAnswer[0].vertex, [3, 3])
+      assert.equal(calls.submitBoardClick.length, 1)
+      assert.deepEqual(calls.submitBoardClick[0].vertex, [3, 3])
     })
 
-    it('returns isCorrect, completed, recallMoveIndex, attempt from store', () => {
+    it('returns isCorrect, completed, recallMoveIndex, attempt from adapter', async () => {
       let answerResult = {
         handled: true,
         changed: true,
@@ -60,9 +60,9 @@ describe('executeRecallInteraction', () => {
         recallMoveIndex: 1,
         attempt: {moveNumber: 0, expectedMove: 'dd', userMove: 'dd', isCorrect: true, hintLevelUsed: 0},
       }
-      let {trainingStore} = trackTrainingStore(answerResult)
+      let {adapter} = trackAdapter(answerResult)
 
-      let exec = executeRecallInteraction(resolvedRecallResult([3, 3]), {}, {trainingStore})
+      let exec = await executeRecallInteraction(resolvedRecallResult([3, 3]), {}, {adapter})
 
       assert.equal(exec.isCorrect, true)
       assert.equal(exec.completed, false)
@@ -70,7 +70,7 @@ describe('executeRecallInteraction', () => {
       assert.deepEqual(exec.attempt, answerResult.attempt)
     })
 
-    it('returns wrong answer result from store', () => {
+    it('returns wrong answer result from adapter', async () => {
       let answerResult = {
         handled: true,
         changed: false,
@@ -80,9 +80,9 @@ describe('executeRecallInteraction', () => {
         reason: undefined,
         attempt: {moveNumber: 0, expectedMove: 'dd', userMove: 'pp', isCorrect: false, hintLevelUsed: 0},
       }
-      let {trainingStore} = trackTrainingStore(answerResult)
+      let {adapter} = trackAdapter(answerResult)
 
-      let exec = executeRecallInteraction(resolvedRecallResult([3, 15]), {}, {trainingStore})
+      let exec = await executeRecallInteraction(resolvedRecallResult([3, 15]), {}, {adapter})
 
       assert.equal(exec.isCorrect, false)
       assert.equal(exec.changed, false)
@@ -91,29 +91,29 @@ describe('executeRecallInteraction', () => {
   })
 
   describe('rejection', () => {
-    it('wrong intent is rejected without side effects', () => {
-      let {trainingStore, calls} = trackTrainingStore()
+    it('wrong intent is rejected without side effects', async () => {
+      let {adapter, calls} = trackAdapter()
       let result = resolvedRecallResult([3, 3], {intent: BOARD_INTENTS.PLAY_STONE})
 
-      let exec = executeRecallInteraction(result, {}, {trainingStore})
+      let exec = await executeRecallInteraction(result, {}, {adapter})
 
       assert.equal(exec.handled, false)
       assert.equal(exec.changed, false)
-      assert.equal(calls.submitRecallAnswer.length, 0)
+      assert.equal(calls.submitBoardClick.length, 0)
     })
 
-    it('wrong contract is rejected without side effects', () => {
-      let {trainingStore, calls} = trackTrainingStore()
+    it('wrong contract is rejected without side effects', async () => {
+      let {adapter, calls} = trackAdapter()
       let result = resolvedRecallResult([3, 3], {mutationContract: MUTATION_CONTRACTS.PLAY_MOVE})
 
-      let exec = executeRecallInteraction(result, {}, {trainingStore})
+      let exec = await executeRecallInteraction(result, {}, {adapter})
 
       assert.equal(exec.handled, false)
-      assert.equal(calls.submitRecallAnswer.length, 0)
+      assert.equal(calls.submitBoardClick.length, 0)
     })
 
-    it('deferred status is rejected', () => {
-      let {trainingStore, calls} = trackTrainingStore()
+    it('deferred status is rejected', async () => {
+      let {adapter, calls} = trackAdapter()
       let result = {
         intent: BOARD_INTENTS.SUBMIT_RECALL_ANSWER,
         status: RESOLVE_STATUSES.DEFERRED,
@@ -122,14 +122,14 @@ describe('executeRecallInteraction', () => {
         reason: 'deferred',
       }
 
-      let exec = executeRecallInteraction(result, {}, {trainingStore})
+      let exec = await executeRecallInteraction(result, {}, {adapter})
 
       assert.equal(exec.handled, false)
-      assert.equal(calls.submitRecallAnswer.length, 0)
+      assert.equal(calls.submitBoardClick.length, 0)
     })
 
-    it('rejected status is rejected', () => {
-      let {trainingStore, calls} = trackTrainingStore()
+    it('rejected status is rejected', async () => {
+      let {adapter, calls} = trackAdapter()
       let result = {
         intent: BOARD_INTENTS.SUBMIT_RECALL_ANSWER,
         status: RESOLVE_STATUSES.REJECTED,
@@ -138,26 +138,26 @@ describe('executeRecallInteraction', () => {
         reason: 'occupied point',
       }
 
-      let exec = executeRecallInteraction(result, {}, {trainingStore})
+      let exec = await executeRecallInteraction(result, {}, {adapter})
 
       assert.equal(exec.handled, false)
-      assert.equal(calls.submitRecallAnswer.length, 0)
+      assert.equal(calls.submitBoardClick.length, 0)
     })
   })
 
   describe('isolation', () => {
-    it('does not call documentStore, engineService, or analysisService', () => {
-      let {trainingStore, calls} = trackTrainingStore()
+    it('does not call documentStore, engineService, or analysisService', async () => {
+      let {adapter, calls} = trackAdapter()
 
-      let exec = executeRecallInteraction(
+      let exec = await executeRecallInteraction(
         resolvedRecallResult([3, 3]),
         {},
-        {trainingStore},
+        {adapter},
       )
 
       assert.equal(exec.handled, true)
-      assert.equal(calls.submitRecallAnswer.length, 1)
-      // No other service calls exist on trainingStore
+      assert.equal(calls.submitBoardClick.length, 1)
+      // No other service calls exist on adapter
     })
   })
 })
@@ -165,14 +165,14 @@ describe('executeRecallInteraction', () => {
 // --- Router integration tests ---
 
 describe('executeBoardInteraction (router) recallAnswer handling', () => {
-  it('routes recallAnswer to recall executor', () => {
-    let {trainingStore, calls} = trackTrainingStore()
+  it('routes recallAnswer to recall executor', async () => {
+    let {adapter, calls} = trackAdapter()
     let result = resolvedRecallResult([3, 3])
 
-    let exec = executeBoardInteraction(result, {}, {trainingStore})
+    let exec = await executeBoardInteraction(result, {}, {adapter})
 
     assert.equal(exec.handled, true)
-    assert.equal(calls.submitRecallAnswer.length, 1)
+    assert.equal(calls.submitBoardClick.length, 1)
   })
 
   it('playMove still does not go through sync router', () => {

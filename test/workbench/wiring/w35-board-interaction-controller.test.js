@@ -104,8 +104,8 @@ function createControllerDeps(options = {}) {
     },
   }
 
-  const recallService = {
-    submitRecallAnswer: (vertex) => {
+  const recallAdapter = {
+    async submitBoardClick(vertex) {
       calls.recallSubmitRecallAnswer.push({vertex})
       return recallAnswerResult
     },
@@ -141,7 +141,7 @@ function createControllerDeps(options = {}) {
 
   return {
     getPlayServices: () => ({documentStore}),
-    getRecallServiceOrStore: () => recallService,
+    getRecallAdapter: () => recallAdapter,
     getEditWorkspaceContext: () => editWorkspaceContext,
     getEditWorkspaceDeps: () => editWorkspaceDeps,
     getLegacySabaki: () => legacySabaki,
@@ -149,7 +149,7 @@ function createControllerDeps(options = {}) {
     // Expose spies for assertions
     _calls: calls,
     _documentStore: documentStore,
-    _recallService: recallService,
+    _recallService: recallAdapter,
     _legacySabaki: legacySabaki,
   }
 }
@@ -290,7 +290,7 @@ describe('W3.5 boardInteractionController', function () {
   // --- W35-T08: handleBoardClick routes recall-answer to recallInteractionExecutor ---
 
   describe('W35-T08: recall-answer routes to recallInteractionExecutor -> recallService', function () {
-    it('click in recall mode on empty point calls recallService.submitRecallAnswer with vertex', async function () {
+    it('click in recall mode on empty point calls adapter.submitBoardClick with vertex', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
       if (!controller) return this.skip()
@@ -308,7 +308,7 @@ describe('W3.5 boardInteractionController', function () {
 
       // Main assertion: recall service received the answer
       assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 1,
-        'recallService.submitRecallAnswer must be called for recall-answer')
+        'adapter.submitBoardClick must be called for recall-answer')
       assert.deepStrictEqual(
         deps._calls.recallSubmitRecallAnswer[0].vertex,
         [5, 5],
@@ -496,7 +496,7 @@ describe('W3.5 boardInteractionController', function () {
 
       // Negative: recallService was NOT written
       assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 0,
-        'play executor must NOT write to recallService')
+        'play executor must NOT write to recallAdapter')
 
       // Negative: editWorkspace was NOT modified
       assert.strictEqual(deps._calls.editAnalysisInvalidate.length, 0,
@@ -525,7 +525,7 @@ describe('W3.5 boardInteractionController', function () {
 
       // Positive: recallService was called
       assert.ok(deps._calls.recallSubmitRecallAnswer.length >= 1,
-        'recall executor must call recallService')
+        'recall executor must call recallAdapter')
 
       // Negative: documentStore was NOT written
       assert.strictEqual(deps._calls.documentStorePlayMove.length, 0,
@@ -597,10 +597,10 @@ describe('W3.5 executor side-effect verification (real executor + resolver)', fu
 
   // W35-T20 verified via real executor: recall does NOT write documentStore
   describe('real recallInteractionExecutor side effects', function () {
-    it('executeRecallInteraction calls trainingStore.submitRecallAnswer, not documentStore', async function () {
+    it('executeRecallInteraction calls adapter.submitBoardClick, not documentStore', async function () {
       const recallCalls = []
-      const mockTrainingStore = {
-        submitRecallAnswer: (vertex) => {
+      const mockAdapter = {
+        async submitBoardClick(vertex) {
           recallCalls.push({vertex})
           return {handled: true, changed: true, isCorrect: true}
         },
@@ -614,15 +614,15 @@ describe('W3.5 executor side-effect verification (real executor + resolver)', fu
       assert.strictEqual(result.status, RESOLVE_STATUSES.RESOLVED)
       assert.strictEqual(result.intent, BOARD_INTENTS.SUBMIT_RECALL_ANSWER)
 
-      const execResult = executeRecallInteraction(
+      const execResult = await executeRecallInteraction(
         result,
         {},
-        {trainingStore: mockTrainingStore},
+        {adapter: mockAdapter},
       )
 
       assert.strictEqual(execResult.handled, true, 'executor must handle recall-answer')
       assert.strictEqual(recallCalls.length, 1,
-        'trainingStore.submitRecallAnswer must be called once')
+        'adapter.submitBoardClick must be called once')
       assert.deepStrictEqual(recallCalls[0].vertex, [5, 5],
         'recall service must receive vertex [5,5]')
 
