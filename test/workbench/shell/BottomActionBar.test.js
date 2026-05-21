@@ -19,6 +19,7 @@ import assert from 'assert'
 import {h} from 'preact'
 import {renderToDom} from '../preactTestHelper.js'
 import {tryImport} from '../tryImport.js'
+import {ANNOTATION_TOOL_DEFS} from '../../../src/components/workbench/shared/AnnotationToolbar.js'
 
 let BottomActionBar = null
 
@@ -65,6 +66,10 @@ const commonButtons = [
   'action-fullscreen',
 ]
 
+function queryActionButtons(container) {
+  return Array.from(container.querySelectorAll('button[data-testid^="action-"]'))
+}
+
 describe('BottomActionBar (T-4.3)', function () {
   before(async function () {
     BottomActionBar = await tryImport('src/components/workbench/shell/BottomActionBar.js')
@@ -85,7 +90,7 @@ describe('BottomActionBar (T-4.3)', function () {
       ...commonButtons,
     ]
 
-    const {queryByTestId, queryAllByTestId} = renderToDom(
+    const {container, queryByTestId} = renderToDom(
       h(BottomActionBar, noopProps({mode: 'play'}))
     )
 
@@ -97,11 +102,11 @@ describe('BottomActionBar (T-4.3)', function () {
       assert.ok(btn, `Play mode should have button with data-testid="${testId}"`)
     }
 
-    const foundCount = playButtons.filter(id => queryByTestId(id) != null).length
+    const allButtons = queryActionButtons(container)
     assert.strictEqual(
-      foundCount,
+      allButtons.length,
       playButtons.length,
-      `Expected ${playButtons.length} action buttons in play mode, found ${foundCount}`
+      `Expected ${playButtons.length} action buttons in play mode, got ${allButtons.length}`
     )
   })
 
@@ -120,7 +125,7 @@ describe('BottomActionBar (T-4.3)', function () {
       ...commonButtons,
     ]
 
-    const {queryByTestId, queryAllByTestId} = renderToDom(
+    const {container, queryByTestId} = renderToDom(
       h(BottomActionBar, noopProps({mode: 'problem'}))
     )
 
@@ -129,11 +134,11 @@ describe('BottomActionBar (T-4.3)', function () {
       assert.ok(btn, `Problem mode should have button with data-testid="${testId}"`)
     }
 
-    const foundCount = problemButtons.filter(id => queryByTestId(id) != null).length
+    const allButtons = queryActionButtons(container)
     assert.strictEqual(
-      foundCount,
+      allButtons.length,
       problemButtons.length,
-      `Expected ${problemButtons.length} action buttons in problem mode, found ${foundCount}`
+      `Expected ${problemButtons.length} action buttons in problem mode, got ${allButtons.length}`
     )
   })
 
@@ -150,7 +155,7 @@ describe('BottomActionBar (T-4.3)', function () {
       ...commonButtons,
     ]
 
-    const {queryByTestId, queryAllByTestId} = renderToDom(
+    const {container, queryByTestId} = renderToDom(
       h(BottomActionBar, noopProps({mode: 'recall'}))
     )
 
@@ -159,11 +164,11 @@ describe('BottomActionBar (T-4.3)', function () {
       assert.ok(btn, `Recall mode should have button with data-testid="${testId}"`)
     }
 
-    const foundCount = recallButtons.filter(id => queryByTestId(id) != null).length
+    const allButtons = queryActionButtons(container)
     assert.strictEqual(
-      foundCount,
+      allButtons.length,
       recallButtons.length,
-      `Expected ${recallButtons.length} action buttons in recall mode, found ${foundCount}`
+      `Expected ${recallButtons.length} action buttons in recall mode, got ${allButtons.length}`
     )
   })
 
@@ -227,10 +232,7 @@ describe('BottomActionBar (T-4.3)', function () {
   // Production bug: annotation tool buttons missing
   // Controlled dependencies: props are inline
   it('T-4.3f: analysis annotation tools render all tool buttons', () => {
-    const annotationTools = [
-      'black', 'white', 'cross', 'triangle', 'square',
-      'circle', 'line', 'arrow', 'label-A', 'label-1',
-    ]
+    const annotationTools = ANNOTATION_TOOL_DEFS.map(tool => tool.id)
 
     const {queryAllByTestId} = renderToDom(
       h(BottomActionBar, noopProps({mode: 'analysis'}))

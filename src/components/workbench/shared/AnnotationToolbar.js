@@ -65,7 +65,8 @@ export default function AnnotationToolbar({activeTool = 'arrow', onToolChange = 
       return h('div', {
         key: tool.id,
         'data-testid': 'annotation-tool-btn',
-        class: 'wb-annotation-toolbar__item',
+        'data-tool': tool.id,
+        class: 'wb-annotation-toolbar__item' + (isActive ? ' active' : ''),
       },
         h('button', {
           'data-testid': `annotation-tool-btn-${tool.id}`,

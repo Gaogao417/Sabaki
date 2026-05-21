@@ -1,13 +1,6 @@
 import {h} from 'preact'
 import StoneStatus from './StoneStatus.js'
 
-export const MODE_COLORS = {
-  play: 'var(--ui-play)',
-  problem: 'var(--ui-problem)',
-  recall: 'var(--ui-recall-mode)',
-  analysis: 'var(--ui-analysis)',
-}
-
 export default function GlobalHeader({
   taskTitle = '攻击题 #1024',
   mode = 'problem',
@@ -28,13 +21,13 @@ export default function GlobalHeader({
       h('span', {class: 'wb-global-header__title'}, taskTitle),
       h(
         'span',
-        {class: 'wb-global-header__mode-chip'},
+        {class: `wb-global-header__mode-chip wb-mode-chip wb-mode-chip--${mode}`},
         modeLabel(mode),
       ),
       statusChips.map((chip, i) =>
         h(
           'span',
-          {class: 'wb-global-header__status-chip', key: i},
+          {class: 'wb-global-header__status-chip wb-status-chip', key: i},
           chip,
         ),
       ),

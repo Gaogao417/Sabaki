@@ -1,5 +1,5 @@
 import {h} from 'preact'
-import {ANNOTATION_TOOL_DEFS} from '../shared/AnnotationToolbar.js'
+import AnnotationToolbar from '../shared/AnnotationToolbar.js'
 
 /**
  * Mode-specific action button definitions.
@@ -42,20 +42,6 @@ const VIEW_ACTIONS = [
   {testId: 'action-zoom-in', label: '放大', callback: 'onZoomIn'},
   {testId: 'action-zoom-out', label: '缩小', callback: 'onZoomOut'},
   {testId: 'action-fullscreen', label: '全屏', callback: 'onFullscreen'},
-]
-
-/** Annotation tools for analysis mode — stone placement, markers, lines, labels */
-const ANNOTATION_TOOLS = [
-  {id: 'black', title: '黑子'},
-  {id: 'white', title: '白子'},
-  {id: 'cross', title: '叉'},
-  {id: 'triangle', title: '三角'},
-  {id: 'square', title: '方'},
-  {id: 'circle', title: '圆'},
-  {id: 'line', title: '线'},
-  {id: 'arrow', title: '箭头'},
-  {id: 'label-A', title: '标签A'},
-  {id: 'label-1', title: '标签1'},
 ]
 
 const WORKSPACE_LABELS = {
@@ -206,17 +192,10 @@ export default function BottomActionBar({
           class: 'wb-bottom-action-bar__annotation-tools',
         },
           h('div', {class: 'wb-bottom-action-bar__divider'}),
-          ANNOTATION_TOOLS.map(tool =>
-            h('button', {
-              key: tool.id,
-              'data-testid': 'annotation-tool-btn',
-              'data-tool': tool.id,
-              'aria-label': tool.title,
-              title: tool.title,
-              class: `wb-btn wb-btn--sm wb-btn-ghost${activeAnnotationTool === tool.id ? ' active' : ''}`,
-              onClick: () => onAnnotationToolChange(tool.id),
-            }, tool.icon ? tool.icon() : tool.title),
-          ),
+          h(AnnotationToolbar, {
+            activeTool: activeAnnotationTool || 'arrow',
+            onToolChange: onAnnotationToolChange,
+          }),
         ),
     ),
   )
