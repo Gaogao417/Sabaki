@@ -15,9 +15,7 @@
  *
  * Test Legitimacy:
  *   - All tests import real production code: resolveBoardInteraction, createBoardInteractionContext,
- *     intents, executors. boardInteractionController uses tryImport (to be created).
- *   - boardInteractionController does not exist yet -> tryImport returns null -> this.skip(),
- *     no silent pass.
+ *     intents, executors, boardInteractionController.
  *   - Controlled dependencies: mock executor targets with write tracking.
  *   - Production bug: wrong executor receives call -> test fails because documentStore is not called
  *     or recallService is called when it should not be.
@@ -37,7 +35,6 @@
  */
 
 import assert from 'assert'
-import {tryImport} from '../tryImport.js'
 
 // Import real production code
 import {resolveBoardInteraction} from '../../../src/modules/workbench/board-interactions/resolveBoardInteraction.ts'
@@ -45,9 +42,7 @@ import {BOARD_INTENTS, RESOLVE_STATUSES} from '../../../src/modules/workbench/bo
 import {createBoardInteractionContext} from '../../../src/modules/workbench/board-interactions/createBoardInteractionContext.ts'
 import {executePlayInteraction} from '../../../src/modules/workbench/board-interactions/executors/playInteractionExecutor.js'
 import {executeRecallInteraction} from '../../../src/modules/workbench/board-interactions/executors/recallInteractionExecutor.js'
-
-// boardInteractionController is to be created
-let createBoardInteractionController = null
+import {createBoardInteractionController} from '../../../src/modules/training/workbench/boardInteractionController.ts'
 
 // --- Mock Factories ---
 
@@ -90,7 +85,7 @@ function createControllerDeps(options = {}) {
 
   const calls = {
     documentStorePlayMove: [],
-    recallSubmitRecallAnswer: [],
+    recallSubmitBoardClick: [],
     legacyClickVertex: [],
     editWorkspaceOps: [],
     editAnalysisInvalidate: [],
@@ -106,7 +101,7 @@ function createControllerDeps(options = {}) {
 
   const recallAdapter = {
     async submitBoardClick(vertex) {
-      calls.recallSubmitRecallAnswer.push({vertex})
+      calls.recallSubmitBoardClick.push({vertex})
       return recallAnswerResult
     },
   }
@@ -149,7 +144,7 @@ function createControllerDeps(options = {}) {
     // Expose spies for assertions
     _calls: calls,
     _documentStore: documentStore,
-    _recallService: recallAdapter,
+    _recallAdapter: recallAdapter,
     _legacySabaki: legacySabaki,
   }
 }
@@ -199,17 +194,8 @@ function resolveClick({
 // --- Tests ---
 
 describe('W3.5 boardInteractionController', function () {
-  before(async function () {
-    const mod = await tryImport(
-      'src/modules/training/workbench/boardInteractionController.ts',
-    )
-    if (mod && mod.createBoardInteractionController) {
-      createBoardInteractionController = mod.createBoardInteractionController
-    }
-  })
 
   function createController(deps) {
-    if (!createBoardInteractionController) return null
     return createBoardInteractionController(deps)
   }
 
@@ -217,8 +203,6 @@ describe('W3.5 boardInteractionController', function () {
 
   describe('W35-T18: controller receives deps via injection', function () {
     it('createBoardInteractionController accepts deps object without importing stores directly', function () {
-      if (!createBoardInteractionController) return this.skip()
-
       const deps = createControllerDeps()
 
       let controller
@@ -238,7 +222,6 @@ describe('W3.5 boardInteractionController', function () {
     it('click in play mode on empty point calls documentStore.playMove with correct vertex', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [3, 3],
@@ -264,7 +247,6 @@ describe('W3.5 boardInteractionController', function () {
     it('click in problem mode on valid point also calls documentStore.playMove', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [3, 3],
@@ -293,7 +275,6 @@ describe('W3.5 boardInteractionController', function () {
     it('click in recall mode on empty point calls adapter.submitBoardClick with vertex', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [5, 5],
@@ -307,10 +288,10 @@ describe('W3.5 boardInteractionController', function () {
       })
 
       // Main assertion: recall service received the answer
-      assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 1,
+      assert.strictEqual(deps._calls.recallSubmitBoardClick.length, 1,
         'adapter.submitBoardClick must be called for recall-answer')
       assert.deepStrictEqual(
-        deps._calls.recallSubmitRecallAnswer[0].vertex,
+        deps._calls.recallSubmitBoardClick[0].vertex,
         [5, 5],
         'recallService must receive the clicked vertex [5,5]',
       )
@@ -323,7 +304,6 @@ describe('W3.5 boardInteractionController', function () {
     it('click in analysis mode with editWorkspace calls scratchEdit operations', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [10, 10],
@@ -352,7 +332,6 @@ describe('W3.5 boardInteractionController', function () {
     it('click in analysis mode without editWorkspace calls legacy sabaki.clickVertex', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [7, 7],
@@ -382,7 +361,6 @@ describe('W3.5 boardInteractionController', function () {
       const board = makeMockBoard({'3,3': 1}) // Black stone at [3,3]
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [3, 3],
@@ -397,7 +375,7 @@ describe('W3.5 boardInteractionController', function () {
 
       assert.strictEqual(deps._calls.documentStorePlayMove.length, 0,
         'No write to documentStore for occupied point')
-      assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 0,
+      assert.strictEqual(deps._calls.recallSubmitBoardClick.length, 0,
         'No write to recallService for occupied point')
       assert.strictEqual(deps._calls.legacyClickVertex.length, 0,
         'No legacy click for occupied point in play mode')
@@ -406,7 +384,6 @@ describe('W3.5 boardInteractionController', function () {
     it('click in play mode on AI turn performs no write', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [3, 3],
@@ -429,7 +406,6 @@ describe('W3.5 boardInteractionController', function () {
     it('click in problem mode outside problemArea performs no write', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [0, 0], // Outside the problemArea
@@ -450,7 +426,6 @@ describe('W3.5 boardInteractionController', function () {
       // Right-click in play mode returns DEFERRED (legacy-play-right-click)
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [3, 3],
@@ -477,7 +452,6 @@ describe('W3.5 boardInteractionController', function () {
     it('play-stone execution writes to documentStore but not recallService or editWorkspace', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [3, 3],
@@ -495,7 +469,7 @@ describe('W3.5 boardInteractionController', function () {
         'play executor must write to documentStore')
 
       // Negative: recallService was NOT written
-      assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 0,
+      assert.strictEqual(deps._calls.recallSubmitBoardClick.length, 0,
         'play executor must NOT write to recallAdapter')
 
       // Negative: editWorkspace was NOT modified
@@ -510,7 +484,6 @@ describe('W3.5 boardInteractionController', function () {
     it('recall-answer execution does not call documentStore.playMove', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [5, 5],
@@ -524,7 +497,7 @@ describe('W3.5 boardInteractionController', function () {
       })
 
       // Positive: recallService was called
-      assert.ok(deps._calls.recallSubmitRecallAnswer.length >= 1,
+      assert.ok(deps._calls.recallSubmitBoardClick.length >= 1,
         'recall executor must call recallAdapter')
 
       // Negative: documentStore was NOT written
@@ -535,7 +508,6 @@ describe('W3.5 boardInteractionController', function () {
     it('recall executor does not call legacy sabaki.clickVertex', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
-      if (!controller) return this.skip()
 
       await controller.handleBoardClick({
         vertex: [5, 5],

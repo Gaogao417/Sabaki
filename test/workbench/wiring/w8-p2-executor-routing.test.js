@@ -15,7 +15,7 @@
  *   - Arch v0.5 SS14: Analysis does NOT pollute Attempt; recall does NOT modify game tree
  *   - playInteractionExecutor.js: calls documentStore.playMove, engineService.generateReply,
  *     analysisService.scheduleLiveAnalysis
- *   - recallInteractionExecutor.js: calls trainingStore.submitRecallAnswer, NOT documentStore
+ *   - recallInteractionExecutor.js: calls adapter.submitBoardClick, NOT documentStore
  *   - scratchEditInteractionExecutor.js: operates on working position, calls
  *     invalidateEditAnalysis + scheduleEditWorkspaceAnalysis
  *
@@ -203,7 +203,7 @@ function createPlayTestDeps(documentStoreResult) {
 /**
  * Create controller deps for recall executor tests.
  * The controller must route through executeRecallInteraction which calls
- * trainingStore.submitRecallAnswer and must NOT call documentStore.
+ * adapter.submitBoardClick and must NOT call documentStore.
  */
 function createRecallTestDeps(recallAnswerResult = {handled: true, changed: true, isCorrect: true}) {
   const recallAnswerCalls = []
@@ -495,7 +495,7 @@ describe('W8-P2 Executor Routing: Recall (T-RECALL-01..T-RECALL-02)', function (
 
   // T-RECALL-01: Recall game tree protection + return value contract
   //
-  // Contract Section 4.2: Recall path writes to trainingStore.submitRecallAnswer,
+  // Contract Section 4.2: Recall path writes to adapter.submitBoardClick,
   // NOT to documentStore.playMove. This is Arch v0.5 SS14 protection.
   //
   // Additionally, the controller must return the executor's result object with
@@ -541,7 +541,7 @@ describe('W8-P2 Executor Routing: Recall (T-RECALL-01..T-RECALL-02)', function (
   // T-RECALL-02: Recall executor correct output + return value
   //
   // Contract Section 4.2: executeRecallInteraction(result, {}, {trainingStore})
-  //   -> trainingStore.submitRecallAnswer(vertex) -> {handled:true, changed:true, isCorrect:true}
+  //   -> adapter.submitBoardClick(vertex) -> {handled:true, changed:true, isCorrect:true}
   // The vertex must be passed through correctly to the executor.
   //
   // The controller must return the executor's result with {handled:true, changed:true,
@@ -568,7 +568,7 @@ describe('W8-P2 Executor Routing: Recall (T-RECALL-01..T-RECALL-02)', function (
       runtimeState: {},
     })
 
-    // trainingStore.submitRecallAnswer must have been called with vertex [3,3]
+    // adapter.submitBoardClick must have been called with vertex [3,3]
     // Contract Section 4.2: executeRecallInteraction passes vertex through
     assert.strictEqual(harness.recallAnswerCalls.length, 1,
       'adapter.submitBoardClick must be called exactly once')
@@ -761,7 +761,7 @@ describe('W8-P2 Executor Routing: Architecture (T-ARCH-01)', function () {
   // T-ARCH-01: Source code structural check
   //
   // Contract Section 6: Controller must NOT directly call documentStore.playMove,
-  // submitRecallMove/submitRecallAnswer, or invalidateEditAnalysis.
+  // submitRecallMove, submitRecallAnswer, or invalidateEditAnalysis.
   // All writes must go through executors.
   //
   // Contract Section 3: Target implementation imports and calls:

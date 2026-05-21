@@ -148,8 +148,7 @@ function createControllerDeps(options = {}) {
 
   const calls = {
     documentStorePlayMove: [],
-    recallSubmitRecallAnswer: [],
-    recallSubmitRecallMove: [],
+    recallSubmitBoardClick: [],
     legacyClickVertex: [],
     editAnalysisInvalidate: [],
     editAnalysisSchedule: [],
@@ -164,15 +163,8 @@ function createControllerDeps(options = {}) {
 
   const recallAdapter = {
     async submitBoardClick(vertex) {
-      calls.recallSubmitRecallAnswer.push({vertex})
+      calls.recallSubmitBoardClick.push({vertex})
       return recallAnswerResult
-    },
-  }
-
-  const recallServiceShape = {
-    submitRecallMove: async (input) => {
-      calls.recallSubmitRecallMove.push(input)
-      return {id: 'ra_1', isCorrect: true, moveNumber: 0}
     },
   }
 
@@ -216,8 +208,7 @@ function createControllerDeps(options = {}) {
     getIsMac: () => false,
     _calls: calls,
     _documentStore: documentStore,
-    _recallService: recallServiceShape,
-    _recallServiceStore: recallAdapter,
+    _recallAdapter: recallAdapter,
     _legacySabaki: legacySabaki,
   }
 }
@@ -513,9 +504,9 @@ describe('W8-P1 Board Interaction Controller', function () {
         runtimeState: {},
       })
 
-      assert.strictEqual(deps._calls.recallSubmitRecallAnswer.length, 1,
+      assert.strictEqual(deps._calls.recallSubmitBoardClick.length, 1,
         'adapter.submitBoardClick must be called exactly once for recall resolved')
-      const call = deps._calls.recallSubmitRecallAnswer[0]
+      const call = deps._calls.recallSubmitBoardClick[0]
       assert.deepStrictEqual(call.vertex, [5, 5],
         'submitBoardClick must receive vertex [5,5]')
     })

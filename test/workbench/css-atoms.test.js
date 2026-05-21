@@ -342,8 +342,8 @@ describe('Phase U1 -- CSS Design Atoms', () => {
 
       // Check for var() reference or numeric value
       if (radiusValue.includes('var(')) {
-        // Using a variable is acceptable
-        assert.ok(true, 'Using CSS variable for border-radius')
+        const varName = radiusValue.match(/var\(([^,)]+)/)?.[1]
+        assert.ok(varName, `border-radius must reference a valid CSS variable, got: ${radiusValue}`)
       } else {
         const pxMatch = radiusValue.match(/(\d+(?:\.\d+)?)px/)
         assert.ok(pxMatch, `.wb-segmented-control border-radius should use px or var(), got: ${radiusValue}`)

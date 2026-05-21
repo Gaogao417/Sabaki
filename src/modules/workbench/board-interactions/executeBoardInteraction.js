@@ -12,7 +12,7 @@ import {executeRecallInteraction} from './executors/recallInteractionExecutor.js
  *
  * @param {import('./intents.ts').BoardInteractionResult} result
  * @param {import('../contracts/workspaceDefaults.ts').ScratchEditExecutionContext} context
- * @param {{invalidateEditAnalysis?: () => void, scheduleEditWorkspaceAnalysis?: (tab: string) => void, adapter?: {submitBoardClick: function}}} [deps]
+ * @param {{invalidateEditAnalysis?: () => void, scheduleEditWorkspaceAnalysis?: (tab: string) => void, adapter?: {submitBoardClick(vertex: [number, number]): Promise<object>}}} [deps]
  * @returns {{
  *   handled: boolean,
  *   changed: boolean,

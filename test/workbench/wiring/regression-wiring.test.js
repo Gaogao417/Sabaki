@@ -243,7 +243,11 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
   describe('R-T01: Board click in Play mode', function () {
     // R-T01: Board click in Play mode still routes through
     // boardInteractionController and produces correct move.
-    // Layer: CONTROLLER_STATE_TRANSITION
+    // Layer: CONTAINER_DELEGATION (existence check only)
+    // NOTE: This test only verifies the handler exists and does not throw.
+    // It does NOT verify that the handler invokes the controller or that
+    // downstream state changes occur. For full chain verification, see
+    // w8-p2-executor-routing T-PLAY-01/02/03.
     // Production Subject: boardInteractionController via Container onVertexClick
     // Real Dependencies: Container render with play tab
     // Mocked Dependencies: spy services
@@ -285,7 +289,8 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
   describe('R-T02: Board click in Problem mode', function () {
     // R-T02: Board click in Problem mode still routes through
     // boardInteractionController.
-    // Layer: CONTROLLER_STATE_TRANSITION
+    // Layer: CONTAINER_DELEGATION (existence check only)
+    // NOTE: Same as R-T01 — only checks handler existence and no-throw.
     // Production Subject: boardInteractionController via Container onVertexClick
     // Real Dependencies: Container render with problem tab
     // Primary Assertion: onVertexClick handler exists and does not throw

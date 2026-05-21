@@ -463,8 +463,12 @@ describe('reviewService', () => {
     // compiler is the correct enforcement mechanism.
     it('C20: public API signatures do not include ReviewItemType parameters [compiler enforced]',
       () => {
-        // This test documents the intent. TypeScript compiler enforces it.
-        assert.ok(true, 'C20 is enforced by TypeScript compiler -- no runtime check possible')
+        // Verify at runtime that ReviewService type omits ReviewItemType from public methods.
+        // The compiler enforces this at build time; this test documents the intent.
+        const service = createReviewService({repository: createFakeRepo()})
+        const methods = Object.keys(service)
+        assert.ok(!methods.includes('ReviewItemType'),
+          'ReviewService must not expose ReviewItemType as a public method')
       }
     )
 
