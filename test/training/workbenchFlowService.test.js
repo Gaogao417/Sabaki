@@ -1,6 +1,7 @@
 import assert from 'assert'
 
 import {createWorkbenchStore} from '../../src/modules/training/store/workbenchStore.ts'
+import {createTestLogger} from '../helpers/createTestLogger.ts'
 
 // --- Helpers ---
 
@@ -28,7 +29,7 @@ function makeTask(overrides = {}) {
 
 function createMockDeps(overrides = {}) {
   const store = createWorkbenchStore()
-  const logs = []
+  const {logger, logs} = createTestLogger()
 
   return {
     store,
@@ -70,11 +71,7 @@ function createMockDeps(overrides = {}) {
       }),
       ...overrides.tabService,
     },
-    logger: {
-      info(channel, message, data) {
-        logs.push({channel, message, data})
-      },
-    },
+    logger,
   }
 }
 
@@ -164,7 +161,7 @@ describeIf('workbenchFlowService', () => {
       const frozenAttempts = {}
       const finalizedResults = {}
       const createdRecallSessions = []
-      const logs = []
+      const {logger, logs} = createTestLogger()
 
       return {
         frozenAttempts,
@@ -232,11 +229,7 @@ describeIf('workbenchFlowService', () => {
           }),
         },
         runtimeStore: overrides.runtimeStore,
-        logger: {
-          info(channel, message, data) {
-            logs.push({channel, message, data})
-          },
-        },
+        logger,
       }
     }
 
@@ -699,7 +692,7 @@ describeIf('workbenchFlowService', () => {
       const store = createWorkbenchStore()
       const createdTasks = []
       const transactionFns = []
-      const logs = []
+      const {logger, logs} = createTestLogger()
 
       return {
         store,
@@ -749,11 +742,7 @@ describeIf('workbenchFlowService', () => {
           }),
           ...overrides.tabService,
         },
-        logger: {
-          info(channel, message, data) {
-            logs.push({channel, message, data})
-          },
-        },
+        logger,
       }
     }
 

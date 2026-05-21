@@ -1,6 +1,7 @@
 import assert from 'assert'
 
 import { createReviewService, calculateNextDue } from '../../src/modules/training/review/reviewService.ts'
+import {createTestLogger} from '../helpers/createTestLogger.ts'
 
 // --- Fake dependencies ---
 
@@ -513,7 +514,7 @@ describe('reviewService', () => {
 
   describe('logging', () => {
     it('logs review.open with taskId and scheduleId', async () => {
-      const logs = []
+      const {logger, logs} = createTestLogger()
       const repo = createFakeRepo()
       seedSchedule(repo, { id: 'rev_1', taskId: 'task_1' })
 
@@ -521,11 +522,7 @@ describe('reviewService', () => {
       const svc = createReviewService({
         repository: repo,
         workbenchTabService: tabSvc,
-        logger: {
-          info(channel, message, data) {
-            logs.push({ channel, message, data })
-          },
-        },
+        logger,
       })
 
       await svc.openDueItem('rev_1')
@@ -537,7 +534,7 @@ describe('reviewService', () => {
     })
 
     it('logs review.update with taskId', async () => {
-      const logs = []
+      const {logger, logs} = createTestLogger()
       const repo = createFakeRepo()
       seedSchedule(repo, { id: 'rev_1', taskId: 'task_1', intervalDays: 1, consecutivePassCount: 0 })
 
@@ -545,11 +542,7 @@ describe('reviewService', () => {
       const svc = createReviewService({
         repository: repo,
         workbenchTabService: tabSvc,
-        logger: {
-          info(channel, message, data) {
-            logs.push({ channel, message, data })
-          },
-        },
+        logger,
       })
 
       await svc.updateScheduleAfterResult({ taskId: 'task_1', result: 'pass' })
@@ -560,17 +553,13 @@ describe('reviewService', () => {
     })
 
     it('logs review.add when adding to queue', async () => {
-      const logs = []
+      const {logger, logs} = createTestLogger()
       const repo = createFakeRepo()
       const tabSvc = createFakeTabService()
       const svc = createReviewService({
         repository: repo,
         workbenchTabService: tabSvc,
-        logger: {
-          info(channel, message, data) {
-            logs.push({ channel, message, data })
-          },
-        },
+        logger,
       })
 
       await svc.addToReviewQueue({ taskId: 'task_x' })

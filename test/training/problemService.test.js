@@ -1,6 +1,7 @@
 import assert from 'assert'
 
 import { createProblemService } from '../../src/modules/training/problem/problemService.ts'
+import {createTestLogger} from '../helpers/createTestLogger.ts'
 
 // --- Fake dependencies ---
 
@@ -356,11 +357,11 @@ describe('problemService', () => {
 
   describe('logging', () => {
     it('logs problem creation', async () => {
-      const logs = []
+      const {logger, logs} = createTestLogger()
       const repo = createFakeRepo()
       const service = createProblemService({
         repository: repo,
-        logger: { info(channel, message, data) { logs.push({ channel, message, data }) } },
+        logger,
       })
 
       await service.createProblem({ positionSgf: '(;SZ[9])', sideToMove: 'black' })
@@ -369,7 +370,7 @@ describe('problemService', () => {
     })
 
     it('logs punishment problem creation with reviewScheduleId', async () => {
-      const logs = []
+      const {logger, logs} = createTestLogger()
       const repo = createFakeRepo()
       seedBadMove(repo)
       seedEvaluation(repo)
@@ -378,7 +379,7 @@ describe('problemService', () => {
       const service = createProblemService({
         repository: repo,
         reviewService: fakeReview,
-        logger: { info(channel, message, data) { logs.push({ channel, message, data }) } },
+        logger,
       })
 
       const { reviewScheduleId } = await service.createPunishmentProblemFromBadMove('bm_1')
