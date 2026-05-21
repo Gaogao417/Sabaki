@@ -496,8 +496,8 @@ describe('W8-P1 Board Interaction Controller', function () {
         'recallService.submitRecallMove must be called exactly once for recall resolved')
       const call = deps._calls.recallSubmitRecallMove[0]
       assert.strictEqual(call.recallSessionId, 'rs_123')
-      assert.strictEqual(call.userMove, '5,5',
-        'userMove must be "x,y" format from vertex coordinates')
+      assert.strictEqual(call.userMove, 'ff',
+        'userMove must be SGF format from vertex coordinates (e.g. [5,5] -> "ff")')
     })
 
     // W8P1-T12: deferred -> legacySabaki.clickVertex is called

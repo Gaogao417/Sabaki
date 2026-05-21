@@ -120,7 +120,50 @@ const noop = () => {}
  *   - No mutation of input parameters
  *   - No random output or timestamp calls
  */
-export function projectGobanProps(input: GobanPropsInput): GobanPropsOutput {
+export function projectGobanProps(input: GobanPropsInput | null): GobanPropsOutput {
+  // When input is null (adapter unavailable), return a minimal output with
+  // null board so that Container never fabricates a 19x19 zero-filled signMap.
+  // Contract T2-07: Container must not fabricate board state.
+  if (input == null) {
+    return {
+      boardStateProps: {
+        gameTree: null,
+        treePosition: '',
+        board: null,
+      },
+      overlayDisplayProps: {
+        paintMap: [],
+        markerMap: [],
+        dimmedStones: [],
+        analysis: null,
+        showMoveNumbers: false,
+        showNextMoves: true,
+        showSiblings: true,
+        crosshair: false,
+        showCoordinates: true,
+        showMoveColorization: false,
+        fuzzyStonePlacement: false,
+        animateStonePlacement: false,
+        highlightVertices: [],
+        analysisType: '',
+        showHumanPreference: false,
+      },
+      interactionProps: {
+        dragMode: false,
+        drawLineMode: null,
+        areaSelectMode: false,
+        transformation: [1, 0, 0, 1, 0, 0],
+      },
+      handlerProps: {
+        onVertexClick: noop,
+        onLineDraw: noop,
+        onAreaSelect: noop,
+        onStoneDragEnd: null,
+        onPlayVariationMoves: null,
+      },
+    }
+  }
+
   const { workbenchMode, boardState, overlayState, settings, analysisData } = input
 
   const isAnalysisWithEditWorkspace =

@@ -192,8 +192,11 @@ export function createBoardInteractionController(
         if ('submitRecallAnswer' in recallServiceOrStore) {
           recallServiceOrStore.submitRecallAnswer(vertex)
         } else if ('submitRecallMove' in recallServiceOrStore) {
-          // Service shape: build a userMove string from vertex
-          const userMove = `${vertex[0]},${vertex[1]}`
+          // Service shape: build a userMove string from vertex in SGF coord format
+          // recallService.submitRecallMove compares userMove against expectedMoves
+          // derived from SGF parsing (e.g. "dd"). The vertex [x,y] maps to
+          // String.fromCharCode(97+x)+String.fromCharCode(97+y) per SGF spec.
+          const userMove = String.fromCharCode(97 + vertex[0]) + String.fromCharCode(97 + vertex[1])
           await recallServiceOrStore.submitRecallMove({
             recallSessionId: activeTab.activeRecallSessionId ?? '',
             userMove,
