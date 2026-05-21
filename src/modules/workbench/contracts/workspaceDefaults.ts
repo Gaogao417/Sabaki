@@ -105,7 +105,7 @@ export function getWorkspaceKindFromState(
   }
 
   if (state?.mode === 'recall') return WORKSPACE_KINDS.RECALL
-  if (state?.mode === 'play') return WORKSPACE_KINDS.PLAY
+  if (state?.mode === 'play' || state?.mode === 'problem') return WORKSPACE_KINDS.PLAY
 
   return null
 }

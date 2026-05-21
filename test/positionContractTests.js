@@ -194,14 +194,21 @@ describe('workspace kind mapping', () => {
     )
   })
 
-  it('maps scoring, estimator, find, problem to null (legacy)', () => {
-    for (let mode of ['scoring', 'estimator', 'find', 'problem']) {
+  it('maps scoring, estimator, find to null (legacy)', () => {
+    for (let mode of ['scoring', 'estimator', 'find']) {
       assert.equal(
         getWorkspaceKindFromState({mode, treePosition: 'n1'}),
         null,
         `${mode} should map to null`,
       )
     }
+  })
+
+  it('maps problem mode to PLAY workspace', () => {
+    assert.equal(
+      getWorkspaceKindFromState({mode: 'problem', treePosition: 'n1'}),
+      WORKSPACE_KINDS.PLAY,
+    )
   })
 
   it('null state returns null', () => {

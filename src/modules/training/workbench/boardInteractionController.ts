@@ -76,10 +76,15 @@ function toWorkbenchMode(tabMode: string): 'play' | 'problem' | 'recall' | 'anal
  * Safely extract a typed problemArea from unknown shape.
  */
 function extractProblemArea(raw: unknown): {vertices?: [number, number][]; [key: string]: unknown} | null {
-  if (raw == null || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-  if (Array.isArray(obj.vertices)) {
-    return obj as {vertices?: [number, number][]; [key: string]: unknown}
+  if (raw == null) return null
+  if (Array.isArray(raw)) {
+    return { vertices: raw as [number, number][] }
+  }
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>
+    if (Array.isArray(obj.vertices)) {
+      return obj as {vertices?: [number, number][]; [key: string]: unknown}
+    }
   }
   return null
 }

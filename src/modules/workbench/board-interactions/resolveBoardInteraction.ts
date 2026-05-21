@@ -287,6 +287,7 @@ export function resolveBoardInteraction(
           return noop('problem: vertex outside problemArea', input)
         }
       }
+      // Resolve as play
       return resolvePlay(input)
     }
     if (workbenchMode === 'recall') {
