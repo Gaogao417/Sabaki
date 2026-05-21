@@ -403,8 +403,10 @@ describe('W7-B1: Container Store Write Fix', function () {
 
       it('startSession does nothing when no due items', async function () {
         const harness = createServiceHarness()
-        // Clear all schedules so there are no due items
-        harness.repo.schedules = {}
+        // Clear all schedules so there are no due items.
+        // Must mutate in-place because createFakeRepo's listDueReviewItems
+        // closure captures the original schedules object reference.
+        Object.keys(harness.repo.schedules).forEach(k => delete harness.repo.schedules[k])
 
         assert.strictEqual(typeof harness.reviewService.startSession, 'function',
           'reviewService must expose startSession method')

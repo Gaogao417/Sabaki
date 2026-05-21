@@ -210,33 +210,12 @@ class TrainingWorkbenchContainer extends Component {
 
     async function handleStartReviewSession() {
       const {reviewService} = sabaki.getTrainingContext()
-      const dueItems = await reviewService.getDueItems()
-      if (dueItems.length === 0) return
-
-      const queue = dueItems.map(s => s.id)
-      runtimeStore.setReviewQueueView({
-        queue,
-        currentIndex: 0,
-        totalDue: queue.length,
-      })
-
-      await reviewService.openDueItem(queue[0])
+      await reviewService.startSession(runtimeStore)
     }
 
     async function handleAdvanceReview() {
       const {reviewService} = sabaki.getTrainingContext()
-      const rv = runtimeStore.getState().reviewQueueView
-      if (!rv) return
-
-      const nextIndex = rv.currentIndex + 1
-
-      if (nextIndex >= rv.queue.length) {
-        runtimeStore.setReviewQueueView(null)
-        return
-      }
-
-      runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
-      await reviewService.openDueItem(rv.queue[nextIndex])
+      await reviewService.advanceReview(runtimeStore)
     }
 
     async function handleReviewResult({taskId, result}) {

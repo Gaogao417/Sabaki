@@ -98,6 +98,8 @@ function createSpyReviewService() {
     getDueItems: [],
     openDueItem: [],
     updateScheduleAfterResult: [],
+    startSession: [],
+    advanceReview: [],
   }
 
   return {
@@ -115,6 +117,34 @@ function createSpyReviewService() {
     },
     async updateScheduleAfterResult(input) {
       calls.updateScheduleAfterResult.push(input)
+    },
+    // B1 fix: Container delegates to startSession instead of calling
+    // getDueItems + setReviewQueueView + openDueItem directly.
+    async startSession(runtimeStore) {
+      calls.startSession.push({})
+      const items = await this.getDueItems()
+      if (items.length === 0) return
+      const queue = items.map(s => s.id)
+      runtimeStore.setReviewQueueView({
+        queue,
+        currentIndex: 0,
+        totalDue: queue.length,
+      })
+      await this.openDueItem(queue[0])
+    },
+    // B1 fix: Container delegates to advanceReview instead of reading/writing
+    // runtimeStore directly.
+    async advanceReview(runtimeStore) {
+      calls.advanceReview.push({})
+      const rv = runtimeStore.getState().reviewQueueView
+      if (!rv) return
+      const nextIndex = rv.currentIndex + 1
+      if (nextIndex >= rv.queue.length) {
+        runtimeStore.setReviewQueueView(null)
+        return
+      }
+      runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
+      await this.openDueItem(rv.queue[nextIndex])
     },
   }
 }
@@ -260,7 +290,7 @@ describe('W6 Review Queue Wiring', function () {
     // --- W6-T01: onStartReviewSession ---
 
     describe('W6-T01: onStartReviewSession fetches due items and opens first', function () {
-      it('calls reviewService.getDueItems and populates reviewQueueView', async function () {
+      it('calls reviewService.startSession and populates reviewQueueView', async function () {
         const harness = createHarness()
 
         const shellProps = harness.getShellProps()
@@ -270,9 +300,10 @@ describe('W6 Review Queue Wiring', function () {
 
         await shellProps.onStartReviewSession()
 
-        // Verify getDueItems was called
-        assert.strictEqual(harness.reviewService.calls.getDueItems.length, 1,
-          'reviewService.getDueItems must be called once')
+        // B1 fix: Container delegates to reviewService.startSession, which
+        // internally calls getDueItems and writes runtimeStore.
+        assert.strictEqual(harness.reviewService.calls.startSession.length, 1,
+          'reviewService.startSession must be called once')
 
         // Verify reviewQueueView is populated
         const rv = harness.runtimeStore.getState().reviewQueueView
@@ -285,23 +316,28 @@ describe('W6 Review Queue Wiring', function () {
           'totalDue must match number of due items')
       })
 
-      it('calls reviewService.openDueItem for the first schedule', async function () {
+      it('calls reviewService.startSession which internally opens first schedule', async function () {
         const harness = createHarness()
 
         const shellProps = harness.getShellProps()
         await shellProps.onStartReviewSession()
 
+        // B1 fix: Container delegates to startSession, which internally calls openDueItem
+        assert.strictEqual(harness.reviewService.calls.startSession.length, 1,
+          'reviewService.startSession must be called once')
         assert.strictEqual(harness.reviewService.calls.openDueItem.length, 1,
-          'reviewService.openDueItem must be called once')
+          'startSession must internally call openDueItem once')
         assert.strictEqual(harness.reviewService.calls.openDueItem[0].scheduleId, 'sched_1',
           'openDueItem must be called with first schedule ID')
       })
 
       it('does nothing when no due items', async function () {
         const harness = createHarness()
-        // Override getDueItems to return empty
-        harness.reviewService.dueItems = []
-        harness.reviewService.getDueItems = async () => []
+        // Override startSession to simulate "no due items" path
+        harness.reviewService.startSession = async (runtimeStore) => {
+          harness.reviewService.calls.startSession.push({})
+          // Simulate empty result: do not write runtimeStore
+        }
 
         const shellProps = harness.getShellProps()
         await shellProps.onStartReviewSession()
@@ -309,15 +345,15 @@ describe('W6 Review Queue Wiring', function () {
         const rv = harness.runtimeStore.getState().reviewQueueView
         assert.strictEqual(rv, null,
           'reviewQueueView must remain null when no due items')
-        assert.strictEqual(harness.reviewService.calls.openDueItem.length, 0,
-          'openDueItem must NOT be called when no due items')
+        assert.strictEqual(harness.reviewService.calls.startSession.length, 1,
+          'startSession must still be called')
       })
     })
 
     // --- W6-T02: onAdvanceReview advances to next item ---
 
     describe('W6-T02: onAdvanceReview advances to next item', function () {
-      it('increments currentIndex and calls reviewService.openDueItem', async function () {
+      it('increments currentIndex via reviewService.advanceReview', async function () {
         const harness = createHarness({
           reviewQueueView: {
             queue: ['sched_1', 'sched_2', 'sched_3'],
@@ -333,14 +369,18 @@ describe('W6 Review Queue Wiring', function () {
 
         await shellProps.onAdvanceReview()
 
-        // Verify state advanced
+        // B1 fix: Container delegates to reviewService.advanceReview
+        assert.strictEqual(harness.reviewService.calls.advanceReview.length, 1,
+          'reviewService.advanceReview must be called once')
+
+        // Verify state advanced (written by advanceReview spy)
         const rv = harness.runtimeStore.getState().reviewQueueView
         assert.strictEqual(rv.currentIndex, 1,
           'currentIndex must advance to 1')
 
-        // Verify openDueItem called with next schedule
+        // Verify openDueItem called with next schedule (inside advanceReview)
         assert.strictEqual(harness.reviewService.calls.openDueItem.length, 1,
-          'reviewService.openDueItem must be called once')
+          'advanceReview must internally call openDueItem once')
         assert.strictEqual(harness.reviewService.calls.openDueItem[0].scheduleId, 'sched_2',
           'openDueItem must be called with next schedule ID')
       })
@@ -365,9 +405,9 @@ describe('W6 Review Queue Wiring', function () {
         assert.strictEqual(rv, null,
           'reviewQueueView must be null when queue exhausted')
 
-        // openDueItem should NOT be called when queue is exhausted
-        assert.strictEqual(harness.reviewService.calls.openDueItem.length, 0,
-          'openDueItem must NOT be called when queue exhausted')
+        // advanceReview must be called (it clears the queue)
+        assert.strictEqual(harness.reviewService.calls.advanceReview.length, 1,
+          'reviewService.advanceReview must be called when queue exhausted')
       })
     })
 
@@ -686,6 +726,12 @@ describe('W6 Review Queue Wiring', function () {
         await freshProps.onAdvanceReview()
         rv = harness.runtimeStore.getState().reviewQueueView
         assert.strictEqual(rv, null, 'Queue must be null after exhausting all items')
+
+        // Verify Container delegated to service methods
+        assert.strictEqual(harness.reviewService.calls.startSession.length, 1,
+          'startSession must be called once')
+        assert.strictEqual(harness.reviewService.calls.advanceReview.length, 2,
+          'advanceReview must be called 2 times: once per advance')
 
         // Verify openDueItem was called for each item (1 from start + 1 from advance)
         const openCalls = harness.reviewService.calls.openDueItem

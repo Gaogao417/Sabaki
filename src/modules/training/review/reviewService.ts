@@ -14,11 +14,17 @@ export type ReviewService = {
   addToReviewQueue(input: {
     taskId: string
   }): Promise<ReviewSchedule>
+  startSession(): Promise<void>
+  advanceReview(): Promise<void>
 }
 
 export type ReviewServiceDeps = {
   repository: TrainingRepository
   workbenchTabService: WorkbenchTabService
+  runtimeStore?: {
+    getState(): { reviewQueueView: { queue: string[]; currentIndex: number; totalDue: number } | null }
+    setReviewQueueView(view: { queue: string[]; currentIndex: number; totalDue: number } | null): void
+  }
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
 }
 
@@ -199,10 +205,40 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     return saved
   }
 
+  async function startSession(runtimeStoreOverride?: ReviewServiceDeps['runtimeStore']): Promise<void> {
+    const store = runtimeStoreOverride ?? deps.runtimeStore
+    if (!store) return
+    const items = await getDueItems()
+    if (items.length === 0) return
+    const queue = items.map(s => s.id)
+    store.setReviewQueueView({
+      queue,
+      currentIndex: 0,
+      totalDue: queue.length,
+    })
+    await openDueItem(queue[0])
+  }
+
+  async function advanceReview(runtimeStoreOverride?: ReviewServiceDeps['runtimeStore']): Promise<void> {
+    const store = runtimeStoreOverride ?? deps.runtimeStore
+    if (!store) return
+    const rv = store.getState().reviewQueueView
+    if (!rv) return
+    const nextIndex = rv.currentIndex + 1
+    if (nextIndex >= rv.queue.length) {
+      store.setReviewQueueView(null)
+      return
+    }
+    store.setReviewQueueView({...rv, currentIndex: nextIndex})
+    await openDueItem(rv.queue[nextIndex])
+  }
+
   return {
     getDueItems,
     openDueItem,
     updateScheduleAfterResult,
     addToReviewQueue,
+    startSession,
+    advanceReview,
   }
 }

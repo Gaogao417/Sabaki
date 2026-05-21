@@ -728,32 +728,12 @@ class Sabaki extends EventEmitter {
 
   async startReviewSession() {
     const {reviewService, runtimeStore} = this.getTrainingContext()
-    const dueItems = await reviewService.getDueItems()
-    if (dueItems.length === 0) return
-
-    const queue = dueItems.map(s => s.id)
-    runtimeStore.setReviewQueueView({
-      queue,
-      currentIndex: 0,
-      totalDue: queue.length,
-    })
-
-    await reviewService.openDueItem(queue[0])
+    await reviewService.startSession(runtimeStore)
   }
 
   async advanceReview() {
     const {reviewService, runtimeStore} = this.getTrainingContext()
-    const rv = runtimeStore.getState().reviewQueueView
-    if (!rv) return
-
-    const nextIndex = rv.currentIndex + 1
-    if (nextIndex >= rv.queue.length) {
-      runtimeStore.setReviewQueueView(null)
-      return
-    }
-
-    runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
-    await reviewService.openDueItem(rv.queue[nextIndex])
+    await reviewService.advanceReview(runtimeStore)
   }
 
   setBusy(busy) {
@@ -1023,7 +1003,7 @@ class Sabaki extends EventEmitter {
         logger,
       })
 
-      const reviewService = createReviewService({ repository, workbenchTabService: tabService, logger })
+      const reviewService = createReviewService({ repository, workbenchTabService: tabService, runtimeStore, logger })
       const problemService = createProblemService({ repository, reviewService, logger })
       const taskImportService = createTaskImportService({ repository, logger })
       const problemFlowService = createProblemFlowService({
