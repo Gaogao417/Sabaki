@@ -341,7 +341,24 @@ class App extends Component {
       })
     })
 
-    sabaki.newFile()
+    sabaki.newFile().then(() => {
+      // Create a default free-play tab so the workbench has an active tab
+      // even when the user starts a plain game (not via startProblem).
+      const {workbenchStore} = sabaki.getTrainingContext()
+      if (workbenchStore.getState().tabs.length === 0) {
+        const tabId = `tab_default_${Date.now()}`
+        workbenchStore.addTab({
+          id: tabId,
+          taskId: null,
+          mode: 'play',
+          childTabIds: [],
+          parentTabId: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        workbenchStore.setActiveTab(tabId)
+      }
+    })
   }
 
   componentDidUpdate(_, prevState = {}) {
