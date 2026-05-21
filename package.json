@@ -135,7 +135,7 @@
     "webpack-cli": "^6.0.1"
   },
   "scripts": {
-    "test": "mocha --require tsx",
+    "test": "mocha --require tsx --recursive \"test/**/*.test.js\"",
     "start": "electron ./",
     "bundle": "webpack --mode production",
     "build": "npm run bundle && electron-builder --dir",

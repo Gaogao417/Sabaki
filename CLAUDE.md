@@ -21,40 +21,46 @@ Sabaki 是一个围棋/SGF 编辑器，基于 Electron + React 架构。
 
 ## 必须遵守的工作流
 
-对于业务、状态、架构边界类功能开发，**禁止直接实施**。一口气跑完以下流程，中途不停等确认：
+对于业务、状态、架构边界类功能开发，**禁止直接实施**。一口气委托完以下 agent 链，中途不停等确认：
 
-1. **澄清需求** — 用 contract-designer 生成测试/验收契约
-2. **写测试** — 用 test-writer 写测试代码，禁止绑定实现细节，写契约测试
-3. **提交测试** — 单独提交初版测试（commit message 标注为测试契约）
-4. **implementation-agent 实施** — 按 ticket 范围实施
-5. **跑测试** — 确保通过
-6. **提交实现** — 单独提交实现代码
-7. **architecture-reviewer 审 diff** — 检查架构边界
+1. **澄清需求** — 委托 `contract-designer` agent 生成测试/验收契约。主 agent 禁止自行编写契约。
+2. **契约审查** — 委托 `contract-auditor` agent 审查契约。返回 REQUEST_CHANGES 或 BLOCK 时必须修改契约后重审，不得跳过。
+3. **写测试** — 委托 `test-writer` agent 写测试代码，禁止绑定实现细节，写契约测试。主 agent 禁止自行编写测试。
+4. **测试审查** — 委托 `test-auditor` agent 审查测试。返回 REQUEST_CHANGES 或 BLOCK 时必须修改测试后重审，不得跳过。
+5. **提交测试** — 单独提交初版测试（commit message 标注为测试契约）
+6. **实施** — 委托 `implementation-agent` agent 按 ticket 范围实施。主 agent 禁止自行编写生产代码。
+7. **跑测试** — 确保通过
+8. **提交实现** — 单独提交实现代码
+9. **架构审查** — 委托 `architecture-reviewer` agent 审 diff
+
+**主 agent 在工作流中只做编排（按顺序调用 sub-agent）和提交，不做执行（不写契约、不写测试、不写实现代码）。** 违反此约束等同于绕过质量闸门。
 
 ### 前端视觉工作流（不可用通用业务契约流程替代）
 
 当任务涉及 UI、CSS、布局、设计 token、响应式、截图验收、Figma/截图还原、纯样式偏差修复时，必须使用前端视觉工作流：
 
-1. **读取视觉真源** — 用 frontend-design-source-reader 读取 UI/UX spec、截图、设计稿、现有 CSS/组件，输出视觉真源索引。
-2. **生成视觉契约** — 用 frontend-contract-designer 生成前端视觉契约，归档到 `docs/design/YYYY-MM-DD/<task>/frontend-visual-contract-v0.N.md`。
-3. **写视觉测试** — 用 visual-test-writer 编写静态 token、computed style、Playwright layout、截图和人工验收测试。
-4. **前端实施** — 用 frontend-implementation-agent 实施 UI/CSS/组件，并运行相关测试和浏览器截图验收。
-5. **视觉还原审查** — 用 visual-fidelity-reviewer 审查 spec 对齐、token、响应式、截图和弱测试风险。
+1. **读取视觉真源** — 委托 `frontend-design-source-reader` agent 读取 UI/UX spec、截图、设计稿、现有 CSS/组件，输出视觉真源索引。主 agent 禁止自行读取视觉源。
+2. **生成视觉契约** — 委托 `frontend-contract-designer` agent 生成前端视觉契约，归档到 `docs/design/YYYY-MM-DD/<task>/frontend-visual-contract-v0.N.md`。主 agent 禁止自行编写视觉契约。
+3. **写视觉测试** — 委托 `visual-test-writer` agent 编写静态 token、computed style、Playwright layout、截图和人工验收测试。主 agent 禁止自行编写视觉测试。
+4. **前端实施** — 委托 `frontend-implementation-agent` agent 实施 UI/CSS/组件，并运行相关测试和浏览器截图验收。主 agent 禁止自行编写 CSS/组件代码。
+5. **视觉还原审查** — 委托 `visual-fidelity-reviewer` agent 审查 spec 对齐、token、响应式、截图和弱测试风险。
 
 前端视觉任务要对齐的是用户实际看到的 UI，不是组件是否存在、class 是否存在、`data-testid` 是否存在或 callback 是否触发。
 
 ### Workbench 接线工作流（不可用前端视觉流程替代）
 
-当任务涉及“已画好的 workbench UI 接入真实训练业务”时，必须使用 Workbench Wiring Workflow：
+当任务涉及”已画好的 workbench UI 接入真实训练业务”时，必须使用 Workbench Wiring Workflow：
 
 0. **真源优先** — 必须先读 `docs/design/gabaki-sabaki-training-prd-v0.5.md` 和 `docs/design/gabaki-sabaki-training-architecture-v0.5.md`。它们是产品与架构唯一事实来源；`workbench-ui-ux-spec.md` 只提供 UI/control placement；所有 W0 inventory、completion plan、test contract 都是派生产物。
-1. **接线契约** — 用 contract-designer 明确 `UI event -> container callback -> controller command -> service/adapter/repository -> store/Sabaki state -> projection -> UI` 全链路，并引用 PRD/Architecture v0.5 证据。
-2. **接线测试** — 用 test-writer 编写 container/controller/store/projection 测试，必须覆盖状态前进和状态回流，不能只测 callback 被调用。
-3. **提交测试** — 单独提交测试契约。
-4. **接线实施** — 用 implementation-agent 实施最小接线，panel 仍保持 presentational，依赖只通过 container/controller/context/adapter 进入。
-5. **跑测试和手动点击** — 验证 store/service 状态变化会通过订阅回到 UI。
-6. **提交实现** — 单独提交实现。
-7. **架构审查** — 用 architecture-reviewer 检查直接 service import、重复状态、store 副作用、隐藏全局和弱测试。
+1. **接线契约** — 委托 `contract-designer` agent 明确 `UI event -> container callback -> controller command -> service/adapter/repository -> store/Sabaki state -> projection -> UI` 全链路，并引用 PRD/Architecture v0.5 证据。契约必须指定每个 handler 被哪个命名 UI 组件消费。主 agent 禁止自行编写接线契约。
+2. **契约审查** — 委托 `contract-auditor` agent 审查契约。返回 REQUEST_CHANGES 或 BLOCK 时必须修改契约后重审，不得跳过。
+3. **接线测试** — 委托 `test-writer` agent 编写 container/controller/store/projection 测试，必须覆盖状态前进和状态回流，不能只测 callback 被调用。每个非 deferred handler 必须有测试证明命名 UI 组件消费它。主 agent 禁止自行编写接线测试。
+4. **测试审查** — 委托 `test-auditor` agent 审查测试。返回 REQUEST_CHANGES 或 BLOCK 时必须修改测试后重审，不得跳过。
+5. **提交测试** — 单独提交测试契约。
+6. **接线实施** — 委托 `implementation-agent` agent 实施最小接线，panel 仍保持 presentational，依赖只通过 container/controller/context/adapter 进入。主 agent 禁止自行编写接线代码。
+7. **跑测试和手动点击** — 验证 store/service 状态变化会通过订阅回到 UI。
+8. **提交实现** — 单独提交实现。
+9. **架构审查** — 委托 `architecture-reviewer` agent 检查直接 service import、重复状态、store 副作用、隐藏全局和弱测试。
 
 Workbench 接线任务要证明控件真的驱动业务状态，业务状态也真的驱动 UI；不是证明页面好看，也不是证明按钮能触发一个 mock callback。
 
