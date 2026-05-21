@@ -3,12 +3,6 @@ name: visual-test-writer
 description:
   将已批准的前端视觉契约转化为静态、computed style、Playwright 和截图验收测试。
   不得修改生产代码。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Edit
-  - Bash
 model: opus
 ---
 

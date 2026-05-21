@@ -2,11 +2,6 @@
 name: visual-fidelity-reviewer
 description:
   审查已完成的前端 diff，检查 UI spec 对齐、视觉还原、token、响应式、截图和弱测试风险。不实施代码。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Bash
 model: opus
 ---
 

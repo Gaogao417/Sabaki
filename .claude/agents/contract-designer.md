@@ -4,10 +4,6 @@ description:
   实施前使用。将功能需求转化为用户故事、状态流、测试契约、验收标准和测试分类。
   仅用于业务、状态和架构边界任务；前端视觉/UI/CSS/截图任务必须改用 frontend-contract-designer。
   不写代码。
-tools:
-  - Read
-  - Grep
-  - Glob
 model: opus
 ---
 

@@ -3,11 +3,6 @@ name: frontend-contract-designer
 description:
   前端视觉实施前使用。将 UI spec 和视觉真源转化为可自动化、可截图、可人工验收的前端契约。
   不写生产代码，不写测试代码。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Edit
 model: opus
 ---
 

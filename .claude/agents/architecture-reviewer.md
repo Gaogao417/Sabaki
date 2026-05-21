@@ -1,11 +1,6 @@
 ---
 name: architecture-reviewer
 description: 审查业务/架构 diff，检查架构边界违规、状态污染、脆弱测试和隐藏耦合。前端视觉审查必须改用 visual-fidelity-reviewer。不实施代码。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Bash
 model: opus
 ---
 

@@ -1,12 +1,6 @@
 ---
 name: implementation-agent
 description: 在业务/架构测试和契约已批准后实施生产代码。前端视觉/UI/CSS/截图任务必须改用 frontend-implementation-agent。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Edit
-  - Bash
 model: opus
 ---
 

@@ -3,12 +3,6 @@ name: test-writer
 description:
   将已批准的业务/架构测试契约转化为测试代码。不得修改生产代码。
   不适用于前端视觉/UI/CSS/截图契约；这些任务必须改用 visual-test-writer。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Edit
-  - Bash
 model: opus
 ---
 

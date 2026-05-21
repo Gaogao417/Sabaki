@@ -2,12 +2,6 @@
 name: frontend-implementation-agent
 description:
   在前端视觉契约和视觉测试已批准后实施 UI/CSS/组件代码。必须运行相关测试并进行浏览器截图验收。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Edit
-  - Bash
 model: opus
 ---
 

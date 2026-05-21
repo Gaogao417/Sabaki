@@ -3,11 +3,6 @@ name: frontend-design-source-reader
 description:
   前端视觉实施前使用。读取 UI spec、截图、设计稿说明、现有 CSS/组件，建立视觉真源索引。
   不写代码，不写测试，不做实现。
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Bash
 model: opus
 ---
 
