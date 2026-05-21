@@ -179,6 +179,18 @@ Workbench 接线任务也属于你的范围。接线任务指：把已经完成�
 - 如果一项用户动作需要完整闭环，必须拆成多条测试行，而不是把不同层塞进同一个“state-forward”测试。
 - `Downstream Covered By` 必须指向后续层测试 ID；如果没有后续测试，标记 `not-covered` 或 `DEFERRED`，并说明 approved reason 和退出条件。
 
+## 接口边界签名规则
+
+当 handler/callback 从一个组件传给另一个组件时，契约必须明确 **上游调用方的真实调用签名**。
+
+具体要求：
+
+1. 契约中必须有一行明确写出调用方签名，例如：`Goban.handleVertexMouseUp:282 → onVertexClick(evt)`，其中 `evt.vertex = [number, number]`。
+2. 如果 handler 被外部组件调用（不是 Container 自己内部调的），契约必须引用外部组件源码的调用方式作为证据（文件名 + 行号）。
+3. 如果测试中调用此 handler 的方式与上游组件的真实调用方式不一致，必须标记为 **假绿风险**。
+
+历史教训：Goban 调用 `onVertexClick(evt)` 单参数，Container handler 按 `(vertex, event)` 两参数接收，测试按两参数调用通过，但运行时 `event` 为 `undefined` 导致 TypeError。原因是契约没有锁定上游组件的调用签名。
+
 ## 测试设计规则
 
 优先使用契约测试，例如：

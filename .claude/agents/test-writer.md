@@ -119,6 +119,17 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 
 ## 测试编写规则
 
+### 上游调用签名一致性（必须遵守）
+
+写 handler/callback 测试时，**必须先读上游组件源码**确认真实调用方式。
+
+规则：
+- 从 `boardProps.handlerProps`、`shellHandlers` 或任何 callback prop 拿出来的函数，测试必须按 **真实上游调用方的参数结构** 去调，不能凭函数名或自己理解编造参数。
+- 测试注释必须标注调用来源，例如 `// Goban.handleVertexMouseUp:282 调用 onVertexClick(evt) 其中 evt.vertex = [row, col]`。
+- 如果不确定上游怎么调，先 `Read` 上游组件源码确认，再写测试。
+
+历史教训：Goban 调用 `onVertexClick(evt)` 单参数（vertex 在 `evt.vertex` 上），测试按 `onVertexClick([3,3], {button:0,...})` 两参数调用，测试全绿但运行时 `event` 为 `undefined` 导致 TypeError 崩溃。根本原因是测试没有对齐上游组件的真实 API。
+
 ### Wiring 测试必须注入真实 LoggerService
 
 Wiring 测试 mock sabaki 对象时，**必须**创建带 consoleWriter 的真实 LoggerService，不能跳过日志链路。
