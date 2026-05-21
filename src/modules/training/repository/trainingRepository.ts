@@ -543,6 +543,10 @@ export function createTrainingRepository(db: Db, logger?: RepositoryLogger): Tra
   }
 
   async function transaction<T>(fn: () => Promise<T>): Promise<T> {
+    if (typeof db.transaction !== 'function') {
+      logger?.info('repo.transaction', 'db.transaction unavailable, executing without transaction wrapper')
+      return fn()
+    }
     logger?.info('repo.transaction', 'Transaction started')
     const result = await db.transaction(() => fn())
     logger?.info('repo.transaction', 'Transaction completed')
