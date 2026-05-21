@@ -67,8 +67,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     const now = new Date().toISOString()
     return {
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      kind: 'problem',
-      source: { kind: 'problem', problemId },
+      origin: { provider: 'local', externalId: problemId, raw: { kind: 'problem' } },
       rootPositionSgf: problem.position_sgf ?? problem.positionSgf ?? '',
       sideToMove: (problem.side_to_move ?? problem.sideToMove ?? 'black') as 'black' | 'white',
       title: (problem.title ?? undefined) as string | undefined,
@@ -81,8 +80,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     const now = new Date().toISOString()
     return {
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      kind: 'game',
-      source: { kind: 'game', gameId },
+      origin: { provider: 'local', externalId: gameId, raw: { kind: 'game' } },
       rootPositionSgf: game.sgf ?? '',
       sideToMove: undefined,
       title: (game.title ?? undefined) as string | undefined,

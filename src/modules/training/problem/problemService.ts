@@ -123,13 +123,12 @@ export function createProblemService(deps: ProblemServiceDeps): ProblemService {
       sourceMoveIndex: badMove.moveIndex,
     })
 
-    await repository.updateBadMove(badMoveId, { generatedProblemId: problem.id })
+    await repository.updateBadMove(badMoveId, { generatedTaskId: problem.id })
 
     let reviewScheduleId: string | undefined
     if (reviewService) {
       const schedule = await reviewService.addToReviewQueue({
-        itemId: problem.id,
-        itemType: 'problem',
+        taskId: problem.id,
       })
       reviewScheduleId = schedule.id
     }

@@ -147,6 +147,7 @@ function seedSession(repo, overrides = {}) {
   const session = {
     id: 'session_1',
     taskId: 'task_1',
+    attemptId: 'attempt_1',
     type: 'line_recall',
     source: { kind: 'attempt', attemptId: 'attempt_1' },
     startMove: 0,
@@ -221,6 +222,7 @@ describe('recallService', () => {
       assert.deepStrictEqual(session.expectedMoves, ['D4', 'Q16', 'C3'])
       assert.strictEqual(session.currentMoveIndex, 0)
       assert.strictEqual(session.completed, false)
+      assert.strictEqual(session.attemptId, 'attempt_1')
       assert.deepStrictEqual(session.source, { kind: 'attempt', attemptId: 'attempt_1' })
     })
 

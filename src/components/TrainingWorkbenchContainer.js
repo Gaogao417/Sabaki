@@ -294,7 +294,7 @@ class TrainingWorkbenchContainer extends Component {
             activeTab: tabRef,
             settings: snap.settings || {selectedTool: 'stone_1'},
             board: (snap.boardState && snap.boardState.board) || {get: () => 0, markers: []},
-            editWorkspacePresent: !!(sabaki.state && sabaki.state.editWorkspace),
+            editWorkspacePresent: !!(snap.settings && snap.settings.editWorkspaceActive),
             task: snap.task || null,
             runtimeState: snap.runtimeState || rt,
           })
@@ -334,7 +334,6 @@ class TrainingWorkbenchContainer extends Component {
     if (!createGobanDataAdapter) return
     try {
       const ctx = sabaki.getTrainingContext()
-      const sabakiState = sabaki.state || {}
 
       // Safely resolve optional services
       const documentStore = sabaki.getPlayServices
@@ -349,25 +348,29 @@ class TrainingWorkbenchContainer extends Component {
       if (!documentStore) return // Cannot build adapter without documentStore
 
       this._gobanAdapter = createGobanDataAdapter({
-        getSabakiState: () => ({
-          treePosition: sabakiState.treePosition || '',
-          gameTrees: sabakiState.gameTrees || [],
-          gameIndex: sabakiState.gameIndex || 0,
-          selectedTool: sabakiState.selectedTool || 'stone_1',
-          editWorkspace: sabakiState.editWorkspace || null,
-          showMoveNumbers: sabakiState.showMoveNumbers ?? null,
-          showNextMoves: sabakiState.showNextMoves ?? null,
-          showSiblings: sabakiState.showSiblings ?? null,
-          showAnalysis: sabakiState.showAnalysis ?? null,
-          showCoordinates: sabakiState.showCoordinates ?? null,
-          showHumanPreference: sabakiState.showHumanPreference ?? null,
-          showMoveColorization: sabakiState.showMoveColorization ?? null,
-          fuzzyStonePlacement: sabakiState.fuzzyStonePlacement ?? null,
-          animateStonePlacement: sabakiState.animateStonePlacement ?? null,
-          boardTransformation: sabakiState.boardTransformation || [1, 0, 0, 1, 0, 0],
-          analysisType: sabakiState.analysisType || null,
-          areaSelectMode: !!sabakiState.areaSelectMode,
-        }),
+        // Live read: re-read sabaki.state on every call so adapter never holds stale state
+        getSabakiState: () => {
+          const s = sabaki.state || {}
+          return {
+            treePosition: s.treePosition || '',
+            gameTrees: s.gameTrees || [],
+            gameIndex: s.gameIndex || 0,
+            selectedTool: s.selectedTool || 'stone_1',
+            editWorkspace: s.editWorkspace || null,
+            showMoveNumbers: s.showMoveNumbers ?? null,
+            showNextMoves: s.showNextMoves ?? null,
+            showSiblings: s.showSiblings ?? null,
+            showAnalysis: s.showAnalysis ?? null,
+            showCoordinates: s.showCoordinates ?? null,
+            showHumanPreference: s.showHumanPreference ?? null,
+            showMoveColorization: s.showMoveColorization ?? null,
+            fuzzyStonePlacement: s.fuzzyStonePlacement ?? null,
+            animateStonePlacement: s.animateStonePlacement ?? null,
+            boardTransformation: s.boardTransformation || [1, 0, 0, 1, 0, 0],
+            analysisType: s.analysisType || null,
+            areaSelectMode: !!s.areaSelectMode,
+          }
+        },
         getDocumentStore: () => documentStore,
         getOverlayStore: () => overlayStore || {getState: () => ({territoryEnabled: false, territoryCompareEnabled: false})},
         getAnalysisResultAdapter: () => analysisResultAdapter || {getAnalysisForPosition: () => null},
@@ -383,6 +386,10 @@ class TrainingWorkbenchContainer extends Component {
         subscribeToAnalysisUpdates: (cb) => {
           if (analysisResultAdapter && analysisResultAdapter.subscribe) return analysisResultAdapter.subscribe(cb)
           return () => {}
+        },
+        getBoard: (tree, pos) => {
+          const gametree = require('../modules/gametree.js')
+          return gametree.getBoard(tree, pos)
         },
       })
 
@@ -406,7 +413,11 @@ class TrainingWorkbenchContainer extends Component {
       this._clickController = createBoardInteractionController({
         getPlayServices: () => playServices || {documentStore: {playMove: async () => {}}},
         getRecallServiceOrStore: () => recallService || {submitRecallAnswer: () => ({handled: false, changed: false})},
-        getEditWorkspaceContext: () => (sabaki.state && sabaki.state.editWorkspace) || null,
+        getEditWorkspaceContext: () => {
+          if (!this._gobanAdapter) return null
+          const s = this._gobanAdapter.getSnapshot()
+          return (s.settings && s.settings.editWorkspaceActive) ? {activeTab: 'current'} : null
+        },
         getEditWorkspaceDeps: () => ({}),
         getLegacySabaki: () => ({
           clickVertex: (vertex, opts) => {

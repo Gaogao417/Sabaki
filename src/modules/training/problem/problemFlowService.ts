@@ -369,8 +369,7 @@ export function createProblemFlowService(
     const generatedPunishmentProblemIds = await createPunishments(savedBadMoves)
 
     await reviewService.updateScheduleAfterResult({
-      itemId: problemId,
-      itemType: 'problem',
+      taskId: problemId,
       result,
     })
 

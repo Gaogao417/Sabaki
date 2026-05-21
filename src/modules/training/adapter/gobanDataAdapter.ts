@@ -10,7 +10,6 @@
  */
 
 import type { GobanPropsInput } from '../workbench/projectGobanProps'
-import * as gametree from '../../gametree.js'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -79,6 +78,7 @@ export type GobanDataAdapterDeps = {
   subscribeToWorkbenchStore: (cb: () => void) => () => void
   subscribeToRuntimeStore: (cb: () => void) => () => void
   subscribeToAnalysisUpdates: (cb: () => void) => () => void
+  getBoard: (gameTree: unknown, treePosition: string) => unknown
 }
 
 export type GobanDataAdapter = {
@@ -187,7 +187,7 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
     const current = documentStore.getCurrent()
     const gameTree = current.tree
     const treePosition = current.treePosition
-    const board = gameTree ? gametree.getBoard(gameTree, treePosition) : null
+    const board = gameTree ? deps.getBoard(gameTree, treePosition) : null
 
     // workbenchMode from activeTab
     const workbenchMode = (activeTab?.mode || 'play') as GobanPropsInput['workbenchMode']

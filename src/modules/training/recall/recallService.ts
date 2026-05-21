@@ -43,6 +43,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     const session = await _createSession({
       taskId: attempt.taskId,
       tabId: attempt.tabId,
+      attemptId,
       source: { kind: 'attempt', attemptId },
       expectedMoves: attempt.userLine,
     })
@@ -193,7 +194,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     })
 
     // Update attempt recallCompleted flag
-    const attemptId = (session.source as { kind: string; attemptId?: string }).attemptId
+    const attemptId = session.attemptId
     if (attemptId) {
       await repository.updateAttempt(attemptId, {
         recallCompleted: true,
@@ -211,6 +212,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
   async function _createSession(input: {
     taskId: string
     tabId?: string
+    attemptId?: string
     source: Record<string, unknown>
     expectedMoves: string[]
     startMove?: number
@@ -223,6 +225,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
       id,
       taskId: input.taskId,
       tabId: input.tabId,
+      attemptId: input.attemptId,
       type: 'line_recall',
       source: input.source as RecallSession['source'],
       startMove: input.startMove ?? 0,

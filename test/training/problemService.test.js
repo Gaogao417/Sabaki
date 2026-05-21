@@ -62,8 +62,7 @@ function createFakeReviewService() {
     async addToReviewQueue(input) {
       const schedule = {
         id: `rev_${Date.now()}`,
-        itemId: input.itemId,
-        itemType: input.itemType,
+        taskId: input.taskId,
         dueAt: new Date().toISOString(),
         intervalDays: 1,
         consecutivePassCount: 0,
@@ -275,7 +274,7 @@ describe('problemService', () => {
       assert.strictEqual(problem.positionSgf, '(;SZ[9]PL[B])')
     })
 
-    it('updates badMove.generatedProblemId', async () => {
+    it('updates badMove.generatedTaskId', async () => {
       const repo = createFakeRepo()
       seedBadMove(repo)
       seedEvaluation(repo)
@@ -283,7 +282,7 @@ describe('problemService', () => {
       const service = createProblemService({ repository: repo })
       const { problem } = await service.createPunishmentProblemFromBadMove('bm_1')
 
-      assert.strictEqual(repo.badMoves['bm_1'].generatedProblemId, problem.id)
+      assert.strictEqual(repo.badMoves['bm_1'].generatedTaskId, problem.id)
     })
 
     it('throws if bad move not found', async () => {
@@ -322,8 +321,7 @@ describe('problemService', () => {
 
       assert.ok(reviewScheduleId, 'should return a reviewScheduleId')
       assert.strictEqual(fakeReview.addedItems.length, 1)
-      assert.strictEqual(fakeReview.addedItems[0].itemId, problem.id)
-      assert.strictEqual(fakeReview.addedItems[0].itemType, 'problem')
+      assert.strictEqual(fakeReview.addedItems[0].taskId, problem.id)
     })
 
     it('skips review queue when no reviewService provided', async () => {
@@ -348,9 +346,8 @@ describe('problemService', () => {
 
       const { problem } = await service.createPunishmentProblemFromBadMove('bm_1')
 
-      const schedule = fakeReview.addedItems.find(s => s.itemId === problem.id)
+      const schedule = fakeReview.addedItems.find(s => s.taskId === problem.id)
       assert.ok(schedule, 'punishment problem should have a review schedule')
-      assert.strictEqual(schedule.itemType, 'problem')
     })
   })
 

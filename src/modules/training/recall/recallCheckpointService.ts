@@ -54,10 +54,9 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     if (!session) return null
 
     // Only trigger for attempt-sourced recall sessions
-    const source = session.source as { kind: string; attemptId?: string }
-    if (source.kind !== 'attempt' || !source.attemptId) return null
+    if (!session.attemptId) return null
 
-    const badMoves = await repository.listBadMovesByAttempt(source.attemptId)
+    const badMoves = await repository.listBadMovesByAttempt(session.attemptId)
 
     // Find a bad move at this move index with major/severe severity
     const triggering = badMoves.find(

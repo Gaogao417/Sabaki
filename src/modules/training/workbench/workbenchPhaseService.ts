@@ -27,7 +27,7 @@ export const PHASE_TRANSITION_RESULT: Record<string, WorkbenchMode> = {
 
 export type WorkbenchPhaseService = {
   transition(tabId: string, transition: PhaseTransition): void
-  getPhase(tabId: string): WorkbenchPhase | null
+  getPhase(tabId: string): WorkbenchMode | null
   getMode(tabId: string): WorkbenchMode | null
   getValidTransitions(tabId: string): PhaseTransition[]
   snapshotFromAnalysis(tabId: string): Promise<WorkbenchTab>
@@ -132,11 +132,10 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
       const now = new Date().toISOString()
       const snapshotTask: TrainingTask = {
         id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        kind: 'snapshot_problem',
-        source: {
-          kind: 'snapshot_problem',
-          problemId: problem.id,
+        origin: {
+          provider: 'snapshot',
           parentTaskId: tab.taskId,
+          raw: { problemId: problem.id },
         },
         rootPositionSgf: problem.positionSgf,
         sideToMove: problem.sideToMove,
@@ -161,9 +160,8 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
     return newTab
   }
 
-  function getPhase(tabId: string): WorkbenchPhase | null {
-    const tab = getTab(tabId)
-    return tab?.phase ?? null
+  function getPhase(tabId: string): WorkbenchMode | null {
+    return getMode(tabId)
   }
 
   function getValidTransitions(tabId: string): PhaseTransition[] {
