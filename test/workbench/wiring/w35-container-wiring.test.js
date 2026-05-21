@@ -39,13 +39,13 @@
 import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
-import {fileURLToPath} from 'url'
+import { fileURLToPath } from 'url'
 
 import TrainingWorkbenchContainer from '../../../src/components/TrainingWorkbenchContainer.js'
-import {createWorkbenchStore} from '../../../src/modules/training/store/workbenchStore.ts'
-import {createTrainingRuntimeStore} from '../../../src/modules/training/store/trainingRuntimeStore.ts'
-import {projectGobanProps} from '../../../src/modules/training/workbench/projectGobanProps.ts'
-import {tryImport} from '../tryImport.js'
+import { createWorkbenchStore } from '../../../src/modules/training/store/workbenchStore.ts'
+import { createTrainingRuntimeStore } from '../../../src/modules/training/store/trainingRuntimeStore.ts'
+import { projectGobanProps } from '../../../src/modules/training/workbench/projectGobanProps.ts'
+import { tryImport } from '../tryImport.js'
 
 let createGobanDataAdapter = null
 let createBoardInteractionController = null
@@ -58,7 +58,7 @@ function makeTab(overrides = {}) {
     taskId: 'task_1',
     mode: 'play',
     childTabIds: [],
-    playerConfig: {black: 'human', white: 'ai'},
+    playerConfig: { black: 'human', white: 'ai' },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
@@ -75,40 +75,40 @@ function createSpyFlowService() {
   }
   return {
     calls,
-    async submit(tabId) { calls.submit.push({tabId}) },
-    enterAnalysis(tabId) { calls.enterAnalysis.push({tabId}) },
-    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({tabId, toMode}) },
-    completeRecall(tabId) { calls.completeRecall.push({tabId}) },
-    async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({tabId}) },
+    async submit(tabId) { calls.submit.push({ tabId }) },
+    enterAnalysis(tabId) { calls.enterAnalysis.push({ tabId }) },
+    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({ tabId, toMode }) },
+    completeRecall(tabId) { calls.completeRecall.push({ tabId }) },
+    async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({ tabId }) },
   }
 }
 
 function createSpyTabService() {
-  const calls = {switchTab: [], closeTab: [], openTask: []}
+  const calls = { switchTab: [], closeTab: [], openTask: [] }
   return {
     calls,
-    switchTab(tabId) { calls.switchTab.push({tabId}) },
-    async closeTab(tabId) { calls.closeTab.push({tabId}) },
+    switchTab(tabId) { calls.switchTab.push({ tabId }) },
+    async closeTab(tabId) { calls.closeTab.push({ tabId }) },
     async openTask(opts) { calls.openTask.push(opts) },
   }
 }
 
 function createNoopLegacyController() {
   return {
-    showRecallHint() {},
-    skipRecallMove() {},
-    endRecallSession() {},
-    undoProblemMove() {},
-    submitProblemAttempt() {},
-    exitProblemMode() {},
-    advanceReview() {},
+    showRecallHint() { },
+    skipRecallMove() { },
+    endRecallSession() { },
+    undoProblemMove() { },
+    submitProblemAttempt() { },
+    exitProblemMode() { },
+    advanceReview() { },
   }
 }
 
 /**
  * Create a test harness with real Container + real stores + spy services.
  */
-function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} = {}) {
+function createHarness({ tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null } = {}) {
   const workbenchStore = createWorkbenchStore()
   const runtimeStore = createTrainingRuntimeStore()
   const flowService = createSpyFlowService()
@@ -116,7 +116,7 @@ function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} =
 
   const taskImportService = {
     async createManualTask(input) {
-      return {id: `task_${Date.now()}`, ...input}
+      return { id: `task_${Date.now()}`, ...input }
     },
   }
 
@@ -140,8 +140,8 @@ function createHarness({tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null} =
     },
   }
 
-  const container = new TrainingWorkbenchContainer({sabaki})
-  container.props = {sabaki}
+  const container = new TrainingWorkbenchContainer({ sabaki })
+  container.props = { sabaki }
 
   return {
     workbenchStore,
@@ -184,8 +184,8 @@ describe('W3.5 Container Wiring', function () {
       // This test checks that the boardState is NOT the hardcoded default.
       // Contract Section 8 says: "Remove Lines 161-172: hardcoded gobanSettings"
       // and "Remove Lines 174-191: projectGobanProps call with hardcoded boardState/overlayState"
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       assert.ok(shellProps.boardProps != null,
@@ -204,8 +204,8 @@ describe('W3.5 Container Wiring', function () {
     })
 
     it('Container boardProps contains real projected overlayDisplayProps', function () {
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       assert.ok(shellProps.boardProps != null)
@@ -224,8 +224,8 @@ describe('W3.5 Container Wiring', function () {
     it('Container boardProps contains real projected settings from input', function () {
       // The settings in boardProps.overlayDisplayProps must reflect the
       // projection from projectGobanProps, not arbitrary hardcoded values.
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       const overlay = shellProps.boardProps.overlayDisplayProps
@@ -240,8 +240,8 @@ describe('W3.5 Container Wiring', function () {
 
   describe('W35-T13: Container passes projected GobanPropsOutput as boardProps', function () {
     it('boardProps has all four top-level sections from projectGobanProps output', function () {
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       assert.ok(shellProps.boardProps != null,
@@ -259,8 +259,8 @@ describe('W3.5 Container Wiring', function () {
     it('boardProps matches projectGobanProps output structure', function () {
       // Verify the Container's boardProps has the same structure as a direct
       // projectGobanProps call.
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       // Directly call projectGobanProps with the same inputs the Container uses
@@ -277,7 +277,7 @@ describe('W3.5 Container Wiring', function () {
             markers: [], lines: [], siblingsInfo: {}, childrenInfo: {},
           },
         },
-        overlayState: {paintMap: [], markerMap: [], dimmedStones: [], analysis: null},
+        overlayState: { paintMap: [], markerMap: [], dimmedStones: [], analysis: null },
         settings: {
           showMoveNumbers: false,
           showNextMoves: true,
@@ -312,8 +312,8 @@ describe('W3.5 Container Wiring', function () {
 
   describe('W35-T14: Container onVertexClick delegates to boardInteractionController', function () {
     it('Container provides onVertexClick handler that routes through the click chain', function () {
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       assert.ok(shellProps.boardProps != null)
@@ -327,8 +327,8 @@ describe('W3.5 Container Wiring', function () {
         workbenchMode: 'play',
         task: null,
         runtimeState: {},
-        boardState: {gameTree: null, treePosition: '', board: {}},
-        overlayState: {paintMap: [], markerMap: [], dimmedStones: [], analysis: null},
+        boardState: { gameTree: null, treePosition: '', board: {} },
+        overlayState: { paintMap: [], markerMap: [], dimmedStones: [], analysis: null },
         settings: {
           showMoveNumbers: false, showNextMoves: true, showSiblings: true,
           showAnalysis: false, showCoordinates: true, showHumanPreference: false,
@@ -338,8 +338,8 @@ describe('W3.5 Container Wiring', function () {
         analysisData: null,
       })
 
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       const containerHandler = shellProps.boardProps.handlerProps.onVertexClick
@@ -351,13 +351,13 @@ describe('W3.5 Container Wiring', function () {
     })
 
     it('onVertexClick does not throw for a valid play mode click', function () {
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       const onVertexClick = shellProps.boardProps.handlerProps.onVertexClick
       // Goban calls onVertexClick(evt) where evt.vertex = [row, col]
-      const evt = {vertex: [3, 3], button: 0, ctrlKey: false, metaKey: false}
+      const evt = { vertex: [3, 3], button: 0, ctrlKey: false, metaKey: false }
       let thrown = null
       try {
         onVertexClick(evt)
@@ -416,8 +416,8 @@ describe('W3.5 Container Wiring', function () {
 
   describe('W35-T21: Store change -> adapter -> Container re-render', function () {
     it('workbenchStore tab mode change causes Container to re-render with updated boardProps', function () {
-      const {workbenchStore, container} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      const { workbenchStore, container } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play' })],
       })
 
       // First render
@@ -430,7 +430,7 @@ describe('W3.5 Container Wiring', function () {
       )
 
       // Change mode
-      workbenchStore.updateTab('tab_1', {mode: 'recall'})
+      workbenchStore.updateTab('tab_1', { mode: 'recall' })
 
       // Re-render
       const recallProps = container.render().props
@@ -448,10 +448,10 @@ describe('W3.5 Container Wiring', function () {
     })
 
     it('switching active tab causes Container to re-render with new tab mode', function () {
-      const {workbenchStore, container} = createHarness({
+      const { workbenchStore, container } = createHarness({
         tabs: [
-          makeTab({id: 'tab_play', mode: 'play'}),
-          makeTab({id: 'tab_recall', mode: 'recall'}),
+          makeTab({ id: 'tab_play', mode: 'play' }),
+          makeTab({ id: 'tab_recall', mode: 'recall' }),
         ],
         activeTabId: 'tab_play',
       })
@@ -485,15 +485,15 @@ describe('W3.5 Container Wiring', function () {
       // a resolver call with the correct workbenchMode context.
       // The full chain (click -> resolver -> executor -> store -> adapter -> re-render)
       // is tested end-to-end once the controller and adapter are wired.
-      const {shellProps} = createHarness({
-        tabs: [makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'})],
+      const { shellProps } = createHarness({
+        tabs: [makeTab({ id: 'tab_1', mode: 'play', taskId: 'task_1' })],
       })
 
       const onVertexClick = shellProps.boardProps.handlerProps?.onVertexClick
       assert.strictEqual(typeof onVertexClick, 'function')
 
       // Goban calls onVertexClick(evt) where evt.vertex = [row, col]
-      const evt = {vertex: [3, 3], button: 0, ctrlKey: false, metaKey: false}
+      const evt = { vertex: [3, 3], button: 0, ctrlKey: false, metaKey: false }
       let thrown = null
       try {
         onVertexClick(evt)
@@ -563,7 +563,7 @@ describe('W3.5 Container Wiring', function () {
         if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue
         for (const method of forbiddenMethods) {
           if (trimmed.includes('workbenchStore.' + method) ||
-              trimmed.includes('ws.' + method)) {
+            trimmed.includes('ws.' + method)) {
             foundForbidden = true
             foundLine = trimmed
           }
@@ -594,7 +594,7 @@ describe('W3.5 Container Wiring', function () {
         if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue
         for (const method of forbiddenMethods) {
           if (trimmed.includes('runtimeStore.' + method) ||
-              trimmed.includes('rt.' + method)) {
+            trimmed.includes('rt.' + method)) {
             foundForbidden = true
             foundLine = trimmed
           }
