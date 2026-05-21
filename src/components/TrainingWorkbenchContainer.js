@@ -128,7 +128,7 @@ class TrainingWorkbenchContainer extends Component {
 
     async function handleAddTask() {
       const {taskImportService} = sabaki.getTrainingContext()
-      const task = await taskImportService.createManualTask({rootPositionSgf: ''})
+      const task = await taskImportService.createManualTask({positionSgf: '(;SZ[19])'})
       await tabService.openTask({taskId: task.id, mode: 'play'})
     }
 
