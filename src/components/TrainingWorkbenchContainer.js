@@ -149,6 +149,11 @@ class TrainingWorkbenchContainer extends Component {
       console.warn('W2 GAP-02: abandon not yet implemented on flowService')
     }
 
+    function handleRestartAttempt() {
+      if (!activeTab) return
+      flowService.restartAttempt(activeTab.id)
+    }
+
     // --- W4 Recall checkpoint handlers ---
 
     async function handleSubmitCorrection() {
@@ -230,6 +235,8 @@ class TrainingWorkbenchContainer extends Component {
       onMarkCheckpoint: () => {},
       onVerify: () => {},
       onRecallToggle: () => {},
+      // W5 Analysis: restart attempt
+      onRestartAttempt: handleRestartAttempt,
     }
 
     // --- W3.5 Goban wiring: project boardProps from adapter snapshot ---
@@ -488,6 +495,8 @@ function projectFromWorkbench(ws) {
 
   if (activeTab) {
     result.mode = activeTab.mode
+    result.analysisContext = activeTab.analysisContext
+    result.previousMode = activeTab.previousMode
     result.taskTitle = activeTab.taskId
 
     result.modeBarPolicy = computeModeBarPolicy({

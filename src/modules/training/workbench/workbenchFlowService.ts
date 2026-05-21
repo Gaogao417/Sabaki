@@ -1,4 +1,5 @@
 import type { WorkbenchMode, WorkbenchTab, TrainingAttemptResult } from '../types/index'
+import type { AnalysisContextSource } from '../types/analysis'
 import type { WorkbenchStore } from '../store/workbenchStore'
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { SnapshotService } from '../analysis/snapshotService'
@@ -146,6 +147,11 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
       previousMode: tab.mode,
+      analysisContext: {
+        taskId: tab.taskId,
+        source: tab.mode as AnalysisContextSource,
+        attemptId: tab.activeAttemptId,
+      },
     })
   }
 

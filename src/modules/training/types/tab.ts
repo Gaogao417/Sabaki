@@ -32,6 +32,15 @@ export type WorkbenchTab = {
   playerConfig?: PlayerConfig
   previousMode?: WorkbenchMode
 
+  analysisContext?: {
+    taskId: string
+    source: string
+    attemptId?: string
+    checkpointId?: string
+    positionHash?: string
+    positionSgf?: string
+  }
+
   createdAt: string
   updatedAt: string
 }
