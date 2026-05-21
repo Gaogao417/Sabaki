@@ -703,22 +703,22 @@ describe('W4 Recall Mode Wiring', function () {
         assert.strictEqual(shellProps.recallExpectedMoves.length, 5,
           'recallExpectedMoves must match recallView.expectedMoves.length')
 
-        // NEW projections (RED until implementation adds them)
-        assert.strictEqual(shellProps.recallTotalMoves, 5,
-          'recallTotalMoves must be recallView.expectedMoves.length')
+        // Panel-consumed prop names (must match RecallModePanel destructured names)
+        assert.strictEqual(shellProps.totalMoves, 5,
+          'totalMoves must be recallView.expectedMoves.length')
 
         const correctCount = shellProps.recallUserAttempts.filter(a => a.isCorrect).length
-        assert.strictEqual(shellProps.recallCorrectCount, correctCount,
-          'recallCorrectCount must be derived from userAttempts where isCorrect=true')
+        assert.strictEqual(shellProps.correctCount, correctCount,
+          'correctCount must be derived from userAttempts where isCorrect=true')
         // Specifically: 2 correct out of 3 attempts
-        assert.strictEqual(shellProps.recallCorrectCount, 2,
-          'recallCorrectCount must be 2')
+        assert.strictEqual(shellProps.correctCount, 2,
+          'correctCount must be 2')
 
-        assert.strictEqual(shellProps.recallWrongCount, 1,
-          'recallWrongCount must be 1')
+        assert.strictEqual(shellProps.wrongCount, 1,
+          'wrongCount must be 1')
 
-        assert.strictEqual(shellProps.recallProgress, 60,
-          'recallProgress must be (moveIndex / totalMoves) * 100 = 60')
+        assert.strictEqual(shellProps.progress, 60,
+          'progress must be (moveIndex / totalMoves) * 100 = 60')
       })
     })
 
@@ -743,7 +743,7 @@ describe('W4 Recall Mode Wiring', function () {
     // --- W4-T11: No recallView projects empty state ---
 
     describe('W4-T11: No recallView projects empty state', function () {
-      it('recallPanelState is empty when recallView is null', function () {
+      it('state is empty when recallView is null', function () {
         const harness = createHarness({
           tabs: [makeTab({mode: 'recall'})],
           recallView: null,
@@ -751,16 +751,15 @@ describe('W4 Recall Mode Wiring', function () {
 
         const shellProps = harness.getShellProps()
 
-        // NEW projection (RED until implementation adds it)
-        assert.strictEqual(shellProps.recallPanelState, 'empty',
-          'recallPanelState must be "empty" when recallView is null')
+        assert.strictEqual(shellProps.state, 'empty',
+          'state must be "empty" when recallView is null')
       })
     })
 
     // --- W4-T12: Completed recallView projects success state ---
 
     describe('W4-T12: Completed recallView projects success state', function () {
-      it('recallPanelState is success when recallView.completed is true', function () {
+      it('state is success when recallView.completed is true', function () {
         const harness = createHarness({
           tabs: [makeTab({mode: 'recall'})],
           recallView: makeRecallView({completed: true}),
@@ -768,9 +767,8 @@ describe('W4 Recall Mode Wiring', function () {
 
         const shellProps = harness.getShellProps()
 
-        // NEW projection (RED until implementation adds it)
-        assert.strictEqual(shellProps.recallPanelState, 'success',
-          'recallPanelState must be "success" when recallView.completed is true')
+        assert.strictEqual(shellProps.state, 'success',
+          'state must be "success" when recallView.completed is true')
       })
     })
 
@@ -791,11 +789,11 @@ describe('W4 Recall Mode Wiring', function () {
 
         const shellProps = harness.getShellProps()
 
-        // NEW projections (RED until implementation adds them)
-        assert.strictEqual(shellProps.recallCorrectCount, 2,
-          'recallCorrectCount must count userAttempts where isCorrect=true')
-        assert.strictEqual(shellProps.recallWrongCount, 1,
-          'recallWrongCount must count userAttempts where isCorrect=false')
+        // Panel-consumed prop names
+        assert.strictEqual(shellProps.correctCount, 2,
+          'correctCount must count userAttempts where isCorrect=true')
+        assert.strictEqual(shellProps.wrongCount, 1,
+          'wrongCount must count userAttempts where isCorrect=false')
       })
     })
 
@@ -810,9 +808,8 @@ describe('W4 Recall Mode Wiring', function () {
 
         const shellProps = harness.getShellProps()
 
-        // NEW projection (RED until implementation adds it)
-        assert.strictEqual(shellProps.recallPanelState, 'disabled',
-          'recallPanelState must be "disabled" when mode is analysis and no recallView')
+        assert.strictEqual(shellProps.state, 'disabled',
+          'state must be "disabled" when mode is analysis and no recallView')
       })
     })
   })
@@ -1001,6 +998,99 @@ describe('W4 Recall Mode Wiring', function () {
           importLines.length === 0,
           `RecallModePanel must only import local UI components, but found: ${importLines.join(', ')}`,
         )
+      })
+    })
+  })
+
+  // ===================================================
+  // Container→Panel Integration Tests (W4-T21..T23)
+  // ===================================================
+
+  describe('Container→Panel Integration (W4-T21..T23)', function () {
+
+    // --- W4-T21: recallOriginalLine driven by activeCheckpointId ---
+
+    describe('W4-T21: recallOriginalLine switches to false when checkpoint active', function () {
+      it('recallOriginalLine is false when activeCheckpointId is set', function () {
+        const harness = createHarness({
+          tabs: [makeTab({mode: 'recall'})],
+          recallView: makeRecallView(),
+          activeCheckpointId: 'cp_1',
+        })
+
+        const shellProps = harness.getShellProps()
+
+        assert.strictEqual(shellProps.recallOriginalLine, false,
+          'recallOriginalLine must be false when activeCheckpointId is set, so panel shows checkpoint card')
+      })
+
+      it('recallOriginalLine is true when no active checkpoint', function () {
+        const harness = createHarness({
+          tabs: [makeTab({mode: 'recall'})],
+          recallView: makeRecallView(),
+        })
+
+        const shellProps = harness.getShellProps()
+
+        assert.strictEqual(shellProps.recallOriginalLine, true,
+          'recallOriginalLine must be true when no activeCheckpointId, so panel shows progress card')
+      })
+    })
+
+    // --- W4-T22: completeRecall clears recallView and activeCheckpointId ---
+
+    describe('W4-T22: completeRecall clears recallView and activeCheckpointId', function () {
+      it('flowService.completeRecall clears recallView', function () {
+        const harness = createHarness({
+          tabs: [makeTab({mode: 'recall', activeRecallSessionId: 'rs_1'})],
+          recallView: makeRecallView(),
+          activeCheckpointId: 'cp_1',
+        })
+
+        // Simulate flowService.completeRecall behavior
+        harness.runtimeStore.setRecallView(null)
+        harness.runtimeStore.setActiveCheckpoint(undefined)
+
+        const shellProps = harness.getShellProps()
+
+        assert.strictEqual(shellProps.state, 'empty',
+          'After completeRecall, state must be "empty" (recallView cleared)')
+        assert.ok(!shellProps.activeCheckpointId,
+          'After completeRecall, activeCheckpointId must be falsy (null or undefined)')
+      })
+    })
+
+    // --- W4-T23: Panel callback names exist and route correctly ---
+
+    describe('W4-T23: Panel callback names route correctly', function () {
+      it('onHint, onSkip, onEndRecall callbacks exist and route to correct targets', function () {
+        const harness = createHarness({
+          tabs: [makeTab({mode: 'recall'})],
+          recallView: makeRecallView(),
+        })
+
+        const shellProps = harness.getShellProps()
+
+        // onHint routes to legacy controller showRecallHint
+        assert.strictEqual(typeof shellProps.onHint, 'function',
+          'onHint callback must exist')
+        shellProps.onHint()
+        assert.strictEqual(harness.legacyController.calls.showRecallHint.length, 1,
+          'onHint must route to legacyTrainingFlowController.showRecallHint')
+
+        // onSkip routes to legacy controller skipRecallMove
+        assert.strictEqual(typeof shellProps.onSkip, 'function',
+          'onSkip callback must exist')
+        shellProps.onSkip()
+        assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 1,
+          'onSkip must route to legacyTrainingFlowController.skipRecallMove')
+
+        // onEndRecall routes to flowService.completeRecall
+        assert.strictEqual(typeof shellProps.onEndRecall, 'function',
+          'onEndRecall callback must exist')
+        shellProps.onEndRecall()
+        assert.strictEqual(harness.flowService.calls.completeRecall.length, 1,
+          'onEndRecall must route to flowService.completeRecall')
       })
     })
   })

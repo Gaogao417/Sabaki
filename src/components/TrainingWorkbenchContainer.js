@@ -222,6 +222,14 @@ class TrainingWorkbenchContainer extends Component {
       onRevealAI: handleRevealAI,
       onSkipCheckpoint: handleSkipCheckpoint,
       onSaveCheckpointComment: handleSaveCheckpointComment,
+      // W4 recall panel callback aliases (RecallModePanel prop names)
+      onHint: () => legacyTrainingFlowController.showRecallHint(),
+      onSkip: () => legacyTrainingFlowController.skipRecallMove(),
+      onEndRecall: handleEndRecall,
+      // W4 DEFERRED: onMarkCheckpoint, onVerify, onRecallToggle
+      onMarkCheckpoint: () => {},
+      onVerify: () => {},
+      onRecallToggle: () => {},
     }
 
     // --- W3.5 Goban wiring: project boardProps from adapter snapshot ---
@@ -296,7 +304,7 @@ class TrainingWorkbenchContainer extends Component {
     // there is no recallView. projectFromRuntime sets 'empty' when recallView
     // is null; here we refine based on the active tab mode.
     if (!rt.recallView && activeTab && activeTab.mode !== 'recall') {
-      projected.recallPanelState = 'disabled'
+      projected.state = 'disabled'
     }
 
     return h(WorkbenchShell, {
@@ -417,6 +425,7 @@ function projectFromRuntime(rt) {
 
   if (rt.recallView) {
     const v = rt.recallView
+    // Internal state kept for debugging / non-panel consumers
     result.recallSession = {active: true}
     result.recallMoveIndex = v.moveIndex
     result.recallExpectedMoves = v.expectedMoves
@@ -424,25 +433,25 @@ function projectFromRuntime(rt) {
     result.recallShowHint = v.showHint
     result.recallCompleted = v.completed
 
-    // W4 projection enhancements
-    result.activeCheckpointId = rt.activeCheckpointId || null
-    result.recallCorrectCount = v.userAttempts.filter(a => a.isCorrect).length
-    result.recallWrongCount = v.userAttempts.filter(a => !a.isCorrect).length
-    result.recallTotalMoves = v.expectedMoves.length
-    result.recallProgress = v.expectedMoves.length > 0
+    // Panel-consumed props (names must match RecallModePanel destructured props)
+    result.currentMove = v.moveIndex
+    result.totalMoves = v.expectedMoves.length
+    result.correctCount = v.userAttempts.filter(a => a.isCorrect).length
+    result.wrongCount = v.userAttempts.filter(a => !a.isCorrect).length
+    result.progress = v.expectedMoves.length > 0
       ? Math.round((v.moveIndex / v.expectedMoves.length) * 100)
       : 0
+    result.activeCheckpointId = rt.activeCheckpointId || null
+    result.recallOriginalLine = !rt.activeCheckpointId
 
-    // Panel state derived from recallView alone
     if (v.completed) {
-      result.recallPanelState = 'success'
+      result.state = 'success'
     } else {
-      result.recallPanelState = 'active'
+      result.state = 'active'
     }
   } else {
-    // No recallView: panel state is 'empty' (may be overridden to 'disabled'
-    // in render() when mode is not 'recall')
-    result.recallPanelState = 'empty'
+    result.state = 'empty'
+    result.recallOriginalLine = true
   }
 
   if (rt.problemView) {

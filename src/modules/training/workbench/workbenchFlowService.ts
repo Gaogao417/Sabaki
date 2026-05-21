@@ -169,6 +169,10 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       deps.recallService.completeRecall(recallSessionId).catch(() => {})
     }
 
+    // Clear recall view model state
+    runtimeStore?.setRecallView(null)
+    runtimeStore?.setActiveCheckpoint(undefined)
+
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
     })
