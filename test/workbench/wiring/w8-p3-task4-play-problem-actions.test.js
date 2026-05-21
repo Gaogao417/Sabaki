@@ -34,7 +34,7 @@
  * Long-term vs migration:
  *   - T4-01..T4-10, T4-15..T4-20: Long-term -- protect core wiring contracts.
  *   - T4-11..T4-14: Long-term -- protect UI button rendering contracts.
- *   - T4-GAP: Migration -- can be removed once onAbandonAnswer is wired in Container.
+ *   - T4-GAP: Resolved -- onAbandonAnswer is now wired in Container to handleAbandon (no-op stub).
  *
  * Workbench wiring coverage:
  *   - UI command mapping: T4-11..T4-14 (button rendering + callback wiring)
@@ -101,6 +101,11 @@ import {
 import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
 import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
 import {renderToDom} from '../preactTestHelper.js'
+import {
+  createSpyFlowService,
+  createSpySnapshotService,
+  createSpyTabService,
+} from '../shared/workbenchSpyFactories.ts'
 
 // UI components for UI_COMMAND_MAPPING tests
 import ModeActions from '../../../src/components/workbench/shell/ModeActions.js'
@@ -146,67 +151,6 @@ function makeProblemTab(overrides = {}) {
 }
 
 // --- Spy factories ---
-
-function createSpyFlowService() {
-  const calls = {
-    submit: [],
-    enterAnalysis: [],
-    returnFromAnalysis: [],
-    completeRecall: [],
-    snapshotFromCurrentContext: [],
-    restartAttempt: [],
-    startAttempt: [],
-  }
-  return {
-    calls,
-    async submit(tabId) { calls.submit.push({tabId}) },
-    enterAnalysis(tabId) { calls.enterAnalysis.push({tabId}) },
-    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({tabId, toMode}) },
-    completeRecall(tabId) { calls.completeRecall.push({tabId}) },
-    async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({tabId}) },
-    restartAttempt(tabId) { calls.restartAttempt.push({tabId}) },
-    async startAttempt(tabId) { calls.startAttempt.push({tabId}) },
-  }
-}
-
-function createSpyTabService() {
-  const calls = {switchTab: [], closeTab: [], openTask: []}
-  let tabCounter = 0
-  return {
-    calls,
-    switchTab(tabId) { calls.switchTab.push({tabId}) },
-    async closeTab(tabId) { calls.closeTab.push({tabId}) },
-    async openTask(opts) {
-      tabCounter++
-      calls.openTask.push(opts)
-      // Simulate real tabService: add tab to store
-      return {
-        id: `tab_new_${tabCounter}`,
-        taskId: opts.taskId,
-        mode: opts.mode || 'problem',
-        parentTabId: opts.parentTabId,
-        childTabIds: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-    },
-  }
-}
-
-function createSpySnapshotService() {
-  const calls = {captureSnapshotInput: []}
-  return {
-    calls,
-    async captureSnapshotInput(input) {
-      calls.captureSnapshotInput.push(input)
-      return {
-        positionSgf: '(;SZ[19]AB[aa][bb])',
-        sideToMove: 'black',
-        sourceTaskId: input.sourceTaskId,
-      }
-    },
-  }
-}
 
 function createSpyLegacyController() {
   const calls = {
@@ -596,24 +540,25 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
       })
     })
 
-    // --- T4-GAP: onAbandonAnswer not wired in shellHandlers ---
+    // --- T4-GAP: onAbandonAnswer is now wired (was previously a GAP) ---
 
-    describe('T4-GAP: onAbandonAnswer not wired', function () {
-      it('shellHandlers does not contain onAbandonAnswer key -- GAP', function () {
+    describe('T4-GAP: onAbandonAnswer is wired', function () {
+      it('shellHandlers contains onAbandonAnswer key that delegates to handleAbandon', function () {
         const harness = createDelegationHarness({
           tabs: [makeProblemTab({id: 'tab_gap'})],
         })
 
         const shellProps = harness.getShellProps()
 
-        // The contract says BottomActionBar problem renders onAbandonAnswer button,
-        // but the Container's shellHandlers does not include onAbandonAnswer.
-        // This is a confirmed GAP.
-        assert.strictEqual(
-          shellProps.onAbandonAnswer,
-          undefined,
-          'shellHandlers must not have onAbandonAnswer -- GAP: not wired in Container (Contract T4-GAP)',
-        )
+        // Previously a GAP: onAbandonAnswer was not wired. Now it delegates to handleAbandon.
+        assert.strictEqual(typeof shellProps.onAbandonAnswer, 'function',
+          'shellHandlers must have onAbandonAnswer wired as a function')
+
+        // handleAbandon is a no-op stub that does not call flowService
+        shellProps.onAbandonAnswer()
+
+        assert.strictEqual(harness.flowService.calls.submit.length, 0,
+          'onAbandonAnswer must not call flowService.submit -- GAP-02: handleAbandon is no-op')
       })
     })
   })

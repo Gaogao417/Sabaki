@@ -37,8 +37,8 @@
  *   - T5-01..T5-03, T5-04..T5-08, T5-09..T5-11, T5-15: Long-term contract tests.
  *   - T5-14 (onHint via legacy controller): Migration-period test. Can be removed
  *     when legacyTrainingFlowController is replaced by a flowService-backed handler.
- *   - T5-GAP (onVerifySkip unconnected): Migration-period test. Can be updated when
- *     the GAP is resolved (BottomActionBar callback name aligned with shellHandlers key).
+ *   - T5-GAP (onVerifySkip now connected): Was a migration-period test. Updated to verify
+ *     onVerifySkip delegates to legacyTrainingFlowController.skipRecallMove().
  *
  * Workbench wiring coverage:
  *   - UI command mapping: T5-12 (ModeActions recall buttons), T5-13 (BottomActionBar recall buttons)
@@ -77,8 +77,8 @@
  *      but the contract (correct delegation) remains testable.
  *   2. T5-12, T5-13: Rely on data-testid attributes. If ModeActions/BottomActionBar
  *      change testIds, tests break. But the button rendering contract is stable.
- *   3. T5-GAP: Confirms a negative (no handler key). If the GAP is resolved and
- *      a handler is added, this test should be updated to test the handler.
+ *   3. T5-GAP: Was confirming a negative (no handler key). Now verifies that
+ *      onVerifySkip is wired and delegates to legacyTrainingFlowController.skipRecallMove().
  *   4. T5-19: Tests fire-and-forget behavior by stubbing recallService.completeRecall
  *      to return a rejected promise. This relies on flowService internals calling
  *      .catch() on the promise. If the implementation changes to await the promise,
@@ -106,7 +106,7 @@
  *   | T5-17      | activeTab null -> no flowService calls         | T5-17   | covered | CONTAINER_DELEGATION          |
  *   | T5-18      | completeRecall -> recall progress not projected | T5-18  | covered | PROJECTION_RETURN             |
  *   | T5-19      | recallService failure does not block mode switch | T5-19 | covered | SIDE_EFFECT_BOUNDARY          |
- *   | T5-GAP     | onVerifySkip is not in shellHandlers           | T5-GAP  | covered | CONTAINER_DELEGATION (GAP)    |
+ *   | T5-GAP     | onVerifySkip delegates to legacy controller     | T5-GAP  | covered | CONTAINER_DELEGATION (resolved) |
  */
 
 import assert from 'assert'
@@ -123,6 +123,10 @@ import { createTrainingRuntimeStore } from '../../../src/modules/training/store/
 import { createWorkbenchFlowService } from '../../../src/modules/training/workbench/workbenchFlowService.ts'
 import { createLoggerService } from '../../../src/modules/logger/LoggerService.js'
 import { createConsoleWriter } from '../../../src/modules/logger/consoleWriter.js'
+import {
+  createSpyFlowService,
+  createSpyTabService,
+} from '../shared/workbenchSpyFactories.ts'
 
 // UI components for UI_COMMAND_MAPPING tests
 import ModeActions from '../../../src/components/workbench/shell/ModeActions.js'
@@ -179,39 +183,6 @@ function makeRecallView(overrides = {}) {
 }
 
 // --- Spy factories for Container delegation tests ---
-
-function createSpyFlowService() {
-  const calls = {
-    submit: [],
-    enterAnalysis: [],
-    returnFromAnalysis: [],
-    completeRecall: [],
-    snapshotFromCurrentContext: [],
-    restartAttempt: [],
-  }
-  return {
-    calls,
-    async submit(tabId) { calls.submit.push({ tabId }) },
-    enterAnalysis(tabId) { calls.enterAnalysis.push({ tabId }) },
-    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({ tabId, toMode }) },
-    completeRecall(tabId) { calls.completeRecall.push({ tabId }) },
-    async snapshotFromCurrentContext(tabId) {
-      calls.snapshotFromCurrentContext.push({ tabId })
-      return { id: 'tab_snapshot_new', taskId: 'task_snap', mode: 'problem', childTabIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-    },
-    restartAttempt(tabId) { calls.restartAttempt.push({ tabId }) },
-  }
-}
-
-function createSpyTabService() {
-  const calls = { switchTab: [], closeTab: [], openTask: [] }
-  return {
-    calls,
-    switchTab(tabId) { calls.switchTab.push({ tabId }) },
-    async closeTab(tabId) { calls.closeTab.push({ tabId }) },
-    async openTask(opts) { calls.openTask.push(opts) },
-  }
-}
 
 function createSpyLegacyController() {
   const calls = {
@@ -1022,12 +993,11 @@ describe('W8-P3 Task5: activeTab Null Guard (T5-17)', function () {
 
 describe('W8-P3 Task5: onVerifySkip GAP (T5-GAP)', function () {
 
-  // T5-GAP: BottomActionBar recall uses callback name 'onVerifySkip' but
-  // shellHandlers has 'onSkip' (which maps to legacyTrainingFlowController.skipRecallMove).
-  // The callback names do not match, so the verify-skip button is effectively disconnected.
-  // This test confirms the GAP: shellHandlers does not have an 'onVerifySkip' key.
+  // T5-GAP: Previously, BottomActionBar recall used callback name 'onVerifySkip' but
+  // shellHandlers only had 'onSkip'. Now onVerifySkip is wired to
+  // legacyTrainingFlowController.skipRecallMove().
   // Production subject: Container shellHandlers
-  it('T5-GAP: shellHandlers does not contain onVerifySkip key', function () {
+  it('T5-GAP: shellHandlers contains onVerifySkip that delegates to legacyTrainingFlowController.skipRecallMove', function () {
     const harness = createHarness({
       tabs: [makeTab({ mode: 'recall' })],
       recallView: makeRecallView(),
@@ -1035,12 +1005,13 @@ describe('W8-P3 Task5: onVerifySkip GAP (T5-GAP)', function () {
 
     const shellProps = harness.getShellProps()
 
-    // shellHandlers must NOT have 'onVerifySkip' as a key
-    // This confirms the GAP: BottomActionBar recall renders a button with
-    // callback='onVerifySkip', but Container shellHandlers only has 'onSkip'.
-    assert.strictEqual(shellProps.onVerifySkip, undefined,
-      'shellHandlers must NOT contain onVerifySkip key -- this is a known GAP. ' +
-      'BottomActionBar uses callback name "onVerifySkip" but shellHandlers has "onSkip". ' +
-      'The verify-skip button is effectively disconnected until this GAP is resolved.')
+    // Previously a GAP: onVerifySkip was not in shellHandlers. Now it is wired.
+    assert.strictEqual(typeof shellProps.onVerifySkip, 'function',
+      'shellHandlers must contain onVerifySkip as a function')
+
+    shellProps.onVerifySkip()
+
+    assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 1,
+      'onVerifySkip must delegate to legacyTrainingFlowController.skipRecallMove')
   })
 })

@@ -73,6 +73,10 @@ import {createTrainingRuntimeStore} from '../../../src/modules/training/store/tr
 import {projectGobanProps} from '../../../src/modules/training/workbench/projectGobanProps.ts'
 import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
 import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {
+  createSpyFlowService,
+  createSpyTabService,
+} from '../shared/workbenchSpyFactories.ts'
 
 // --- Logger for test harness (real, not mocked) ---
 
@@ -90,36 +94,6 @@ function makeTab(overrides = {}) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
-  }
-}
-
-function createSpyFlowService() {
-  const calls = {
-    submit: [],
-    enterAnalysis: [],
-    returnFromAnalysis: [],
-    completeRecall: [],
-    snapshotFromCurrentContext: [],
-    restartAttempt: [],
-  }
-  return {
-    calls,
-    async submit(tabId) { calls.submit.push({tabId}) },
-    enterAnalysis(tabId) { calls.enterAnalysis.push({tabId}) },
-    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({tabId, toMode}) },
-    completeRecall(tabId) { calls.completeRecall.push({tabId}) },
-    async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({tabId}) },
-    restartAttempt(tabId) { calls.restartAttempt.push({tabId}) },
-  }
-}
-
-function createSpyTabService() {
-  const calls = {switchTab: [], closeTab: [], openTask: []}
-  return {
-    calls,
-    switchTab(tabId) { calls.switchTab.push({tabId}) },
-    async closeTab(tabId) { calls.closeTab.push({tabId}) },
-    async openTask(opts) { calls.openTask.push(opts) },
   }
 }
 

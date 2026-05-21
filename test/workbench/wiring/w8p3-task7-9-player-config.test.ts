@@ -51,6 +51,10 @@ import { createTrainingRuntimeStore } from '../../../src/modules/training/store/
 import PlayModePanel from '../../../src/components/workbench/panels/PlayModePanel.js'
 import ProblemModePanel from '../../../src/components/workbench/panels/ProblemModePanel.js'
 import { renderToDom } from '../preactTestHelper.js'
+import {
+  createSpyFlowService,
+  createSpyTabService,
+} from '../shared/workbenchSpyFactories.ts'
 
 // --- Helpers ---
 
@@ -64,44 +68,6 @@ function makeTab(overrides: Record<string, unknown> = {}): Record<string, unknow
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
-  }
-}
-
-/**
- * Spy flowService that records all calls.
- * Includes updatePlayerConfig spy for GAP-P1 testing.
- */
-function createSpyFlowService() {
-  const calls: Record<string, Array<Record<string, unknown>>> = {
-    submit: [],
-    enterAnalysis: [],
-    returnFromAnalysis: [],
-    completeRecall: [],
-    snapshotFromCurrentContext: [],
-    updatePlayerConfig: [],
-  }
-  return {
-    calls,
-    async submit(tabId: string) { calls.submit.push({ tabId }) },
-    enterAnalysis(tabId: string) { calls.enterAnalysis.push({ tabId }) },
-    returnFromAnalysis(tabId: string, toMode: string) { calls.returnFromAnalysis.push({ tabId, toMode }) },
-    completeRecall(tabId: string) { calls.completeRecall.push({ tabId }) },
-    async snapshotFromCurrentContext(tabId: string) { calls.snapshotFromCurrentContext.push({ tabId }) },
-    // GAP-P1: updatePlayerConfig does not exist on production flowService yet.
-    // When GAP-P1 is fixed, this spy will match the real method signature.
-    updatePlayerConfig(tabId: string, patch: Record<string, unknown>) {
-      calls.updatePlayerConfig.push({ tabId, patch })
-    },
-  }
-}
-
-function createSpyTabService() {
-  const calls: Record<string, Array<Record<string, unknown>>> = { switchTab: [], closeTab: [], openTask: [] }
-  return {
-    calls,
-    switchTab(tabId: string) { calls.switchTab.push({ tabId }) },
-    async closeTab(tabId: string) { calls.closeTab.push({ tabId }) },
-    async openTask(opts: Record<string, unknown>) { calls.openTask.push(opts) },
   }
 }
 
@@ -403,11 +369,13 @@ describe('W8-P3 Tasks 7-9: Player Config Wiring', function () {
 
     // T7-16: problemArea from repository.loadTask correctly reaches Container props
     // Layer: CONTROLLER_STATE_TRANSITION / PROJECTION_RETURN
-    // Production Subject: Container render path (repository.loadTask -> props)
+    // Production Subject: Container render path (repository.loadTask -> cache -> props)
     // Real Dependencies: Container render, workbenchStore
     // Mocked Dependencies: repository.loadTask (stub returns task with problemArea)
     // Primary Assertion: shellProps contains correct problemArea value
-    it('T7-16: problemArea from repository.loadTask reaches Container props', function () {
+    // Note: problemArea is loaded asynchronously on first render, so we wait one tick
+    // for the fire-and-forget repository.loadTask to resolve and populate the cache.
+    it('T7-16: problemArea from repository.loadTask reaches Container props', async function () {
       const problemArea = { source: 'analysis_area', vertices: [[3, 3], [3, 15], [15, 3], [15, 15]] }
       const repo = createStubRepository({ problemArea })
 
@@ -415,12 +383,13 @@ describe('W8-P3 Tasks 7-9: Player Config Wiring', function () {
         tabs: [makeTab({ mode: 'problem' })],
         repository: repo as any,
       })
-      const { shellProps } = harness
 
-      // GAP-P4: projectFromWorkbench does not yet project problemArea.
-      // When fixed, shellProps should contain problemArea.
+      // First render triggers async load; wait one tick for cache to populate
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+      const shellProps = (harness.container as any).render().props
       assert.ok(shellProps.problemArea !== undefined,
-        'Container shellProps must include problemArea from repository. GAP-P4: projection not yet implemented.')
+        'Container shellProps must include problemArea from repository after async load resolves.')
       assert.deepStrictEqual(shellProps.problemArea, problemArea,
         'problemArea in shellProps must match repository task data')
     })
@@ -481,13 +450,14 @@ describe('W8-P3 Tasks 7-9: Player Config Wiring', function () {
     })
 
     // T7-17: problemArea in shellProps is correctly projected
-    // GAP-P4: projectFromWorkbench does not yet project problemArea.
     // Layer: PROJECTION_RETURN
     // Production Subject: projectFromWorkbench (internal to Container)
     // Real Dependencies: Container render with store state
     // Mocked Dependencies: spy flowService, stub repository with problemArea
     // Primary Assertion: shellProps contains problemArea
-    it('T7-17: problemArea is projected to shellProps', function () {
+    // Note: problemArea is loaded asynchronously on first render, so we wait one tick
+    // for the fire-and-forget repository.loadTask to resolve and populate the cache.
+    it('T7-17: problemArea is projected to shellProps', async function () {
       const problemArea = { source: 'analysis_area', rects: [{ x: 3, y: 3, width: 12, height: 12 }] }
       const repo = createStubRepository({ problemArea })
 
@@ -497,11 +467,13 @@ describe('W8-P3 Tasks 7-9: Player Config Wiring', function () {
       })
       const { container } = harness
 
+      // First render triggers async load; wait one tick for cache to populate
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+
       const shellProps = (container as any).render().props
 
-      // GAP-P4: projection not yet implemented.
       assert.ok(shellProps.problemArea !== undefined,
-        'shellProps must include problemArea. GAP-P4: projection not yet implemented.')
+        'shellProps must include problemArea after async load resolves.')
       assert.deepStrictEqual(shellProps.problemArea, problemArea)
     })
   })

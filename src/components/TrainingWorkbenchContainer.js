@@ -63,7 +63,8 @@ class TrainingWorkbenchContainer extends Component {
     const projected = projectFromRuntime(rt)
 
     // Project workbench store state into UI props
-    const workbenchProjected = projectFromWorkbench(ws)
+    const repository = sabaki.getTrainingContext().repository
+    const workbenchProjected = projectFromWorkbench(ws, repository, this)
 
     // Derive the active tab ID and active tab for handler wiring
     const activeTabId = ws.activeTabId
@@ -540,7 +541,7 @@ function projectFromRuntime(rt) {
  * Project workbenchStore state into WorkbenchShell props.
  * Maps tabs to games array, derives mode and activeIndex.
  */
-function projectFromWorkbench(ws) {
+function projectFromWorkbench(ws, repository, container) {
   const result = {}
 
   const activeTab = ws.tabs.find(t => t.id === ws.activeTabId) || null
@@ -550,6 +551,30 @@ function projectFromWorkbench(ws) {
     result.analysisContext = activeTab.analysisContext
     result.previousMode = activeTab.previousMode
     result.taskTitle = activeTab.taskId
+
+    // W8-P3: Project playerConfig fields
+    result.blackPlayer = activeTab.playerConfig?.black || 'human'
+    result.whitePlayer = activeTab.playerConfig?.white || 'human'
+    result.problemOpponent = activeTab.playerConfig?.problemOpponent || 'ai'
+
+    // W8-P3: Project problemArea from task cache or repository
+    if (container && container._taskCache && container._taskCache[activeTab.taskId]) {
+      const task = container._taskCache[activeTab.taskId]
+      if (task && task.problemArea !== undefined) {
+        result.problemArea = task.problemArea
+      }
+    } else if (container && repository && typeof repository.loadTask === 'function') {
+      // Fire-and-forget async load to populate cache for next render
+      const taskRef = activeTab
+      repository.loadTask(activeTab.taskId).then(function(task) {
+        if (task) {
+          if (!container._taskCache) container._taskCache = {}
+          container._taskCache[taskRef.taskId] = task
+          // Trigger re-render so problemArea is projected
+          container.forceUpdate()
+        }
+      }).catch(function() { /* ignore */ })
+    }
 
     result.modeBarPolicy = computeModeBarPolicy({
       currentMode: activeTab.mode,

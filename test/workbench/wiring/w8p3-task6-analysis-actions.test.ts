@@ -78,6 +78,11 @@ import {createSnapshotService} from '../../../src/modules/training/analysis/snap
 import ModeActions from '../../../src/components/workbench/shell/ModeActions.js'
 import BottomActionBar from '../../../src/components/workbench/shell/BottomActionBar.js'
 import {renderToDom} from '../preactTestHelper.js'
+import {
+  createSpyFlowService,
+  createSpySnapshotService,
+  createSpyTabService,
+} from '../shared/workbenchSpyFactories.ts'
 
 // --- Logger ---
 
@@ -102,51 +107,6 @@ function makeAnalysisTab(overrides: Record<string, unknown> = {}) {
 }
 
 // --- Spy Factories ---
-
-function createSpyFlowService() {
-  const calls = {
-    submit: [] as any[],
-    enterAnalysis: [] as any[],
-    returnFromAnalysis: [] as any[],
-    completeRecall: [] as any[],
-    snapshotFromCurrentContext: [] as any[],
-    restartAttempt: [] as any[],
-  }
-  return {
-    calls,
-    async submit(tabId: string) { calls.submit.push({tabId}) },
-    enterAnalysis(tabId: string) { calls.enterAnalysis.push({tabId}) },
-    returnFromAnalysis(tabId: string, toMode: string) { calls.returnFromAnalysis.push({tabId, toMode}) },
-    completeRecall(tabId: string) { calls.completeRecall.push({tabId}) },
-    async snapshotFromCurrentContext(tabId: string) { calls.snapshotFromCurrentContext.push({tabId}) },
-    restartAttempt(tabId: string) { calls.restartAttempt.push({tabId}) },
-  }
-}
-
-function createSpyTabService() {
-  const calls = {switchTab: [] as any[], closeTab: [] as any[], openTask: [] as any[]}
-  return {
-    calls,
-    switchTab(tabId: string) { calls.switchTab.push({tabId}) },
-    async closeTab(tabId: string) { calls.closeTab.push({tabId}) },
-    async openTask(opts: any) { calls.openTask.push(opts) },
-  }
-}
-
-function createSpySnapshotService() {
-  const calls = {captureSnapshotInput: [] as any[]}
-  return {
-    calls,
-    async captureSnapshotInput(input: any) {
-      calls.captureSnapshotInput.push(input)
-      return {
-        positionSgf: '(;SZ[19])',
-        sideToMove: 'black' as const,
-        sourceTaskId: input.sourceTaskId,
-      }
-    },
-  }
-}
 
 function createSpyLegacyController() {
   return {
@@ -318,29 +278,13 @@ function createHarnessWithRealFlowService({
   const snapshotService = createSpySnapshotService()
   const repository = createSpyRepository()
 
-  // tabService.openTask must return a valid WorkbenchTab because
-  // flowService.snapshotFromCurrentContext accesses newTab.id (L330).
-  // It also adds the tab to the store to simulate real openTask behavior.
-  const tabService = {
-    calls: {switchTab: [] as any[], closeTab: [] as any[], openTask: [] as any[]},
-    switchTab(tabId: string) { tabService.calls.switchTab.push({tabId}) },
-    async closeTab(tabId: string) { tabService.calls.closeTab.push({tabId}) },
-    async openTask(opts: any) {
-      tabService.calls.openTask.push(opts)
-      const now = new Date().toISOString()
-      const newTab = {
-        id: `tab_snap_${Date.now()}`,
-        taskId: opts.taskId,
-        mode: opts.mode,
-        parentTabId: opts.parentTabId,
-        childTabIds: [],
-        createdAt: now,
-        updatedAt: now,
-      }
-      workbenchStore.addTab(newTab)
-      workbenchStore.setActiveTab(newTab.id)
-      return newTab
-    },
+  const tabService = createSpyTabService()
+  const openTask = tabService.openTask.bind(tabService)
+  tabService.openTask = async (opts) => {
+    const newTab = await openTask(opts)
+    workbenchStore.addTab(newTab)
+    workbenchStore.setActiveTab(newTab.id)
+    return newTab
   }
 
   const spyRecallService = {
@@ -433,27 +377,13 @@ function createHarnessWithRealSnapshotService({
   const repository = createSpyRepository()
   const positionSnapshotAdapter = createSpyPositionSnapshotAdapter()
 
-  // tabService.openTask must return a valid WorkbenchTab
-  const tabService = {
-    calls: {switchTab: [] as any[], closeTab: [] as any[], openTask: [] as any[]},
-    switchTab(tabId: string) { tabService.calls.switchTab.push({tabId}) },
-    async closeTab(tabId: string) { tabService.calls.closeTab.push({tabId}) },
-    async openTask(opts: any) {
-      tabService.calls.openTask.push(opts)
-      const now = new Date().toISOString()
-      const newTab = {
-        id: `tab_snap_${Date.now()}`,
-        taskId: opts.taskId,
-        mode: opts.mode,
-        parentTabId: opts.parentTabId,
-        childTabIds: [],
-        createdAt: now,
-        updatedAt: now,
-      }
-      workbenchStore.addTab(newTab)
-      workbenchStore.setActiveTab(newTab.id)
-      return newTab
-    },
+  const tabService = createSpyTabService()
+  const openTask = tabService.openTask.bind(tabService)
+  tabService.openTask = async (opts) => {
+    const newTab = await openTask(opts)
+    workbenchStore.addTab(newTab)
+    workbenchStore.setActiveTab(newTab.id)
+    return newTab
   }
 
   const realSnapshotService = createSnapshotService({
