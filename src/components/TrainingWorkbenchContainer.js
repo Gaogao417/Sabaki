@@ -90,9 +90,22 @@ class TrainingWorkbenchContainer extends Component {
       }
     }
 
-    function handleSubmit() {
+    async function handleSubmit() {
       if (!activeTab) return
-      flowService.submit(activeTab.id)
+      await flowService.submit(activeTab.id)
+
+      // W6: update review schedule if in review session
+      const rv = runtimeStore.getState().reviewQueueView
+      if (rv && activeTab.taskId) {
+        const pv = runtimeStore.getState().problemView
+        if (pv && pv.result) {
+          const {reviewService} = sabaki.getTrainingContext()
+          await reviewService.updateScheduleAfterResult({
+            taskId: activeTab.taskId,
+            result: pv.result,
+          })
+        }
+      }
     }
 
     function handleEnterAnalysis() {
