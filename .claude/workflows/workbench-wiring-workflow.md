@@ -68,6 +68,7 @@ If a task only implements the first half of this loop, it is incomplete unless t
    - Archives it at `docs/design/YYYY-MM-DD/<task>/test-contract-v0.N.md`.
    - Must first produce a "source alignment" section citing PRD v0.5 and Architecture v0.5.
    - Must list control events, controller commands, service calls, store before/after state, projection results, allowed side effects, forbidden side effects, and manual acceptance.
+   - Must name the specific UI component (e.g., ProblemBar, RecallModePanel, TrainingDashboardDrawer) that triggers each handler. If no UI component exists, the handler must be marked `DEFERRED` with the missing UI control described.
    - Must classify every automated Test ID by Layer, Production Subject, Real Dependencies, Mocked Dependencies, Forbidden Mocks, Primary Assertion, and Downstream Covered By.
    - Must mark any command or state not present in v0.5 as `PROPOSED_GAP`, not as an approved behavior.
    - For any matrix/state-table based task, must convert each in-scope row into an explicit expected value/behavior with a test status: `GREEN`, `RED`, or `DEFERRED`.
@@ -94,6 +95,7 @@ If a task only implements the first half of this loop, it is incomplete unless t
    - Must cover at least one state-forward path and one state-return path for every non-trivial control group:
      - state-forward: UI/container command changes store/service/repository state.
      - state-return: store/service state projects back into UI props or rendered state.
+   - Must include at least one test per handler that proves a named UI component (e.g., ProblemBar, TrainingDashboardDrawer) receives and calls the handler. Tests that only call `shellProps.handler()` without proving UI consumption are incomplete.
    - Must not replace wiring with "callback was called" tests except as auxiliary checks.
    - Must not assert known GAP/bug current behavior as correct. If the approved matrix/contract says expected=A and current implementation returns B, write a RED test for A or stop and request contract clarification.
    - Must include a harness/mock manifest for every shared test setup, naming which modules are real, which are fake, and which Layers the harness can and cannot prove.
@@ -255,6 +257,7 @@ Do not accept these as completed wiring:
 - A derived inventory assigns tab creation, snapshot handling, review, recall, or attempt ownership contrary to Architecture v0.5.
 - Store methods call DB, engine, UI, IPC, or controller commands.
 - Tests only assert call count and never assert before/after state.
+- A handler is exposed on `shellProps` but no UI component consumes it. Every non-deferred handler must be traceable to a named UI component that triggers it (e.g., ProblemBar "下一题" button, TrainingDashboardDrawer "Start Review" button).
 - Tests mock the entire controller and therefore prove no production wiring.
 - Tests use `assert.ok(true)`, `assert(true)`, or empty assertions to document future behavior.
 - Tests use conditional branches to pass when the production path is missing.
@@ -267,6 +270,7 @@ Do not accept these as completed wiring:
 Workbench wiring is done only when:
 
 - Every in-scope control is active, disabled with a reason, display-only, or documented as deferred.
+- Every non-deferred handler is consumed by a named UI component. Handlers without a consuming UI component must be marked deferred and are not counted as complete.
 - Non-trivial controls have tests for command mapping, state transition, and projection return.
 - Each contract/test row declares the Layer it proves, the production subject, real dependencies, mocked dependencies, forbidden mocks, and primary assertion.
 - No test row claims state transition, projection, or rendered UI coverage for behavior owned by a mocked production object.
