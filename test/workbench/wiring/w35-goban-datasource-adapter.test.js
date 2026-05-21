@@ -57,11 +57,11 @@ function createMockBoardState(overrides = {}) {
 }
 
 function createMockDocumentStore(overrides = {}) {
-  const board = createMockBoardState()
   return {
-    getCurrentTree: () => ({id: 'mock_tree_1'}),
-    getCurrentTreePosition: () => 'node_root',
-    getCurrentBoard: () => board,
+    getCurrent: () => ({
+      tree: {id: 'mock_tree_1'},
+      treePosition: 'node_root',
+    }),
     playMove: () => Promise.resolve({valid: true, changed: true}),
     ...overrides,
   }
@@ -191,6 +191,7 @@ function createAdapterDeps(options = {}) {
     tabs = [makeTab()],
     activeTabId = tabs[0]?.id ?? null,
     taskCache = {},
+    getBoard,
   } = options
 
   const workbenchStore = createMockWorkbenchStore(tabs, activeTabId)
@@ -224,6 +225,7 @@ function createAdapterDeps(options = {}) {
     subscribeToWorkbenchStore: (cb) => workbenchStore.subscribe(cb),
     subscribeToRuntimeStore: (cb) => runtimeStore.subscribe(cb),
     subscribeToAnalysisUpdates: (cb) => analysisResultAdapter.subscribeToAnalysisUpdates(cb),
+    getBoard: getBoard || ((gameTree, treePosition) => createMockBoardState()),
     // Expose internals for test assertions
     _writeCalls: writeCalls,
     _workbenchStore: workbenchStore,
@@ -254,11 +256,11 @@ describe('W3.5 gobanDataAdapter', function () {
   // --- W35-T01: getSnapshot returns GobanPropsInput with real boardState from documentStore ---
 
   describe('W35-T01: getSnapshot returns real boardState from documentStore', function () {
-    it('boardState.gameTree comes from documentStore.getCurrentTree()', function () {
+    it('boardState.gameTree comes from documentStore.getCurrent().tree', function () {
       const mockTree = {id: 'real_game_tree_42'}
       const deps = createAdapterDeps({
         documentStore: createMockDocumentStore({
-          getCurrentTree: () => mockTree,
+          getCurrent: () => ({ tree: mockTree, treePosition: 'node_root' }),
         }),
       })
       const adapter = createAdapter(deps)
@@ -270,40 +272,30 @@ describe('W3.5 gobanDataAdapter', function () {
       assert.strictEqual(
         snapshot.boardState.gameTree,
         mockTree,
-        'boardState.gameTree must come from documentStore.getCurrentTree(), not hardcoded',
+        'boardState.gameTree must come from documentStore.getCurrent().tree, not hardcoded',
       )
     })
 
-    it('boardState.board contains real signMap from documentStore', function () {
-      const realSignMap = Array(19).fill(null).map(() => Array(19).fill(0))
-      // Place a black stone at [3,3] and white at [15,15]
-      realSignMap[3][3] = 1
-      realSignMap[15][15] = -1
+    it('boardState.board comes from deps.getBoard(gameTree, treePosition)', function () {
+      const mockBoard = createMockBoardState()
       const deps = createAdapterDeps({
-        documentStore: createMockDocumentStore({
-          getCurrentBoard: () => createMockBoardState({signMap: realSignMap}),
-        }),
+        getBoard: () => mockBoard,
       })
       const adapter = createAdapter(deps)
       if (!adapter) return this.skip()
 
       const snapshot = adapter.getSnapshot()
       assert.strictEqual(
-        snapshot.boardState.board.signMap[3][3],
-        1,
-        'boardState.signMap[3][3] must reflect the black stone from documentStore',
-      )
-      assert.strictEqual(
-        snapshot.boardState.board.signMap[15][15],
-        -1,
-        'boardState.signMap[15][15] must reflect the white stone from documentStore',
+        snapshot.boardState.board,
+        mockBoard,
+        'boardState.board must come from deps.getBoard(gameTree, treePosition)',
       )
     })
 
-    it('boardState.treePosition comes from documentStore.getCurrentTreePosition()', function () {
+    it('boardState.treePosition comes from documentStore.getCurrent().treePosition', function () {
       const deps = createAdapterDeps({
         documentStore: createMockDocumentStore({
-          getCurrentTreePosition: () => 'node_move_7',
+          getCurrent: () => ({ tree: {id: 'mock_tree_1'}, treePosition: 'node_move_7' }),
         }),
       })
       const adapter = createAdapter(deps)
@@ -492,6 +484,7 @@ describe('W3.5 gobanDataAdapter', function () {
         subscribeToWorkbenchStore: () => () => {},
         subscribeToRuntimeStore: () => () => {},
         subscribeToAnalysisUpdates: () => () => {},
+        getBoard: () => null,
       }
 
       // Must not throw -- if adapter tries to import sabaki.js directly
