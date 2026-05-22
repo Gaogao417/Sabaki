@@ -277,6 +277,10 @@ class TrainingWorkbenchContainer extends Component {
       sabaki.setState(({fullScreen}) => ({fullScreen: !fullScreen}))
     }
 
+    function handleGraphClick(evt) {
+      sabaki.setCurrentTreePosition(evt.gameTree, evt.treePosition)
+    }
+
     function handleAnnotationToolChange(tool) {
       sabaki.setState({selectedTool: tool})
     }
@@ -479,6 +483,8 @@ class TrainingWorkbenchContainer extends Component {
       onFullscreen: handleFullscreen,
       onAnnotationToolChange: handleAnnotationToolChange,
       onFilterChange: handleFilterChange,
+      // P0: GameGraph node click -> sabaki.setCurrentTreePosition
+      onGraphClick: handleGraphClick,
       // W4 recall checkpoint handlers
       onSubmitCorrection: handleSubmitCorrection,
       onRevealAI: handleRevealAI,
@@ -591,8 +597,16 @@ class TrainingWorkbenchContainer extends Component {
       projected.state = 'disabled'
     }
 
+    // P0-T02: Index gameCurrents by gameIndex before passing to Shell.
+    // Sidebar.js:777 passes gameCurrents[gameIndex] to GameGraph; Container
+    // mirrors this projection so Shell receives the indexed value.
+    const gameCurrentsIndexed = shellProps.gameCurrents && shellProps.gameIndex != null
+      ? shellProps.gameCurrents[shellProps.gameIndex]
+      : shellProps.gameCurrents
+
     return h(WorkbenchShell, {
       ...shellProps,
+      gameCurrents: gameCurrentsIndexed,
       ...projected,
       ...workbenchProjected,
       ...legacyHandlers,

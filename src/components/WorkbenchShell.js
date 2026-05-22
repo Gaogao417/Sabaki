@@ -12,6 +12,8 @@ import {
   RecallModePanel,
   AnalysisModePanel,
 } from './workbench/index.js'
+import WorkbenchLeftPanel from './workbench/panels/WorkbenchLeftPanel.js'
+import WorkbenchRightPanel from './workbench/panels/WorkbenchRightPanel.js'
 import TrainingDashboardDrawer from './drawers/TrainingDashboardDrawer.js'
 
 /**
@@ -107,9 +109,12 @@ export default function WorkbenchShell({
       // Main content area
       h('div', {class: 'workbench-shell__main'},
 
-        // Left panel: mode-specific
+        // Left panel: EnginePeerList + mode-specific panel
         h('div', {class: 'workbench-shell__left-panel'},
-          leftPanel[mode] || leftPanel.play,
+          h(WorkbenchLeftPanel, {
+            engineProps: rest,
+            modePanel: leftPanel[mode] || leftPanel.play,
+          }),
         ),
 
         // Center: board stage with children
@@ -117,9 +122,19 @@ export default function WorkbenchShell({
           h(MainBoardStage, {mode, boardProps: rest.boardProps}, children),
         ),
 
-        // Right panel: mode-specific
+        // Right panel: GameGraph + mode-specific content
         h('div', {class: 'workbench-shell__right-panel'},
-          h(RightModePanel, {mode, ...rest}),
+          h(WorkbenchRightPanel, {
+            mode,
+            gameTree: rest.gameTree,
+            treePosition: rest.treePosition,
+            graphGridSize: rest.graphGridSize,
+            graphNodeSize: rest.graphNodeSize,
+            showGameGraph: rest.showGameGraph,
+            gameCurrents: rest.gameCurrents,
+            onGraphClick: rest.onGraphClick,
+            modePanel: h(RightModePanel, {mode, ...rest}),
+          }),
         ),
       ),
 
