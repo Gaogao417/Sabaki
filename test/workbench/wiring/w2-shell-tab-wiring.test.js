@@ -157,18 +157,21 @@ async function callRequired(props, name) {
 }
 
 describe('W2 Container Wiring: flow commands', () => {
-  it('wires play ModeActions end and BottomActionBar endAttempt to submit(activeTabId)', async () => {
-    const {shellProps, flowService} = createHarness({
+  it('wires play onEnd to stopEngineGameTraining, onEndAttempt to submit', async () => {
+    const {shellProps, flowService, sabaki} = createHarness({
       tabs: [makeTab({id: 'tab_play', mode: 'play', activeAttemptId: 'att_1'})],
     })
 
+    // onEnd (play) stops engine, does NOT call submit
     await callRequired(shellProps, 'onEnd')
-    await callRequired(shellProps, 'onEndAttempt')
+    assert.strictEqual(flowService.calls.submit.length, 0,
+      'play onEnd should not call flowService.submit -- it stops engine')
 
+    // onEndAttempt still calls submit
+    await callRequired(shellProps, 'onEndAttempt')
     assert.deepStrictEqual(flowService.calls.submit, [
       {tabId: 'tab_play'},
-      {tabId: 'tab_play'},
-    ])
+    ], 'onEndAttempt must call flowService.submit')
   })
 
   it('wires problem submit buttons to submit(activeTabId)', async () => {

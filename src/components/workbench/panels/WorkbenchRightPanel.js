@@ -36,17 +36,30 @@ export default function WorkbenchRightPanel({
   modePanel,
 }) {
   return h('div', {class: 'workbench-right-panel'},
-    GameGraph
-      ? h(GameGraph, {
-          gameTree,
-          treePosition,
-          graphGridSize,
-          graphNodeSize,
-          showGameGraph,
-          gameCurrents,
-          onNodeClick: onGraphClick,
-        })
+    showGameGraph !== false && GameGraph && gameTree
+      ? h('div', {
+          class: 'workbench-right-panel__graph',
+          style: {
+            flex: '1 1 0',
+            minHeight: '180px',
+            maxHeight: '45%',
+            overflow: 'hidden',
+            position: 'relative',
+          },
+        },
+          h(GameGraph, {
+            gameTree,
+            treePosition,
+            graphGridSize,
+            graphNodeSize,
+            showGameGraph,
+            gameCurrents,
+            onNodeClick: onGraphClick,
+          }),
+        )
       : h('div', {class: 'workbench-right-panel__graph-placeholder'}),
-    modePanel,
+    h('div', {class: 'workbench-right-panel__mode', style: {flex: '1 1 0', overflowY: 'auto'}},
+      modePanel,
+    ),
   )
 }

@@ -168,6 +168,12 @@ class TrainingWorkbenchContainer extends Component {
       sabaki.makeResign()
     }
 
+    async function handleEndPlay() {
+      if (sabaki.stopEngineGameTraining) {
+        await sabaki.stopEngineGameTraining()
+      }
+    }
+
     function handleAbandon() {
       if (!activeTab) return
       if (activeTab.mode === 'problem') {
@@ -450,7 +456,9 @@ class TrainingWorkbenchContainer extends Component {
     // W2 shell/tab handlers
     const shellHandlers = {
       onModeChange: handleModeChange,
-      onEnd: (activeTab && activeTab.mode === 'recall') ? handleEndRecall : handleSubmit,
+      onEnd: (activeTab && activeTab.mode === 'recall') ? handleEndRecall
+        : (activeTab && activeTab.mode === 'play') ? handleEndPlay
+        : handleSubmit,
       onResign: handleResign,
       onSubmit: handleSubmit,
       onAbandon: handleAbandon,

@@ -241,12 +241,13 @@ function createDelegationHarness({
     recallCheckpointService,
   }
 
-  const sabakiCalls = { makeResign: 0, flashInfoOverlay: 0 }
+  const sabakiCalls = { makeResign: 0, flashInfoOverlay: 0, stopEngineGameTraining: 0 }
   const sabaki = {
     getTrainingContext() {
       return trainingContext
     },
     makeResign() { sabakiCalls.makeResign++ },
+    async stopEngineGameTraining() { sabakiCalls.stopEngineGameTraining++ },
     undo() {},
     redo() {},
     makeMove() {},
@@ -349,7 +350,7 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
     // --- T4-01: handleSubmit calls flowService.submit(activeTab.id) ---
 
     describe('T4-01: handleSubmit delegates to flowService.submit', function () {
-      it('onEnd (play) calls flowService.submit with activeTab.id', async function () {
+      it('onEnd (play) stops engine game, does not call flowService.submit', async function () {
         const harness = createDelegationHarness({
           tabs: [makePlayTab({id: 'tab_p1'})],
         })
@@ -361,9 +362,10 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
 
         await shellProps.onEnd()
 
-        assert.deepStrictEqual(harness.flowService.calls.submit, [
-          {tabId: 'tab_p1'},
-        ], 'flowService.submit must be called with active tab id -- Contract T4-01')
+        assert.strictEqual(harness.sabakiCalls.stopEngineGameTraining, 1,
+          'sabaki.stopEngineGameTraining must be called for play End')
+        assert.strictEqual(harness.flowService.calls.submit.length, 0,
+          'flowService.submit must NOT be called for play End -- play End stops engine, not submit')
       })
 
       it('onSubmit (problem) calls flowService.submit with activeTab.id', async function () {

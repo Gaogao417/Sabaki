@@ -21,11 +21,15 @@ try {
  * @param {import('preact').VNode} props.modePanel - Mode-specific panel VNode child
  */
 export default function WorkbenchLeftPanel({engineProps = {}, modePanel}) {
-  return h('div', {class: 'workbench-left-panel'},
+  return h('div', {class: 'workbench-left-panel', style: {display: 'flex', flexDirection: 'column', height: '100%'}},
     EnginePeerList
-      ? h(EnginePeerListAdapter, engineProps)
+      ? h('div', {style: {flex: '0 0 auto', maxHeight: '220px', overflow: 'hidden'}},
+          h(EnginePeerListAdapter, engineProps),
+        )
       : h('div', {class: 'workbench-left-panel__engine-placeholder'}),
-    modePanel,
+    h('div', {style: {flex: '1 1 0', overflowY: 'auto', minHeight: 0}},
+      modePanel,
+    ),
   )
 }
 

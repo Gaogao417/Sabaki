@@ -209,6 +209,16 @@ function createRegressionHarness({
     getTrainingContext() {
       return trainingContext
     },
+    stopEngineGameTraining: async () => {},
+    makeResign() {},
+    undo() {},
+    redo() {},
+    makeMove() {},
+    openDrawer() {},
+    setComment() {},
+    flashInfoOverlay() {},
+    setState() {},
+    toggleThirdPartyPanel() {},
   }
 
   const container = new TrainingWorkbenchContainer({sabaki})
@@ -401,17 +411,22 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
         'flowService.submit must be called with activeTab.id -- Regression R-T04')
     })
 
-    it('onEnd calls flowService.submit for play tab', async function () {
+    it('onEnd stops engine for play tab', async function () {
       const harness = createRegressionHarness({
         tabs: [makePlayTab({id: 'tab_rt4_end'})],
       })
+
+      let stopCalled = false
+      harness.sabaki.stopEngineGameTraining = async () => { stopCalled = true }
 
       const shellProps = harness.getShellProps()
 
       await shellProps.onEnd()
 
-      assert.deepStrictEqual(harness.flowService.calls.submit, [{tabId: 'tab_rt4_end'}],
-        'flowService.submit must be called via onEnd for play tab -- Regression R-T04')
+      assert.strictEqual(stopCalled, true,
+        'sabaki.stopEngineGameTraining must be called via onEnd for play tab -- Regression R-T04')
+      assert.strictEqual(harness.flowService.calls.submit.length, 0,
+        'flowService.submit must NOT be called for play End -- Regression R-T04')
     })
   })
 
