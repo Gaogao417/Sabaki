@@ -16,6 +16,7 @@ export default function AnalysisModePanel({
   captures = {black: 0, white: 0},
   evaluation = null,
   onSnapshot = () => {},
+  onFilterChange = () => {},
   state = 'active',
 }) {
   function renderContent() {
@@ -105,7 +106,7 @@ export default function AnalysisModePanel({
               h('button', {
                 key: tag,
                 class: 'wb-btn wb-btn-ghost wb-btn--sm',
-                onClick: () => {},
+                onClick: () => onFilterChange(tag),
               }, tag),
             ),
           ),

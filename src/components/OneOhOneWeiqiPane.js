@@ -195,7 +195,7 @@ export default class OneOhOneWeiqiPane extends Component {
   }
 
   render() {
-    let {loading, error, selectedId, previewBoard, problems, isLoggedIn, loginLoading, loginError, username, password} = this.state
+    let {loading, error, selectedId, previewBoard, problems, isLoggedIn, loggedInUser, loginLoading, loginError, username, password, cachedCount, syncProgress} = this.state
     let sorted = this.getSortedProblems()
     let problem = problems.find((p) => p.problemId === selectedId)
 
@@ -207,6 +207,13 @@ export default class OneOhOneWeiqiPane extends Component {
     return h(
       'div',
       {class: 'hub-pane'},
+
+      h(
+        'header',
+        {class: 'hub-header'},
+        h('h1', null, '101 围棋错题同步'),
+        h('p', {class: 'subtitle'}, '登录后同步错题本到本地，直接预览题面并打开到棋盘训练。'),
+      ),
 
       h('div', {class: 'hub-body'},
 
@@ -247,6 +254,13 @@ export default class OneOhOneWeiqiPane extends Component {
                 disabled: loginLoading || !username || !password,
                 onClick: () => this.handleLogin(),
               }, loginLoading ? '登录中...' : '登录'),
+          h('div', {class: 'hub-status-card'},
+            h('strong', null, isLoggedIn ? '已连接' : '未登录'),
+            h('span', null, isLoggedIn ? (loggedInUser || username || '101 账户') : '请先登录账户'),
+            h('span', null, `本地缓存 ${cachedCount || problems.length} 题`),
+            syncProgress && syncProgress.phase !== 'done' &&
+              h('span', null, `同步中：${syncProgress.completed || 0}/${syncProgress.total || 0}`),
+          ),
           h('div', {style: {flex: 1}}),
           h('button', {
             class: 'hub-button hub-button--primary',

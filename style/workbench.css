@@ -89,6 +89,17 @@
   -webkit-app-region: no-drag;
 }
 
+.wb-global-header__right {
+  margin-left: auto;
+}
+
+.wb-global-header__utilities {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
 .wb-global-header__title {
   font-size: 16px;
   font-weight: 600;

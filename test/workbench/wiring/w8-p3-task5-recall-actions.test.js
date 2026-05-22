@@ -242,6 +242,15 @@ function createHarness({
 
   const sabaki = {
     getTrainingContext() { return trainingContext },
+    makeResign() {},
+    undo() {},
+    redo() {},
+    makeMove() {},
+    openDrawer() {},
+    setComment() {},
+    flashInfoOverlay() {},
+    setState() {},
+    toggleThirdPartyPanel() {},
   }
 
   const container = new TrainingWorkbenchContainer({ sabaki })

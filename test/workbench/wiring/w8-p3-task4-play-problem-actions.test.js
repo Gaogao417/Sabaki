@@ -241,10 +241,20 @@ function createDelegationHarness({
     recallCheckpointService,
   }
 
+  const sabakiCalls = { makeResign: 0, flashInfoOverlay: 0 }
   const sabaki = {
     getTrainingContext() {
       return trainingContext
     },
+    makeResign() { sabakiCalls.makeResign++ },
+    undo() {},
+    redo() {},
+    makeMove() {},
+    openDrawer() {},
+    setComment() {},
+    flashInfoOverlay() { sabakiCalls.flashInfoOverlay++ },
+    setState() {},
+    toggleThirdPartyPanel() {},
   }
 
   const container = new TrainingWorkbenchContainer({sabaki})
@@ -259,6 +269,7 @@ function createDelegationHarness({
     legacyController,
     container,
     sabaki,
+    sabakiCalls,
     trainingContext,
     getShellProps() {
       return container.render().props
@@ -449,10 +460,10 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
       })
     })
 
-    // --- T4-17: handleResign/handleAbandon are no-op ---
+    // --- T4-17: handleResign/handleAbandon delegate to sabaki/legacyController ---
 
-    describe('T4-17: handleResign/handleAbandon are no-op', function () {
-      it('onResign does not call any flowService method -- GAP-01', function () {
+    describe('T4-17: handleResign/handleAbandon delegation', function () {
+      it('onResign delegates to sabaki.makeResign', function () {
         const harness = createDelegationHarness({
           tabs: [makePlayTab({id: 'tab_resign'})],
         })
@@ -464,16 +475,15 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
 
         shellProps.onResign()
 
-        // Verify no flowService methods were called
+        assert.strictEqual(harness.sabakiCalls.makeResign, 1,
+          'handleResign must call sabaki.makeResign')
         assert.strictEqual(harness.flowService.calls.submit.length, 0,
-          'handleResign must not call flowService.submit -- GAP-01')
+          'handleResign must not call flowService.submit')
         assert.strictEqual(harness.flowService.calls.enterAnalysis.length, 0,
           'handleResign must not call flowService.enterAnalysis')
-        assert.strictEqual(harness.flowService.calls.snapshotFromCurrentContext.length, 0,
-          'handleResign must not call flowService.snapshotFromCurrentContext')
       })
 
-      it('onAbandon does not call any flowService method -- GAP-02', function () {
+      it('onAbandon delegates to legacyController.exitProblemMode in problem mode', function () {
         const harness = createDelegationHarness({
           tabs: [makeProblemTab({id: 'tab_abandon'})],
         })
@@ -485,12 +495,10 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
 
         shellProps.onAbandon()
 
+        assert.strictEqual(harness.legacyController.calls.exitProblemMode.length, 1,
+          'handleAbandon must call legacyController.exitProblemMode in problem mode')
         assert.strictEqual(harness.flowService.calls.submit.length, 0,
-          'handleAbandon must not call flowService.submit -- GAP-02')
-        assert.strictEqual(harness.flowService.calls.enterAnalysis.length, 0,
-          'handleAbandon must not call flowService.enterAnalysis')
-        assert.strictEqual(harness.flowService.calls.snapshotFromCurrentContext.length, 0,
-          'handleAbandon must not call flowService.snapshotFromCurrentContext')
+          'handleAbandon must not call flowService.submit')
       })
     })
 

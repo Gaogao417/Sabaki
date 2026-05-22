@@ -165,20 +165,137 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleResign() {
-      // GAP-01: No dedicated resign method on flowService yet.
-      if (!activeTab) return
-      console.warn('W2 GAP-01: resign not yet implemented on flowService')
+      sabaki.makeResign()
     }
 
     function handleAbandon() {
-      // GAP-02: No dedicated abandon method on flowService yet.
       if (!activeTab) return
-      console.warn('W2 GAP-02: abandon not yet implemented on flowService')
+      if (activeTab.mode === 'problem') {
+        legacyTrainingFlowController.exitProblemMode()
+        return
+      }
+
+      if (activeTab.mode === 'analysis') {
+        flowService.returnFromAnalysis(
+          activeTab.id,
+          activeTab.previousMode || 'play',
+        )
+      }
     }
 
     function handleRestartAttempt() {
       if (!activeTab) return
       flowService.restartAttempt(activeTab.id)
+    }
+
+    function handleUndo() {
+      if (activeTab?.mode === 'problem' && rt.problemView) {
+        legacyTrainingFlowController.undoProblemMove()
+        return
+      }
+
+      sabaki.undo()
+    }
+
+    function handleRedo() {
+      sabaki.redo()
+    }
+
+    function handlePass() {
+      sabaki.makeMove([-1, -1])
+    }
+
+    function handleSettings() {
+      sabaki.openDrawer(
+        activeTab?.mode === 'problem' ? 'problemEditor' : 'info',
+      )
+    }
+
+    function handleMarkDoubtful() {
+      sabaki.setComment(sabaki.state.treePosition, {
+        hotspot: true,
+        moveAnnotation: 'DO',
+      })
+      sabaki.flashInfoOverlay('已标记为疑问手')
+    }
+
+    function handleRequestHint() {
+      if (activeTab?.mode === 'recall') {
+        legacyTrainingFlowController.showRecallHint()
+        return
+      }
+
+      sabaki.flashInfoOverlay('当前题目暂无可用提示')
+    }
+
+    function handleClear() {
+      const ws = sabaki.state.editWorkspace
+      if (ws) {
+        const tab = ws.activeTab || 'current'
+        const keys = sabaki.getEditWorkspaceTabKeys(tab)
+        const snapshot = ws[keys.snapshotKey]
+        if (snapshot) {
+          const markerMap = Array.from({length: snapshot.height}, () =>
+            Array.from({length: snapshot.width}, () => null),
+          )
+          sabaki.setState({
+            editWorkspace: {
+              ...ws,
+              [keys.markerKey]: markerMap,
+              [keys.linesKey]: [],
+              lineFirstVertex: null,
+            },
+          })
+          return
+        }
+      }
+
+      sabaki.clearAnalysisArea?.()
+    }
+
+    function handleEditPosition() {
+      sabaki.setState({selectedTool: 'stone_1'})
+      if (sabaki.state.mode !== 'analysis') sabaki.setMode('analysis')
+    }
+
+    function handleSelectTool() {
+      sabaki.setState({selectedTool: 'play'})
+    }
+
+    function handleHandShapeTool() {
+      sabaki.flashInfoOverlay('手型视图尚未接入')
+    }
+
+    function handleZoom(step) {
+      const appSetting = window?.sabaki?.setting
+      if (!appSetting) return
+      const current = appSetting.get('app.zoom_factor') || 1
+      appSetting.set('app.zoom_factor', Math.max(0.2, current + step))
+    }
+
+    function handleFullscreen() {
+      sabaki.setState(({fullScreen}) => ({fullScreen: !fullScreen}))
+    }
+
+    function handleAnnotationToolChange(tool) {
+      sabaki.setState({selectedTool: tool})
+    }
+
+    function handleFilterChange(tag) {
+      sabaki.flashInfoOverlay(`已切换筛选：${tag}`)
+    }
+
+    function handleOpenFoxGames() {
+      sabaki.toggleThirdPartyPanel('fox')
+    }
+
+    function handleOpenOneOhOneWeiqi() {
+      sabaki.toggleThirdPartyPanel('101')
+    }
+
+    function handleOpenPreferences(tab = 'general') {
+      sabaki.setState({preferencesTab: tab})
+      sabaki.openDrawer('preferences')
     }
 
     // --- W8-P3 Player config handlers ---
@@ -336,14 +453,32 @@ class TrainingWorkbenchContainer extends Component {
       onAnalysis: handleEnterAnalysis,
       onReturn: handleReturnFromAnalysis,
       onSnapshot: handleSnapshot,
+      onSettings: handleSettings,
       onNewGame: handleNewGame,
       onSelectGame: handleSelectTab,
       onCloseGame: handleCloseTab,
       onAddGame: handleAddTask,
+      onOpenFoxGames: handleOpenFoxGames,
+      onOpenOneOhOneWeiqi: handleOpenOneOhOneWeiqi,
+      onOpenPreferences: handleOpenPreferences,
       // BottomActionBar shared handlers
+      onUndo: handleUndo,
+      onRedo: handleRedo,
+      onPass: handlePass,
       onEndAttempt: handleSubmit,
       onSubmitAnswer: handleSubmit,
+      onRequestHint: handleRequestHint,
+      onMarkDoubtful: handleMarkDoubtful,
       onEnterAnalysis: handleEnterAnalysis,
+      onClear: handleClear,
+      onEditPosition: handleEditPosition,
+      onSelect: handleSelectTool,
+      onHandShape: handleHandShapeTool,
+      onZoomIn: () => handleZoom(0.1),
+      onZoomOut: () => handleZoom(-0.1),
+      onFullscreen: handleFullscreen,
+      onAnnotationToolChange: handleAnnotationToolChange,
+      onFilterChange: handleFilterChange,
       // W4 recall checkpoint handlers
       onSubmitCorrection: handleSubmitCorrection,
       onRevealAI: handleRevealAI,
@@ -354,8 +489,13 @@ class TrainingWorkbenchContainer extends Component {
       onSkip: () => legacyTrainingFlowController.skipRecallMove(),
       onEndRecall: handleEndRecall,
       // W4 DEFERRED: onMarkCheckpoint, onVerify, onRecallToggle
-      onMarkCheckpoint: () => { },
-      onVerify: () => { },
+      onMarkCheckpoint: () => {
+        sabaki.flashInfoOverlay('检查点标记尚未接入')
+      },
+      onMark: () => {
+        sabaki.flashInfoOverlay('检查点标记尚未接入')
+      },
+      onVerify: () => legacyTrainingFlowController.skipRecallMove(),
       onRecallToggle: () => { },
       // W5 Analysis: restart attempt
       onRestartAttempt: handleRestartAttempt,

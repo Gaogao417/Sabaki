@@ -1,118 +1,129 @@
-# PRD: FoxWQ Game Record Fetcher & Local Loader
+# PRD: 野狐对局导入 (Fox Mode)
 
-## 1. Goal
-Implement a "FoxWQ Game Import" feature within Sabaki. Users can input a FoxWQ User UID to fetch a list of recent public games, select a game to download its SGF, and load it into the Sabaki board for review or analysis.
+## 1. 概述
 
-The core loop:
-1. Input FoxWQ UID.
-2. Fetch game list.
-3. Display game metadata.
-4. User selects a game.
-5. Download SGF.
-6. Import to local board.
-7. Enter Review/Analysis mode.
+为 Sabaki 提供野狐围棋（FoxWQ）对局的一站式导入能力。用户在偏好设置中绑定自己的野狐用户名后，即可在面板中浏览、预览并导入历史对局，支持导入至本地棋谱库或直接进入 Recall 复盘训练。
 
-## 2. Scope
+## 2. 核心流程
 
-### V1 (Core Features)
-- Support UID input.
-- Call FoxWQ H5 game list API.
-- Display a list of recent public games.
-- Support selecting a specific game.
-- Download SGF based on `chessid`.
-- Load SGF into the current Sabaki board.
-- Basic error handling (network, invalid UID, empty list).
+1. 在 Preference / 野狐设置中输入并保存自己的野狐用户名。
+2. 打开野狐面板，系统自动加载该用户名下的公开对局列表。
+3. **单击**列表中的棋谱 → 右侧预览区展示对局详情与终局盘面。
+4. **双击**列表中的棋谱 → 在新 Tab 中打开该对局，默认进入 Recall 模式。
+5. 点击"导入棋谱库"按钮 → 将选中对局持久化至本地训练任务库。
 
-### Out of Scope for V1
-- No login required (public data only).
-- No bypassing of permissions, CAPTCHAs, or private game restrictions.
-- No batch downloads.
-- No cloud synchronization.
-- No full-scale game database management.
-- No real-time synchronization of ongoing games.
+## 3. 设计约束
 
-## 3. Frontend Contract Dependency
+### 3.1 唯一数据来源 (Single Source of Truth)
 
-This feature should start from the shared Management Hub UI contract branch/worktree.
+野狐用户名在全局配置中**仅维护一份**（`settings: fox.account`）。所有消费方——偏好设置面板、野狐主面板、导入服务——均从该唯一来源读取，禁止在组件本地拷贝或缓存该值。
 
-Before FoxWQ network work begins, the following frontend decisions should already be fixed:
+### 3.2 用户输入
 
-- `FoxGamePane` component location and public props/events.
-- Search form fields and action names.
-- Result table columns.
-- Selected-game detail shape.
-- Loading, empty, error, and selected-row states.
-- Bottom action bar button placement.
+用户只需输入**人类可读的野狐用户名**（如 `YiWoo`）。底层的数字 UID 解析对用户完全透明，由系统在首次查询时自动完成并缓存。
 
-The FoxWQ feature worktree owns service/store/data-flow implementation. It should avoid redesigning the Management Hub shell or changing shared sidebar behavior unless the shared UI contract is updated first.
+## 4. 功能规格
 
-## 4. User Scenarios
+### 4.1 偏好设置 · 野狐窗口
 
-### Scenario 1: Fetching Recent Games by UID
-A user knows a FoxWQ UID (e.g., `35020143`). They enter it in the "Fox Games" panel, click "Search," and see a list of recent public games played by that user.
+| 元素 | 说明 |
+|------|------|
+| 用户名输入框 | 输入野狐用户名，回车或失焦后保存至 `fox.account` |
+| 校验反馈 | 保存时调用 `QueryUserInfoPanel` 接口验证用户名有效性；无效时即时提示 |
+| 持久化 | 用户名与解析后的 UID 一并写入全局 settings，后续面板直接使用 |
 
-### Scenario 2: Selecting and Loading a Game
-The user browses the list, seeing details like:
-- Black/White players (names and ranks)
-- Result
-- Date
-- Move count
-- `chessid`
-They click "Open in Local Board," and Sabaki downloads the SGF and opens it.
+### 4.2 野狐面板 · 对局列表
 
-### Scenario 3: Error Handling
-If the UID is invalid, the list is empty, or the SGF fails to download/parse, the system provides clear feedback instead of failing silently.
+面板打开时自动读取 `fox.account`，加载该用户的公开对局列表。
 
-## 5. API Specification
+**列表字段**：日期、黑方（昵称 + 段位）、白方（昵称 + 段位）、结果、手数。
 
-### 5.1 Fetch Game List
-**URL**: `https://h5.foxwq.com/yehuDiamond/chessbook_local/YHWQFetchChessList?srcuid=0&dstuid={uid}&type=1&lastcode={lastcode}&searchkey=&uin={uid}`
+支持分页加载（Load More）与列头排序。
 
-**Parameters**:
-- `srcuid=0`: Source UID (0 for non-logged-in).
-- `dstuid`: Target User UID.
-- `type=1`: Game type (fixed for V1).
-- `lastcode=0`: Pagination cursor (0 for first page).
-- `uin`: Same as `dstuid`.
+### 4.3 单击预览
 
-### 5.2 Fetch SGF
-**URL**: `https://h5.foxwq.com/yehuDiamond/chessbook_local/YHWQFetchChess?chessid={chessid}`
+选中列表中的任意一条对局，右侧详情区同步展示：
 
-**Output**: SGF content (may be wrapped in JSON).
+- **对局信息**：黑白双方昵称与段位、规则、胜负结果、总手数
+- **终局盘面**：系统后台调用 `fetchSgf(chessid)` 获取完整 SGF，解析至最后一手，以只读 MiniGoban 渲染终局静态棋面
 
-## 6. Technical Architecture
+### 4.4 双击打开
 
-The implementation follows the established Service/Store/Component pattern in Sabaki:
+双击列表中的棋谱：
 
-### 6.1 FoxGameFetchService (`src/modules/fox/foxGameFetchService.js`)
-Responsible for all network requests to FoxWQ APIs.
-- `fetchGameListByUid(uid, lastcode)`
-- `fetchSgfByChessId(chessid)`
+1. 获取 SGF 并在 Sabaki 中创建新 Tab。
+2. 默认以 **Recall（记谱）模式**载入，用户可立即开始复盘训练。
 
-### 6.2 FoxGameStore (`src/modules/fox/foxGameStore.js`)
-Manages the state of the Fox Games panel.
-- `uidInput`: The current value of the UID input field.
-- `games`: Array of game metadata objects.
-- `loadingList`: Boolean.
-- `loadingSgf`: Boolean.
-- `error`: Error message if any.
-- `selectedChessId`: The ID of the currently highlighted game in the list.
+### 4.5 导入棋谱库
 
-### 6.3 SgfImportService (`src/modules/fox/sgfImportService.js`)
-Handles the logic of taking an SGF string and importing it into `documentStore`.
-- `importFromSgfText(sgf)`: Prompts user if there are unsaved changes before replacing current game.
+在面板底部动作栏提供"导入棋谱库"按钮：
 
-### 6.4 Components
-- `FoxGamePane` (`src/components/management/FoxGamePane.js`): The main Management Hub pane.
-- `FoxGameList`: Renders the table of games.
-- `FoxGameDetail`: Shows detailed info and preview of the selected game.
+1. 下载选中对局的 SGF。
+2. 调用 `taskImportService.importFoxGame({ gameId })` 将其持久化为本地训练任务，`origin.provider` 标记为 `'fox'`。
+3. **去重**：若该 `chessid` 已存在于本地库中，提示"该对局已导入"，不重复创建。
 
-## 7. Data Flow
-1. **Fetch**: UI triggers `FoxGameStore.loadGameList` -> `FoxGameFetchService.fetchGameListByUid` -> Update `FoxGameStore.games`.
-2. **Import**: UI triggers `FoxGameStore.importGame` -> `FoxGameFetchService.fetchSgfByChessId` -> `SgfImportService.importFromSgfText` -> `documentStore` updates.
+## 5. API 依赖
 
-## 8. Success Criteria
-- Successfully fetch and display games for UID `35020143`.
-- Successfully download and load a game into Sabaki.
-- Proper handling of network failures.
-- Confirmation dialog when importing if the current game is unsaved.
+### 5.1 用户名查询
+
+```
+GET https://newframe.foxwq.com/cgi/QueryUserInfoPanel?srcuid=0&username={name}
+```
+
+输入用户名，返回 UID 及用户信息。用于偏好设置的校验与 UID 解析。
+
+### 5.2 对局列表
+
+```
+GET https://h5.foxwq.com/yehuDiamond/chessbook_local/YHWQFetchChessList
+    ?srcuid=0&dstuid={uid}&type=1&lastcode={cursor}&searchkey=&uin={uid}
+```
+
+按 UID 分页获取公开对局元数据。`lastcode` 为分页游标，首次传空。
+
+### 5.3 SGF 获取
+
+```
+GET https://h5.foxwq.com/yehuDiamond/chessbook_local/YHWQFetchChess?chessid={id}
+```
+
+按 `chessid` 获取完整 SGF 棋谱文本。
+
+## 6. 技术架构
+
+### 6.1 模块职责
+
+| 模块 | 职责 |
+|------|------|
+| `foxGameFetchService` | 封装所有野狐 API 的网络请求（用户查询、对局列表、SGF 获取） |
+| `settings: fox.account` | 全局唯一的用户名/UID 存储，所有组件从此读取 |
+| `FoxGamePane` | 面板 UI：列表展示、单击预览、双击打开、导入操作 |
+| `taskImportService` | 将 SGF 持久化为本地训练任务，处理去重逻辑 |
+
+### 6.2 数据流
+
+```
+Preference 输入用户名
+  └─► settings['fox.account']  ← 唯一来源
+        │
+        ▼
+  FoxGamePane 读取 → fetchGameList(uid) → 渲染列表
+        │
+        ├─ 单击 → fetchSgf(chessid) → 解析 SGF → MiniGoban 终局预览
+        ├─ 双击 → fetchSgf(chessid) → 新 Tab → Recall 模式
+        └─ 导入 → taskImportService.importFoxGame → 本地 SQLite
+```
+
+## 7. 边界与限制
+
+- 仅访问公开对局数据，不涉及登录态或私密对局。
+- 不支持批量下载或云端同步。
+- 不支持实时观战或正在进行的对局。
+
+## 8. 验收标准
+
+- [ ] 偏好设置中输入用户名后保存成功，面板自动加载对局列表。
+- [ ] 单击对局可预览黑白双方、规则、结果及终局盘面。
+- [ ] 双击对局在新 Tab 中以 Recall 模式打开。
+- [ ] 点击"导入棋谱库"可将对局持久化至本地，重复导入时给出提示。
+- [ ] 网络异常、用户名无效、对局列表为空等场景均有清晰的错误反馈。

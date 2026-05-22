@@ -4167,7 +4167,7 @@ button:active {
   inset: 0;
   display: flex;
   justify-content: center;
-  padding: 24px;
+  padding: 20px;
   box-sizing: border-box;
   background: var(--bg-app);
 }
@@ -4184,10 +4184,10 @@ button:active {
 .workbench-shell__main {
   display: grid;
   grid-template-columns:
-    300px
-    minmax(560px, 1fr)
-    300px;
-  gap: 40px;
+    minmax(240px, 300px)
+    minmax(420px, 1fr)
+    minmax(240px, 300px);
+  gap: 16px;
   min-height: 0;
   overflow: hidden;
 }
@@ -4213,6 +4213,32 @@ button:active {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 1180px) {
+  .workbench-shell {
+    padding: 12px;
+  }
+
+  .workbench-shell__main {
+    grid-template-columns:
+      minmax(210px, 260px)
+      minmax(360px, 1fr)
+      minmax(210px, 260px);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 920px) {
+  .workbench-shell__main {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .workbench-shell__left-panel,
+  .workbench-shell__right-panel {
+    max-height: 260px;
+  }
 }
 
 .modeLayout.inspectorShell .workbench-shell #main {
@@ -5895,6 +5921,28 @@ button:active {
 
 .hub-input:focus {
   border-color: var(--hub-accent);
+}
+
+.hub-select {
+  min-width: 120px;
+}
+
+.hub-status-card {
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--hub-border-soft);
+  border-radius: var(--hub-radius-control);
+  background: rgba(255, 255, 255, 0.56);
+  color: var(--hub-text-secondary);
+  font-size: 12px;
+}
+
+.hub-status-card strong {
+  color: var(--hub-text-primary);
+  font-size: 13px;
 }
 
 /* Buttons */

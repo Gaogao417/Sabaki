@@ -27,6 +27,8 @@ export default function ProblemModePanel({
   problemOpponent = 'ai',
   onOpponentChange = () => {},
   onRequestHint = () => {},
+  onSubmitAnswer = () => {},
+  onAbandonAnswer = () => {},
   state = 'active',
 }) {
   function renderContent() {
@@ -122,12 +124,12 @@ export default function ProblemModePanel({
             h('button', {
               'data-testid': 'submit-answer-btn',
               class: 'wb-btn wb-btn-primary wb-btn--sm',
-              onClick: () => {},
+              onClick: onSubmitAnswer,
             }, '提交答案'),
             h('button', {
               'data-testid': 'abandon-answer-btn',
               class: 'wb-btn wb-btn-danger wb-btn--sm',
-              onClick: () => {},
+              onClick: onAbandonAnswer,
             }, '放弃作答'),
             h('button', {
               'data-testid': 'request-hint-btn',

@@ -34,6 +34,7 @@ export default class FoxGamePane extends Component {
       previewBoard: Board.fromDimensions(19, 19),
       sortBy: 'starttime',
       sortDir: 'desc',
+      copyStatus: null,
     }
 
     this.settingUnsub = setting.onDidChange(({key}) => {
@@ -48,6 +49,11 @@ export default class FoxGamePane extends Component {
 
     this.handleQueryKeyDown = (e) => {
       if (e.key === 'Enter') this.handleSearch()
+    }
+
+    this.handleSortSelect = (e) => {
+      let [sortBy, sortDir] = e.currentTarget.value.split(':')
+      this.setState({sortBy, sortDir})
     }
 
     this.handleSearch = async () => {
@@ -118,6 +124,19 @@ export default class FoxGamePane extends Component {
       sabaki.toggleThirdPartyPanel()
       sabaki.loadContent(result.data, 'sgf')
     }
+
+    this.handleCopyChessId = async () => {
+      let {selectedChessId} = this.state
+      if (!selectedChessId) return
+
+      await window.sabaki.clipboard.writeText(String(selectedChessId))
+      this.setState({copyStatus: '已复制 chessid'})
+      clearTimeout(this.copyStatusTimer)
+      this.copyStatusTimer = setTimeout(
+        () => this.setState({copyStatus: null}),
+        1600,
+      )
+    }
   }
 
   componentDidMount() {
@@ -126,6 +145,7 @@ export default class FoxGamePane extends Component {
 
   componentWillUnmount() {
     this.settingUnsub()
+    clearTimeout(this.copyStatusTimer)
   }
 
   async fetchGames(uid, lastcode) {
@@ -180,7 +200,7 @@ export default class FoxGamePane extends Component {
   }
 
   render() {
-    let {query, games, loading, error, selectedChessId, nextLastcode, previewBoard} = this.state
+    let {query, games, loading, error, selectedChessId, nextLastcode, previewBoard, sortBy, sortDir, copyStatus} = this.state
     let sorted = this.getSortedGames()
     let game = games.find((g) => g.chessid === selectedChessId)
     let statusText = game
@@ -191,6 +211,13 @@ export default class FoxGamePane extends Component {
     return h(
       'div',
       {class: 'hub-pane'},
+
+      h(
+        'header',
+        {class: 'hub-header'},
+        h('h1', null, '野狐历史对局导入'),
+        h('p', {class: 'subtitle'}, '按 UID 或用户名搜索公开历史对局，预览后打开到本地棋盘。'),
+      ),
 
       h('div', {class: 'hub-body'},
 
@@ -206,6 +233,19 @@ export default class FoxGamePane extends Component {
               onInput: this.handleQueryChange,
               onKeyDown: this.handleQueryKeyDown,
             }),
+          ),
+          h('div', {class: 'hub-form-group', style: {width: '210px'}},
+            h('label', {class: 'hub-label'}, '排序'),
+            h('select', {
+              class: 'hub-input hub-select',
+              value: `${sortBy}:${sortDir}`,
+              onChange: this.handleSortSelect,
+            },
+              h('option', {value: 'starttime:desc'}, '最近对局'),
+              h('option', {value: 'starttime:asc'}, '最早对局'),
+              h('option', {value: 'movenum:desc'}, '手数最多'),
+              h('option', {value: 'movenum:asc'}, '手数最少'),
+            ),
           ),
           h('button', {
             class: 'hub-button hub-button--primary',
@@ -321,11 +361,17 @@ export default class FoxGamePane extends Component {
       h('div', {class: 'hub-bottom-bar'},
         h('div', {class: 'hub-status-info'}, statusText),
         h('div', {class: 'hub-action-group'},
+          copyStatus && h('span', {class: 'hub-status-info'}, copyStatus),
           h('button', {
             class: 'hub-button hub-button--secondary',
             disabled: loading || games.length === 0,
             onClick: this.handleSearch,
           }, '刷新列表'),
+          h('button', {
+            class: 'hub-button hub-button--secondary',
+            disabled: !selectedChessId,
+            onClick: this.handleCopyChessId,
+          }, '复制 chessid'),
           h('button', {
             class: 'hub-button hub-button--primary',
             disabled: !selectedChessId || loading,

@@ -67,12 +67,17 @@ export default function WorkbenchShell({
   engineConnected,
   ...rest
 }) {
+  const playState = rest.playState || 'active'
+  const problemState = rest.problemState || 'active'
+  const recallState = rest.recallState || rest.state || 'active'
+  const analysisState = rest.analysisState || 'active'
+
   /** Left panel content per mode */
   const leftPanel = {
-    play: h(PlayModePanel, {...rest}),
-    problem: h(ProblemModePanel, {...rest}),
-    recall: h(RecallModePanel, {...rest}),
-    analysis: h(AnalysisModePanel, {...rest}),
+    play: h(PlayModePanel, {...rest, state: playState}),
+    problem: h(ProblemModePanel, {...rest, state: problemState}),
+    recall: h(RecallModePanel, {...rest, state: recallState}),
+    analysis: h(AnalysisModePanel, {...rest, state: analysisState}),
   }
 
   return h('section', {class: 'workbench-shell', 'data-mode': mode},
@@ -80,7 +85,16 @@ export default function WorkbenchShell({
 
       // Row 1: Chrome — GlobalHeader + GameTabBar
       h('div', {class: 'workbench-shell__chrome'},
-        h(GlobalHeader, {mode, taskTitle, statusChips, engineName, engineConnected}),
+        h(GlobalHeader, {
+          mode,
+          taskTitle,
+          statusChips,
+          engineName,
+          engineConnected,
+          onOpenFoxGames: rest.onOpenFoxGames,
+          onOpenOneOhOneWeiqi: rest.onOpenOneOhOneWeiqi,
+          onOpenPreferences: rest.onOpenPreferences,
+        }),
 
         // Game tab bar (only when games prop is provided)
         games && games.length > 0 &&
