@@ -1,289 +1,226 @@
-# PRD: 101 Weiqi Wrong-Problem Book Sync
+# PRD: 101 围棋错题本同步
 
-## 1. Goal
+## 1. 概述
 
-Implement a 101 Weiqi integration that logs in to the user's own 101 Weiqi account, visits the wrong-problem book page, discovers every listed problem, decodes each problem page, and stores the problems locally for Sabaki training workflows.
+为 Sabaki 提供与 101 围棋（101weiqi.com）错题本的一站式同步能力。用户登录自己的 101 围棋账号后，一键将个人错题本中的所有题目抓取、解码并缓存到本地，随后可离线进入 Sabaki 训练流程进行针对性练习。
 
-The core loop:
+## 2. 核心流程
 
-1. User opens the `101围棋` page in the Management Hub.
-2. User logs in or reuses an existing authenticated session.
-3. User clicks `同步错题本`.
-4. Sabaki fetches `https://www.101weiqi.com/error/`.
-5. Sabaki parses every wrong-problem card.
-6. Sabaki visits each problem page and decodes the board/problem payload.
-7. Sabaki stores the decoded problems and thumbnails in a local cache.
+1. 在管理面板中打开「101 围棋」页面。
+2. 输入账号密码完成登录（或复用已有会话）。
+3. 点击「同步错题本」，系统自动遍历错题本所有分页。
+4. 逐题抓取题目页面，解码加密的棋盘数据，生成 SGF。
+5. 将解码后的题目持久化到本地缓存，可供离线训练使用。
 
-## 2. Scope
+## 3. 设计约束
 
-### V1
+### 3.1 会话管理
 
-- Log in to 101 Weiqi with username/password and CSRF token handling.
-- Keep an authenticated cookie session for subsequent sync requests.
-- Fetch the authenticated user's wrong-problem book from `/error/`.
-- Parse problem cards matching `.col-md-2.col-xs-6.col-sm-3`.
-- Extract problem id, problem code, rank, thumbnail URL, and correctness stats.
-- Visit each `/error/{problemId}/` page.
-- Decode the encrypted problem payload from the problem page.
-- Store decoded problems locally.
-- Support incremental sync by skipping unchanged cached problems.
-- Show sync progress, success count, failed count, and last sync time.
+- 登录凭证（密码）**绝不以明文形式写入配置文件或日志**。
+- 登录成功后仅持久化 Cookie Session，会话过期时引导用户重新登录。
+- 凭证信息在错误日志、遥测数据、测试快照中一律脱敏处理。
 
-### Out of Scope for V1
+### 3.2 请求控制
 
-- No batch submission of answers back to 101 Weiqi.
-- No scraping of private pages beyond the authenticated user's own wrong-problem book.
-- No CAPTCHA bypass or permission bypass.
-- No full 101 Weiqi course/library mirror.
-- No cloud sync of the local cache.
-- No automatic background sync unless the user explicitly enables it later.
+- 每次请求间设置合理延时（≥300ms），避免触发目标站点的频率限制。
+- 网络异常时支持自动重试（最多 3 次，退避间隔 2s），并保留部分同步结果。
 
-## 3. Frontend Contract Dependency
+## 4. 功能规格
 
-This feature should start from the shared Management Hub UI contract branch/worktree.
+### 4.1 登录与会话
 
-Before 101 Weiqi scraping and decoding work begins, the following frontend decisions should already be fixed:
+| 元素 | 说明 |
+|------|------|
+| 用户名 / 密码输入 | 标准表单输入，密码字段为密文显示 |
+| 登录流程 | `GET /` 获取初始 Cookie → `POST /wq/login/` 提交凭证 → 验证 `sessionid` 存在 |
+| 会话持久化 | 登录成功后将 Cookie 与用户名序列化存储至 `settings['101weiqi.session']` |
+| 会话校验 | 访问 `/error/` 页面，检查返回内容中是否包含题目卡片，以此判断会话有效性 |
+| 登出 | 清除本地 Cookie 与会话存储 |
+| 会话失效 | 展示「登录已失效」提示，引导用户重新登录 |
 
-- `OneOhOneWeiqiSettingsPane` component location and public props/events.
-- Account/login status panel fields.
-- Sync status fields.
-- Progress, empty, failed-item, and retry states.
-- Local cache controls.
-- Bottom or panel-level primary action placement.
+### 4.2 错题本同步
 
-The 101 Weiqi feature worktree owns auth, scraping, decoding, cache, and training-data integration. It should avoid redesigning the Management Hub shell or changing shared sidebar behavior unless the shared UI contract is updated first.
+点击「同步错题本」后，系统按以下阶段推进：
 
-## 4. User Scenarios
+| 阶段 | 行为 |
+|------|------|
+| **发现 (discovering)** | 从 `/error/` 起始页逐页遍历，解析所有题目卡片，自动跟踪分页链接直至末页 |
+| **抓取 (fetching)** | 逐一访问 `/error/{problemId}/` 题目页面，提取加密数据 |
+| **解码 (decoding)** | 对加密载荷执行 Base64 解码 + XOR 解密，生成明文题目数据与 SGF |
+| **完成 (done)** | 展示同步结果：成功数、失败数、跳过数、最近同步时间 |
 
-### Scenario 1: First-Time Login and Sync
+**增量同步**：基于题目卡片元数据的内容哈希判断题目是否变化，未变化的题目直接跳过，避免重复下载。
 
-The user opens `101围棋错题同步`, enters their account credentials, logs in, then clicks `同步错题本`. Sabaki fetches every wrong problem and stores them locally.
+### 4.3 同步进度展示
 
-### Scenario 2: Re-Sync Existing Cache
+同步过程中实时更新以下信息：
 
-The user already has a valid session. They click `同步错题本`, and Sabaki only downloads missing or changed problems.
+- 当前阶段（发现 / 抓取 / 解码 / 完成 / 错误）
+- 总题目数 / 已处理数
+- 成功数 / 失败数
+- 当前正在处理的题目编号
 
-### Scenario 3: Offline Training After Sync
+### 4.4 离线训练
 
-After sync completes, the user can train against the locally cached wrong problems without opening 101 Weiqi.
+同步完成后，本地缓存的错题可直接进入 Sabaki 训练工作流，无需网络连接。
 
-### Scenario 4: Login Expired
+### 4.5 启动自动同步与状态反馈
 
-If the cookie session expires, Sabaki shows `登录已失效` and asks the user to log in again.
+为确保错题本数据时刻保持最新，101 围棋支持应用启动时的后台静默增量同步，并与全局状态栏、通知系统联动。
 
-## 5. Source Pages and Parsing
+#### 4.5.1 触发机制
+- **触发时机**：应用启动（Sabaki 主窗口加载完成）时。
+- **前置条件**：全局 `settings['101weiqi.session']` 存在已登录的有效会话。
 
-### 5.1 Login
+#### 4.5.2 同步流程
+1. **静默启动**：后台调用 `oneOhOneWeiqiService`，向 101 围棋发起增量同步请求。
+2. **增量比对**：遍历发现前几页最新的题目卡片，对比内容哈希，若无新错题则立即静默结束。
+3. **后台抓取与解码**：对新增错题在后台进行限频抓取、解码，自动持久化至本地缓存。
 
-Base URL:
+#### 4.5.3 状态与通知联动
+- **指示器状态**：同步启动时，`GlobalHeader` 中的 101 指示器状态变为 `syncing` (🔄 同步中...)，显示当前进度。
+- **同步成功 Toast**：若同步了新错题，完成后在右下角弹出 **Success Toast**："101 错题本同步成功，新增 N 道题目"。若无新错题，静默更新指示器，不弹出 Toast。
+- **同步失败 Toast**：若网络超时或会话过期，指示器变为 `error` 态，并弹出 **Persistent Error Toast**："101 错题同步失败，点击重试"（若为会话过期，则提示 "101 登录已失效，请重新登录"）。
 
-```text
-https://www.101weiqi.com/
+## 5. 源页面解析
+
+### 5.1 登录接口
+
+```
+POST https://www.101weiqi.com/wq/login/
+Content-Type: application/x-www-form-urlencoded
+
+username={user}&password={password}
 ```
 
-Login action:
+返回 JSON，`result === 0` 表示登录成功，响应 Set-Cookie 中应包含 `sessionid`。
 
-```text
-https://www.101weiqi.com/login/
+### 5.2 错题列表页
+
+```
+GET https://www.101weiqi.com/error/
 ```
 
-Login flow:
+每张题目卡片对应一个 `.col-md-2.col-xs-6.col-sm-3` DOM 元素，从中提取：
 
-1. `GET /` to fetch the login page.
-2. Extract `csrfmiddlewaretoken` from the login form.
-3. `POST /login/` with form data:
-   - `csrfmiddlewaretoken`
-   - `source=index_nav`
-   - `form_username`
-   - `form_password`
-   - optional `remember=on`
-4. Preserve response cookies in a session cookie jar.
-5. Confirm login by checking that authenticated-only pages are reachable.
+| 字段 | 来源 |
+|------|------|
+| `problemId` | 卡片链接 `/error/{problemId}/` |
+| `problemCode` | 卡片文本，如 `Q-409082` |
+| `rank` | 卡片文本，如 `4K` |
+| `thumbnailUrl` | 缩略图 `<img>` 的 `src` 属性 |
+| `correctCount` / `wrongCount` | 解析 `1052对/485错` 格式文本 |
 
-Security requirements:
+**分页**：自动发现并跟踪页面中的"下一页"链接，直至无后续页面或 URL 重复。
 
-- Never write plaintext passwords to normal preferences.
-- Prefer session cookies and OS-protected storage when persistence is needed.
-- Redact credentials from logs, errors, telemetry, and test snapshots.
+### 5.3 题目页面与解码
 
-### 5.2 Wrong-Problem List
-
-Wrong-problem book URL:
-
-```text
-https://www.101weiqi.com/error/
+```
+GET https://www.101weiqi.com/error/{problemId}/
 ```
 
-Each problem card is represented by a DOM element with all of these classes:
+页面中包含加密的题目载荷，需提取两个关键值：
 
-```css
-.col-md-2.col-xs-6.col-sm-3
-```
+- `r`：数值型密钥种子（正则 `"r":\s*([0-9]+)` 提取）
+- `c`：Base64 编码的加密内容
 
-Example source shape:
+**解码算法**：
 
-```html
-<div class="col-md-2 col-xs-6 col-sm-3">
-  <div style="text-align:center;">
-    <a href="/error/459697/">
-      <img src="https://static4.101weiqi.com/file/qimg0/459697.png" style="max-width: 100%;">
-    </a>
-  </div>
-  <div style="text-align:center;" class="warptext">
-    Q-409082
-    <span style="padding-left:8px;">4K</span>
-  </div>
-  <div style="text-align:center;" class="warptext">
-    1052对/485错
-  </div>
-</div>
-```
+1. 计算 `n = r + 1`
+2. 构造密钥 `key = "101" + n + n + n`（例：`r = 1` → `key = "101222"`）
+3. 对 `c` 进行 Base64 解码得到字节数组
+4. 逐字节与密钥循环 XOR，还原明文
+5. 将明文解析为本地题目表示，并转换为 SGF
 
-Extracted fields:
-
-- `problemId`: from `/error/{problemId}/`, e.g. `459697`.
-- `problemUrl`: absolute URL for the problem page.
-- `thumbnailUrl`: image URL, e.g. `https://static4.101weiqi.com/file/qimg0/459697.png`.
-- `problemCode`: visible code, e.g. `Q-409082`.
-- `rank`: visible rank, e.g. `4K`.
-- `correctCount`: from `1052对/485错`.
-- `wrongCount`: from `1052对/485错`.
-
-Pagination:
-
-- V1 should discover and follow pagination links from the `/error/` page instead of hardcoding page URL patterns.
-- Stop when there is no next page or when a seen page URL repeats.
-
-## 6. Problem Page Decoding
-
-After discovering a problem card, fetch:
-
-```text
-https://www.101weiqi.com/error/{problemId}/
-```
-
-The page contains an encrypted problem payload. The reference notebook shows two values are needed:
-
-- `r`: numeric key seed from the page.
-- `c`: base64-encoded encrypted problem content.
-
-Recommended extraction:
-
-- Extract `r` with a pattern equivalent to `"r":\s*([0-9]+)`.
-- Extract `c` directly from the page data when available.
-- As a fallback, extract the base64 string immediately before `"enable_answer"` if that is the stable shape in current pages.
-
-Decode algorithm:
-
-1. Parse `r` as an integer.
-2. Compute `sequenceNumber = r + 1`.
-3. Build key: `"101" + sequenceNumber + sequenceNumber + sequenceNumber`.
-   - Example: if `r = 1`, key is `101222`.
-4. Base64-decode `c` into bytes.
-5. XOR each byte with the corresponding key character byte, cycling through the key.
-6. Convert the result into the decoded problem text.
-7. Parse the decoded text into Sabaki's local problem representation.
-
-Pseudo-code:
-
-```js
-function decode101WeiqiPayload(encodedText, r) {
-  let n = String(Number(r) + 1)
-  let key = `101${n}${n}${n}`
-  let bytes = base64Decode(encodedText)
-
-  return bytes
-    .map((byte, index) => byte ^ key.charCodeAt(index % key.length))
-    .map(code => String.fromCharCode(code))
-    .join('')
-}
-```
-
-## 7. Local Data Model
-
-Recommended cached problem shape:
+## 6. 本地数据模型
 
 ```ts
 type OneOhOneWeiqiProblem = {
   source: '101weiqi'
-  problemId: string
-  problemCode: string
-  rank: string | null
-  problemUrl: string
+  problemId: string          // 题目 ID
+  problemCode: string        // 可读编号，如 Q-409082
+  rank: string | null        // 难度等级，如 4K
+  problemUrl: string         // 题目页面 URL
   thumbnailUrl: string | null
   correctCount: number | null
   wrongCount: number | null
-  decodedPayload: string
-  sgf?: string
-  initialPosition?: unknown
-  solutionTree?: unknown
-  syncedAt: string
-  contentHash: string
+  decodedPayload: string     // 解密后的原始载荷
+  sgf: string                // 转换后的 SGF 文本
+  syncedAt: string           // ISO 时间戳
+  contentHash: string        // 内容哈希，用于增量同步判断
 }
 ```
 
-The parser should preserve the raw decoded payload until the final local exercise schema is confirmed. This makes future migrations possible if the decoded payload format varies across problem types.
+保留原始解码载荷（`decodedPayload`），确保后续在题目格式发生变化时仍可进行数据迁移。
 
-## 8. Technical Architecture
+## 7. 技术架构
 
-### 8.1 Services
+### 7.1 模块职责
 
-- `OneOhOneWeiqiAuthService`
-  - Fetches CSRF token.
-  - Posts login form.
-  - Owns cookie/session validation.
+| 模块 | 职责 |
+|------|------|
+| `oneOhOneWeiqiService` | 整合认证、抓取、同步的统一入口，管理会话状态与同步进度 |
+| `decoder` | 加密载荷的 Base64 + XOR 解码，题目卡片与分页的 HTML 解析，题目数据到 SGF 的转换 |
+| `db` (101weiqi 相关方法) | 本地题目缓存的读写与查询 |
+| `settings['101weiqi.session']` | 会话持久化存储 |
 
-- `OneOhOneWeiqiErrorBookService`
-  - Fetches `/error/`.
-  - Follows pagination.
-  - Parses problem cards.
+### 7.2 数据流
 
-- `OneOhOneWeiqiProblemService`
-  - Fetches individual problem pages.
-  - Extracts `r` and `c`.
-  - Calls the decoder.
-
-- `OneOhOneWeiqiProblemDecoder`
-  - Implements base64 + XOR decoding.
-  - Converts decoded payloads into local problem records when possible.
-
-- `TrainingProblemCache`
-  - Stores synced problem metadata, thumbnails, decoded payloads, and parsed training data.
-
-### 8.2 UI
-
-Management Hub pane:
-
-```text
-src/components/management/OneOhOneWeiqiSettingsPane.js
+```
+登录 → Cookie Session 持久化
+  │
+  ▼
+同步错题本
+  ├─ 发现阶段 → GET /error/ → 逐页解析题目卡片 → 收集 problemId 列表
+  ├─ 抓取阶段 → GET /error/{id}/ → 提取 r, c → XOR 解码 → 生成 SGF
+  └─ 存储阶段 → db.saveWeiqi101Problem() → 本地 SQLite
+                                              │
+                                              ▼
+                                    离线训练工作流可用
 ```
 
-Expected controls:
+## 8. 管理面板 UI
 
-- Username
-- Password or login prompt
-- Login/logout
-- Sync wrong-problem book
-- Last sync time
-- Synced problem count
-- Failed item list or retry action
-- Local cache clear action
+面板位于管理中心（Management Hub），提供以下控件：
 
-## 9. Error Handling
+- 用户名 / 密码输入与登录 / 登出按钮
+- 登录状态指示
+- 「同步错题本」主操作按钮
+- 实时同步进度条（阶段、计数、当前题目）
+- 最近同步时间
+- 已同步题目总数
+- 失败题目列表与重试操作
+- 本地缓存清除操作
 
-- Invalid credentials: show a clear login failure message.
-- Missing CSRF token: report that the login page shape changed.
-- Unauthorized `/error/`: mark session expired and require login.
-- Empty wrong-problem book: show a valid empty state.
-- Problem card parse failure: skip card, log sanitized diagnostic metadata.
-- Problem page decode failure: keep card metadata, mark problem as failed, allow retry.
-- Network rate limiting/failure: back off and keep partial sync results.
+## 9. 错误处理
 
-## 10. Success Criteria
+| 场景 | 处理方式 |
+|------|----------|
+| 凭证错误 | 展示「用户名或密码错误」，保持登录表单 |
+| 登录响应解析失败 | 提示「登录响应解析失败，请检查网络连接」 |
+| 会话过期 | 标记 `isLoggedIn = false`，清除存储的会话，提示重新登录 |
+| 错题本为空 | 展示合理的空状态界面 |
+| 单题解析失败 | 跳过该题并记录诊断日志（脱敏），计入失败数，支持重试 |
+| 网络超时 / 限频 | 自动重试（退避策略），保留已成功的部分同步结果 |
 
-- User can log in to 101 Weiqi from the Management Hub.
-- User can sync all visible wrong-problem-book entries from `/error/`.
-- Sabaki extracts problem id, code, rank, thumbnail, and correctness stats from each card.
-- Sabaki fetches each problem page and decodes the encrypted board/problem payload.
-- Synced problems are available locally after network access is removed.
-- Credentials are not stored or logged in plaintext.
+## 10. 边界与限制
+
+- 仅同步当前登录用户自己的错题本，不涉及他人数据。
+- 不向 101 围棋提交答案或修改远端数据。
+- 不抓取 101 围棋的课程库、题库等其他内容。
+- 仅支持启动时自动触发增量同步与手动同步，不支持高频实时定时轮询同步。
+- 不绕过验证码或权限限制。
+
+## 11. 验收标准
+
+- [ ] 用户可在管理面板中成功登录 101 围棋账号。
+- [ ] 登录后点击同步，可完整抓取错题本所有分页的题目。
+- [ ] 每道题目的 ID、编号、难度、缩略图、正误统计均正确提取。
+- [ ] 加密题目载荷成功解码，生成的 SGF 可被 Sabaki 正确加载。
+- [ ] 增量同步时，未变化的题目被正确跳过。
+- [ ] 同步完成后，断开网络仍可进行本地训练。
+- [ ] 密码在任何持久化存储与日志中均不以明文出现。
+- [ ] 应用启动时，若存在有效会话，能自动触发后台静默增量同步。
+- [ ] 启动同步时，GlobalHeader 的 101 状态指示器展示旋转的同步中状态。
+- [ ] 同步发现新题目时，弹出 Toast 提示用户；无新题目时静默完成不打扰。
+- [ ] 同步失败时，指示器变为错误态，弹出持久的错误 Toast 并支持点击"重试"。

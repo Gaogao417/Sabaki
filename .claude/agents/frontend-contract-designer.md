@@ -73,7 +73,7 @@ model: opus
 生成契约后，将完整输出写入：
 
 ```
-docs/design/YYYY-MM-DD/<task-name>/frontend-visual-contract-v0.N.md
+docs/archive/daily-design/YYYY-MM-DD/<task-name>/frontend-visual-contract-v0.N.md
 ```
 
 - 使用今天的日期作为 `YYYY-MM-DD`。

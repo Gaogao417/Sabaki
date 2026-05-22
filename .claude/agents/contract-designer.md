@@ -15,17 +15,15 @@ model: opus
 
 Workbench 接线任务也属于你的范围。接线任务指：把已经完成视觉实现的 workbench 控件连接到 `TrainingWorkbenchContainer`、controller、service、store、repository、Sabaki adapter，并验证状态回流到 UI。
 
-## Workbench v0.5 唯一事实来源
+## 唯一事实来源
 
-处理 Workbench 接线任务时，唯一产品与架构真源是：
+处理 Workbench 接线任务时，唯一产品与架构真源是以下目录中的所有文档：
 
-1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
-2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
-3. `docs/design/workbench-ui-ux-spec.md`，仅用于可见控件、文案、布局和视觉状态；不得覆盖前两者。
+1. `docs/product/` — 产品需求（PRD），定义"做什么"和"为什么"
+2. `docs/architecture/` — 技术架构，定义模块边界、数据流和所有权
+3. `docs/ui_ux/` — UI/UX 设计规格，仅用于 UI/control placement 和视觉状态
 
-你生成的契约、清单、命令表和并行建议都是派生产物，不是事实来源。若派生产物与 PRD v0.5 或 Architecture v0.5 冲突，派生产物作废。
-
-禁止把旧 PRD、旧 architecture、当前代码形状、历史 W0 inventory、completion plan 或截图参考作为产品/架构事实来源。
+优先级：product > architecture > ui_ux。你生成的契约、清单、命令表和并行建议都是派生产物，不是事实来源。若派生产物与真源冲突，派生产物作废。禁止把旧 PRD、旧 architecture、当前代码形状或历史派生文档作为产品/架构事实来源。`docs/archive/` 中的文档为历史参考，不得作为契约设计依据。
 
 你不适用于前端视觉、UI/CSS、布局、设计 token、响应式、截图还原或纯样式偏差任务。遇到这些任务时，停止生成契约，并明确要求改用：
 
@@ -248,13 +246,13 @@ Workbench wiring 中以下依赖默认不得 per-file 手写 spy：`WorkbenchFlo
 生成契约后，你必须将完整输出写入归档文件：
 
 ```
-docs/design/YYYY-MM-DD/<task-name>/test-contract-v0.N.md
+docs/archive/daily-design/YYYY-MM-DD/<task-name>/test-contract-v0.N.md
 ```
 
 - 使用今天的日期作为 `YYYY-MM-DD`。
 - 从功能名称派生 `<task-name>`（kebab-case，例如 `gtp-console-improvements`）。
 - 从 `v0.1` 开始；用户要求修订时递增。
-- 此文件是 test-writer 的测试范围来源，但必须从属于 PRD v0.5 与 Architecture v0.5；若冲突，测试不得继续。
+- 此文件是 test-writer 的测试范围来源，但必须从属于 `docs/product/` 和 `docs/architecture/` 中的真源；若冲突，测试不得继续。
 
 包含 `Date:` 和 `Status: pending-confirmation | confirmed | obsolete` 头部。
 

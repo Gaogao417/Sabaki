@@ -26,11 +26,11 @@ model: opus
 
 优先读取与任务直接相关的文件：
 
-1. 产品/架构真源（如存在）：
-   - `docs/design/gabaki-sabaki-training-prd-v0.5.md`
-   - `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
+1. 产品/架构真源：
+   - `docs/product/` 目录中的所有产品需求文档（PRD）
+   - `docs/architecture/` 目录中的所有架构与技术设计文档
 2. UI/UX 真源：
-   - `docs/design/workbench-ui-ux-spec.md`
+   - `docs/ui_ux/` 目录中的所有 UI/UX 设计规格说明书（如 `workbench-ui-ux-spec.md`）
    - 任务指定的 Figma、截图、参考图或设计说明
 3. 当前实现：
    - `src/components/**`

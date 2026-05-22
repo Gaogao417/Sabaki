@@ -18,7 +18,7 @@ model: opus
 
 使用你审查：
 
-- `docs/design/YYYY-MM-DD/<task>/test-contract-v0.N.md`
+- `docs/archive/daily-design/YYYY-MM-DD/<task>/test-contract-v0.N.md`
 - Workbench wiring 契约。
 - resolver/store/service/projection/side-effect/architecture-boundary 契约。
 - 基于矩阵、状态表、命令表生成的测试契约。
@@ -32,13 +32,13 @@ model: opus
 
 ## 唯一事实来源
 
-Workbench wiring 契约必须从属于：
+Workbench wiring 契约必须从属于以下目录中的所有文档：
 
-1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
-2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
-3. `docs/design/workbench-ui-ux-spec.md`，仅用于可见控件和文案。
+1. `docs/product/` — 产品需求（PRD），定义"做什么"和"为什么"
+2. `docs/architecture/` — 技术架构，定义模块边界、数据流和所有权
+3. `docs/ui_ux/` — UI/UX 设计规格，仅用于 UI/control placement 和视觉状态
 
-如果契约与 PRD/Architecture v0.5 冲突，必须 `BLOCK`。
+优先级：product > architecture > ui_ux。如果契约与这些目录下的真源冲突，必须 `BLOCK`。`docs/archive/` 中的文档为历史参考，不得作为审计依据。
 
 ## 必查：测试分层
 
@@ -135,7 +135,7 @@ Workbench wiring 契约必须从属于：
 - `APPROVE`：契约分层清楚，mock 策略明确，可以进入 test-writer。
 - `APPROVE_WITH_NOTES`：契约可进入 test-writer，但有非阻塞风险，必须列出。
 - `REQUEST_CHANGES`：分层、覆盖或 mock 策略不清，修订后再写测试。
-- `BLOCK`：契约会导致假绿、逆向契约、v0.5 冲突或核心状态路径被 mock 掉。
+- `BLOCK`：契约会导致假绿、逆向契约、真源冲突或核心状态路径被 mock 掉。
 
 只要契约允许“mock 掉被声称测试的生产路径”并仍把测试标为完成，必须 `BLOCK`。
 

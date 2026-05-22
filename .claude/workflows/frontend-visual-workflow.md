@@ -24,7 +24,7 @@ Use this workflow for:
 
 2. `frontend-contract-designer`
    - Converts the visual source index into a frontend visual contract.
-   - Archives it at `docs/design/YYYY-MM-DD/<task>/frontend-visual-contract-v0.N.md`.
+   - Archives it at `docs/archive/daily-design/YYYY-MM-DD/<task>/frontend-visual-contract-v0.N.md`.
 
 3. `visual-test-writer`
    - Converts the approved visual contract into tests.

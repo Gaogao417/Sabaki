@@ -6,28 +6,28 @@ This workflow is different from the frontend visual workflow. Visual work proves
 
 ## Non-Negotiable Source Of Truth
 
-The only product and architecture sources of truth for Workbench wiring are:
+The only product, architecture, and UI/UX sources of truth for Workbench wiring are the documents located in the following directories:
 
-1. Product source: `docs/design/gabaki-sabaki-training-prd-v0.5.md`
-2. Architecture source: `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
-3. UI source, only for visual/control placement after the two sources above: `docs/design/workbench-ui-ux-spec.md`
+1. `docs/product/` — Product requirements (PRDs), defining "what" and "why"
+2. `docs/architecture/` — Technical architecture, defining module boundaries, data flows, and state ownership
+3. `docs/ui_ux/` — UI/UX design specifications, defining visual structures, layout placement, and status/interaction indicators
 
-All generated contracts, inventories, plans, tests, and implementation notes are derived artifacts. They must not introduce behavior, command names, ownership, store fields, services, tab APIs, or flow branches that conflict with PRD v0.5 or Architecture v0.5.
+All generated contracts, inventories, plans, tests, and implementation notes are derived artifacts. They must not introduce behavior, command names, ownership, store fields, services, tab APIs, or flow branches that conflict with these primary sources of truth.
 
-If any derived artifact conflicts with the v0.5 sources, the derived artifact is wrong. Do not reconcile by inventing a compromise. Rewrite the derived artifact from the v0.5 sources.
+Priority hierarchy: product > architecture > ui_ux. If any documents conflict, the higher priority document wins. `docs/archive/` contains historical reference material only; archived files must not be used as execution or verification sources.
 
-Before writing any contract or implementation, every agent must read and cite the relevant sections of the PRD and Architecture. At minimum, a Workbench wiring contract must cite:
+Before writing any contract or implementation, every agent must read and cite the relevant sections of the active PRDs, architecture documents, and UI/UX specs. At minimum, a Workbench wiring contract must cite:
 
-- PRD v0.5 sections for the affected mode and workflow.
-- Architecture v0.5 sections for read path, write path, stores, services, repository, adapters, WorkbenchTab, WorkbenchMode, Attempt, Recall, Analysis, Snapshot, and Review when touched.
-- UI/UX spec sections only for the visible control placement and copy.
+- Active PRD sections in `docs/product/` for the affected mode and workflow.
+- Active architecture sections in `docs/architecture/` for read path, write path, stores, services, repository, adapters, WorkbenchTab, WorkbenchMode, Attempt, Recall, Analysis, Snapshot, and Review when touched.
+- Active UI/UX spec sections in `docs/ui_ux/` for the visible control placement, copy, and status representations.
 
 Forbidden source hierarchy:
 
 - Do not use `completion-plan-and-parallelism.md` as a behavior source.
 - Do not use W0 inventory files as a behavior source.
-- Do not use older PRD or architecture files when v0.5 has an answer.
-- Do not use current code shape as justification to violate v0.5; current code may be a migration state.
+- Do not use archived versioned PRD or architecture files from `docs/archive/` when current files exist.
+- Do not use current code shape as justification to violate active truth sources; current code may be a migration state.
 
 ## When To Use
 
@@ -65,12 +65,12 @@ If a task only implements the first half of this loop, it is incomplete unless t
 
 1. `contract-designer`
    - Produces a wiring contract.
-   - Archives it at `docs/design/YYYY-MM-DD/<task>/test-contract-v0.N.md`.
-   - Must first produce a "source alignment" section citing PRD v0.5 and Architecture v0.5.
+   - Archives it at `docs/archive/daily-design/YYYY-MM-DD/<task>/test-contract-v0.N.md`.
+   - Must first produce a "source alignment" section citing active product, architecture, and UI/UX documents.
    - Must list control events, controller commands, service calls, store before/after state, projection results, allowed side effects, forbidden side effects, and manual acceptance.
    - Must name the specific UI component (e.g., ProblemBar, RecallModePanel, TrainingDashboardDrawer) that triggers each handler. If no UI component exists, the handler must be marked `DEFERRED` with the missing UI control described.
    - Must classify every automated Test ID by Layer, Production Subject, Real Dependencies, Mocked Dependencies, Mock Contract Source, Forbidden Mocks, Primary Assertion, and Downstream Covered By.
-   - Must mark any command or state not present in v0.5 as `PROPOSED_GAP`, not as an approved behavior.
+   - Must mark any command or state not present in active docs as `PROPOSED_GAP`, not as an approved behavior.
    - For any matrix/state-table based task, must convert each in-scope row into an explicit expected value/behavior with a test status: `GREEN`, `RED`, or `DEFERRED`.
    - Must not leave test-writer to infer whether a matrix/current-code conflict should test current behavior. Known GAP rows must be `RED` or `DEFERRED`, never green current-behavior tests.
 
@@ -151,16 +151,16 @@ Every wiring task should classify acceptance into these layers:
 For a workbench wiring project, complete phases in this order:
 
 1. **Inventory controls**
-   - Read PRD v0.5, Architecture v0.5, then UI/UX spec in that order.
+   - Read active product PRDs, architecture documents, then UI/UX specs in that order.
    - List every visible control in GlobalHeader, ModeBar, left panels, right panels, tab bar, board stage, drawer, and bottom bar.
    - Mark each as active, disabled, display-only, or intentionally deferred.
-   - Do not decide ownership from component shape alone. Ownership must come from Architecture v0.5.
+   - Do not decide ownership from component shape alone. Ownership must come from active architecture specs.
 
 2. **Define command surface**
    - Name semantic commands such as `openTask`, `startProblemAttempt`, `submitProblemAttempt`, `skipRecallMove`, `createSnapshot`, `selectWorkbenchTab`, `setProblemArea`, `toggleAnnotationTool`.
    - Each command must have one owner: container, controller, service, or existing Sabaki command.
-   - Commands must map to v0.5 concepts. For example, unified task opening must flow through the v0.5 WorkbenchTab/Task API, not source-specific `openGameTab`/`openProblemTab` branches unless Architecture v0.5 explicitly permits a compatibility wrapper.
-   - Snapshot commands must respect the v0.5 boundary that snapshot creation and tab opening are not owned by `snapshotService` if Architecture v0.5 assigns those responsibilities elsewhere.
+   - Commands must map to active architecture/PRD concepts. For example, unified task opening must flow through the active WorkbenchTab/Task API, not source-specific `openGameTab`/`openProblemTab` branches unless active architecture documents explicitly permit a compatibility wrapper.
+   - Snapshot commands must respect active architecture boundaries that snapshot creation and tab opening are not owned by `snapshotService` if active architecture specs assign those responsibilities elsewhere.
 
 3. **Write wiring contracts**
    - Split contracts by mode or workflow, not by CSS component.
@@ -244,7 +244,7 @@ Parallelize only when write ownership is clear. Do not let two workers edit the 
 - Two workers editing `TrainingWorkbenchContainer.js` at the same time.
 - Two workers editing the same controller file at the same time.
 - Production implementation before command names and store transitions are agreed.
-- Production implementation before command names and ownership are checked against PRD v0.5 and Architecture v0.5.
+- Production implementation before command names and ownership are checked against active PRD and Architecture documents.
 - Visual CSS changes mixed into wiring tasks unless the contract explicitly requires visible state feedback.
 
 ## Anti-Patterns
@@ -255,10 +255,10 @@ Do not accept these as completed wiring:
 - The service changes state, but the UI still reads hardcoded demo props.
 - The panel imports `sabaki`, `window.sabaki`, repository, or training services directly.
 - The container keeps duplicate state that mirrors `runtimeStore` or `workbenchStore`.
-- The container writes `runtimeStore` or `workbenchStore` directly when Architecture v0.5 assigns the write to a service.
-- A derived inventory invents source-specific workflows after v0.5 standardized all materials as `TrainingTask`.
+- The container writes `runtimeStore` or `workbenchStore` directly when active architecture docs assign the write to a service.
+- A derived inventory invents source-specific workflows after active PRD/architecture standardized all materials as `TrainingTask`.
 - A derived inventory treats `origin.provider` as a workflow branch.
-- A derived inventory assigns tab creation, snapshot handling, review, recall, or attempt ownership contrary to Architecture v0.5.
+- A derived inventory assigns tab creation, snapshot handling, review, recall, or attempt ownership contrary to active architecture specifications.
 - Store methods call DB, engine, UI, IPC, or controller commands.
 - Tests only assert call count and never assert before/after state.
 - A handler is exposed on `shellProps` but no UI component consumes it. Every non-deferred handler must be traceable to a named UI component that triggers it (e.g., ProblemBar "下一题" button, TrainingDashboardDrawer "Start Review" button).

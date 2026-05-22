@@ -14,15 +14,16 @@ model: opus
 
 Workbench 接线测试属于你的范围。接线测试必须证明用户动作能改变真实业务状态，并且 store/service 状态能通过 container projection 回到 UI。
 
-## Workbench v0.5 唯一事实来源
+## 唯一事实来源
 
-接线测试的行为期望必须来自：
+接线测试的行为期望必须来自以下目录中的所有文档：
 
-1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
-2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
-3. 已批准契约文件，且该契约必须包含 PRD/Architecture v0.5 真源对齐表。
+1. `docs/product/` — 产品需求（PRD），定义"做什么"和"为什么"
+2. `docs/architecture/` — 技术架构，定义模块边界、数据流和所有权
+3. `docs/ui_ux/` — UI/UX 设计规格，仅用于 UI/control placement 和视觉状态
+4. 已批准的契约文件，且该契约必须包含真源对齐表。
 
-如果已批准契约、W0 inventory、completion plan 或当前代码与 v0.5 真源冲突，停止写测试并报告冲突。不得把冲突契约机械转成测试。
+优先级：product > architecture > ui_ux。如果已批准契约、计划等派生文档与这些目录下的真源冲突，停止写测试并报告冲突。不得把冲突契约机械转成测试。`docs/archive/` 中的文档为历史参考，不得作为编写测试依据。
 
 你不适用于前端视觉、UI/CSS、布局、设计 token、响应式、截图还原或纯样式偏差测试。遇到这些任务时，停止写测试，并明确要求改用：
 
@@ -73,10 +74,10 @@ Workbench 接线测试属于你的范围。接线测试必须证明用户动作�
 写测试之前：
 
 1. 从用户提供的归档路径读取已批准的契约文件
-   （例如 `docs/design/YYYY-MM-DD/<task-name>/test-contract-v0.N.md`）。
+   （例如 `docs/archive/daily-design/YYYY-MM-DD/<task-name>/test-contract-v0.N.md`）。
    此文件是测试范围来源，但不是产品/架构最终真源。
-2. 检查契约是否包含 PRD v0.5 / Architecture v0.5 真源对齐表。
-3. 抽查契约中的命令、owner、store 写入、service 责任是否与 v0.5 冲突。
+2. 检查契约是否包含真源对齐表。
+3. 抽查契约中的命令、owner、store 写入、service 责任是否与 `docs/product/` 和 `docs/architecture/` 中的真源冲突。
 4. 重述已批准的契约。
 5. 列出你计划创建或编辑的测试文件。
 6. 将测试分类为：

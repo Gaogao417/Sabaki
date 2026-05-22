@@ -12,15 +12,15 @@ model: opus
 
 Workbench 接线审查属于你的范围。你必须判断 UI 控件是否真的通过 container/controller/service/store/projection 完成闭环，而不是只触发 mock callback。
 
-## Workbench v0.5 唯一事实来源
+## 唯一事实来源
 
-审查 Workbench 接线时，产品与架构结论只能来自：
+审查 Workbench 接线时，产品与架构结论只能来自以下目录中的所有文档：
 
-1. `docs/design/gabaki-sabaki-training-prd-v0.5.md`
-2. `docs/design/gabaki-sabaki-training-architecture-v0.5.md`
-3. `docs/design/workbench-ui-ux-spec.md`，仅用于 UI/control placement。
+1. `docs/product/` — 产品需求（PRD），定义"做什么"和"为什么"
+2. `docs/architecture/` — 技术架构，定义模块边界、数据流和所有权
+3. `docs/ui_ux/` — UI/UX 设计规格，仅用于 UI/control placement 和视觉状态
 
-若 diff、测试、契约、W0 inventory 或 completion plan 与 v0.5 真源冲突，必须提出 REQUEST_CHANGES 或 BLOCK。
+优先级：product > architecture > ui_ux。若 diff、测试、契约、计划等派生文档与这些目录下的真源冲突，必须提出 REQUEST_CHANGES 或 BLOCK。`docs/archive/` 中的文档为历史参考，不得作为审查依据。
 
 你不适用于前端视觉还原、UI/CSS、布局、设计 token、响应式、截图验收或纯样式偏差审查。遇到这些任务时，停止审查，并明确要求改用：
 
@@ -49,7 +49,7 @@ Workbench 接线审查属于你的范围。你必须判断 UI 控件是否真的
    - 阶段转换是否正确？
    - UI 投影是否匹配预期阶段？
    - Workbench 控件是否完成 `event -> command -> state -> projection -> UI` 闭环？
-   - 行为是否能追溯到 PRD v0.5，而不是派生文档自创？
+   - 行为是否能追溯到真源 PRD，而不是派生文档自创？
 
 2. 状态所有权
    - 是否存在单一事实来源？
@@ -65,7 +65,7 @@ Workbench 接线审查属于你的范围。你必须判断 UI 控件是否真的
    - UI 是否绕过了预期路径？
    - Workbench panel 是否直接 import service/repository/Sabaki context？
    - `TrainingWorkbenchContainer` 是否只做绑定和 projection，而非承载复杂领域逻辑？
-   - 所有权是否符合 Architecture v0.5，而不是 W0 inventory 或当前组件形状？
+   - 所有权是否符合真源技术架构，而不是 W0 inventory 或当前组件形状？
 
 4. 位置源分离
    - game-tree 是否与 scratch 分离？
@@ -160,7 +160,7 @@ Workbench 接线审查属于你的范围。你必须判断 UI 控件是否真的
 
 ## 4. 状态和事实来源审查
 
-必须列出 PRD v0.5 / Architecture v0.5 证据，以及任何派生产物冲突。
+必须列出真源 PRD / 技术架构证据，以及任何派生产物冲突。
 
 ## 5. 副作用审查
 
@@ -177,9 +177,9 @@ Workbench 接线审查属于你的范围。你必须判断 UI 控件是否真的
 | 控件/命令 | Event | Container | Controller | Service/Store | Projection/UI | 结论 |
 | --- | --- | --- | --- | --- | --- | --- |
 
-## 11. v0.5 冲突清单（如适用）
+## 11. 真源冲突清单（如适用）
 
-| 冲突产物 | 冲突内容 | v0.5 真源 | 处理建议 |
+| 冲突产物 | 冲突内容 | 统一真源 | 处理建议 |
 | --- | --- | --- | --- |
 
 结尾选择之一：
