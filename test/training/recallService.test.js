@@ -3,193 +3,30 @@ import assert from 'assert'
 import { createRecallService } from '../../src/modules/training/recall/recallService.ts'
 import { createRecallCheckpointService } from '../../src/modules/training/recall/recallCheckpointService.ts'
 import { createTrainingRuntimeStore } from '../../src/modules/training/store/trainingRuntimeStore.ts'
-
-// --- Strict fake repository ---
-
-function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value))
-}
-
-function requireRecord(map, id, name) {
-  const record = map[id]
-  if (!record) throw new Error(`${name} not found: ${id}`)
-  return record
-}
-
-function createStrictFakeRepo() {
-  const store = {
-    attempts: {},
-    sessions: {},
-    recallAttempts: [],
-    badMoves: [],
-    evaluations: [],
-    comments: [],
-    checkpoints: {},
-    games: {},
-  }
-
-  const calls = []
-
-  return {
-    store,
-    calls,
-
-    // Attempt
-    async loadAttempt(id) {
-      return clone(store.attempts[id]) || null
-    },
-    async updateAttempt(id, patch) {
-      calls.push(['updateAttempt', id, clone(patch)])
-      const current = requireRecord(store.attempts, id, 'attempt')
-      store.attempts[id] = { ...current, ...clone(patch) }
-    },
-
-    // RecallSession
-    async createRecallSession(session) {
-      calls.push(['createRecallSession', clone(session)])
-      if (store.sessions[session.id]) throw new Error(`duplicate recall session: ${session.id}`)
-      store.sessions[session.id] = clone(session)
-      return clone(session)
-    },
-    async loadRecallSession(id) {
-      return clone(store.sessions[id]) || null
-    },
-    async updateRecallSession(id, patch) {
-      calls.push(['updateRecallSession', id, clone(patch)])
-      const current = requireRecord(store.sessions, id, 'recall session')
-      store.sessions[id] = { ...current, ...clone(patch) }
-    },
-
-    // RecallAttempt
-    async createRecallAttempt(attempt) {
-      calls.push(['createRecallAttempt', clone(attempt)])
-      store.recallAttempts.push(clone(attempt))
-      return clone(attempt)
-    },
-    async listRecallAttempts(sessionId) {
-      return store.recallAttempts.filter(a => a.recallSessionId === sessionId).map(clone)
-    },
-
-    // Checkpoint
-    async createRecallCheckpoint(checkpoint) {
-      calls.push(['createRecallCheckpoint', clone(checkpoint)])
-      if (store.checkpoints[checkpoint.id]) throw new Error(`duplicate checkpoint: ${checkpoint.id}`)
-      store.checkpoints[checkpoint.id] = clone(checkpoint)
-      return clone(checkpoint)
-    },
-    async loadRecallCheckpoint(id) {
-      return clone(store.checkpoints[id]) || null
-    },
-    async updateRecallCheckpoint(id, patch) {
-      calls.push(['updateRecallCheckpoint', id, clone(patch)])
-      const current = requireRecord(store.checkpoints, id, 'recall checkpoint')
-      store.checkpoints[id] = { ...current, ...clone(patch) }
-    },
-    async listCheckpointsByRecallSession(sessionId) {
-      return Object.values(store.checkpoints).filter(c => c.recallSessionId === sessionId).map(clone)
-    },
-
-    // BadMove
-    async listBadMovesByAttempt(attemptId) {
-      return store.badMoves.filter(bm => bm.attemptId === attemptId).map(clone)
-    },
-    async loadBadMove(id) {
-      return clone(store.badMoves.find(bm => bm.id === id)) || null
-    },
-    async updateBadMove(badMoveId, patch) {
-      calls.push(['updateBadMove', badMoveId, clone(patch)])
-      const bm = store.badMoves.find(b => b.id === badMoveId)
-      if (!bm) throw new Error(`bad move not found: ${badMoveId}`)
-      Object.assign(bm, clone(patch))
-    },
-
-    // Evaluation
-    async listMoveEvaluationsByAttempt(attemptId) {
-      return store.evaluations.filter(ev => ev.attemptId === attemptId).map(clone)
-    },
-
-    // Comment
-    async createMoveComment(comment) {
-      calls.push(['createMoveComment', clone(comment)])
-      store.comments.push(clone(comment))
-      return clone(comment)
-    },
-
-    // Game
-    async getGame(id) {
-      return clone(store.games[id]) || null
-    },
-  }
-}
+import {
+  createPhase3StrictRecallRepository,
+  seedPhase3BadMove,
+  seedPhase3Checkpoint,
+  seedPhase3RecallAttempt,
+  seedPhase3RecallSession,
+} from './phase3TypedFakes.ts'
 
 // --- Helpers ---
 
 function seedAttempt(repo, overrides = {}) {
-  const attempt = {
-    id: 'attempt_1',
-    taskId: 'task_1',
-    tabId: 'tab_1',
-    startedAt: '2026-01-01T00:00:00.000Z',
-    rootPositionSgf: '(;SZ[9])',
-    userLine: ['D4', 'Q16', 'C3'],
-    status: 'submitted',
-    result: 'pending',
-    hintLevelUsed: 0,
-    recallCompleted: false,
-    analysisOpened: false,
-    ...overrides,
-  }
-  repo.store.attempts[attempt.id] = clone(attempt)
-  return attempt
+  return seedPhase3RecallAttempt(repo, overrides)
 }
 
 function seedSession(repo, overrides = {}) {
-  const session = {
-    id: 'session_1',
-    taskId: 'task_1',
-    attemptId: 'attempt_1',
-    type: 'line_recall',
-    source: { kind: 'attempt', attemptId: 'attempt_1' },
-    startMove: 0,
-    expectedMoves: ['D4', 'Q16', 'C3'],
-    currentMoveIndex: 0,
-    completed: false,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  }
-  repo.store.sessions[session.id] = clone(session)
-  return session
+  return seedPhase3RecallSession(repo, overrides)
 }
 
 function seedBadMove(repo, overrides = {}) {
-  const bm = {
-    id: 'bm_1',
-    moveEvaluationId: 'eval_1',
-    attemptId: 'attempt_1',
-    taskId: 'task_1',
-    moveIndex: 1,
-    severity: 'major',
-    punishSide: 'black',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  }
-  repo.store.badMoves.push(clone(bm))
-  return bm
+  return seedPhase3BadMove(repo, overrides)
 }
 
 function seedCheckpoint(repo, overrides = {}) {
-  const cp = {
-    id: 'cp_1',
-    recallSessionId: 'session_1',
-    badMoveId: 'bm_1',
-    status: 'pending_correction',
-    userCorrectionLine: [],
-    aiCandidateLines: [],
-    createdAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  }
-  repo.store.checkpoints[cp.id] = clone(cp)
-  return cp
+  return seedPhase3Checkpoint(repo, overrides)
 }
 
 // --- recallService tests ---
@@ -199,7 +36,7 @@ describe('recallService', () => {
 
   beforeEach(() => {
     runtimeStore = createTrainingRuntimeStore()
-    repo = createStrictFakeRepo()
+    repo = createPhase3StrictRecallRepository()
     checkpointService = createRecallCheckpointService({
       repository: repo,
       runtimeStore,
@@ -385,14 +222,21 @@ describe('recallService', () => {
       assert.strictEqual(runtimeStore.getState().activeRecallSessionId, undefined)
     })
 
-    it('updates attempt recallCompleted and status', async () => {
+    it('P3-T06 completes recall without mutating source Attempt status/result/userLine', async () => {
       seedAttempt(repo, { userLine: ['D4'] })
       const session = await service.createRecallFromAttempt('attempt_1')
+      repo.calls.length = 0
       await service.completeRecall(session.id)
 
       const attempt = repo.store.attempts['attempt_1']
-      assert.strictEqual(attempt.recallCompleted, true)
-      assert.strictEqual(attempt.status, 'analyzing')
+      assert.deepStrictEqual(attempt.userLine, ['D4'])
+      assert.strictEqual(attempt.result, 'pending')
+      assert.strictEqual(attempt.status, 'submitted')
+      assert.strictEqual(
+        repo.calls.some(call => call[0] === 'updateAttempt'),
+        false,
+        'completeRecall must not call repository.updateAttempt',
+      )
     })
 
     it('throws if session not found', async () => {
@@ -411,7 +255,7 @@ describe('recallCheckpointService', () => {
 
   beforeEach(() => {
     runtimeStore = createTrainingRuntimeStore()
-    repo = createStrictFakeRepo()
+    repo = createPhase3StrictRecallRepository()
     service = createRecallCheckpointService({
       repository: repo,
       runtimeStore,
@@ -788,7 +632,7 @@ describe('recallCheckpointService', () => {
 
     beforeEach(() => {
       runtimeStore2 = createTrainingRuntimeStore()
-      repo2 = createStrictFakeRepo()
+      repo2 = createPhase3StrictRecallRepository()
       checkpointService2 = createRecallCheckpointService({
         repository: repo2,
         runtimeStore: runtimeStore2,
@@ -886,8 +730,8 @@ describe('recallCheckpointService', () => {
       assert.strictEqual(finalSession.currentMoveIndex, 3)
 
       const finalAttempt = repo2.store.attempts['attempt_1']
-      assert.strictEqual(finalAttempt.recallCompleted, true)
-      assert.strictEqual(finalAttempt.status, 'analyzing')
+      assert.strictEqual(finalAttempt.recallCompleted, false)
+      assert.strictEqual(finalAttempt.status, 'submitted')
     })
   })
 })

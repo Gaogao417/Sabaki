@@ -1,25 +1,16 @@
 import assert from 'assert'
 
-// --- Lazy-load aiMoveService (skip tests if module not yet implemented) ---
+import { createTrainingRuntimeStore } from '../../src/modules/training/store/trainingRuntimeStore.ts'
+import { createWorkbenchStore } from '../../src/modules/training/store/workbenchStore.ts'
+import {
+  createPhase3AttemptRepository,
+  createPhase3EngineService,
+} from './phase3TypedFakes.ts'
 
-let _createAiMoveService = null
-let _shouldAiMove = null
-let _loadAttempted = false
-
-function loadModule() {
-  if (_loadAttempted) return { createAiMoveService: _createAiMoveService, shouldAiMove: _shouldAiMove }
-  _loadAttempted = true
-  try {
-    const mod = require('../../src/modules/training/ai/aiMoveService.ts')
-    _createAiMoveService = mod.createAiMoveService
-    _shouldAiMove = mod.shouldAiMove
-  } catch {}
-  return { createAiMoveService: _createAiMoveService, shouldAiMove: _shouldAiMove }
-}
-
-const describeIf = loadModule().createAiMoveService || loadModule().shouldAiMove
-  ? describe
-  : describe.skip
+const {
+  createAiMoveService,
+  shouldAiMove: shouldAiMoveFn,
+} = require('../../src/modules/training/ai/aiMoveService.ts')
 
 // --- Helpers ---
 
@@ -64,9 +55,7 @@ function makeTask(overrides = {}) {
 
 // --- Tests ---
 
-describeIf('aiMoveService', () => {
-  const { createAiMoveService, shouldAiMove: shouldAiMoveFn } = loadModule()
-
+describe('aiMoveService', () => {
   // =====================================================================
   // shouldAiMove — pure function tests (C07-C13, C34, C36, C37)
   // =====================================================================
@@ -344,6 +333,341 @@ describeIf('aiMoveService', () => {
 
       const result = await service.requestAiMove({ tab, attempt, task })
       assert.strictEqual(result, null)
+    })
+
+    it('P3-T02 records and clears AiMovePending for a valid in-area response', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      const tab = makeTab({
+        id: 'tab_1',
+        mode: 'problem',
+        activeAttemptId: 'attempt_1',
+      })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      let receivedInput = null
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(
+          async (input) => {
+            receivedInput = input
+            assert.ok(runtimeStore.getState().pendingAiMove)
+            return { move: 'C3', candidates: ['C3'] }
+          },
+        ),
+      })
+
+      const result = await service.requestAiMove({
+        tab,
+        attempt,
+        task: makeTask({ problemArea: [[2, 2]] }),
+        color: 'white',
+      })
+
+      assert.strictEqual(result, 'C3')
+      assert.deepStrictEqual(receivedInput.analysisAreaVertices, [[2, 2]])
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+    })
+
+    it('P3-T03 drops a stale AI response when the Attempt position changes before resolve', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const originalAttempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let latestAttempt = originalAttempt
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+
+      const tab = makeTab({
+        id: 'tab_1',
+        mode: 'play',
+        activeAttemptId: 'attempt_1',
+      })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+      runtimeStore.setProblemView({
+        taskId: 'task_1',
+        tabId: 'tab_1',
+        attemptId: 'attempt_1',
+        legacyProblemSession: null,
+        evalCache: [{ moveIndex: 0, move: 'D4', isBadMove: false, severity: 'none' }],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+      const problemViewBefore = runtimeStore.getState().problemView
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => latestAttempt),
+        engineService: createPhase3EngineService(
+          async () => {
+            return enginePromise
+          },
+        ),
+      })
+
+      const pending = service.requestAiMove({
+        tab,
+        attempt: originalAttempt,
+        task: makeTask(),
+        color: 'white',
+      })
+
+      latestAttempt = { ...originalAttempt, userLine: ['D4', 'Q16'] }
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+
+      const result = await pending
+
+      assert.strictEqual(result, null)
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+      assert.deepStrictEqual(runtimeStore.getState().problemView, problemViewBefore)
+      assert.strictEqual(workbenchStore.getState().activeTabId, 'tab_1')
+    })
+
+    it('P3-T03b drops a stale AI response when the active tab changes before resolve', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+
+      const tab = makeTab({ id: 'tab_1', mode: 'play', activeAttemptId: 'attempt_1' })
+      workbenchStore.addTab(tab)
+      workbenchStore.addTab(makeTab({ id: 'tab_2', mode: 'play', activeAttemptId: 'attempt_2' }))
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => enginePromise),
+      })
+
+      const pending = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+      workbenchStore.setActiveTab('tab_2')
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+
+      assert.strictEqual(await pending, null)
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+      assert.strictEqual(workbenchStore.getState().activeTabId, 'tab_2')
+    })
+
+    it('P3-T03c drops a stale AI response when the active attempt changes before resolve', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+
+      const tab = makeTab({ id: 'tab_1', mode: 'play', activeAttemptId: 'attempt_1' })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => enginePromise),
+      })
+
+      const pending = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+      runtimeStore.setActiveAttempt('attempt_2')
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+
+      assert.strictEqual(await pending, null)
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+      assert.strictEqual(runtimeStore.getState().activeAttemptId, 'attempt_2')
+    })
+
+    it('P3-T03d drops a stale AI response when mode changes before resolve', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+
+      const tab = makeTab({ id: 'tab_1', mode: 'play', activeAttemptId: 'attempt_1' })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => enginePromise),
+      })
+
+      const pending = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+      workbenchStore.updateTab('tab_1', { mode: 'analysis' })
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+
+      assert.strictEqual(await pending, null)
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+      assert.strictEqual(workbenchStore.getState().tabs.find(t => t.id === 'tab_1').mode, 'analysis')
+    })
+
+    it('P3-T03e keeps a newer pending request when an older response resolves', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+
+      const tab = makeTab({ id: 'tab_1', mode: 'play', activeAttemptId: 'attempt_1' })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => enginePromise),
+      })
+
+      const pending = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+      runtimeStore.setAiMovePending({
+        requestId: 'ai_req_newer',
+        tabId: 'tab_1',
+        attemptId: 'attempt_1',
+        positionHash: 'newer',
+        mode: 'play',
+        color: 'black',
+        startedAt: '2026-05-25T00:00:00.000Z',
+      })
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+
+      assert.strictEqual(await pending, null)
+      assert.strictEqual(runtimeStore.getState().pendingAiMove.requestId, 'ai_req_newer')
+    })
+
+    it('P3-T03f drops an older response after the newer request already resolved', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let resolveOlder
+      let resolveNewer
+      const olderEnginePromise = new Promise(resolve => {
+        resolveOlder = resolve
+      })
+      const newerEnginePromise = new Promise(resolve => {
+        resolveNewer = resolve
+      })
+      let callCount = 0
+
+      const tab = makeTab({ id: 'tab_1', mode: 'play', activeAttemptId: 'attempt_1' })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => {
+          callCount += 1
+          return callCount === 1 ? olderEnginePromise : newerEnginePromise
+        }),
+      })
+
+      const older = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+      const newer = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+
+      resolveNewer({ move: 'B2', candidates: ['B2'] })
+      assert.strictEqual(await newer, 'B2')
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+
+      resolveOlder({ move: 'A1', candidates: ['A1'] })
+      assert.strictEqual(await older, null)
+      assert.strictEqual(runtimeStore.hasSupersededAiMoveRequest(runtimeStore.getState().supersededAiMoveRequestIds[0]), true)
+    })
+
+    it('P3-T03g clears only matching pending when the engine request rejects', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      const tab = makeTab({ id: 'tab_1', mode: 'play', activeAttemptId: 'attempt_1' })
+
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => {
+          throw new Error('engine unavailable')
+        }),
+      })
+
+      await assert.rejects(
+        () => service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' }),
+        /engine unavailable/,
+      )
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+    })
+
+    it('P3-T03h keeps newer pending when an older engine request rejects', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let rejectOlder
+      let resolveNewer
+      const olderEnginePromise = new Promise((_, reject) => {
+        rejectOlder = reject
+      })
+      const newerEnginePromise = new Promise(resolve => {
+        resolveNewer = resolve
+      })
+      let callCount = 0
+
+      const tab = makeTab({ id: 'tab_1', mode: 'play', activeAttemptId: 'attempt_1' })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => {
+          callCount += 1
+          return callCount === 1 ? olderEnginePromise : newerEnginePromise
+        }),
+      })
+
+      const older = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+      const newer = service.requestAiMove({ tab, attempt, task: makeTask(), color: 'white' })
+      const newerRequestId = runtimeStore.getState().pendingAiMove.requestId
+
+      rejectOlder(new Error('older failed'))
+      await assert.rejects(() => older, /older failed/)
+      assert.strictEqual(runtimeStore.getState().pendingAiMove.requestId, newerRequestId)
+
+      resolveNewer({ move: 'B2', candidates: ['B2'] })
+      assert.strictEqual(await newer, 'B2')
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
     })
   })
 })

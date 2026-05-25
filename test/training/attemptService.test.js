@@ -2,6 +2,7 @@ import assert from 'assert'
 
 import { createAttemptService } from '../../src/modules/training/attempt/attemptService.ts'
 import { createTrainingRuntimeStore } from '../../src/modules/training/store/trainingRuntimeStore.ts'
+import { createPhase3MutableAttemptRepository } from './phase3TypedFakes.ts'
 
 function makeAttempt(overrides = {}) {
   return {
@@ -19,51 +20,12 @@ function makeAttempt(overrides = {}) {
   }
 }
 
-function createMockDbs() {
-  const store = { data: {} }
-
-  const repository = {
-    created: [],
-    updated: [],
-    evaluations: [],
-    badMoves: [],
-
-    async createAttempt(attempt) {
-      this.created.push({ ...attempt })
-      store.data.attempt = { ...attempt }
-      return { ...attempt }
-    },
-
-    async loadAttempt(id) {
-      return store.data.attempt || null
-    },
-
-    async updateAttempt(id, patch) {
-      this.updated.push({ id, patch })
-      if (store.data.attempt) {
-        Object.assign(store.data.attempt, patch)
-      }
-    },
-
-    async createMoveEvaluation(eval_) {
-      this.evaluations.push({ ...eval_ })
-    },
-
-    async createBadMove(badMove) {
-      this.badMoves.push({ ...badMove })
-    },
-  }
-
-  return { store, repository }
-}
-
 describe('attemptService', () => {
   let service, runtimeStore, mockRepo
 
   beforeEach(() => {
     runtimeStore = createTrainingRuntimeStore()
-    const { repository } = createMockDbs()
-    mockRepo = repository
+    mockRepo = createPhase3MutableAttemptRepository()
     service = createAttemptService({
       repository: mockRepo,
       runtimeStore,
@@ -247,6 +209,19 @@ describe('attemptService', () => {
       const update = mockRepo.updated.find(u => u.patch.result === 'pass')
       assert.ok(update)
       assert.strictEqual(update.patch.result, 'pass')
+    })
+
+    it('P3-T05 finalizes result before freeze so frozen Attempt guard is not violated', async () => {
+      await service.createAttempt({ taskId: 'task_1', rootPositionSgf: '(;SZ[9])' })
+      const attemptId = runtimeStore.getState().activeAttemptId
+
+      await service.finalizeAttemptResult(attemptId, 'pass')
+      await service.freezeAttempt(attemptId)
+
+      const attempt = await mockRepo.loadAttempt(attemptId)
+      assert.strictEqual(attempt.result, 'pass')
+      assert.strictEqual(attempt.status, 'submitted')
+      assert.ok(attempt.submittedAt)
     })
   })
 })

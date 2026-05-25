@@ -2,6 +2,9 @@ import assert from 'assert'
 
 import {createWorkbenchStore} from '../../src/modules/training/store/workbenchStore.ts'
 import {createTestLogger} from '../helpers/createTestLogger.ts'
+import {createPhase3SubmitOrderDeps} from './phase3TypedFakes.ts'
+
+const {createWorkbenchFlowService} = require('../../src/modules/training/workbench/workbenchFlowService.ts')
 
 // --- Helpers ---
 
@@ -81,32 +84,9 @@ function createMockDeps(overrides = {}) {
   }
 }
 
-// Lazy-load the module; return null if not yet implemented.
-let _createWorkbenchFlowService = null
-let _loadAttempted = false
-
-function getFlowServiceFactory() {
-  if (_loadAttempted) return _createWorkbenchFlowService
-  _loadAttempted = true
-  try {
-    // Dynamic import is not available in CJS/mocha without top-level await.
-    // Use require via tsx instead.
-    const mod = require('../../src/modules/training/workbench/workbenchFlowService.ts')
-    _createWorkbenchFlowService = mod.createWorkbenchFlowService
-  } catch {
-    // Module doesn't exist yet — tests serve as spec.
-  }
-  return _createWorkbenchFlowService
-}
-
-// Skip all tests if module not yet implemented.
-const describeIf = getFlowServiceFactory() ? describe : describe.skip
-
 // --- Tests ---
 
-describeIf('workbenchFlowService', () => {
-  const createWorkbenchFlowService = getFlowServiceFactory()
-
+describe('workbenchFlowService', () => {
   describe('submit — play/problem → recall', () => {
     it('transitions play mode tab to recall', () => {
       const deps = createMockDeps()
@@ -437,34 +417,15 @@ describeIf('workbenchFlowService', () => {
       assert.strictEqual(persistedResults['att_1'], 'pass')
     })
 
-    it('submit ordering: freeze before recall creation (C39)', async () => {
-      let freezeCalled = false
-      let recallCreatedBeforeFreeze = false
-
-      const deps = createEvalMockDeps({
-        attemptService: {
-          async freezeAttempt() {
-            freezeCalled = true
-          },
-          async finalizeAttemptResult() {},
-        },
-        recallService: {
-          async createRecallSession(input) {
-            if (!freezeCalled) {
-              recallCreatedBeforeFreeze = true
-            }
-            return {id: 'rs_1', ...input}
-          },
-        },
-      })
+    it('P3-T08 submit ordering: finalize result before freeze, then create recall (C39)', async () => {
+      const deps = createPhase3SubmitOrderDeps({makeDeps: createEvalMockDeps})
       deps.workbenchStore = deps.store
       const service = createWorkbenchFlowService(deps)
       deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
 
       await service.submit('tab_1')
 
-      assert.strictEqual(recallCreatedBeforeFreeze, false, 'recall must not be created before freeze')
-      assert.strictEqual(freezeCalled, true, 'freeze must have been called')
+      assert.deepStrictEqual(deps.phase3Order, ['finalize', 'freeze', 'recall'])
     })
   })
 

@@ -726,7 +726,8 @@ describe('recallCheckpointService — Phase 5 integration contracts', () => {
       assert.strictEqual(finalSession.completed, true)
 
       const finalAttempt = repo.store.attempts['attempt_1']
-      assert.strictEqual(finalAttempt.recallCompleted, true)
+      assert.strictEqual(finalAttempt.recallCompleted, false)
+      assert.strictEqual(finalAttempt.status, 'submitted')
     })
   })
 
