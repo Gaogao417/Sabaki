@@ -1297,6 +1297,7 @@
 
 .wb-play-mode-panel__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

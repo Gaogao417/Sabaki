@@ -43,7 +43,7 @@ export default function TrainingDashboardDrawer({
   const recentBadMoveTasks = dd ? dd.recentBadMoveTasks : []
 
   if (loading || !dd) {
-    return h('div', {class: 'drawer training-dashboard'},
+    return h('div', {class: 'drawer training-dashboard show'},
       h('div', {class: 'drawer-header'},
         h('h2', {}, t('Training Dashboard')),
       ),
@@ -52,7 +52,7 @@ export default function TrainingDashboardDrawer({
   }
 
   if (error) {
-    return h('div', {class: 'drawer training-dashboard'},
+    return h('div', {class: 'drawer training-dashboard show'},
       h('div', {class: 'drawer-header'},
         h('h2', {}, t('Training Dashboard')),
       ),
@@ -60,7 +60,7 @@ export default function TrainingDashboardDrawer({
     )
   }
 
-  return h('div', {class: 'drawer training-dashboard'},
+  return h('div', {class: 'drawer training-dashboard show'},
     h('div', {class: 'drawer-header'},
       h('h2', {}, t('Training Dashboard')),
     ),
