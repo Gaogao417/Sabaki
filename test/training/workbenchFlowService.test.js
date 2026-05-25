@@ -27,6 +27,9 @@ function makeTask(overrides = {}) {
   }
 }
 
+/**
+ * @param {Partial<ReturnType<typeof import('../../src/modules/training/workbench/workbenchFlowService').createWorkbenchFlowService>['deps']>} [overrides]
+ */
 function createMockDeps(overrides = {}) {
   const store = createWorkbenchStore()
   const {logger, logs} = createTestLogger()
@@ -40,15 +43,18 @@ function createMockDeps(overrides = {}) {
       createTask: async t => t,
       transaction: async fn => fn(),
       createRecallSession: async s => ({...s, id: 'rs_1'}),
+      loadRecallSession: async id => ({id, recallPolicy: 'fullLine', expectedMoveIndexes: []}),
       ...overrides.repository,
     },
     attemptService: {
       createAttempt: async input => ({id: 'attempt_1', ...input}),
       freezeAttempt: async () => {},
+      finalizeAttemptResult: async () => {},
       ...overrides.attemptService,
     },
     recallService: {
       createRecallSession: async input => ({id: 'rs_1', ...input}),
+      createRecallFromAttempt: async input => ({id: 'rs_1', recallPolicy: 'fullLine', ...input}),
       ...overrides.recallService,
     },
     snapshotService: {
@@ -609,7 +615,13 @@ describeIf('workbenchFlowService', () => {
         deps.store.addTab(makeTab({id: 'tab_1', mode: from}))
 
         assert.throws(
-          () => service[method]('tab_1'),
+          () => {
+            if (method === 'returnFromAnalysis') {
+              service[method]({tabId: 'tab_1'})
+            } else {
+              service[method]('tab_1')
+            }
+          },
         )
       })
     }
@@ -871,6 +883,280 @@ describeIf('workbenchFlowService', () => {
           deps.transactionFns.length >= 1,
           'repository.transaction should be called at least once',
         )
+      })
+    })
+  })
+
+  // ================================================================
+  // Phase 1 Gap tests: recallSubstate, analysisReturnTarget, enterRecall
+  // Contract: docs/design/2026-05-25/phase1-gaps/test-contract-v0.1.md
+  //
+  // Harness manifest:
+  // - Real production modules: createWorkbenchFlowService, createWorkbenchStore
+  // - Fake/spy modules: attemptService, recallService, repository, snapshotService, tabService
+  // - Mock Contract Source: satisfies production interfaces via createMockDeps pattern
+  // - Valid for: SERVICE_REPOSITORY_TRANSITION
+  // - Not valid for: CONTROLLER_STATE_TRANSITION (use modeTransitions.test.js), RENDERED_UI_RETURN
+  // ================================================================
+
+  describe('Phase 1 Gaps: recallSubstate and analysisReturnTarget', () => {
+
+    // ============================================================
+    // P1G-T26: submit sets tab.recallSubstate='normal'
+    // Contract Section 6: "submit: play/problem -> recall"
+    // Contract Section 9 row P1G-T26
+    // ============================================================
+    describe('P1G-T26: submit sets recallSubstate to normal', () => {
+      it('sets recallSubstate="normal" after submit from play', async () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+        await service.submit('tab_1')
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.recallSubstate, 'normal',
+          'submit must set tab.recallSubstate to "normal"')
+      })
+
+      it('sets recallSubstate="normal" after submit from problem', async () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'problem', activeAttemptId: 'att_1'}))
+
+        await service.submit('tab_1')
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.recallSubstate, 'normal',
+          'submit from problem must set tab.recallSubstate to "normal"')
+      })
+    })
+
+    // ============================================================
+    // P1G-T27: enterAnalysis saves analysisReturnTarget
+    // Contract Section 6: "enterAnalysis: ... -> analysis"
+    // Contract Section 9 row P1G-T27
+    // ============================================================
+    describe('P1G-T27: enterAnalysis saves analysisReturnTarget', () => {
+      it('saves analysisReturnTarget with current mode', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'problem'}))
+
+        service.enterAnalysis('tab_1')
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.ok(tab.analysisReturnTarget, 'tab should have analysisReturnTarget set')
+        assert.strictEqual(tab.analysisReturnTarget.mode, 'problem',
+          'analysisReturnTarget.mode should be the original mode')
+      })
+
+      it('saves analysisReturnTarget with recallSubstate when entering from recall', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'recall', recallSubstate: 'normal'}))
+
+        service.enterAnalysis('tab_1')
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.ok(tab.analysisReturnTarget, 'tab should have analysisReturnTarget set')
+        assert.strictEqual(tab.analysisReturnTarget.recallSubstate, 'normal',
+          'analysisReturnTarget.recallSubstate should preserve the recall substate')
+      })
+
+      it('saves analysisReturnTarget with currentTreePosition', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', currentTreePosition: 'pos_42'}))
+
+        service.enterAnalysis('tab_1')
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.analysisReturnTarget.treePosition, 'pos_42',
+          'analysisReturnTarget.treePosition should preserve currentTreePosition')
+      })
+    })
+
+    // ============================================================
+    // P1G-T29: returnFromAnalysis restores mode, recallSubstate,
+    //          currentTreePosition, and clears analysisReturnTarget
+    // Contract Section 6: "returnFromAnalysis: analysis -> previous mode"
+    // Contract Section 9 row P1G-T29
+    // ============================================================
+    describe('P1G-T29: returnFromAnalysis restores all saved state', () => {
+      it('restores mode from analysisReturnTarget', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({
+          id: 'tab_1',
+          mode: 'analysis',
+          analysisReturnTarget: {
+            mode: 'recall',
+            recallSubstate: 'normal',
+            treePosition: 'pos_10',
+            moveIndex: 5,
+          },
+        }))
+
+        service.returnFromAnalysis({tabId: 'tab_1'})
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.mode, 'recall',
+          'mode should be restored to analysisReturnTarget.mode')
+      })
+
+      it('restores recallSubstate from analysisReturnTarget', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({
+          id: 'tab_1',
+          mode: 'analysis',
+          analysisReturnTarget: {
+            mode: 'recall',
+            recallSubstate: 'normal',
+            treePosition: 'pos_10',
+            moveIndex: 5,
+          },
+        }))
+
+        service.returnFromAnalysis({tabId: 'tab_1'})
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.recallSubstate, 'normal',
+          'recallSubstate should be restored from analysisReturnTarget')
+      })
+
+      it('restores currentTreePosition from analysisReturnTarget', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({
+          id: 'tab_1',
+          mode: 'analysis',
+          analysisReturnTarget: {
+            mode: 'play',
+            treePosition: 'pos_42',
+            moveIndex: 15,
+          },
+        }))
+
+        service.returnFromAnalysis({tabId: 'tab_1'})
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.currentTreePosition, 'pos_42',
+          'currentTreePosition should be restored from analysisReturnTarget')
+      })
+
+      it('clears analysisReturnTarget after restoration', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({
+          id: 'tab_1',
+          mode: 'analysis',
+          analysisReturnTarget: {
+            mode: 'play',
+            treePosition: 'pos_1',
+          },
+        }))
+
+        service.returnFromAnalysis({tabId: 'tab_1'})
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.analysisReturnTarget, undefined,
+          'analysisReturnTarget should be cleared after return')
+      })
+    })
+
+    // ============================================================
+    // P1G-T30: returnFromAnalysis throws when no analysisReturnTarget
+    // Contract Section 6: "returnFromAnalysis: analysis (no target) => disallowed"
+    // Contract Section 9 row P1G-T30
+    // ============================================================
+    describe('P1G-T30: returnFromAnalysis throws without target', () => {
+      it('throws when analysisReturnTarget is not set', () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis'}))
+
+        assert.throws(
+          () => service.returnFromAnalysis({tabId: 'tab_1'}),
+          /InvalidModeTransitionError|analysis.*target|return.*target/i,
+          'returnFromAnalysis without target must throw',
+        )
+      })
+    })
+
+    // ============================================================
+    // P1G-T32: enterRecall creates RecallSession and sets tab state
+    // Contract Section 5 Gap 5: enterRecall API
+    // Contract Section 9 row P1G-T32
+    // ============================================================
+    describe('P1G-T32: enterRecall creates RecallSession and sets tab state', () => {
+      it('creates a recall session', async () => {
+        const createdSessions = []
+        const deps = createMockDeps({
+          recallService: {
+            createRecallSession: async input => {
+              createdSessions.push({...input})
+              return {id: 'rs_new', ...input}
+            },
+          },
+        })
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+        await service.enterRecall({tabId: 'tab_1', attemptId: 'att_1'})
+
+        assert.ok(createdSessions.length >= 1, 'recallService should create a session')
+      })
+
+      it('sets tab mode to recall', async () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+        await service.enterRecall({tabId: 'tab_1', attemptId: 'att_1'})
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.mode, 'recall',
+          'enterRecall must set tab.mode to "recall"')
+      })
+
+      it('sets tab recallSubstate to normal', async () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+        await service.enterRecall({tabId: 'tab_1', attemptId: 'att_1'})
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.strictEqual(tab.recallSubstate, 'normal',
+          'enterRecall must set tab.recallSubstate to "normal"')
+      })
+
+      it('sets tab activeRecallSessionId', async () => {
+        const deps = createMockDeps()
+        deps.workbenchStore = deps.store
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', activeAttemptId: 'att_1'}))
+
+        await service.enterRecall({tabId: 'tab_1', attemptId: 'att_1'})
+
+        const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+        assert.ok(tab.activeRecallSessionId,
+          'enterRecall must set tab.activeRecallSessionId')
       })
     })
   })

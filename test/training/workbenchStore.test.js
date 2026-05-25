@@ -231,4 +231,84 @@ describe('workbenchStore', () => {
     store.updateTab('tab_1', {phase: 'recall'})
     assert.strictEqual(store.getState().tabs[0].mode, 'recall')
   })
+
+  // ================================================================
+  // P1G-T35: Phase 1 Gap -- recallSubstate and analysisReturnTarget
+  // Contract: docs/design/2026-05-25/phase1-gaps/test-contract-v0.1.md
+  // Contract Section 9 row P1G-T35
+  //
+  // Harness manifest:
+  // - Real production modules: createWorkbenchStore
+  // - Fake/spy modules: NONE
+  // - Valid for: STORE_SUBSCRIPTION
+  // - Not valid for: SERVICE_REPOSITORY_TRANSITION, CONTROLLER_STATE_TRANSITION
+  // ================================================================
+
+  describe('P1G-T35: recallSubstate and analysisReturnTarget roundtrip', () => {
+    it('updateTab persists recallSubstate', () => {
+      store.addTab(makeTab({id: 'tab_1', mode: 'recall'}))
+      store.updateTab('tab_1', {recallSubstate: 'normal'})
+      assert.strictEqual(store.getState().tabs[0].recallSubstate, 'normal')
+    })
+
+    it('updateTab persists analysisReturnTarget', () => {
+      const target = {
+        mode: 'play',
+        recallSubstate: undefined,
+        treePosition: 'pos_42',
+        moveIndex: 15,
+      }
+      store.addTab(makeTab({id: 'tab_1', mode: 'analysis'}))
+      store.updateTab('tab_1', {analysisReturnTarget: target})
+
+      const stored = store.getState().tabs[0].analysisReturnTarget
+      assert.ok(stored, 'analysisReturnTarget should be stored')
+      assert.strictEqual(stored.mode, 'play')
+      assert.strictEqual(stored.treePosition, 'pos_42')
+      assert.strictEqual(stored.moveIndex, 15)
+    })
+
+    it('updateTab can clear analysisReturnTarget by setting undefined', () => {
+      const target = {mode: 'play', treePosition: 'pos_1'}
+      store.addTab(makeTab({id: 'tab_1', mode: 'analysis', analysisReturnTarget: target}))
+      store.updateTab('tab_1', {analysisReturnTarget: undefined})
+
+      const tab = store.getState().tabs[0]
+      assert.strictEqual(tab.analysisReturnTarget, undefined,
+        'analysisReturnTarget should be cleared')
+    })
+
+    it('updateTab preserves recallSubstate when patching other fields', () => {
+      store.addTab(makeTab({id: 'tab_1', mode: 'recall', recallSubstate: 'normal'}))
+      store.updateTab('tab_1', {currentTreePosition: 'new_pos'})
+
+      const tab = store.getState().tabs[0]
+      assert.strictEqual(tab.recallSubstate, 'normal',
+        'recallSubstate should be preserved when patching unrelated fields')
+      assert.strictEqual(tab.currentTreePosition, 'new_pos')
+    })
+
+    it('addTab stores recallSubstate and analysisReturnTarget from initial tab', () => {
+      const target = {mode: 'problem', treePosition: 'pos_99'}
+      store.addTab(makeTab({
+        id: 'tab_1',
+        mode: 'analysis',
+        recallSubstate: 'normal',
+        analysisReturnTarget: target,
+      }))
+
+      const tab = store.getState().tabs[0]
+      assert.strictEqual(tab.recallSubstate, 'normal')
+      assert.strictEqual(tab.analysisReturnTarget.mode, 'problem')
+    })
+
+    it('updateTab notifies subscribers when setting recallSubstate', () => {
+      let callCount = 0
+      store.addTab(makeTab({id: 'tab_1', mode: 'recall'}))
+      store.subscribe(() => callCount++)
+      store.updateTab('tab_1', {recallSubstate: 'normal'})
+      assert.strictEqual(callCount, 1,
+        'subscriber should be notified on recallSubstate update')
+    })
+  })
 })
