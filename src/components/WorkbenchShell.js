@@ -11,6 +11,7 @@ import {
   ProblemModePanel,
   RecallModePanel,
   AnalysisModePanel,
+  LibrarySideDrawer,
 } from './workbench/index.js'
 import WorkbenchLeftPanel from './workbench/panels/WorkbenchLeftPanel.js'
 import WorkbenchRightPanel from './workbench/panels/WorkbenchRightPanel.js'
@@ -63,6 +64,14 @@ export default function WorkbenchShell({
   onSelectGame,
   onCloseGame,
   onAddGame,
+  gameTrees,
+  gameIndex,
+  libraryDrawerType,
+  onCloseLibraryDrawer,
+  onSwitchLibraryDrawer,
+  onOpenGame,
+  onStartReview,
+  onStartProblem,
   taskTitle,
   statusChips,
   engineName,
@@ -83,6 +92,18 @@ export default function WorkbenchShell({
   }
 
   return h('section', {class: 'workbench-shell', 'data-mode': mode},
+    h(LibrarySideDrawer, {
+      open: libraryDrawerType != null,
+      type: libraryDrawerType || 'games',
+      gameTrees,
+      gameIndex,
+      onClose: onCloseLibraryDrawer,
+      onSwitch: onSwitchLibraryDrawer,
+      onOpenGame,
+      onNewGame: rest.onNewGame,
+      onStartReview,
+      onStartProblem,
+    }),
     h('div', {class: 'workbench-shell__inner'},
 
       // Row 1: Chrome — GlobalHeader + GameTabBar

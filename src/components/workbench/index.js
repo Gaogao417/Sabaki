@@ -17,6 +17,7 @@ import ReferenceLineSummary from './shared/ReferenceLineSummary.js'
 import RightDrawer from './shared/RightDrawer.js'
 import AnnotationToolbar from './shared/AnnotationToolbar.js'
 import MaterialLibraryDialog from './shared/MaterialLibraryDialog.js'
+import LibrarySideDrawer from './shared/LibrarySideDrawer.js'
 
 import PlayModePanel from './panels/PlayModePanel.js'
 import ProblemModePanel from './panels/ProblemModePanel.js'
@@ -48,6 +49,7 @@ export {
   RightDrawer,
   AnnotationToolbar,
   MaterialLibraryDialog,
+  LibrarySideDrawer,
   PlayModePanel,
   ProblemModePanel,
   RecallModePanel,

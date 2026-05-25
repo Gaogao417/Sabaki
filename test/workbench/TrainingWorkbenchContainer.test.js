@@ -58,43 +58,49 @@ describe('TrainingWorkbenchContainer new game wiring', () => {
     assert.strictEqual(openedDrawer, 'newgame')
   })
 
-  it('opens the game library drawer from the play mode left panel', () => {
-    let openedDrawer = null
-    const sabaki = createSabakiStub({
-      openDrawer: (drawer) => {
-        openedDrawer = drawer
-      },
-    })
+  it('opens the left game library drawer from the play mode left panel', async () => {
+    const sabaki = createSabakiStub()
 
     const {queryByTestId, fireEvent} = renderToDom(
-      h(TrainingWorkbenchContainer, {sabaki, mode: 'play'}),
+      h(TrainingWorkbenchContainer, {
+        sabaki,
+        mode: 'play',
+        gameTrees: [],
+        gameIndex: 0,
+      }),
     )
 
     const libraryButton = queryByTestId('open-game-library-btn')
     assert.ok(libraryButton, 'Expected open-game-library button to render')
 
     fireEvent.click(libraryButton)
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
-    assert.strictEqual(openedDrawer, 'gamechooser')
+    const drawer = queryByTestId('library-side-drawer')
+    assert.ok(drawer, 'Expected left library drawer to render')
+    assert.ok(drawer.textContent.includes('棋谱库'))
   })
 
-  it('opens the wrong-problem drawer from the play mode left panel', () => {
-    let openedDrawer = null
-    const sabaki = createSabakiStub({
-      openDrawer: (drawer) => {
-        openedDrawer = drawer
-      },
-    })
+  it('opens the left wrong-problem drawer from the play mode left panel', async () => {
+    const sabaki = createSabakiStub()
 
     const {queryByTestId, fireEvent} = renderToDom(
-      h(TrainingWorkbenchContainer, {sabaki, mode: 'play'}),
+      h(TrainingWorkbenchContainer, {
+        sabaki,
+        mode: 'play',
+        gameTrees: [],
+        gameIndex: 0,
+      }),
     )
 
     const wrongProblemButton = queryByTestId('open-wrong-problems-btn')
     assert.ok(wrongProblemButton, 'Expected open-wrong-problems button to render')
 
     fireEvent.click(wrongProblemButton)
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
-    assert.strictEqual(openedDrawer, 'training')
+    const drawer = queryByTestId('library-side-drawer')
+    assert.ok(drawer, 'Expected left library drawer to render')
+    assert.ok(drawer.textContent.includes('错题库'))
   })
 })

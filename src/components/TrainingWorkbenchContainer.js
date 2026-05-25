@@ -48,6 +48,7 @@ class TrainingWorkbenchContainer extends Component {
     // trainingRuntimeStore. Dashboard data is loaded on-demand.
     this.state = {
       dashboardData: null,
+      libraryDrawerType: null,
     }
 
     // Subscribe to store changes
@@ -567,8 +568,27 @@ class TrainingWorkbenchContainer extends Component {
       onOpenFoxGames: handleOpenFoxGames,
       onOpenOneOhOneWeiqi: handleOpenOneOhOneWeiqi,
       onOpenPreferences: handleOpenPreferences,
-      onOpenGameLibrary: () => sabaki.openDrawer('gamechooser'),
-      onOpenWrongProblems: () => sabaki.openDrawer('training'),
+      onOpenGameLibrary: () => this.setState({libraryDrawerType: 'games'}),
+      onOpenWrongProblems: () => this.setState({libraryDrawerType: 'problems'}),
+      onCloseLibraryDrawer: () => this.setState({libraryDrawerType: null}),
+      onSwitchLibraryDrawer: (libraryDrawerType) =>
+        this.setState({libraryDrawerType}),
+      onOpenGame: (index) => {
+        const gameTree = shellProps.gameTrees?.[index]
+        if (gameTree == null) return
+
+        this.setState({libraryDrawerType: null})
+        sabaki.setMode('play')
+        sabaki.setCurrentTreePosition(gameTree, gameTree.root.id)
+      },
+      onStartReview: async () => {
+        this.setState({libraryDrawerType: null})
+        await handleStartReviewSession()
+      },
+      onStartProblem: async (id) => {
+        this.setState({libraryDrawerType: null})
+        await sabaki.startProblem(id)
+      },
       // BottomActionBar shared handlers
       onUndo: handleUndo,
       onRedo: handleRedo,
@@ -723,6 +743,7 @@ class TrainingWorkbenchContainer extends Component {
       ...shellHandlers,
       dashboardData: this.state.dashboardData,
       boardProps,
+      libraryDrawerType: this.state.libraryDrawerType,
     })
   }
 

@@ -1302,6 +1302,258 @@
 }
 
 /* ========================================================================
+   24b. LibrarySideDrawer  (.wb-library-drawer)
+   ======================================================================== */
+
+.wb-library-drawer-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 72;
+  pointer-events: none;
+}
+
+.wb-library-drawer__backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  pointer-events: auto;
+}
+
+.wb-library-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(380px, calc(100vw - 32px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  border-right: 1px solid var(--ui-border);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--ui-text);
+  box-shadow: 18px 0 48px rgba(15, 23, 42, 0.18);
+  pointer-events: auto;
+  animation: wb-library-drawer-in 0.18s ease-out;
+}
+
+@keyframes wb-library-drawer-in {
+  from {
+    transform: translateX(-28px);
+    opacity: 0.72;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.wb-library-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 24px 16px;
+}
+
+.wb-library-drawer__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ui-text-tertiary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.wb-library-drawer__header h2 {
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.wb-library-drawer__close {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: var(--ui-bg-soft);
+  color: var(--ui-text-secondary);
+  font-size: 21px;
+  line-height: 1;
+}
+
+.wb-library-drawer__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 0 24px 14px;
+  padding: 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg-soft);
+}
+
+.wb-library-drawer__tabs button {
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-weight: 700;
+}
+
+.wb-library-drawer__tabs button.active {
+  background: var(--ui-blue);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37, 99, 255, 0.22);
+}
+
+.wb-library-drawer__body {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 24px 24px;
+}
+
+.wb-library-drawer__toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.wb-library-drawer__toolbar input {
+  min-width: 0;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ui-text);
+}
+
+.wb-library-drawer__primary {
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-blue);
+  border-radius: 10px;
+  background: var(--ui-blue);
+  color: #fff;
+  font-weight: 700;
+}
+
+.wb-library-drawer__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wb-library-drawer__stats > * {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 12px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-bg-soft);
+  color: var(--ui-text);
+  text-align: left;
+}
+
+.wb-library-drawer__stats strong {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.wb-library-drawer__stats span {
+  overflow: hidden;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-library-drawer__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wb-library-drawer__item button {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ui-text);
+  text-align: left;
+}
+
+.wb-library-drawer__item--active button,
+.wb-library-drawer__item button:hover {
+  border-color: rgba(37, 99, 255, 0.28);
+  background: var(--ui-blue-soft);
+}
+
+.wb-library-drawer__item strong,
+.wb-library-drawer__item span,
+.wb-library-drawer__item small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-library-drawer__item strong {
+  color: var(--ui-text);
+  font-size: 14px;
+}
+
+.wb-library-drawer__item span {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+}
+
+.wb-library-drawer__item small {
+  color: var(--ui-text-tertiary);
+  font-size: 12px;
+}
+
+.wb-library-drawer__empty {
+  display: grid;
+  gap: 6px;
+  padding: 22px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 12px;
+  background: var(--ui-bg-soft);
+  text-align: center;
+}
+
+.wb-library-drawer__empty strong {
+  color: var(--ui-text);
+}
+
+.wb-library-drawer__empty span {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+}
+
+/* ========================================================================
    25. AnalysisModePanel  (.wb-analysis-mode-panel)
    ======================================================================== */
 
