@@ -14,15 +14,19 @@ function createTrainingDbApi(client) {
     const id = session.id || uuid()
     const now = new Date().toISOString()
     const attemptId = session.attemptId || null
+    const recallPolicy = session.recallPolicy || null
+    const expectedMoveIndexesJson = session.expectedMoveIndexes
+      ? JSON.stringify(session.expectedMoveIndexes)
+      : null
     client.run(`INSERT INTO training_recall_sessions (id, task_id, tab_id, type, source_json,
       start_move, end_move, expected_moves_json, current_move_index, completed, created_at, completed_at,
-      attempt_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      attempt_id, recall_policy, expected_move_indexes_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       id, session.taskId, session.tabId || null, session.type || 'line_recall',
       JSON.stringify(session.source || {}), session.startMove || 0, session.endMove ?? null,
       JSON.stringify(session.expectedMoves || []), session.currentMoveIndex || 0,
       session.completed ? 1 : 0, now, session.completedAt || null,
-      attemptId,
+      attemptId, recallPolicy, expectedMoveIndexesJson,
     ])
     client.save()
     return rowToTrainingRecallSession(client.queryOne('SELECT * FROM training_recall_sessions WHERE id = ?', [id]))
@@ -61,6 +65,19 @@ function createTrainingDbApi(client) {
       } catch (_) {}
     }
 
+    const expectedMoves = JSON.parse(row.expected_moves_json || '[]')
+
+    // v0.5: recallPolicy defaults to 'fullLine' when absent (legacy compat)
+    const recallPolicy = row.recall_policy || 'fullLine'
+
+    // v0.5: expectedMoveIndexes defaults to [0..N-1] when absent (legacy compat)
+    let expectedMoveIndexes
+    if (row.expected_move_indexes_json) {
+      expectedMoveIndexes = JSON.parse(row.expected_move_indexes_json)
+    } else {
+      expectedMoveIndexes = expectedMoves.map((_, i) => i)
+    }
+
     return {
       id: row.id,
       taskId: row.task_id,
@@ -70,7 +87,9 @@ function createTrainingDbApi(client) {
       source: JSON.parse(row.source_json || '{}'),
       startMove: row.start_move,
       endMove: row.end_move,
-      expectedMoves: JSON.parse(row.expected_moves_json || '[]'),
+      recallPolicy,
+      expectedMoveIndexes,
+      expectedMoves,
       currentMoveIndex: row.current_move_index,
       completed: !!row.completed,
       createdAt: row.created_at,

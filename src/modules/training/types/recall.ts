@@ -1,5 +1,7 @@
 import type { BadMoveSeverity } from './badMove'
 
+export type RecallPolicy = 'fullLine' | 'humanMovesOnly' | 'sideToMoveOnly'
+
 export type RecallSource =
   | { kind: 'attempt'; attemptId: string }
   | { kind: 'game'; gameId: string; startMove?: number; endMove?: number }
@@ -18,6 +20,10 @@ export type RecallSession = {
   source?: RecallSource
   startMove?: number
   endMove?: number
+
+  // v0.5: recall policy and expected move indexes
+  recallPolicy?: RecallPolicy
+  expectedMoveIndexes?: number[]
 
   expectedMoves: string[]
   currentMoveIndex: number

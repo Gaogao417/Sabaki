@@ -373,6 +373,10 @@ function migrate(client) {
   // training_attempts: add move_actors_json (v0.5 new field)
   _tryAlter('ALTER TABLE training_attempts ADD COLUMN move_actors_json TEXT')
 
+  // training_recall_sessions: add recall_policy and expected_move_indexes_json (v0.5 Phase 0)
+  _tryAlter('ALTER TABLE training_recall_sessions ADD COLUMN recall_policy TEXT')
+  _tryAlter('ALTER TABLE training_recall_sessions ADD COLUMN expected_move_indexes_json TEXT')
+
   // New indexes for v0.5 columns
   client.run('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks(status)')
   client.run('CREATE INDEX IF NOT EXISTS idx_review_schedule_task ON review_schedule(task_id)')

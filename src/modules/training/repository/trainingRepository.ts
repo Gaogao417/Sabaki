@@ -341,6 +341,8 @@ export function createTrainingRepository(db: Db, logger?: RepositoryLogger): Tra
       startMove: session.startMove,
       endMove: session.endMove,
       expectedMoves: session.expectedMoves,
+      recallPolicy: session.recallPolicy,
+      expectedMoveIndexes: session.expectedMoveIndexes,
       currentMoveIndex: session.currentMoveIndex,
       completed: session.completed,
       completedAt: session.completedAt,
@@ -703,6 +705,24 @@ export function createTrainingRepository(db: Db, logger?: RepositoryLogger): Tra
       }
     }
 
+    const expectedMoves: string[] = typeof row.expectedMoves === 'string'
+      ? JSON.parse(row.expectedMoves as string)
+      : (row.expectedMoves as string[])
+
+    // v0.5: recallPolicy defaults to 'fullLine' when absent (legacy compat)
+    const recallPolicy: RecallSession['recallPolicy'] =
+      (row.recallPolicy as RecallSession['recallPolicy']) || 'fullLine'
+
+    // v0.5: expectedMoveIndexes defaults to [0..N-1] when absent (legacy compat)
+    let expectedMoveIndexes: number[]
+    if (row.expectedMoveIndexes != null) {
+      expectedMoveIndexes = typeof row.expectedMoveIndexes === 'string'
+        ? JSON.parse(row.expectedMoveIndexes as string)
+        : (row.expectedMoveIndexes as number[])
+    } else {
+      expectedMoveIndexes = expectedMoves.map((_, i) => i)
+    }
+
     return {
       id: row.id as string,
       taskId: row.taskId as string,
@@ -712,7 +732,9 @@ export function createTrainingRepository(db: Db, logger?: RepositoryLogger): Tra
       source: typeof row.source === 'string' ? JSON.parse(row.source as string) : row.source as RecallSession['source'],
       startMove: (row.startMove as number) ?? 0,
       endMove: (row.endMove as number) ?? undefined,
-      expectedMoves: typeof row.expectedMoves === 'string' ? JSON.parse(row.expectedMoves as string) : (row.expectedMoves as string[]),
+      recallPolicy,
+      expectedMoveIndexes,
+      expectedMoves,
       currentMoveIndex: (row.currentMoveIndex as number) ?? 0,
       completed: !!row.completed,
       createdAt: row.createdAt as string,
