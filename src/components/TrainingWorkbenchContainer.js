@@ -567,6 +567,8 @@ class TrainingWorkbenchContainer extends Component {
       onOpenFoxGames: handleOpenFoxGames,
       onOpenOneOhOneWeiqi: handleOpenOneOhOneWeiqi,
       onOpenPreferences: handleOpenPreferences,
+      onOpenGameLibrary: () => sabaki.openDrawer('gamechooser'),
+      onOpenWrongProblems: () => sabaki.openDrawer('training'),
       // BottomActionBar shared handlers
       onUndo: handleUndo,
       onRedo: handleRedo,
