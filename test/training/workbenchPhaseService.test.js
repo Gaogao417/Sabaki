@@ -282,7 +282,21 @@ describe('workbenchPhaseService', () => {
             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
           }),
         },
+        taskImportService: {
+          createTaskFromSnapshot: async input => ({
+            id: 'task_snap_1',
+            rootPositionSgf: input.positionSgf,
+            sideToMove: input.sideToMove,
+            origin: {provider: 'snapshot', parentTaskId: input.parentTaskId},
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }),
+        },
         tabService: {
+          openTask: async opts => ({
+            id: 'tab_snap_1', taskId: opts.taskId, mode: opts.mode, parentTabId: opts.parentTabId, childTabIds: [],
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          }),
           openSnapshotProblemTab: async (problemId, opts) => ({
             id: 'tab_snap_1', taskId: 'task_snap_1', mode: 'play', parentTabId: opts?.parentTabId, childTabIds: [],
             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),

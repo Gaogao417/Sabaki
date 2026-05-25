@@ -363,6 +363,7 @@ export type SpyTaskImportServiceCalls = {
   importFoxGame: Array<{gameId: string}>
   importLocalSgf: Array<{filePath: string; title?: string}>
   import101Problem: Array<{problemId: string}>
+  createTaskFromLegacyProblem: Array<{problemId: string}>
   createManualTask: Array<Record<string, unknown>>
   createTaskFromSnapshot: Array<Record<string, unknown>>
   createTaskFromBadMove: Array<{badMoveId: string}>
@@ -379,6 +380,7 @@ export function createSpyTaskImportService(
     importFoxGame: [],
     importLocalSgf: [],
     import101Problem: [],
+    createTaskFromLegacyProblem: [],
     createManualTask: [],
     createTaskFromSnapshot: [],
     createTaskFromBadMove: [],
@@ -397,6 +399,10 @@ export function createSpyTaskImportService(
     async import101Problem(input: {problemId: string}) {
       calls.import101Problem.push(input)
       return {id: `task_101_${Date.now()}`}
+    },
+    async createTaskFromLegacyProblem(input: {problemId: string}) {
+      calls.createTaskFromLegacyProblem.push(input)
+      return {id: `task_legacy_problem_${Date.now()}`}
     },
     async createManualTask(input: Record<string, unknown>) {
       calls.createManualTask.push(input)

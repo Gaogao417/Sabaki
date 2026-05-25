@@ -1,8 +1,9 @@
-import type { WorkbenchMode, WorkbenchTab, TrainingTask } from '../types/index'
+import type { WorkbenchMode, WorkbenchTab } from '../types/index'
 import type { WorkbenchStore } from '../store/workbenchStore'
 import type { SnapshotService } from '../analysis/snapshotService'
 import type { WorkbenchTabService } from './workbenchTabService'
 import type { TrainingRepository } from '../repository/trainingRepository'
+import type { TaskImportService } from '../import/taskImportService'
 
 const VALID_PHASES: Set<string> = new Set(['play', 'recall', 'analysis'])
 
@@ -40,6 +41,7 @@ export type WorkbenchPhaseServiceDeps = {
   repository: TrainingRepository
   snapshotService: SnapshotService
   tabService: WorkbenchTabService
+  taskImportService?: TaskImportService
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
 }
 
@@ -56,7 +58,7 @@ export class InvalidPhaseTransitionError extends Error {
 
 /** @deprecated Use createWorkbenchFlowService instead. This module will not receive new features. */
 export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): WorkbenchPhaseService {
-  const { workbenchStore, repository, snapshotService, tabService, logger } = deps
+  const { workbenchStore, repository, snapshotService, tabService, taskImportService, logger } = deps
 
   function getTab(tabId: string) {
     return workbenchStore.getState().tabs.find(t => t.id === tabId) ?? null
@@ -129,36 +131,42 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
       sourceAttemptId: undefined,
     })
 
-    const { problem, snapshotTask } = await repository.transaction(async () => {
-      const problem = await snapshotService.createProblemFromCurrentAnalysisPosition(snapshotInput)
+    if (!taskImportService) {
+      throw new Error('workbenchPhaseService.snapshotFromAnalysis: taskImportService is required')
+    }
 
-      const now = new Date().toISOString()
-      const snapshotTask: TrainingTask = {
-        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        origin: {
-          provider: 'snapshot',
-          parentTaskId: tab.taskId,
-          raw: { problemId: problem.id },
-        },
-        rootPositionSgf: problem.positionSgf,
-        sideToMove: problem.sideToMove,
-        title: problem.title,
-        createdAt: now,
-        updatedAt: now,
-      }
+    const snapshotTask = await repository.transaction(async () => {
+      const taskInput = {
+        parentTaskId: (snapshotInput as { parentTaskId?: string }).parentTaskId ?? tab.taskId,
+        positionSgf: snapshotInput.positionSgf,
+        sideToMove: snapshotInput.sideToMove,
+      } as Parameters<TaskImportService['createTaskFromSnapshot']>[0]
 
-      await repository.createTask(snapshotTask)
-      return { problem, snapshotTask }
+      const parentAttemptId =
+        (snapshotInput as { parentAttemptId?: string }).parentAttemptId ??
+        snapshotInput.sourceAttemptId
+      if (parentAttemptId !== undefined) taskInput.parentAttemptId = parentAttemptId
+      if (snapshotInput.referenceLines !== undefined) taskInput.referenceLines = snapshotInput.referenceLines
+      const moveIndex =
+        (snapshotInput as { moveIndex?: number }).moveIndex ??
+        snapshotInput.sourceMoveIndex
+      if (moveIndex !== undefined) taskInput.moveIndex = moveIndex
+      if (snapshotInput.snapshotReason !== undefined) taskInput.snapshotReason = snapshotInput.snapshotReason
+
+      return taskImportService.createTaskFromSnapshot(taskInput)
     })
 
-    logger?.info('phase.snapshot.created', 'Snapshot problem + task created', {
+    logger?.info('phase.snapshot.created', 'Snapshot task created', {
       tabId,
-      problemId: problem.id,
       taskId: snapshotTask.id,
       sourceTaskId: tab.taskId,
     })
 
-    const newTab = await tabService.openSnapshotProblemTab(problem.id, { parentTabId: tabId })
+    const newTab = await tabService.openTask({
+      taskId: snapshotTask.id,
+      mode: 'problem',
+      parentTabId: tabId,
+    })
 
     return newTab
   }

@@ -970,6 +970,7 @@ class Sabaki extends EventEmitter {
       const analysisResultAdapter = createAnalysisResultAdapter(this)
       const positionSnapshotAdapter = createPositionSnapshotAdapter(this)
 
+      const taskImportService = createTaskImportService({ repository, logger })
       const attemptService = createAttemptService({ repository, runtimeStore, logger })
       const monitor = createPlayTrainingMonitor({ attemptService, analysisResultAdapter, repository, runtimeStore, logger })
       const tabService = createWorkbenchTabService({
@@ -980,6 +981,7 @@ class Sabaki extends EventEmitter {
         runtimeStore,
         attemptService,
         monitor,
+        taskImportService,
         logger,
       })
       const checkpointService = createRecallCheckpointService({ repository, runtimeStore, logger })
@@ -999,6 +1001,7 @@ class Sabaki extends EventEmitter {
         repository,
         snapshotService,
         tabService,
+        taskImportService,
         logger,
       })
       const flowService = createWorkbenchFlowService({
@@ -1015,7 +1018,6 @@ class Sabaki extends EventEmitter {
 
       const reviewService = createReviewService({ repository, workbenchTabService: tabService, runtimeStore, logger })
       const problemService = createProblemService({ repository, reviewService, logger })
-      const taskImportService = createTaskImportService({ repository, logger })
       const problemFlowService = createProblemFlowService({
         runtimeStore,
         repository,

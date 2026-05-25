@@ -117,6 +117,7 @@ function createTestServices(overrides = {}) {
     repository,
     legacyAdapter,
     sgfParser,
+    taskImportService: overrides.taskImportService,
   })
   const phaseService = createWorkbenchPhaseService({workbenchStore: store})
   return {store, repository, legacyAdapter, sgfParser, tabService, phaseService}
@@ -157,6 +158,36 @@ describe('workbenchTabService', () => {
         () => tabService.openProblemTab('nonexistent', {legacyCompatibility: false}),
         /problem not found/,
       )
+    })
+
+    it('P2-T05: delegates legacy problem material creation to taskImportService then openTask when available', async () => {
+      const importedTask = {
+        id: 'task_from_legacy_problem',
+        rootPositionSgf: '(;GM[1]FF[4]SZ[19])',
+        sideToMove: 'black',
+        prompt: 'Solve',
+        origin: {provider: 'local', externalId: 'prob_1'},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      const calls = []
+      const {store, tabService, legacyAdapter} = createTestServices({
+        tasks: {[importedTask.id]: importedTask},
+        taskImportService: {
+          async createTaskFromLegacyProblem(input) {
+            calls.push(input)
+            return importedTask
+          },
+        },
+      })
+
+      const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+
+      assert.deepStrictEqual(calls, [{problemId: 'prob_1'}])
+      assert.strictEqual(tab.taskId, importedTask.id)
+      assert.strictEqual(tab.mode, 'problem')
+      assert.strictEqual(store.getState().activeTabId, tab.id)
+      assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
     })
   })
 

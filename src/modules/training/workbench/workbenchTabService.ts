@@ -5,6 +5,7 @@ import type { TrainingRepository } from '../repository/trainingRepository'
 import type { LegacySabakiAdapter } from '../adapter/legacySabakiAdapter'
 import type { AttemptService } from '../attempt/attemptService'
 import type { PlayTrainingMonitor } from '../attempt/playTrainingMonitor'
+import type { TaskImportService } from '../import/taskImportService'
 
 export type SgfParser = {
   parse(sgf: string): unknown[]
@@ -41,6 +42,7 @@ export type WorkbenchTabServiceDeps = {
   runtimeStore?: TrainingRuntimeStore
   attemptService?: AttemptService
   monitor?: PlayTrainingMonitor
+  taskImportService?: TaskImportService
   logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
 }
 
@@ -58,6 +60,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     runtimeStore,
     attemptService,
     monitor,
+    taskImportService,
     logger,
   } = deps
 
@@ -135,6 +138,61 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
       type: problem.type,
       sideToMove: problem.sideToMove,
     })
+
+    if (taskImportService) {
+      if (options?.parentTabId) {
+        const parent = workbenchStore.getState().tabs.find(t => t.id === options.parentTabId)
+        if (!parent) {
+          throw new Error(`workbenchTabService.openProblemTab: parent tab not found (id=${options.parentTabId})`)
+        }
+      }
+
+      if (options?.legacyCompatibility !== false) {
+        await setupLegacyCompatibility(problem, problemId)
+      }
+
+      const savedTask = await taskImportService.createTaskFromLegacyProblem({ problemId })
+      const tab = await openTask({
+        taskId: savedTask.id,
+        mode: 'problem',
+        parentTabId: options?.parentTabId,
+      })
+      const attempt = attemptService
+        ? await attemptService.createAttempt({
+          taskId: savedTask.id,
+          tabId: tab.id,
+          rootPositionSgf: savedTask.rootPositionSgf,
+        })
+        : null
+
+      if (attempt && runtimeStore) {
+        runtimeStore.setProblemView({
+          taskId: savedTask.id,
+          tabId: tab.id,
+          attemptId: attempt.id,
+          problemId,
+          legacyProblemSession: problem,
+          evalCache: [],
+          badMoves: [],
+          submitted: false,
+          result: null,
+        })
+
+        monitor?.startForAttempt({
+          attemptId: attempt.id,
+          taskId: savedTask.id,
+        })
+      }
+
+      logger?.info('tab.openProblemTab.created', 'Problem task tab created', {
+        tabId: tab.id,
+        problemId,
+        taskId: savedTask.id,
+        attemptId: attempt?.id ?? null,
+      })
+
+      return tab
+    }
 
     // Create new-system Task + Tab
     const task = createTaskFromProblem(problemId, problem)

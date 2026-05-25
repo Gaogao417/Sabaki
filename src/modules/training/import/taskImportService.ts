@@ -33,6 +33,7 @@ export type TaskImportService = {
   importFoxGame(input: { gameId: string }): Promise<TrainingTask>
   importLocalSgf(input: { filePath: string; title?: string }): Promise<TrainingTask>
   import101Problem(input: { problemId: string }): Promise<TrainingTask>
+  createTaskFromLegacyProblem(input: { problemId: string }): Promise<TrainingTask>
   createManualTask(input: CreateTrainingTaskInput): Promise<TrainingTask>
   createTaskFromSnapshot(input: SnapshotTaskInput): Promise<TrainingTask>
   createTaskFromBadMove(input: { badMoveId: string }): Promise<TrainingTask>
@@ -200,6 +201,57 @@ export function createTaskImportService(
     return repository.createTask(task)
   }
 
+  async function createTaskFromLegacyProblem(input: {
+    problemId: string
+  }): Promise<TrainingTask> {
+    const problem = await repository.getProblem(input.problemId)
+
+    if (!problem) {
+      throw new Error(`Legacy problem not found: ${input.problemId}`)
+    }
+
+    const now = nowISO()
+    const task: TrainingTask = {
+      id: generateId(),
+      rootPositionSgf:
+        (problem.positionSgf as string | undefined) ??
+        (problem.position_sgf as string | undefined) ??
+        '',
+      sideToMove:
+        (problem.sideToMove as 'black' | 'white' | undefined) ??
+        (problem.side_to_move as 'black' | 'white' | undefined) ??
+        'black',
+      title: problem.title as string | undefined,
+      prompt:
+        (problem.positionDescription as string | undefined) ??
+        (problem.position_description as string | undefined) ??
+        (problem.prompt as string | undefined),
+      goal:
+        (problem.taskGoal as string | undefined) ??
+        (problem.task_goal as string | undefined) ??
+        (problem.goal as string | undefined),
+      passRule: problem.passRule as TaskPassRule | undefined,
+      referenceLines: problem.referenceLines as ReferenceLine[] | undefined,
+      tags: problem.tags as string[] | undefined,
+      difficulty: problem.difficulty as number | undefined,
+      status: problem.status as string | undefined,
+      origin: {
+        provider: 'local',
+        externalId: input.problemId,
+        raw: { kind: 'problem' },
+      },
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    logger?.info('taskImport.legacyProblem', 'Created task from legacy problem', {
+      problemId: input.problemId,
+      taskId: task.id,
+    })
+
+    return repository.createTask(task)
+  }
+
   async function createManualTask(
     input: CreateTrainingTaskInput
   ): Promise<TrainingTask> {
@@ -336,6 +388,7 @@ export function createTaskImportService(
     importFoxGame,
     importLocalSgf,
     import101Problem,
+    createTaskFromLegacyProblem,
     createManualTask,
     createTaskFromSnapshot,
     createTaskFromBadMove,
