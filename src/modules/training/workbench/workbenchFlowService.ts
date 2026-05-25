@@ -42,7 +42,8 @@ export type WorkbenchFlowServiceDeps = {
     finalizeAttemptResult(attemptId: string, result: TrainingAttemptResult): Promise<void>
   }
   recallService: {
-    createRecallSession(input: Record<string, unknown>): Promise<{ id: string }>
+    createRecallFromAttempt?: (attemptId: string) => Promise<{ id: string }>
+    createRecallSession?: (input: Record<string, unknown>) => Promise<{ id: string }>
     completeRecall(recallSessionId: string): Promise<void>
   }
   snapshotService: SnapshotService
@@ -100,6 +101,26 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     }
   }
 
+  async function createRecallForAttempt(tab: WorkbenchTab): Promise<{ id: string }> {
+    if (!tab.activeAttemptId) {
+      throw new Error(`workbenchFlowService.submit: no active attempt (tabId=${tab.id})`)
+    }
+
+    if (recallService.createRecallFromAttempt) {
+      return recallService.createRecallFromAttempt(tab.activeAttemptId)
+    }
+
+    if (recallService.createRecallSession) {
+      return recallService.createRecallSession({
+        taskId: tab.taskId,
+        tabId: tab.id,
+        attemptId: tab.activeAttemptId,
+      })
+    }
+
+    throw new Error('workbenchFlowService.submit: recall service cannot create recall from attempt')
+  }
+
   function submit(tabId: string): Promise<void> {
     const tab = getTab(tabId)
     assertTransition(tab, 'submit')
@@ -139,12 +160,8 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
         await attemptService.finalizeAttemptResult(tab.activeAttemptId, result)
       }
 
-      // Step 5: Create recall session
-      const session = await recallService.createRecallSession({
-        taskId: tab.taskId,
-        tabId: tab.id,
-        attemptId: tab.activeAttemptId,
-      })
+      // Step 5: Create recall session from the submitted attempt.
+      const session = await createRecallForAttempt(tab)
 
       // Step 6: Transition mode only after all work succeeds
       workbenchStore.updateTab(tabId, {

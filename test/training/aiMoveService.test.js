@@ -310,9 +310,11 @@ describeIf('aiMoveService', () => {
       assert.strictEqual(result, null)
     })
 
-    it('returns engine top move when no problemArea (no area filtering) (C18)', async () => {
+    it('returns null in problem mode when no problemArea is configured (C18)', async () => {
+      let called = false
       const mockAdapter = {
         async requestMove() {
+          called = true
           return { move: 'Q16', candidates: ['Q16'] }
         },
       }
@@ -324,7 +326,8 @@ describeIf('aiMoveService', () => {
       const task = makeTask()
 
       const result = await service.requestAiMove({ tab, attempt, task })
-      assert.strictEqual(result, 'Q16')
+      assert.strictEqual(result, null)
+      assert.strictEqual(called, false)
     })
 
     it('returns null when engineMoveAdapter returns null (C19)', async () => {

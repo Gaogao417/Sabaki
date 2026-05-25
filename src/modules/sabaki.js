@@ -60,6 +60,7 @@ import {
   createReviewService,
   createProblemService,
   createProblemFlowService,
+  createAiMoveService,
   createLegacyTrainingFlowController,
   createTaskImportService,
   evaluateAttempt,
@@ -983,6 +984,15 @@ class Sabaki extends EventEmitter {
       })
       const checkpointService = createRecallCheckpointService({ repository, runtimeStore, logger })
       const recallService = createRecallService({ repository, runtimeStore, checkpointService, logger })
+      const aiMoveService = createAiMoveService({
+        engineService: {
+          requestMove: async (input) => {
+            const engineService = this.getPlayServices().engineService
+            if (typeof engineService.requestMove !== 'function') return null
+            return engineService.requestMove(input)
+          },
+        },
+      })
       const snapshotService = createSnapshotService({ repository, positionSnapshotAdapter, workbenchStore, logger })
       const phaseService = createWorkbenchPhaseService({
         workbenchStore,
@@ -1028,6 +1038,7 @@ class Sabaki extends EventEmitter {
         attemptService,
         monitor,
         recallService,
+        aiMoveService,
         checkpointService,
         snapshotService,
         reviewService,

@@ -323,10 +323,12 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
         'play mode must not filter by problemArea')
     })
 
-    // C11: requestAiMove no constraint when problemArea is undefined or empty
-    it('C11: no constraint when task.problemArea is undefined', async () => {
+    // C11: requestAiMove refuses problem AI when problemArea is undefined or empty.
+    it('C11: no AI move when task.problemArea is undefined', async () => {
+      let called = false
       const mockEngineDeps = {
         async requestMove() {
+          called = true
           return { move: 'Q16', candidates: ['Q16'] }
         },
       }
@@ -337,13 +339,16 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
       const task = makeTask() // no problemArea
 
       const result = await service.requestAiMove({ tab, attempt, task })
-      assert.strictEqual(result, 'Q16',
-        'no problemArea should mean no filtering')
+      assert.strictEqual(result, null,
+        'problem mode without problemArea must not request an AI move')
+      assert.strictEqual(called, false)
     })
 
-    it('C11: no constraint when task.problemArea is empty array', async () => {
+    it('C11: no AI move when task.problemArea is empty array', async () => {
+      let called = false
       const mockEngineDeps = {
         async requestMove() {
+          called = true
           return { move: 'Q16', candidates: ['Q16'] }
         },
       }
@@ -354,10 +359,9 @@ describe('problemAreaTypeFix - Group C: aiMoveService Real Engine Path', () => {
       const task = makeTask({ problemArea: [] })
 
       const result = await service.requestAiMove({ tab, attempt, task })
-      // Empty array should mean no filtering (or return null — either is acceptable)
-      // Contract says "no area constraint"
-      assert.strictEqual(result, 'Q16',
-        'empty problemArea should mean no filtering')
+      assert.strictEqual(result, null,
+        'problem mode with an empty problemArea must not request an AI move')
+      assert.strictEqual(called, false)
     })
 
     // C12: shouldAiMove pure function behavior unchanged (no regression)

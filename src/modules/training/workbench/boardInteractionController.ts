@@ -25,6 +25,30 @@ export type BoardInteractionControllerDeps = {
     documentStore: {playMove(vertex: [number, number], options?: unknown): Promise<unknown>}
     engineService?: {generateReply(treePosition: string, player: unknown): void}
     analysisService?: {scheduleLiveAnalysis(treePosition: string): void}
+    attemptService?: {
+      appendMove(attemptId: string, move: string, actor?: 'human' | 'ai'): Promise<void>
+    }
+    monitor?: {
+      onUserMove(input: {
+        attemptId: string
+        moveIndex: number
+        move: string
+        positionBeforeHash?: string
+        positionAfterHash?: string
+      }): Promise<void>
+    }
+    repository?: {
+      loadAttempt?(attemptId: string): Promise<{rootPositionSgf: string; userLine: string[]} | null>
+      loadTask?(taskId: string): Promise<{problemArea?: [number, number][]; rootPositionSgf?: string; sideToMove?: 'black' | 'white'} | null>
+    }
+    aiMoveService?: {
+      maybePlayAiMove(input: {
+        tab: unknown
+        attempt: {rootPositionSgf: string; userLine: string[]}
+        task: {problemArea?: [number, number][]; rootPositionSgf?: string; sideToMove?: 'black' | 'white'}
+        sideToMove?: 'black' | 'white'
+      }): Promise<string | null>
+    }
   }
   getRecallAdapter: () =>
     {submitBoardClick(vertex: [number, number]): Promise<{handled: boolean; changed: boolean; isCorrect?: boolean; completed?: boolean; recallMoveIndex?: number; attempt?: unknown}>}
@@ -32,6 +56,7 @@ export type BoardInteractionControllerDeps = {
   getEditWorkspaceDeps: () => {
     invalidateEditAnalysis?: () => void
     scheduleEditWorkspaceAnalysis?: (tab: string) => void
+    commitScratchResult?: (result: unknown) => void
   }
   getLegacySabaki: () => {
     clickVertex(vertex: [number, number], options?: unknown): void
@@ -56,7 +81,7 @@ export type BoardInteractionController = {
     settings: {selectedTool: string; [key: string]: unknown}
     board: {get(vertex: [number, number]): number; markers: unknown[][]}
     editWorkspacePresent: boolean
-    task: {problemArea?: unknown} | null
+    task: {problemArea?: unknown; rootPositionSgf?: string; sideToMove?: 'black' | 'white'} | null
     runtimeState: {activeCheckpointId?: string; correctionDraft?: unknown}
   }): Promise<unknown>
 }
@@ -124,6 +149,66 @@ function inferContractFromIntent(intent: string): string | null {
   return null
 }
 
+function vertexToSgfMove(vertex: [number, number]): string {
+  const [x, y] = vertex
+  if (x < 0 || y < 0) return ''
+  return String.fromCharCode(97 + x) + String.fromCharCode(97 + y)
+}
+
+function moveToVertex(move: string): [number, number] | null {
+  if (!move) return [-1, -1]
+
+  const normalized = move.trim()
+  if (normalized.toLowerCase() === 'pass') return [-1, -1]
+  if (normalized.toLowerCase() === 'resign') return null
+  if (normalized.length < 2) return null
+
+  const secondChar = normalized.charCodeAt(1)
+  if (secondChar >= 48 && secondChar <= 57) {
+    const match = normalized.match(/^([A-HJ-T])(\d+)$/i)
+    if (!match) return null
+    const columns = 'ABCDEFGHJKLMNOPQRST'
+    const x = columns.indexOf(match[1].toUpperCase())
+    const y = Number.parseInt(match[2], 10) - 1
+    return x < 0 || y < 0 ? null : [x, y]
+  }
+
+  const x = normalized.charCodeAt(0) - 97
+  const y = normalized.charCodeAt(1) - 97
+  if (x < 0 || y < 0) return null
+  return [x, y]
+}
+
+function normalizeMoveToSgf(move: string): string {
+  const vertex = moveToVertex(move)
+  return vertex ? vertexToSgfMove(vertex) : move
+}
+
+function isChangedPlayResult(result: unknown): result is {changed: boolean; treePosition?: string} {
+  return typeof result === 'object' && result != null && (result as {changed?: unknown}).changed === true
+}
+
+async function loadAttempt(
+  playServices: ReturnType<BoardInteractionControllerDeps['getPlayServices']>,
+  attemptId: string,
+): Promise<{rootPositionSgf: string; userLine: string[]} | null> {
+  return await playServices.repository?.loadAttempt?.(attemptId) ?? null
+}
+
+async function loadTask(
+  playServices: ReturnType<BoardInteractionControllerDeps['getPlayServices']>,
+  activeTab: {taskId?: string},
+  task: {problemArea?: unknown; rootPositionSgf?: string; sideToMove?: 'black' | 'white'} | null,
+): Promise<{problemArea?: [number, number][]; rootPositionSgf?: string; sideToMove?: 'black' | 'white'}> {
+  const loaded = activeTab.taskId
+    ? await playServices.repository?.loadTask?.(activeTab.taskId) ?? null
+    : null
+  return {
+    ...(task ?? {}),
+    ...(loaded ?? {}),
+  } as {problemArea?: [number, number][]; rootPositionSgf?: string; sideToMove?: 'black' | 'white'}
+}
+
 export function createBoardInteractionController(
   deps: BoardInteractionControllerDeps,
 ): BoardInteractionController {
@@ -188,11 +273,59 @@ export function createBoardInteractionController(
 
       if (effectiveContract === 'playMove') {
         const playServices = deps.getPlayServices()
+        const useTrainingAiReply =
+          playServices.aiMoveService != null && activeTab.activeAttemptId != null
         const playResult = await executePlayInteraction(result, {player: (result.payload?.player as number) ?? undefined}, {
           documentStore: playServices.documentStore,
-          engineService: playServices.engineService,
+          engineService: useTrainingAiReply ? undefined : playServices.engineService,
           analysisService: playServices.analysisService,
         })
+        if (isChangedPlayResult(playResult) && activeTab.activeAttemptId) {
+          const attemptId = activeTab.activeAttemptId
+          const humanMove = vertexToSgfMove(vertex)
+          const attemptBefore = await loadAttempt(playServices, attemptId)
+          const humanMoveIndex = attemptBefore?.userLine.length ?? 0
+
+          if (playServices.attemptService) {
+            await playServices.attemptService.appendMove(attemptId, humanMove, 'human')
+          }
+
+          if (playServices.monitor) {
+            await playServices.monitor.onUserMove({
+              attemptId,
+              moveIndex: humanMoveIndex,
+              move: humanMove,
+              positionAfterHash: playResult.treePosition,
+            })
+          }
+
+          const attemptAfter = await loadAttempt(playServices, attemptId) ??
+            (attemptBefore
+              ? {...attemptBefore, userLine: [...attemptBefore.userLine, humanMove]}
+              : null)
+
+          if (attemptAfter && playServices.aiMoveService) {
+            const loadedTask = await loadTask(playServices, activeTab, task)
+            const aiMove = await playServices.aiMoveService.maybePlayAiMove({
+              tab: activeTab,
+              attempt: attemptAfter,
+              task: loadedTask,
+              sideToMove: loadedTask.sideToMove,
+            })
+            const aiVertex = aiMove ? moveToVertex(aiMove) : null
+
+            if (aiVertex) {
+              const aiPlayResult = await playServices.documentStore.playMove(aiVertex, {player: undefined})
+              if (isChangedPlayResult(aiPlayResult)) {
+                const aiMoveSgf = normalizeMoveToSgf(aiMove)
+
+                if (playServices.attemptService) {
+                  await playServices.attemptService.appendMove(attemptId, aiMoveSgf, 'ai')
+                }
+              }
+            }
+          }
+        }
         return playResult
       }
 
@@ -206,6 +339,15 @@ export function createBoardInteractionController(
         const editWorkspaceContext = deps.getEditWorkspaceContext()
         const editWorkspaceDeps = deps.getEditWorkspaceDeps()
         const scratchResult = executeScratchEdit(result, editWorkspaceContext as any, editWorkspaceDeps)
+        if (
+          scratchResult.handled &&
+          (scratchResult.changed ||
+            scratchResult.lineFirstVertex !== undefined ||
+            scratchResult.newTab != null ||
+            scratchResult.capturedSnapshot != null)
+        ) {
+          editWorkspaceDeps.commitScratchResult?.(scratchResult)
+        }
         return scratchResult
       }
 

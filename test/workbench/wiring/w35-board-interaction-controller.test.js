@@ -81,6 +81,7 @@ function createControllerDeps(options = {}) {
   const {
     playMoveResult = {valid: true, changed: true, treePosition: 'node_2'},
     recallAnswerResult = {handled: true, changed: true, isCorrect: true},
+    playServicesPatch = {},
   } = options
 
   const calls = {
@@ -90,6 +91,9 @@ function createControllerDeps(options = {}) {
     editWorkspaceOps: [],
     editAnalysisInvalidate: [],
     editAnalysisSchedule: [],
+    attemptAppendMove: [],
+    monitorUserMove: [],
+    aiMoveRequest: [],
   }
 
   const documentStore = {
@@ -134,8 +138,13 @@ function createControllerDeps(options = {}) {
     },
   }
 
+  const defaultPlayServices = {
+    documentStore,
+    ...playServicesPatch,
+  }
+
   return {
-    getPlayServices: () => ({documentStore}),
+    getPlayServices: () => defaultPlayServices,
     getRecallAdapter: () => recallAdapter,
     getEditWorkspaceContext: () => editWorkspaceContext,
     getEditWorkspaceDeps: () => editWorkspaceDeps,
@@ -266,6 +275,111 @@ describe('W3.5 boardInteractionController', function () {
         [3, 3],
         'vertex must be [3,3]',
       )
+    })
+
+    it('click in play mode appends human move to active attempt and notifies monitor', async function () {
+      const attempt = {rootPositionSgf: '(;SZ[19])', userLine: []}
+      const deps = createControllerDeps({
+        playServicesPatch: {
+          attemptService: {
+            appendMove: async (attemptId, move, actor) => {
+              deps._calls.attemptAppendMove.push({attemptId, move, actor})
+              attempt.userLine.push(move)
+            },
+          },
+          monitor: {
+            onUserMove: async (input) => {
+              deps._calls.monitorUserMove.push(input)
+            },
+          },
+          repository: {
+            loadAttempt: async () => ({...attempt, userLine: [...attempt.userLine]}),
+          },
+        },
+      })
+      const controller = createController(deps)
+
+      await controller.handleBoardClick({
+        vertex: [3, 3],
+        event: {button: 0, ctrlKey: false, metaKey: false},
+        activeTab: makeTab({mode: 'play', activeAttemptId: 'attempt_1'}),
+        settings: {selectedTool: 'stone_1'},
+        board: makeMockBoard(),
+        editWorkspacePresent: false,
+        task: null,
+        runtimeState: {},
+      })
+
+      assert.deepStrictEqual(deps._calls.attemptAppendMove, [
+        {attemptId: 'attempt_1', move: 'dd', actor: 'human'},
+      ])
+      assert.strictEqual(deps._calls.monitorUserMove.length, 1)
+      assert.strictEqual(deps._calls.monitorUserMove[0].moveIndex, 0)
+      assert.strictEqual(deps._calls.monitorUserMove[0].move, 'dd')
+    })
+
+    it('click in play mode applies AI reply through documentStore and appends it to attempt', async function () {
+      const attempt = {rootPositionSgf: '(;SZ[19])', userLine: []}
+      const deps = createControllerDeps({
+        playServicesPatch: {
+          attemptService: {
+            appendMove: async (attemptId, move, actor) => {
+              deps._calls.attemptAppendMove.push({attemptId, move, actor})
+              attempt.userLine.push(move)
+            },
+          },
+          monitor: {
+            onUserMove: async (input) => {
+              deps._calls.monitorUserMove.push(input)
+            },
+          },
+          repository: {
+            loadAttempt: async () => ({...attempt, userLine: [...attempt.userLine]}),
+            loadTask: async () => ({
+              rootPositionSgf: '(;SZ[19])',
+              sideToMove: 'black',
+            }),
+          },
+          aiMoveService: {
+            maybePlayAiMove: async (input) => {
+              deps._calls.aiMoveRequest.push(input)
+              return 'qq'
+            },
+          },
+        },
+      })
+      const controller = createController(deps)
+
+      await controller.handleBoardClick({
+        vertex: [3, 3],
+        event: {button: 0, ctrlKey: false, metaKey: false},
+        activeTab: makeTab({
+          mode: 'play',
+          activeAttemptId: 'attempt_1',
+          playerConfig: {black: 'human', white: 'ai', ai: {autoPlay: true}},
+        }),
+        settings: {selectedTool: 'stone_1'},
+        board: makeMockBoard(),
+        editWorkspacePresent: false,
+        task: null,
+        runtimeState: {},
+      })
+
+      assert.deepStrictEqual(
+        deps._calls.documentStorePlayMove.map(call => call.vertex),
+        [[3, 3], [16, 16]],
+      )
+      assert.deepStrictEqual(
+        deps._calls.attemptAppendMove.map(call => ({move: call.move, actor: call.actor})),
+        [{move: 'dd', actor: 'human'}, {move: 'qq', actor: 'ai'}],
+      )
+      assert.deepStrictEqual(
+        deps._calls.monitorUserMove.map(call => call.move),
+        ['dd'],
+        'monitor must evaluate human moves only; AI replies are recorded as actor=ai',
+      )
+      assert.strictEqual(deps._calls.aiMoveRequest.length, 1)
+      assert.deepStrictEqual(deps._calls.aiMoveRequest[0].attempt.userLine, ['dd'])
     })
   })
 

@@ -83,6 +83,8 @@ export type GobanDataAdapterDeps = {
   subscribeToRuntimeStore: (cb: () => void) => () => void
   subscribeToAnalysisUpdates: (cb: () => void) => () => void
   getBoard: (gameTree: unknown, treePosition: string) => unknown
+  getBoardFromSnapshot?: (snapshot: unknown) => unknown
+  getRawAnalysisForPosition?: (positionKey: string) => unknown | null
 }
 
 export type GobanDataAdapter = {
@@ -101,6 +103,28 @@ function defaultBoolean(value: boolean | null | undefined, fallback: boolean): b
 
 function defaultString(value: string | null | undefined, fallback: string): string {
   return typeof value === 'string' ? value : fallback
+}
+
+function getActiveEditWorkspaceData(editWorkspace: unknown): {
+  snapshot: unknown | null
+  markerMap: (object | null)[][] | null
+  lines: Array<{v1: number[]; v2: number[]; type: string}> | null
+  analysis: object | null
+} {
+  if (editWorkspace == null || typeof editWorkspace !== 'object') {
+    return { snapshot: null, markerMap: null, lines: null, analysis: null }
+  }
+
+  const ws = editWorkspace as Record<string, unknown>
+  const activeTab = ws.activeTab === 'reference' ? 'reference' : 'current'
+  const prefix = activeTab === 'reference' ? 'reference' : 'current'
+
+  return {
+    snapshot: ws[`${prefix}Snapshot`] ?? null,
+    markerMap: (ws[`${prefix}MarkerMap`] as (object | null)[][]) ?? null,
+    lines: (ws[`${prefix}Lines`] as Array<{v1: number[]; v2: number[]; type: string}>) ?? null,
+    analysis: (ws[`${prefix}Analysis`] as object) ?? null,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +222,16 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
     const current = documentStore.getCurrent()
     const gameTree = current.tree
     const treePosition = current.treePosition
-    const board = gameTree ? deps.getBoard(gameTree, treePosition) : null
+    const editWorkspaceData = getActiveEditWorkspaceData(sabakiState.editWorkspace)
+    const editBoard =
+      editWorkspaceData.snapshot != null && deps.getBoardFromSnapshot
+        ? deps.getBoardFromSnapshot(editWorkspaceData.snapshot)
+        : null
+    if (editBoard != null && editWorkspaceData.lines != null) {
+      const boardWithLines = editBoard as {lines?: Array<{v1: number[]; v2: number[]; type: string}>}
+      boardWithLines.lines = editWorkspaceData.lines
+    }
+    const board = editBoard ?? (gameTree ? deps.getBoard(gameTree, treePosition) : null)
 
     // workbenchMode from activeTab
     const workbenchMode = (activeTab?.mode || 'play') as GobanPropsInput['workbenchMode']
@@ -206,9 +239,12 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
     // overlayState
     const overlayState: GobanPropsInput['overlayState'] = {
       paintMap: (sabakiState as Record<string, unknown>).paintMap as number[][] ?? [],
-      markerMap: (sabakiState as Record<string, unknown>).markerMap as (object | null)[][] ?? [],
+      markerMap: editWorkspaceData.markerMap ??
+        ((sabakiState as Record<string, unknown>).markerMap as (object | null)[][] ?? []),
       dimmedStones: ((sabakiState as Record<string, unknown>).dimmedStones as [number, number][]) ?? [],
-      analysis: analysisResultAdapter.getAnalysisForPosition(treePosition),
+      analysis: editWorkspaceData.analysis ??
+        deps.getRawAnalysisForPosition?.(treePosition) ??
+        analysisResultAdapter.getAnalysisForPosition(treePosition),
     }
 
     // settings
@@ -232,7 +268,7 @@ export function createGobanDataAdapter(deps: GobanDataAdapterDeps): GobanDataAda
 
     // analysisData
     const analysisData: GobanPropsInput['analysisData'] = {
-      activeAnalysis: analysisResultAdapter.getAnalysisForPosition(treePosition),
+      activeAnalysis: overlayState.analysis,
       analysisType: sabakiState.analysisType ?? '',
     }
 

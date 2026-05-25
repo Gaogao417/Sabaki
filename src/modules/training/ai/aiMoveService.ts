@@ -60,12 +60,20 @@ export function shouldAiMove(input: ShouldAiMoveInput): boolean {
 export function createAiMoveService(deps: AiMoveServiceDeps) {
   const { engineService } = deps
 
+  function hasProblemArea(task: { problemArea?: ProblemArea }): task is { problemArea: ProblemArea } {
+    return Array.isArray(task.problemArea) && task.problemArea.length > 0
+  }
+
   async function requestAiMove(input: {
     tab: WorkbenchTab
     attempt: { rootPositionSgf: string; userLine: string[] }
     task: { problemArea?: ProblemArea; rootPositionSgf?: string }
   }): Promise<string | null> {
     const { tab, attempt, task } = input
+
+    if (tab.mode === 'problem' && !hasProblemArea(task)) {
+      return null
+    }
 
     const engineInput: {
       engineId?: string
@@ -89,7 +97,7 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     }
 
     // In problem mode, pass analysisAreaVertices from task
-    if (tab.mode === 'problem' && task.problemArea && task.problemArea.length > 0) {
+    if (tab.mode === 'problem' && hasProblemArea(task)) {
       engineInput.analysisAreaVertices = task.problemArea
     }
 
@@ -98,7 +106,7 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     if (!result) return null
 
     // In problem mode with problemArea, filter by area
-    if (tab.mode === 'problem' && task.problemArea && task.problemArea.length > 0) {
+    if (tab.mode === 'problem' && hasProblemArea(task)) {
       const area = task.problemArea
       const moveCoord = moveToCoord(result.move)
       if (moveCoord && isCoordInArea(moveCoord, area)) {
@@ -110,7 +118,21 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     return result.move
   }
 
-  return { requestAiMove }
+  async function maybePlayAiMove(input: {
+    tab: WorkbenchTab
+    attempt: { rootPositionSgf: string; userLine: string[] }
+    task: { problemArea?: ProblemArea; rootPositionSgf?: string; sideToMove?: 'black' | 'white' }
+    sideToMove?: 'black' | 'white'
+  }): Promise<string | null> {
+    const { tab, attempt, task } = input
+    if (!shouldAiMove({ tab, attempt, sideToMove: input.sideToMove ?? task.sideToMove })) {
+      return null
+    }
+
+    return requestAiMove({ tab, attempt, task })
+  }
+
+  return { requestAiMove, maybePlayAiMove }
 }
 
 /**

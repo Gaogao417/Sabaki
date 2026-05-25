@@ -3,6 +3,21 @@ import { h, Component } from 'preact'
 import WorkbenchShell from './WorkbenchShell.js'
 import { computeModeBarPolicy, getModeTransitionAction } from '../modules/training/workbench/workbenchUiPolicy.ts'
 import { projectGobanProps } from '../modules/training/workbench/projectGobanProps.ts'
+import { createScratchEditExecutionContext } from '../modules/workbench/contracts/index.ts'
+
+const DEFAULT_PLAY_PLAYER_CONFIG = Object.freeze({
+  black: 'human',
+  white: 'human',
+  ai: Object.freeze({autoPlay: true}),
+})
+
+function createDefaultPlayPlayerConfig() {
+  return {
+    black: DEFAULT_PLAY_PLAYER_CONFIG.black,
+    white: DEFAULT_PLAY_PLAYER_CONFIG.white,
+    ai: {...DEFAULT_PLAY_PLAYER_CONFIG.ai},
+  }
+}
 
 // W3.5: gobanDataAdapter and boardInteractionController are loaded via
 // tryImport-style lazy requires so that test harnesses without the full
@@ -85,6 +100,35 @@ class TrainingWorkbenchContainer extends Component {
 
     // --- Handler wiring: UI callback -> service method ---
 
+    function ensureAnalysisWorkspace(selectedTool = null) {
+      if (!sabaki.state || typeof sabaki.setState !== 'function') return
+
+      if (sabaki.state.mode !== 'analysis') {
+        sabaki.setMode?.('analysis')
+      } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
+        sabaki.setState({
+          editWorkspace: sabaki.createAnalysisWorkspace(),
+        })
+        sabaki.scheduleEditWorkspaceAnalysis?.()
+      } else if (sabaki.state.editWorkspace) {
+        sabaki.scheduleEditWorkspaceAnalysis?.(sabaki.state.editWorkspace.activeTab || 'current')
+      }
+
+      const statePatch = {
+        showAnalysis: true,
+        analysisType: sabaki.state.analysisType || 'winrate',
+      }
+      if (selectedTool != null) statePatch.selectedTool = selectedTool
+      sabaki.setState(statePatch)
+    }
+
+    function exitAnalysisWorkspace() {
+      if (!sabaki.state) return
+      if (sabaki.state.mode === 'analysis') {
+        sabaki.setMode?.('play')
+      }
+    }
+
     function handleModeChange(mode) {
       if (!activeTab) return
       const action = getModeTransitionAction(
@@ -99,8 +143,10 @@ class TrainingWorkbenchContainer extends Component {
 
       if (action === 'enterAnalysis') {
         flowService.enterAnalysis(activeTab.id)
+        ensureAnalysisWorkspace()
       } else if (action === 'returnFromAnalysis') {
         flowService.returnFromAnalysis(activeTab.id, activeTab.previousMode || 'play')
+        exitAnalysisWorkspace()
       }
     }
 
@@ -125,17 +171,20 @@ class TrainingWorkbenchContainer extends Component {
     function handleEnterAnalysis() {
       if (!activeTab) return
       flowService.enterAnalysis(activeTab.id)
+      ensureAnalysisWorkspace()
     }
 
     function handleReturnFromAnalysis() {
       if (!activeTab) return
       const toMode = activeTab.previousMode || 'play'
       flowService.returnFromAnalysis(activeTab.id, toMode)
+      exitAnalysisWorkspace()
     }
 
     function handleEndRecall() {
       if (!activeTab) return
       flowService.completeRecall(activeTab.id)
+      ensureAnalysisWorkspace()
     }
 
     async function handleSnapshot() {
@@ -156,7 +205,14 @@ class TrainingWorkbenchContainer extends Component {
     async function handleAddTask() {
       const { taskImportService } = sabaki.getTrainingContext()
       const task = await taskImportService.createManualTask({ positionSgf: '(;SZ[19])' })
-      await tabService.openTask({ taskId: task.id, mode: 'play' })
+      const tab = await tabService.openTask({
+        taskId: task.id,
+        mode: 'play',
+        playerConfig: createDefaultPlayPlayerConfig(),
+      })
+      if (flowService.startAttempt) {
+        await flowService.startAttempt(tab.id)
+      }
     }
 
     async function handleNewGame() {
@@ -186,12 +242,14 @@ class TrainingWorkbenchContainer extends Component {
           activeTab.id,
           activeTab.previousMode || 'play',
         )
+        exitAnalysisWorkspace()
       }
     }
 
     function handleRestartAttempt() {
       if (!activeTab) return
       flowService.restartAttempt(activeTab.id)
+      exitAnalysisWorkspace()
     }
 
     function handleUndo() {
@@ -260,8 +318,10 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleEditPosition() {
-      sabaki.setState({selectedTool: 'stone_1'})
-      if (sabaki.state.mode !== 'analysis') sabaki.setMode('analysis')
+      if (activeTab && activeTab.mode !== 'analysis') {
+        flowService.enterAnalysis(activeTab.id)
+      }
+      ensureAnalysisWorkspace('stone_1')
     }
 
     function handleSelectTool() {
@@ -285,6 +345,41 @@ class TrainingWorkbenchContainer extends Component {
 
     function handleGraphClick(evt) {
       sabaki.setCurrentTreePosition(evt.gameTree, evt.treePosition)
+    }
+
+    async function handlePlayVariationMoves({sign, moves}) {
+      for (let i = 0; i < moves.length; i++) {
+        const player = i % 2 === 0 ? sign : -sign
+        await sabaki.makeMove(moves[i], {player, generateEngineMove: false})
+      }
+    }
+
+    function handleLineDraw(evt) {
+      const ws = sabaki.state.editWorkspace
+      if (!ws || !evt.line) return
+
+      const tab = ws.activeTab || 'current'
+      const keys = sabaki.getEditWorkspaceTabKeys(tab)
+      const lines = [
+        ...(ws[keys.linesKey] || []),
+        {
+          v1: evt.line.v1,
+          v2: evt.line.v2,
+          type: sabaki.state.selectedTool || evt.line.type || 'line',
+        },
+      ]
+
+      if (sabaki.commitEditResult) {
+        sabaki.commitEditResult({tab, lines, lineFirstVertex: null})
+      } else {
+        sabaki.setState({
+          editWorkspace: {
+            ...ws,
+            [keys.linesKey]: lines,
+            lineFirstVertex: null,
+          },
+        })
+      }
     }
 
     function handleAnnotationToolChange(tool) {
@@ -596,6 +691,12 @@ class TrainingWorkbenchContainer extends Component {
         // being a named function the test can distinguish.
         boardProps.handlerProps.onVertexClick = function onVertexClick() { }
       }
+
+      if (workbenchMode === 'analysis' && boardProps.interactionProps.dragMode) {
+        boardProps.handlerProps.onLineDraw = handleLineDraw
+        boardProps.handlerProps.onStoneDragEnd = (evt) => sabaki.handleEditDragEnd?.(evt)
+        boardProps.handlerProps.onPlayVariationMoves = handlePlayVariationMoves
+      }
     }
 
     // Override recallPanelState to 'disabled' when mode is not 'recall' and
@@ -692,6 +793,14 @@ class TrainingWorkbenchContainer extends Component {
           const gametree = require('../modules/gametree.js')
           return gametree.getBoard(tree, pos)
         },
+        getBoardFromSnapshot: (snapshot) => {
+          const {boardFromSnapshot} = require('../modules/study.js')
+          return boardFromSnapshot(snapshot)
+        },
+        getRawAnalysisForPosition: (treePosition) => {
+          const services = sabaki.getPlayServices ? sabaki.getPlayServices() : null
+          return services?.engineService?.getAnalysisForPosition?.(treePosition) || null
+        },
       })
 
       this._unsubGoban = this._gobanAdapter.subscribe(() => this.forceUpdate())
@@ -712,7 +821,13 @@ class TrainingWorkbenchContainer extends Component {
       const recallService = ctx.recallService || null
 
       this._clickController = createBoardInteractionController({
-        getPlayServices: () => playServices || { documentStore: { playMove: async () => { } } },
+        getPlayServices: () => ({
+          ...(playServices || { documentStore: { playMove: async () => { } } }),
+          attemptService: ctx.attemptService,
+          monitor: ctx.monitor,
+          repository: ctx.repository,
+          aiMoveService: ctx.aiMoveService,
+        }),
         getRecallAdapter: () => {
           const ws = ctx.workbenchStore.getState()
           const activeTabId = ws.activeTabId
@@ -765,12 +880,14 @@ class TrainingWorkbenchContainer extends Component {
             },
           }
         },
-        getEditWorkspaceContext: () => {
-          if (!this._gobanAdapter) return null
-          const s = this._gobanAdapter.getSnapshot()
-          return (s.settings && s.settings.editWorkspaceActive) ? { activeTab: 'current' } : null
-        },
-        getEditWorkspaceDeps: () => ({}),
+        getEditWorkspaceContext: () =>
+          createScratchEditExecutionContext(sabaki.state?.editWorkspace),
+        getEditWorkspaceDeps: () => ({
+          scheduleEditWorkspaceAnalysis: (tab) =>
+            sabaki.scheduleEditWorkspaceAnalysis?.(tab),
+          commitScratchResult: (result) =>
+            sabaki.commitEditResult?.(result),
+        }),
         getLegacySabaki: () => ({
           clickVertex: (vertex, opts) => {
             // Delegate to sabaki's legacy click handler via dynamic lookup

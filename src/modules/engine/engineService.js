@@ -1105,7 +1105,17 @@ export function createEngineService(deps) {
       }
     })
 
-    if (newTreePosition == null || !commit()) return
+    if (newTreePosition == null) return
+
+    let result = {
+      tree: newTree,
+      treePosition: newTreePosition,
+      resign,
+      pass,
+      coord,
+    }
+
+    if (!commit()) return result
 
     if (pass) {
       sound.playPass()
@@ -1133,17 +1143,35 @@ export function createEngineService(deps) {
         if (saved?.id) {
           startRecallSession(saved.id)
         }
-        return {tree: newTree, treePosition: newTreePosition, resign, pass}
+        return result
       }
     }
 
     syncer.treePosition = newTreePosition
 
+    return result
+  }
+
+  async function requestMove(input = {}) {
+    let treePosition = getTreePosition()
+    let syncerId = input.engineId
+
+    if (syncerId == null) {
+      let sign = getPlayer(treePosition)
+      syncerId = sign > 0 ? state.blackEngineSyncerId : state.whiteEngineSyncerId
+    }
+
+    if (syncerId == null) return null
+
+    let result = await generateMove(syncerId, treePosition, {
+      commit: () => false,
+    })
+
+    if (result?.coord == null || result.coord === 'resign') return null
+
     return {
-      tree: newTree,
-      treePosition: newTreePosition,
-      resign,
-      pass,
+      move: result.coord,
+      candidates: [result.coord],
     }
   }
 
@@ -1672,6 +1700,7 @@ export function createEngineService(deps) {
     // Move generation
     generateMove,
     generateReply,
+    requestMove,
 
     // Analysis control
     startAnalysis,
