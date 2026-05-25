@@ -21,7 +21,7 @@ Generated contracts, plans, tests, inventories, and archived docs are derived ar
 
 ## Required State Loop
 
-Every non-trivial wiring slice must name the loop it touches:
+Every non-trivial wiring step must name the loop it touches:
 
 ```text
 UI control event
@@ -39,15 +39,17 @@ UI control event
 
 1. `$phase-intake-slice-planner`
    - Required for phase/plan/gaps/cleanup/partial/cross-boundary wiring requests.
-   - Output: slice graph with `parallel_batches[]`, `dependencies`, `serial_blockers`, `write_scope`, `test_scope`, source refs, and contract seeds.
+   - Output: executable `step1..stepN` plan. Parallel work is written as dotted substeps such as `step2.1..step2.N`.
+   - The planner output is the dispatch plan. It must say what each step does, whether it is serial or parallel, dependencies, shared locks/owner, and the next role.
 
-2. Slice gate
-   - Main session reads the slice graph.
-   - Independent slices in the same `parallel_batch` may fan out to multiple same-role agent instances.
-   - Shared files such as `workbenchFlowService.ts`, `WorkbenchTab` types, stores, repositories, and container wiring are serial locks.
+2. Step dispatch
+   - Main session reads the planner step plan and starts the next ready dotted step group.
+   - Independent dotted steps such as `step2.1..step2.N` should fan out to multiple same-role agent instances.
+   - Do not collapse multiple ready steps into one umbrella contract unless the planner marks them indivisible.
+   - Shared files such as `workbenchFlowService.ts`, `WorkbenchTab` types, stores, repositories, and container wiring are serial locks; assign one later integrator step for those files.
 
 3. `agent:contract-designer`
-   - Input: one wiring slice payload.
+   - Input: one wiring step payload.
    - Output path: `docs/archive/daily-design/YYYY-MM-DD/<task-name>/test-contract-v0.N.md`.
    - Must cite active source truth.
    - Must list control event, container handler, controller command, service/repository boundary, store before/after, projection result, allowed side effects, forbidden side effects, and manual acceptance.
@@ -58,7 +60,7 @@ UI control event
 5. `$test-writer`
    - Writes state-forward and state-return tests from the approved contract.
    - Must include a harness/mock manifest.
-   - May run in parallel only with disjoint `test_scope`.
+   - May run in parallel only for dotted steps in the same ready group with disjoint test scope; otherwise use the named test integrator step.
 
 6. `agent:test-auditor`
    - Rejects callback-only fake green tests, wrong-layer mocks, reverse-contract tests, and tests that manually mutate asserted state.
@@ -66,7 +68,8 @@ UI control event
 7. `$implementation-agent`
    - Implements minimal wiring against approved contract/tests.
    - Keeps presentational panels presentational.
-   - Shared production files require one integrator.
+   - May run in parallel only for dotted steps in the same ready group with disjoint write scope.
+   - Shared production files require one named integrator step; other workers must avoid those files or wait for the integrator handoff.
 
 8. `agent:architecture-reviewer`
    - Reviews boundary leaks, duplicate state, hidden globals, direct service imports in UI components, and weak tests.

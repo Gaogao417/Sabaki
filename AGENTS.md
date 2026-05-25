@@ -16,7 +16,7 @@ Workflow 选择：
 
 ## Role 类型
 
-Workflow skill 负责任务顺序、上下游字段、gate ledger 和并行条件。角色分两类：
+Workflow skill 负责 step 调度、上下游字段、gate ledger 和并行条件。角色分两类：
 
 - **Agents（独立 gate）**：`contract-designer`、`frontend-contract-designer`、`contract-auditor`、`test-auditor`、`architecture-reviewer`、`visual-fidelity-reviewer`。这些必须用 `.codex/agents/*.toml`，并作为独立子代理执行，除非当前 Codex 工具策略阻止 spawn。
 - **Skills（执行/读取角色）**：`phase-intake-slice-planner`、`test-writer`、`implementation-agent`、`frontend-design-source-reader`、`visual-test-writer`、`frontend-implementation-agent`。这些由主代理或明确分派的 worker 执行，必须先处在当前 workflow skill 下。
@@ -32,12 +32,20 @@ Workflow skill 负责任务顺序、上下游字段、gate ledger 和并行条�
 任何 Phase / implementation-plan / Partial / cleanup / gaps 请求，读完对应 workflow skill
 和完成 Phase Intake / Slice Planner 仍不代表可以编辑测试或生产代码。
 
+Phase Intake / Slice Planner 的产物必须是 step 计划，而不是一个总包 gate。串行步骤用 `step1..stepN`，并行步骤用 `step2.1..step2.N`。至少列出：
+
+```text
+Step | Do | Mode | Depends on | Can run with | Locks / owner | Next role
+```
+
+主代理必须按 step 计划调度后续 workflow：同一 dotted step 组（如 `step2.1..2.N`）且写入/测试范围不冲突的步骤应并行走对应 gate；共享写入文件必须指定一个 serial integrator step。除非 planner 明确标记步骤不可拆，否则不得把多个 ready steps 合并成一个 umbrella contract。
+
 主代理在第一次文件编辑前必须按当前 workflow skill 输出或维护 gate ledger，并确认：
 
 ```text
 Edit gate check:
 workflow = ...
-slice = ...
+step = ...
 contract = APPROVED / missing
 contract audit = APPROVED / missing
 tests = written / missing

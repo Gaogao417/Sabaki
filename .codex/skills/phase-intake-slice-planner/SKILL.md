@@ -1,6 +1,6 @@
 ---
 name: phase-intake-slice-planner
-description: Sabaki lightweight read-only gate that turns phase/plan/gaps/cleanup/partial requests into a slice graph and per-slice contract seeds.
+description: Sabaki lightweight read-only gate that turns phase/plan/gaps/cleanup/partial requests into an executable step plan with explicit parallel branches.
 ---
 
 # Phase Intake / Slice Planner
@@ -9,43 +9,47 @@ Use this skill inside the selected workflow before contract design when the requ
 
 This skill is read-only except for an optional `slice-plan.md` or JSON planning artifact. It does not write full contracts, tests, or production code.
 
+Its job is scheduling, not ceremony: decompose the user request into `step1..stepN`. If a step has parallel work, write it as `step2.1..step2.N`. Do not replace separable steps with one umbrella step unless the work is truly indivisible.
+
 ## Output
 
-Return a structured plan with:
+Return a compact plan with:
 
-- `request_id`
-- `user_goal`
-- `source_truth_refs`
-- `phase_label`
-- `phase_status`
-- `current_state_summary`
-- `remaining_gap_summary`
-- `out_of_scope`
-- `slices[]`
-- `slice.id`
-- `slice.title`
-- `slice.true_source_refs`
-- `slice.primary_owner`
-- `slice.layers`
-- `slice.write_scope`
-- `slice.test_scope`
-- `slice.acceptance_contract_seed`
-- `slice.dependencies`
-- `slice.parallel_group`
-- `slice.serial_blockers`
-- `slice.risk_level`
-- `slice.estimated_agent_budget`
-- `slice.gate_decision`: `READY_FOR_CONTRACT | SPLIT_REQUIRED | DEFERRED | NEEDS_HUMAN`
-- `graph_edges[]`
-- `parallel_batches[]`
-- `known_issues_index`
-- `verdict_ledger_seed`
+- source truth refs
+- current state / remaining gaps
+- out of scope
+- step list
+- shared locks / integrators
+- gate ledger seed
 
-Downstream contract design receives one slice payload per agent instance. A slice graph is not a serial queue: `parallel_batches[]`, `dependencies`, `serial_blockers`, `write_scope`, and `test_scope` define parallelism.
+The step list is the scheduling contract. Always use this shape:
 
-## Slice Size
+```text
+Step | Do | Mode | Depends on | Can run with | Locks / owner | Next role
+```
 
-A slice is small enough only when it protects one core behavior or one state-transition family, has one primary production owner, preferably touches at most 3 production files and 2 test files, suggests at most 8 contract rows, has no unresolved source conflict, and does not mix schema, state machine, legacy deprecation, UI routing, and regression repair in one bundle.
+Use top-level steps for serial order:
 
-Mark oversized bundles `SPLIT_REQUIRED`.
+```text
+step1
+step2
+step3
+```
 
+Use dotted substeps for parallel work inside a step:
+
+```text
+step2.1
+step2.2
+step2.3
+```
+
+All `step2.x` entries are parallel unless their `Depends on` or `Locks / owner` says otherwise. If several parallel branches need the same file, create a later serial integrator step, for example `step3 integrate container wiring`.
+
+Downstream roles receive one step payload per agent instance. The main session must fan out ready dotted substeps before creating a new umbrella contract.
+
+## Step Size
+
+A step is small enough only when it protects one core behavior or one state-transition family, has one primary production owner, preferably touches at most 3 production files and 2 test files, suggests at most 8 contract rows, has no unresolved source conflict, and does not mix schema, state machine, legacy deprecation, UI routing, and regression repair in one bundle.
+
+Mark oversized bundles `SPLIT_REQUIRED`; do not hide an oversized bundle behind an umbrella step.

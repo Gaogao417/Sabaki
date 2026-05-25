@@ -5,15 +5,15 @@ description: Sabaki execution skill for implementing approved business/state/arc
 
 # Implementation Agent
 
-Use this skill only after contract, contract audit, tests, and test audit are approved for the active slice.
+Use this skill only after contract, contract audit, tests, and test audit are approved for the active planner step.
 
 Input:
 
 - Approved contract path.
 - Approved tests and test-auditor verdict.
 - Required constraints.
-- One slice payload.
-- Allowed `write_scope`.
+- One step payload.
+- Allowed write scope.
 
 Output:
 
@@ -22,5 +22,4 @@ Output:
 - Verification results.
 - Residual risk notes.
 
-Do not weaken approved tests or reinterpret the contract. Parallel implementation is allowed only when selected slices have disjoint `write_scope`; shared production files require one integrator.
-
+Do not weaken approved tests or reinterpret the contract. Parallel implementation is allowed only when selected dotted steps are in the same ready group and have disjoint write scope; shared production files require one named integrator step.

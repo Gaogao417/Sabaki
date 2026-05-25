@@ -10,6 +10,7 @@ Use this skill under `$frontend-visual-workflow`.
 Input:
 
 - User goal.
+- One planner step payload when Phase Intake produced a step plan.
 - UI/UX specs, screenshots, Figma refs, or design notes.
 - Current CSS/components.
 
@@ -20,4 +21,3 @@ Output:
 - Current implementation gaps.
 
 This role is read-only unless the active workflow asks for an archived source index. Do not write tests or production code.
-
