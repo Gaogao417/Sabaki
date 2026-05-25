@@ -36,15 +36,24 @@ Load only the references needed for the selected workflow.
 
 ## Codex Role Semantics
 
-The migrated `*-agent` names are role references, not a requirement to spawn a long-lived Codex subagent for every step. By default, the main Codex agent should execute the role instructions directly. Spawn subagents only when parallel work, independent review, or explicit user direction makes that useful.
+The migrated `*-agent` names are workflow role references. Most roles are executed directly by the main Codex agent, but contract design and review gates must be delegated to independent Codex subagents so the workflow has a real second pass.
+
+Always spawn a subagent for:
+
+- `contract-designer`
+- `frontend-contract-designer`
+- `contract-auditor`
+- `test-auditor`
+- `architecture-reviewer`
+- `visual-fidelity-reviewer`
+
+Do not spawn subagents for other roles by default. The main Codex agent should execute `test-writer`, `visual-test-writer`, `implementation-agent`, `frontend-implementation-agent`, and `frontend-design-source-reader` directly.
 
 ## Model Policy
 
-When delegating role work to Codex subagents, use GPT models only.
+When delegating required role work to Codex subagents, use GPT models only.
 
-- All Codex subagents default to `gpt-5.5` in fast mode.
-- Contract and review roles may escalate to `gpt-5.5-pro` with reasoning effort `xhigh` for high-risk or ambiguous work.
-- Implementation, test-writing, and frontend design source reading roles also use `gpt-5.5` in fast mode.
+- Required subagents use `gpt-5.5` with `reasoning_effort=xhigh`.
 - Do not assign Zhipu / GLM models to subagents; they may hang in this workflow. Zhipu is allowed only as the main session model.
 
 ## Execution Rules

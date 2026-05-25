@@ -47,14 +47,14 @@ Do not use this workflow for pure UI/CSS/layout/design-token/screenshot fidelity
 
 ## Codex Delegation Guidance
 
-These names are workflow roles. Execute them directly unless subagents are useful. When subagents are explicitly appropriate, use GPT models only:
+These names are workflow roles. Delegate only the contract design and review gates; execute test writing and implementation directly in the main Codex session.
 
-- `contract-designer`: default `gpt-5.5` fast mode; escalate to `gpt-5.5-pro` `xhigh` for high-risk contracts.
-- `contract-auditor`: default `gpt-5.5` fast mode; escalate to `gpt-5.5-pro` `xhigh` for high-risk contract audits.
-- `test-writer`: default `gpt-5.5` fast mode.
-- `test-auditor`: default `gpt-5.5` fast mode; escalate to `gpt-5.5-pro` `xhigh` for high-risk test audits.
-- `implementation-agent`: default `gpt-5.5` fast mode.
-- `architecture-reviewer`: default `gpt-5.5` fast mode; escalate to `gpt-5.5-pro` `xhigh` for high-risk reviews.
+- `contract-designer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `contract-auditor`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `test-writer`: do not spawn; main Codex agent writes tests.
+- `test-auditor`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `implementation-agent`: do not spawn; main Codex agent implements.
+- `architecture-reviewer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
 
 Do not delegate any role to Zhipu / GLM.
 

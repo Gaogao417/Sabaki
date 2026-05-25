@@ -2,7 +2,14 @@
 
 本文件是 Codex 的仓库级规则入口。`.claude` 和 `CLAUDE.md` 暂时保留作为历史来源；新任务优先遵守本文件、`.codex/hooks.json` 和 `sabaki-workflows` skill。
 
-Codex 中这些 `*-agent` 名称表示工作流角色参考，不等同于必须为每一步启动长期常驻 agent。默认由 Codex 主代理按这些角色约束执行；只有在任务需要并行、独立审查、独立实现切片，或用户明确要求时，才 spawn Codex 子代理。
+Codex 中这些 `*-agent` 名称表示工作流角色参考，不等同于必须为每一步启动长期常驻 agent。默认由 Codex 主代理按这些角色约束执行；只有契约设计和审查关卡必须 spawn 独立 Codex 子代理：
+- `contract-designer` / `frontend-contract-designer`
+- `contract-auditor`
+- `test-auditor`
+- `architecture-reviewer`
+- `visual-fidelity-reviewer`
+
+其他角色默认不新开子代理，由主代理连续执行，包括 `test-writer`、`visual-test-writer`、`implementation-agent`、`frontend-implementation-agent`、`frontend-design-source-reader`。
 
 ## 项目概要
 
@@ -109,9 +116,9 @@ Codex 主入口为 `sabaki-workflows` skill 的 `references/`；`.claude` 下的
 
 ## Codex 模型策略
 
-- 所有 Codex 子代理默认使用 `gpt-5.5` 的 fast 模式
-- 契约/审查角色遇到高风险或高歧义任务时，可升级到 `gpt-5.5-pro`，reasoning effort 为 `xhigh`
-- 实施、测试、视觉真源读取角色也统一使用 `gpt-5.5` 的 fast 模式
+- 必须 spawn 子代理的角色：`contract-designer` / `frontend-contract-designer`、`contract-auditor`、`test-auditor`、`architecture-reviewer`、`visual-fidelity-reviewer`
+- 这些子代理统一使用 `gpt-5.5`，`reasoning_effort=xhigh`
+- 其他角色默认不新开子代理，由主代理执行；不要为了 `test-writer`、`visual-test-writer`、`implementation-agent`、`frontend-implementation-agent`、`frontend-design-source-reader` 单独 spawn
 - Zhipu / GLM 只允许作为主会话模型，不要配置为 Codex 子代理模型
 
 ## 常用命令

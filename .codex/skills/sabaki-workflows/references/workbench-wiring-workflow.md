@@ -136,11 +136,17 @@ If a task only implements the first half of this loop, it is incomplete unless t
 
 Use `visual-fidelity-reviewer` only if the wiring changed visible layout or visual behavior enough to risk a UI regression.
 
-## Codex Model Policy
+## Codex Delegation and Model Policy
 
-- All Workbench wiring roles default to `gpt-5.5` fast mode.
-- `contract-designer`, `contract-auditor`, `test-auditor`, and `architecture-reviewer` may escalate to `gpt-5.5-pro` `xhigh` for high-risk or ambiguous wiring.
-- Do not use Zhipu / GLM models for subagent roles.
+- `contract-designer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `contract-auditor`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `test-writer`: do not spawn; main Codex agent writes wiring tests.
+- `test-auditor`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `implementation-agent`: do not spawn; main Codex agent implements wiring.
+- `architecture-reviewer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `visual-fidelity-reviewer`: spawn only when this workflow explicitly needs visual review; use `model=gpt-5.5` and `reasoning_effort=xhigh`.
+
+Do not use Zhipu / GLM models for subagent roles.
 
 ## Required Acceptance Layers
 

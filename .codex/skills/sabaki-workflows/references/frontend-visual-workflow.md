@@ -41,13 +41,13 @@ Use this workflow for:
    - Reviews the final diff against UI/UX spec, token rules, responsive behavior, screenshots, and test quality.
    - Does not edit files.
 
-## Codex Model Policy
+## Codex Delegation and Model Policy
 
-- `frontend-design-source-reader`: default `gpt-5.5` fast mode.
-- `frontend-contract-designer`: default `gpt-5.5` fast mode; escalate to `gpt-5.5-pro` `xhigh` for high-risk visual contracts.
-- `visual-test-writer`: default `gpt-5.5` fast mode.
-- `frontend-implementation-agent`: default `gpt-5.5` fast mode.
-- `visual-fidelity-reviewer`: default `gpt-5.5` fast mode; escalate to `gpt-5.5-pro` `xhigh` for high-risk visual reviews.
+- `frontend-design-source-reader`: do not spawn; main Codex agent reads the visual source.
+- `frontend-contract-designer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `visual-test-writer`: do not spawn; main Codex agent writes visual tests.
+- `frontend-implementation-agent`: do not spawn; main Codex agent implements.
+- `visual-fidelity-reviewer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
 
 Do not use Zhipu / GLM models for these subagent roles.
 
