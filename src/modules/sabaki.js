@@ -987,6 +987,9 @@ class Sabaki extends EventEmitter {
       const checkpointService = createRecallCheckpointService({ repository, runtimeStore, logger })
       const recallService = createRecallService({ repository, runtimeStore, checkpointService, logger })
       const aiMoveService = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository,
         engineService: {
           requestMove: async (input) => {
             const engineService = this.getPlayServices().engineService

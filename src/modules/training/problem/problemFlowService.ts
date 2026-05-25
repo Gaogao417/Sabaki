@@ -58,7 +58,7 @@ export type UndoMoveResult = {
 
 export type ProblemFlowService = {
   appendProblemMove(input: AppendMoveInput): Promise<AppendMoveResult | null>
-  undoProblemMove(): UndoMoveResult | null
+  undoProblemMove(): Promise<UndoMoveResult | null>
   submitActiveProblem(): Promise<SubmitProblemResult | null>
 }
 
@@ -234,9 +234,17 @@ export function createProblemFlowService(
     return { moveIndex, evalCache: newEvalCache, badMoves: newBadMoves }
   }
 
-  function undoProblemMove(): UndoMoveResult | null {
+  async function undoProblemMove(): Promise<UndoMoveResult | null> {
     const view = runtimeStore.getState().problemView
-    if (!view || view.evalCache.length === 0) return null
+    if (!view || view.submitted || view.evalCache.length === 0) return null
+
+    const attempt = await repository.loadAttempt(view.attemptId)
+    if (!attempt) {
+      throw new Error(`problemFlowService.undoProblemMove: attempt not found (id=${view.attemptId})`)
+    }
+    if (attempt.status !== 'playing') {
+      return null
+    }
 
     const lastEval = view.evalCache[view.evalCache.length - 1]
     const newEvalCache = view.evalCache.slice(0, -1)
@@ -245,6 +253,14 @@ export function createProblemFlowService(
       : view.badMoves
 
     const userLine = newEvalCache.map(e => e.move)
+    const moveActors = (attempt.moveActors ?? []).filter(actor =>
+      actor.moveIndex < userLine.length,
+    )
+
+    await repository.updateAttempt(view.attemptId, {
+      userLine,
+      moveActors,
+    })
 
     runtimeStore.setProblemView({
       ...view,
@@ -347,8 +363,8 @@ export function createProblemFlowService(
       result,
     })
 
-    const frozenAttempt = await attemptService.freezeAttempt(view.attemptId)
     await attemptService.finalizeAttemptResult(view.attemptId, result)
+    const frozenAttempt = await attemptService.freezeAttempt(view.attemptId)
     const finalizedAttempt: TrainingAttempt = {
       ...frozenAttempt,
       result,

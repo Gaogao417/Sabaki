@@ -167,29 +167,32 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       })
       return Promise.resolve()
     }
+    const activeAttemptId = tab.activeAttemptId
 
     assertTransition(tab, 'submit')
 
     return (async () => {
-      // Step 1: Freeze attempt
-      await attemptService.freezeAttempt(tab.activeAttemptId)
-
-      // Step 2 & 3: Load evaluations and bad moves, then evaluate
+      // Step 1 & 2: Load evaluations and bad moves, then evaluate while
+      // the Attempt is still mutable. Repository guards reject result/status
+      // patches once the Attempt has been frozen.
       let result: TrainingAttemptResult = 'pass'
       if (evaluationRules && attemptService.finalizeAttemptResult) {
         const [evaluations, badMoves] = await Promise.all([
-          repository.listMoveEvaluationsByAttempt(tab.activeAttemptId),
-          repository.listBadMovesByAttempt(tab.activeAttemptId),
+          repository.listMoveEvaluationsByAttempt(activeAttemptId),
+          repository.listBadMovesByAttempt(activeAttemptId),
         ])
         result = evaluationRules.evaluateAttempt({
-          attempt: { id: tab.activeAttemptId },
+          attempt: { id: activeAttemptId },
           evaluations,
           badMoves,
         })
 
-        // Step 4: Finalize attempt result
-        await attemptService.finalizeAttemptResult(tab.activeAttemptId, result)
+        // Step 3: Finalize attempt result
+        await attemptService.finalizeAttemptResult(activeAttemptId, result)
       }
+
+      // Step 4: Freeze attempt
+      await attemptService.freezeAttempt(activeAttemptId)
 
       // Step 5: Create recall session from the submitted attempt.
       const session = await createRecallForAttempt(tab)
@@ -446,7 +449,13 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
 
   function updatePlayerConfig(tabId: string, patch: Partial<import('../types/tab').PlayerConfig>): void {
     const tab = getTab(tabId)
-    const merged = { ...tab.playerConfig, ...patch }
+    const merged: import('../types/tab').PlayerConfig = {
+      black: tab.playerConfig?.black ?? 'human',
+      white: tab.playerConfig?.white ?? 'human',
+      problemOpponent: tab.playerConfig?.problemOpponent,
+      ai: tab.playerConfig?.ai,
+      ...patch,
+    }
     workbenchStore.updateTab(tabId, { playerConfig: merged })
   }
 

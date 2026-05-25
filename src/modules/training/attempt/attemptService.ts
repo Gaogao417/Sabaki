@@ -1,7 +1,6 @@
 import type {
   TrainingAttempt,
   TrainingAttemptResult,
-  TrainingAttemptStatus,
   MoveEvaluation,
   BadMove,
 } from '../types/index'
@@ -132,14 +131,15 @@ export function createAttemptService(deps: AttemptServiceDeps): AttemptService {
     result: TrainingAttemptResult,
   ): Promise<void> {
     const now = new Date().toISOString()
-    const status: TrainingAttemptStatus =
-      result === 'abandoned' ? 'abandoned' : 'submitted'
-
-    await repository.updateAttempt(attemptId, {
+    const patch: Partial<TrainingAttempt> = {
       result,
-      status,
       completedAt: result === 'abandoned' ? now : undefined,
-    })
+    }
+    if (result === 'abandoned') {
+      patch.status = 'abandoned'
+    }
+
+    await repository.updateAttempt(attemptId, patch)
 
     logger?.info('attempt.finalize', 'Attempt result finalized', {
       attemptId,

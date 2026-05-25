@@ -77,7 +77,7 @@ export type TrainingFlowController = {
   checkRecallComplete(): void
   handleProblemMove(vertex: number[]): Promise<void>
   submitProblemAttempt(): Promise<void>
-  undoProblemMove(): void
+  undoProblemMove(): Promise<void>
   exitProblemMode(): void
   startReviewSession(): Promise<void>
   advanceReview(): Promise<void>
@@ -449,11 +449,11 @@ export function createLegacyTrainingFlowController(deps: {
     }
   }
 
-  function undoProblemMove(): void {
+  async function undoProblemMove(): Promise<void> {
     const services = deps.getTrainingContext() as any
     const {problemFlowService} = services
 
-    const result = problemFlowService.undoProblemMove()
+    const result = await problemFlowService.undoProblemMove()
     if (!result) return
 
     let {gameTrees, gameIndex, treePosition} = sabaki.state

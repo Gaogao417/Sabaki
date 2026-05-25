@@ -1,4 +1,7 @@
 import type { WorkbenchTab, PlayerConfig, ProblemArea } from '../types/index'
+import type { TrainingRepository } from '../repository/trainingRepository'
+import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
+import type { WorkbenchStore } from '../store/workbenchStore'
 
 export type AiMoveServiceDeps = {
   engineService: {
@@ -10,6 +13,9 @@ export type AiMoveServiceDeps = {
       analysisAreaVertices?: ProblemArea
     }): Promise<{ move: string; candidates: string[] } | null>
   }
+  runtimeStore?: TrainingRuntimeStore
+  workbenchStore?: WorkbenchStore
+  repository?: Pick<TrainingRepository, 'loadAttempt'>
 }
 
 export type ShouldAiMoveInput = {
@@ -58,7 +64,7 @@ export function shouldAiMove(input: ShouldAiMoveInput): boolean {
 }
 
 export function createAiMoveService(deps: AiMoveServiceDeps) {
-  const { engineService } = deps
+  const { engineService, runtimeStore, workbenchStore, repository } = deps
 
   function hasProblemArea(task: { problemArea?: ProblemArea }): task is { problemArea: ProblemArea } {
     return Array.isArray(task.problemArea) && task.problemArea.length > 0
@@ -67,13 +73,30 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
   async function requestAiMove(input: {
     tab: WorkbenchTab
     attempt: { rootPositionSgf: string; userLine: string[] }
-    task: { problemArea?: ProblemArea; rootPositionSgf?: string }
+    task: { problemArea?: ProblemArea; rootPositionSgf?: string; sideToMove?: 'black' | 'white' }
+    color?: 'black' | 'white'
   }): Promise<string | null> {
     const { tab, attempt, task } = input
 
     if (tab.mode === 'problem' && !hasProblemArea(task)) {
       return null
     }
+
+    const requestId = `ai_req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const positionHash = hashAiMovePosition(attempt)
+    const mode = tab.mode
+    if (mode !== 'play' && mode !== 'problem') return null
+    const sideToMove = 'sideToMove' in task ? task.sideToMove : undefined
+
+    runtimeStore?.setAiMovePending({
+      requestId,
+      tabId: tab.id,
+      attemptId: tab.activeAttemptId ?? '',
+      positionHash,
+      mode,
+      color: input.color ?? inferAiMoveColor(attempt, sideToMove),
+      startedAt: new Date().toISOString(),
+    })
 
     const engineInput: {
       engineId?: string
@@ -101,7 +124,25 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
       engineInput.analysisAreaVertices = task.problemArea
     }
 
-    const result = await engineService.requestMove(engineInput)
+    let result: Awaited<ReturnType<AiMoveServiceDeps['engineService']['requestMove']>>
+    try {
+      result = await engineService.requestMove(engineInput)
+    } catch (error) {
+      runtimeStore?.clearAiMovePending(requestId)
+      throw error
+    }
+
+    if (!(await isAiMoveRequestFresh({
+      requestId,
+      tab,
+      attempt,
+      positionHash,
+    }))) {
+      runtimeStore?.clearAiMovePending(requestId)
+      return null
+    }
+
+    runtimeStore?.clearAiMovePending(requestId)
 
     if (!result) return null
 
@@ -133,6 +174,57 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
   }
 
   return { requestAiMove, maybePlayAiMove }
+
+  async function isAiMoveRequestFresh(input: {
+    requestId: string
+    tab: WorkbenchTab
+    attempt: { rootPositionSgf: string; userLine: string[] }
+    positionHash: string
+  }): Promise<boolean> {
+    const { requestId, tab, attempt, positionHash } = input
+    if (runtimeStore?.hasSupersededAiMoveRequest(requestId)) return false
+
+    const pending = runtimeStore?.getState().pendingAiMove
+    if (pending && pending.requestId !== requestId) return false
+
+    const workbenchState = workbenchStore?.getState()
+    const activeTab = workbenchState?.tabs.find(t => t.id === tab.id)
+    if (workbenchState && workbenchState.activeTabId !== tab.id) return false
+    if (activeTab && activeTab.mode !== tab.mode) return false
+    if (activeTab && activeTab.activeAttemptId !== tab.activeAttemptId) return false
+
+    const runtimeState = runtimeStore?.getState()
+    if (runtimeState?.activeAttemptId && tab.activeAttemptId && runtimeState.activeAttemptId !== tab.activeAttemptId) {
+      return false
+    }
+
+    const latestAttempt = tab.activeAttemptId && repository
+      ? await repository.loadAttempt(tab.activeAttemptId)
+      : null
+    if (latestAttempt) {
+      return hashAiMovePosition(latestAttempt) === positionHash
+    }
+
+    return hashAiMovePosition(attempt) === positionHash
+  }
+}
+
+function hashAiMovePosition(attempt: { rootPositionSgf: string; userLine: string[] }): string {
+  return JSON.stringify({
+    rootPositionSgf: attempt.rootPositionSgf,
+    userLine: attempt.userLine,
+  })
+}
+
+function inferAiMoveColor(
+  attempt: { userLine: string[] },
+  sideToMove: 'black' | 'white' = 'black',
+): 'black' | 'white' {
+  const moveCount = attempt.userLine.length
+  const blackTurn = moveCount % 2 === 0
+    ? sideToMove === 'black'
+    : sideToMove !== 'black'
+  return blackTurn ? 'black' : 'white'
 }
 
 /**

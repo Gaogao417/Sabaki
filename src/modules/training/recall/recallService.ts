@@ -193,15 +193,6 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
       completedAt: now,
     })
 
-    // Update attempt recallCompleted flag
-    const attemptId = session.attemptId
-    if (attemptId) {
-      await repository.updateAttempt(attemptId, {
-        recallCompleted: true,
-        status: 'analyzing',
-      })
-    }
-
     runtimeStore.setActiveRecallSession(undefined)
 
     logger?.info('recall.complete', 'RecallSession completed', {

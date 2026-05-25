@@ -34,10 +34,22 @@ export type ReviewQueueView = {
   totalDue: number
 }
 
+export type AiMovePending = {
+  requestId: string
+  tabId: string
+  attemptId: string
+  positionHash: string
+  mode: 'play' | 'problem'
+  color: 'black' | 'white'
+  startedAt: string
+}
+
 export type TrainingRuntimeState = {
   activeAttemptId?: string
   activeRecallSessionId?: string
   activeCheckpointId?: string
+  pendingAiMove?: AiMovePending
+  supersededAiMoveRequestIds: string[]
 
   pendingMoveEvaluations: Record<string, MoveEvaluation>
 
@@ -67,6 +79,9 @@ export type TrainingRuntimeStore = {
   setActiveAttempt(id?: string): void
   setActiveRecallSession(id?: string): void
   setActiveCheckpoint(id?: string): void
+  setAiMovePending(pending: AiMovePending): void
+  clearAiMovePending(requestId?: string): void
+  hasSupersededAiMoveRequest(requestId: string): boolean
 
   upsertPendingMoveEvaluation(evaluation: MoveEvaluation): void
   removePendingMoveEvaluation(evaluationId: string): void
@@ -82,9 +97,10 @@ export type TrainingRuntimeStore = {
 export function createTrainingRuntimeStore(deps?: TrainingRuntimeStoreDeps): TrainingRuntimeStore {
   const { logger } = deps ?? {}
   let state: TrainingRuntimeState = {
-    pendingMoveEvaluations: {},
-    visibleBadMoveIds: [],
-    recallView: null,
+      pendingMoveEvaluations: {},
+      supersededAiMoveRequestIds: [],
+      visibleBadMoveIds: [],
+      recallView: null,
     problemView: null,
     reviewQueueView: null,
   }
@@ -131,6 +147,32 @@ export function createTrainingRuntimeStore(deps?: TrainingRuntimeStoreDeps): Tra
       }
       state = { ...state, activeCheckpointId: id }
       notify()
+    },
+
+    setAiMovePending(pending: AiMovePending) {
+      logger?.info('runtime.ai_move_pending', 'AI move request pending', {
+        requestId: pending.requestId,
+        tabId: pending.tabId,
+        attemptId: pending.attemptId,
+        mode: pending.mode,
+      })
+      const supersededAiMoveRequestIds = state.pendingAiMove
+        && state.pendingAiMove.requestId !== pending.requestId
+        ? [...state.supersededAiMoveRequestIds, state.pendingAiMove.requestId]
+        : state.supersededAiMoveRequestIds
+      state = { ...state, pendingAiMove: pending, supersededAiMoveRequestIds }
+      notify()
+    },
+
+    clearAiMovePending(requestId?: string) {
+      if (!state.pendingAiMove) return
+      if (requestId != null && state.pendingAiMove.requestId !== requestId) return
+      state = { ...state, pendingAiMove: undefined }
+      notify()
+    },
+
+    hasSupersededAiMoveRequest(requestId: string) {
+      return state.supersededAiMoveRequestIds.includes(requestId)
     },
 
     upsertPendingMoveEvaluation(evaluation: MoveEvaluation) {

@@ -54,6 +54,8 @@ export type TrainingRepository = {
   createTask(task: TrainingTask): Promise<TrainingTask>
   loadTask(taskId: string): Promise<TrainingTask | null>
   findTaskBySource(source: TrainingTaskSource): Promise<TrainingTask | null>
+  listTasksByStatus?(status: string): Promise<TrainingTask[]>
+  listTasksByOriginProvider?(provider: string): Promise<TrainingTask[]>
   updateTask(taskId: string, patch: Partial<TrainingTask>): Promise<void>
 
   // Attempt
@@ -248,6 +250,25 @@ export function createTrainingRepository(db: Db, logger?: RepositoryLogger): Tra
   }
 
   async function updateAttempt(attemptId: string, patch: Partial<TrainingAttempt>): Promise<void> {
+    const protectedFields = [
+      'userLine',
+      'moveActors',
+      'result',
+      'status',
+    ].filter(field => Object.prototype.hasOwnProperty.call(patch, field))
+
+    if (protectedFields.length > 0) {
+      const current = await loadAttempt(attemptId)
+      if (!current) {
+        throw new Error(`repo.updateAttempt: attempt not found (id=${attemptId})`)
+      }
+      if (current.status !== 'playing') {
+        throw new Error(
+          `repo.updateAttempt: frozen Attempt protected fields (${protectedFields.join(', ')})`,
+        )
+      }
+    }
+
     const mapped: Record<string, unknown> = {}
     if (patch.tabId !== undefined) mapped.tabId = patch.tabId
     if (patch.submittedAt !== undefined) mapped.submittedAt = patch.submittedAt
