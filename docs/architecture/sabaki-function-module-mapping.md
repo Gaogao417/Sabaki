@@ -11,7 +11,7 @@
 
 | 目标模块 | 函数数量 | 职责概述 |
 | --- | --- | --- |
-| `workbench/board-interactions/` | 16 | 棋盘输入解析与 executor 路由 |
+| `workbench/board-interactions/` | 17 | 棋盘输入解析与 executor 路由 |
 | `workbench/working-position/` | 13 | Working position CRUD 与棋盘互转 |
 | `workbench/stores/workbenchStore` | 11 | Workspace 状态、编辑工作区、工具选择 |
 | `workbench/contracts/` | 3 | PositionSource / MutationContract 定义与映射 |
@@ -19,7 +19,7 @@
 | `document/` | 20 | Game tree 读写、导航、SGF 写回、文件 I/O |
 | `analysis/` | 30 | 分析调度、缓存、scratch/game-tree 分析 |
 | `engine/` | 23 | 引擎附加/分离/同步/分析/genmove |
-| `training/` | 19 | Recall/Problem/Review 会话与答题 |
+| `training/` | 19 | Recall/Problem/Review 会话、Attempt、ProblemView 与答题 |
 | `overlays/` | 6 | Overlay 可见性、领地显示、合成 |
 | `ui/` | 8 | 抽屉、侧栏、信息覆盖、忙碌状态 |
 | `sabaki.js (facade)` | 11 | App 生命周期、设置、窗口、顶层装配 |
@@ -36,8 +36,10 @@
 | 2 | `getActiveMutationContract` | 1173 | 根据 mode/workspace 派生活动 MutationContract | `mutationContracts.ts` |
 | 3 | `setMode` | 515 | 设置应用模式，隐式决定 source/contract | `workspaceDefaults.ts`（mode → 默认契约映射部分） |
 
-**说明**：`setMode` 本身是遗留入口，拆解时其 mode → source/contract 映射逻辑应抽入
-`workspaceDefaults.ts`；mode 切换的 UI 副作用留在 `sabaki.js` facade 或 `uiStore`。
+**说明**：`setMode` 本身是遗留入口。新的上层真相是
+`docs/design/workbench-mode-orchestration-contract.md` 中的 `ModeState` / `TransitionEffect`；
+`workspaceDefaults.ts` 只承接 mode → source/contract 映射。mode 切换的 tab/runtime/overlay/engine
+副作用必须由 `workbenchFlowService` 或后续 `workbenchModeService` 编排。
 
 ---
 
@@ -93,7 +95,20 @@ resolver → intent → executor。`handleEditAnalysisClick` 已部分迁移到 
 | 5 | `skipRecallMove` | 631 | 跳过当前回忆 | `recallInteractionExecutor.js` |
 | 6 | `showRecallHint` | 635 | 显示回忆提示 | `recallInteractionExecutor.js` |
 
-### 2.5 variationInteractionExecutor
+### 2.5 problemInteractionExecutor
+
+目标文件：`executors/problemInteractionExecutor.js` 或 `training/problem/problemFlowService.ts`
+
+| # | 函数名 | 行号 | 用途 | 目标文件 |
+| --- | --- | --- | --- | --- |
+| 1 | `handleProblemMove` | 732 | 做题模式落子，写 mutable Attempt 和 problem runtime | `problemInteractionExecutor.js` |
+
+**说明**：Problem 是一等 workbench mode。`handleProblemMove` 不再属于
+`legacyInteractionExecutor`，也不应被描述为“长期被 recall 替代”。迁移目标是：
+`WorkbenchMode.problem -> problemAttemptMove -> problemInteractionExecutor -> training problem service`。
+当前 legacy 的 `play + problemView` 截获路径只是过渡兼容层。
+
+### 2.6 variationInteractionExecutor
 
 目标文件：`executors/variationInteractionExecutor.js`
 
@@ -102,19 +117,18 @@ resolver → intent → executor。`handleEditAnalysisClick` 已部分迁移到 
 | 1 | `variationMove` | 3239 | 变化落子 | `variationInteractionExecutor.js` |
 | 2 | `playAnalysisVariation` | 5284 | 播放分析变化 | `variationInteractionExecutor.js` |
 
-### 2.6 legacyInteractionExecutor
+### 2.7 legacyInteractionExecutor
 
 目标文件：`executors/legacyInteractionExecutor.js`
 
 | # | 函数名 | 行号 | 用途 | 目标文件 |
 | --- | --- | --- | --- | --- |
-| 1 | `handleProblemMove` | 732 | 问题模式落子（legacy） | `legacyInteractionExecutor.js` |
-| 2 | `findMove` | 5152 | 查找棋步（legacy） | `legacyInteractionExecutor.js` |
-| 3 | `findPosition` | 5115 | 查找位置（legacy） | `legacyInteractionExecutor.js` |
-| 4 | `findHotspot` | 5148 | 查找热点（legacy） | `legacyInteractionExecutor.js` |
+| 1 | `findMove` | 5152 | 查找棋步（legacy） | `legacyInteractionExecutor.js` |
+| 2 | `findPosition` | 5115 | 查找位置（legacy） | `legacyInteractionExecutor.js` |
+| 3 | `findHotspot` | 5148 | 查找热点（legacy） | `legacyInteractionExecutor.js` |
 
 **说明**：`findPosition`/`findHotspot`/`findMove` 属于 legacy `find` 功能，冻结不再扩展。
-`handleProblemMove` 属于 legacy `problem` 功能，长期将被 recall 替代。
+Problem 不属于 legacy product capability；legacy 的只是旧 `play + problemView` 截获实现。
 
 ---
 
@@ -362,7 +376,8 @@ UI 状态（→ uiStore）、默认 overlay（→ presets）。映射表本身�
 
 ## 9. training/ — 训练会话
 
-目标文件：`trainingStore.ts`、`recallSession.js`、`problemSession.js`、`reviewSession.js`
+目标文件：`trainingRuntimeStore.ts`、`recallService.ts`、`recallCheckpointService.ts`、
+`problemFlowService.ts`、`problemService.ts`、`reviewService.ts`
 
 ### 9.1 recallSession.js — 回忆会话
 
@@ -379,15 +394,19 @@ UI 状态（→ uiStore）、默认 overlay（→ presets）。映射表本身�
 | 9 | `getPlayServices` | 1376 | 获取游戏服务（训练用） | `trainingStore.ts` |
 | 10 | `saveCurrentGame` | 639 | 保存当前游戏（训练后触发） | `trainingStore.ts` 或 `document/sgfWriteback.js` |
 
-### 9.2 problemSession.js — 问题/题目会话
+### 9.2 problemFlowService.ts / problemService.ts — 问题/题目会话
 
 | # | 函数名 | 行号 | 用途 | 目标文件 |
 | --- | --- | --- | --- | --- |
-| 1 | `startProblem` | 696 | 启动问题模式 | `problemSession.js` |
-| 2 | `submitProblemAttempt` | 841 | 提交问题尝试 | `problemSession.js` |
-| 3 | `generatePunishmentProblem` | 934 | 生成惩罚题目 | `problemSession.js` |
-| 4 | `undoProblemMove` | 971 | 撤销问题落子 | `problemSession.js` |
-| 5 | `exitProblemMode` | 1001 | 退出问题模式 | `problemSession.js` |
+| 1 | `startProblem` | 696 | 启动 Problem mode / 创建 problem runtime | `problemFlowService.ts` |
+| 2 | `submitProblemAttempt` | 841 | 提交问题尝试并冻结 Attempt | `problemFlowService.ts` |
+| 3 | `generatePunishmentProblem` | 934 | 生成惩罚题目 | `problemService.ts` |
+| 4 | `undoProblemMove` | 971 | 撤销问题落子，必须同步 runtime、tree 和 Attempt line | `problemFlowService.ts` |
+| 5 | `exitProblemMode` | 1001 | 退出 Problem mode，清理 problem companion state | `workbenchFlowService.ts` / `problemFlowService.ts` |
+
+**说明**：Problem service 是训练核心 owner 之一。它拥有 Problem entity、ProblemView runtime、
+Attempt mutable write、MoveEvaluation/BadMove handoff 和 punishment Problem 生成。Recall
+只能创建 RecallSession / RecallAttempt / Checkpoint / Comment，不能替代 Problem mode。
 
 ### 9.3 reviewSession.js — 复习会话
 
@@ -510,8 +529,8 @@ change event 发布源；真正要先收紧的是“写入入口”：某个领�
    documentStore/engineService，但不直接持有 document state。
 7. **Phase 12D：workspace presets + uiStore + legacy 冻结**：拆 `setMode` 为 workspace
    preset 选择、UI 副作用和 overlay 默认值；迁出 drawer/busy/info overlay 等 UI-only state；
-   `find`、`problem`、`guess`、`scoring` 等 legacy 分支先冻结/包进 legacy executor，再根据
-   测试覆盖逐步隐藏和删除入口。
+   `find`、legacy `play + problemView` 截获、`guess`、`scoring` 等旧分支先冻结/包进兼容层；
+   Problem 产品能力迁往一等 `problemInteractionExecutor`，再根据测试覆盖逐步隐藏和删除旧入口。
 
 最终目标不是让 `sabaki.js` 变成零函数，而是只保留 app lifecycle、service 装配、顶层
 `setState`/`inferredState`、菜单门面和兼容 wrapper。

@@ -12,13 +12,45 @@
 | `engineService` | 15 | ✅ 已完成 | 引擎附加/同步/分析结果/genmove/HumanSL/控制台 |
 | `analysisService` | 4 | 待迁移 | 分析区域选择与类型 |
 | `overlayStore` | 4 | 待迁移 | Overlay 可见性与合成 |
-| `workbenchStore` | 6 | 待迁移 | Workspace 状态、工具选择、编辑工作区 |
-| `trainingStore` | 15 | 待迁移 | Recall/Problem/Review 会话与答题 |
+| `workbenchStore` | 6+ | 待迁移 | WorkbenchTab、mode、active ids、workspace 状态、工具选择、编辑工作区 |
+| `trainingRuntimeStore` / `trainingRepository` | 15+ | 待迁移 | Problem/Recall companion runtime 与训练事实表 |
 | `uiStore` | 22 | 待迁移 | 抽屉、侧栏、布局、第三方面板、状态覆盖 |
 | `sabaki.js (facade)` | 12 | 保留 | 设置驱动字段、棋盘渲染配置、文件名 |
 | Legacy 冻结 | 4 | 冻结 | `find`/`scoring`/`guess` 旧分支 |
 
 ---
+
+## ModeState Companion Mapping
+
+`docs/design/workbench-mode-orchestration-contract.md` 是上层状态机 source of truth。
+本字段映射表按底层字段 owner 拆分，但所有新增字段必须能归入以下 mode companion 结构：
+
+```txt
+ModeState
+  ├─ WorkbenchTab fields
+  │  └─ mode, activeAttemptId, activeRecallSessionId, previousMode, currentTreePosition
+  ├─ TrainingRuntime companion fields
+  │  └─ problemView, recallView, activeCheckpointId, correctionDraft,
+  │     pendingMoveEvaluations, visibleBadMoveIds
+  ├─ TrainingRepository persistence
+  │  └─ Attempt, MoveEvaluation, BadMove, Problem, RecallSession,
+  │     RecallAttempt, RecallCheckpoint, MoveComment
+  ├─ OverlayRegion
+  │  └─ territoryEnabled, territoryCompareEnabled, info overlay,
+  │     ownership source, pending/unavailable reason
+  └─ EngineAnalysisRegion
+     └─ attached engine, analyzing syncer, game-tree live analysis,
+        scratch analysis, ownership cache, engine game ongoing
+```
+
+口径：
+
+- `WorkbenchMode.problem` 是一等运行态 mode。
+- `Problem` entity / task 不是 mode，而是训练业务对象。
+- `PositionSource` / `MutationContract` 是由 ModeState 派生出的棋盘读写边界。
+- `overlayStore` 只接受 Analysis 相关 territory / compare；离开 Analysis 必须清理。
+- `engineService` / `analysisService` 的更新必须携带 target，不能混 game-tree live analysis 和
+  scratch analysis。
 
 ## 1. documentStore — Game Tree 状态与导航
 
@@ -111,11 +143,17 @@
 
 ---
 
-## 5. workbenchStore — Workspace 状态
+## 5. workbenchStore — WorkbenchTab / Mode / Workspace 状态
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `mode` | `string` | `'play'` | 应用模式 |
+| `tabs` | `Record<string, WorkbenchTab>` | `{}` | Workbench tab map，包含 mode 和 active ids |
+| `activeTabId` | `string\|null` | `null` | 当前 active tab |
+| `mode` | `string` | `'play'` | legacy app mode mirror；新代码应读 `WorkbenchTab.mode` |
+| `activeAttemptId` | `string\|null` | `null` | 当前 tab 的 active Attempt id |
+| `activeRecallSessionId` | `string\|null` | `null` | 当前 tab 的 active RecallSession id |
+| `previousMode` | `string\|undefined` | `undefined` | Analysis return target |
+| `currentTreePosition` | `string\|undefined` | `undefined` | tab-level 恢复点 |
 | `selectedTool` | `string` | `'stone_1'` | 选中的工具 |
 | `editWorkspace` | `object\|null` | `null` | 编辑工作区（current/reference snapshot） |
 | `areaSelectMode` | `boolean` | `false` | 区域选择模式 |
@@ -124,46 +162,44 @@
 
 **迁移阶段**: Phase 12D（workspace presets 部分）
 
-**迁移策略**: 拆 `setMode` 为 workspace preset 选择、UI 副作用和 overlay 默认值。`workbenchStore` 拥有 workspace kind、`editWorkspace`、selected tools 和 working positions。
+**迁移策略**: `workbenchStore` 拥有 WorkbenchTab、mode、previousMode、active ids、
+workspace kind、`editWorkspace`、selected tools 和 working positions。Mode transition 必须走
+`workbenchFlowService` 或后续 `workbenchModeService`；`setMode` 只能作为 legacy facade。
 
 ---
 
-## 6. trainingStore — 训练会话
+## 6. trainingRuntimeStore / trainingRepository — 训练 companion state 与事实表
 
-### 6.1 Recall
-
-| 字段 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `recallSession` | `object\|null` | `null` | 回忆会话 |
-| `recallMoveIndex` | `number` | `0` | 回忆步骤索引 |
-| `recallExpectedMoves` | `array` | `[]` | 回忆预期步骤 |
-| `recallUserAttempts` | `array` | `[]` | 回忆用户尝试 |
-| `recallShowHint` | `boolean` | `false` | 回忆提示 |
-| `recallCompleted` | `boolean` | `false` | 回忆完成 |
-
-### 6.2 Problem
+### 6.1 TrainingRuntimeStore companion fields
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `problemSession` | `object\|null` | `null` | 题目会话 |
-| `problemAttempt` | `object\|null` | `null` | 题目尝试 |
-| `problemWorkspace` | `object\|null` | `null` | 题目工作区 |
-| `problemEvalCache` | `array` | `[]` | 题目评估缓存 |
-| `problemBadMoves` | `array` | `[]` | 题目坏步骤 |
-| `problemSubmitted` | `boolean` | `false` | 题目已提交 |
-| `problemResult` | `object\|null` | `null` | 题目结果 |
+| `activeAttemptId` | `string\|null` | `null` | 当前 runtime active Attempt mirror |
+| `activeRecallSessionId` | `string\|null` | `null` | 当前 runtime active RecallSession mirror |
+| `activeCheckpointId` | `string\|null` | `null` | 当前 Recall checkpoint |
+| `pendingMoveEvaluations` | `MoveEvaluation[]` | `[]` | engine pending evaluation projection |
+| `correctionDraft` | `string\|null` | `null` | Recall checkpoint correction draft |
+| `visibleBadMoveIds` | `string[]` | `[]` | 当前 Problem/Attempt 可见坏棋 projection |
+| `recallView` | `RecallView\|null` | `null` | Recall mode runtime companion |
+| `problemView` | `ProblemView\|null` | `null` | Problem mode runtime companion |
+| `reviewQueueView` | `object\|null` | `null` | Review queue projection；打开具体题目后进入 Problem mode |
 
-### 6.3 Review
+### 6.2 trainingRepository persistence
 
-| 字段 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `reviewQueue` | `array` | `[]` | 复习队列 |
-| `reviewCurrentIndex` | `number` | `0` | 复习当前索引 |
-| `reviewTotalDue` | `number` | `0` | 复习总数 |
+| 实体 | Owner | Mode 写入边界 |
+| --- | --- | --- |
+| `Attempt` | `attemptService` / repository | Play/Problem submit 前 mutable；submit 后 frozen。Recall/Analysis 不得改 `userLine/result/status`。 |
+| `MoveEvaluation` | monitor / attempt service | engine update 可解析 pending evaluation，但不得污染 frozen Attempt。 |
+| `BadMove` | monitor / problem service | 绑定 MoveEvaluation；可派生 punishment Problem。 |
+| `Problem` / `TrainingTask` | problem service / workbench tab service | Problem entity 不是 mode；打开后进入 `WorkbenchMode.problem`。 |
+| `RecallSession` / `RecallAttempt` | recall service | Recall 只能写 recall facts，不改 source Attempt line/result/status。 |
+| `RecallCheckpoint` / `MoveComment` | recall checkpoint service | 只属于 Recall checkpoint 子流程。 |
 
-**迁移阶段**: Phase 9（recall），Phase 12D（problem/review legacy 冻结）
+**迁移阶段**: Phase 9（recall），Phase 9B（problem），Phase 12D（runtime cleanup）。
 
-**迁移策略**: Recall executor 写 `trainingStore` 边界，不复用 play move 或 scratch edit 写路径。Problem/Review 长期被 recall 替代，短期冻结。
+**迁移策略**: Problem executor 写 `problemView`、mutable Attempt、MoveEvaluation / BadMove
+handoff。Recall executor 写 RecallSession / RecallAttempt / Checkpoint / Comment。二者都不能复用
+play move 或 scratch edit 写路径，也不能绕过 mode transition guard。
 
 ---
 
@@ -250,8 +286,9 @@ Phase 12A: documentStore（gameTrees, treePosition, gameCurrents, gameIndex）
     ↓
 Phase 12C: analysisService（selectedAnalysisVertex, analysisAreaRects, analysisAreaVertices, analysisType）
     ↓
-Phase 12D: workbenchStore + uiStore + legacy 冻结
-           workbenchStore（mode, selectedTool, editWorkspace, areaSelectMode, ...）
+Phase 12D: workbenchStore + trainingRuntimeStore + uiStore + legacy 冻结
+           workbenchStore（tabs, activeTabId, mode, previousMode, active ids, selectedTool, editWorkspace, ...）
+           trainingRuntimeStore（problemView, recallView, activeCheckpointId, pendingMoveEvaluations, ...）
            uiStore（openDrawer, busy, fullScreen, sidebar*, infoOverlay*, third-party*, ...）
            Legacy 冻结（findText, findVertex, deadStones, blockedGuesses）
 ```

@@ -11,6 +11,8 @@
 
 - 当前工作台视觉实现以 [Workbench UI/UX Spec](../design/workbench-ui-ux-spec.md) 为准。
 - 当前视觉参考图归档在 [Workbench Reference Pictures](../design/workbench-ref-pics/README.md)。
+- 当前运行态状态机以 [Workbench Mode Orchestration Contract](../design/workbench-mode-orchestration-contract.md) 为准。
+- 棋盘读写边界以 [Position Source and Mutation Contract](../architecture/position-source-mutation-contract.md) 为准。
 - 如 PRD 与具体 UI/UX 方案存在范围差异，产品能力边界以 PRD 为准；具体阶段的布局、视觉层级和控件呈现以对应 UI/UX 方案为准。
 
 ---
@@ -160,6 +162,36 @@ Snapshot 出题时，题目不能只有“黑先/白先，下一手”。
 8. Review Mode
    系统根据复习计划、错误记录和题目状态安排复习
 ```
+
+## 5.2 Workbench Mode State Machine
+
+产品闭环中的运行态 workbench mode 只有四个：
+
+```text
+Play / Problem / Recall / Analysis
+```
+
+产品对象和运行态 mode 必须区分：
+
+- `Problem` entity / task：一道题、惩罚题或题目来源，是训练业务对象。
+- `WorkbenchMode.problem`：用户正在做题的运行态 mode，拥有 `problemView`、mutable Attempt、
+  pending evaluations 和 visible bad move projection。
+- `Review`：复习队列和入口，不一定是棋盘 mode。用户从 Review 打开具体题目后进入
+  `WorkbenchMode.problem`。
+- `Punishment Problem`：`Problem.type = 'punishment'`，不是新 mode。
+
+Snapshot 只能从 `WorkbenchMode.analysis` 的 scratch/current 局面派生：
+
+```text
+Analysis scratch/current
+→ Snapshot
+→ Problem entity / Task
+→ child Problem tab
+→ WorkbenchMode.problem
+```
+
+禁止从 Play / Problem / Recall 的 live mutable context 直接 snapshot 成新 Problem；否则会把
+source Attempt、game-tree live analysis 或 recall follow-up 状态混进派生题。
 
 ---
 
@@ -396,6 +428,10 @@ MVP 阶段优先实现：
 ### 6.3.6 Snapshot 出题
 
 用户在复盘中可以将当前局面 snapshot 为题目。
+
+工程约束：Snapshot 只能从 Analysis Mode 的 scratch/current 局面派生。Play / Problem / Recall
+不能直接 snapshot 成 Problem；如果需要出题，必须先进入 Analysis 并以 scratch workspace 作为
+source。
 
 Snapshot 时必须保存：
 
@@ -719,11 +755,14 @@ type PunishmentProblem = Problem & {
 
 ---
 
-## 6.7 Review Mode：复习模式
+## 6.7 Review Mode：复习队列 / 入口模式
 
 ### 6.7.1 目标
 
 根据题目状态、复习间隔和用户错误记录，安排题目复习。
+
+Review 是产品入口和队列语义，不是独立棋盘运行态。打开普通题或惩罚题后，工作台进入
+`WorkbenchMode.problem`。
 
 ### 6.7.2 复习来源
 

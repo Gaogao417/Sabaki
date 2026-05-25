@@ -4,34 +4,50 @@
 > 用途：Agent 在修改训练系统代码前，根据任务类型定位必读上下文，避免全文阅读后凭印象改代码。
 > 使用方法：先判断任务属于哪个**切面**，然后只读该切面对应的文档片段和源码。
 
-三份主文档的简称：
+主文档层级：
 
-| 简称 | 全称 |
-|------|------|
-| PRD | `gabaki-sabaki-training-prd-v0.4.md` |
-| 架构 | `gabaki-sabaki-training-architecture.md` |
-| 实施计划 | `gabaki-sabaki-training-implementation-plan.md` |
+| 优先级 | 文档 | 用途 |
+| --- | --- | --- |
+| 1 | `docs/product/sabaki-training-prd.md` | 产品闭环与能力边界。 |
+| 2 | `docs/design/workbench-mode-orchestration-contract.md` | Workbench 运行态状态机 source of truth。 |
+| 3 | `docs/architecture/position-source-mutation-contract.md` | 棋盘读写边界：position source、mutation contract、executor。 |
+| 4 | `docs/architecture/workbench-architecture-overview.md` | 迁移架构：mode orchestration -> source/contract -> resolver -> executor -> owner service。 |
+| 5 | `docs/architecture/sabaki-function-module-mapping.md` | `sabaki.js` 函数迁移目标。 |
+| 6 | `docs/architecture/sabaki-state-field-mapping.md` | 字段和 companion state owner。 |
+
+核心口径：
+
+```text
+ModeState / TransitionEffect 是上层真相。
+PositionSource / MutationContract 是棋盘读写边界。
+Problem entity 不是 mode；WorkbenchMode.problem 是运行态 mode。
+```
 
 ---
 
-## 切面 A：Task / Tab / Phase
+## 切面 A：Task / Tab / Mode
 
-触发关键词：`TrainingTask`、`WorkbenchTab`、`openProblemTab`、`openGameTab`、`phase transition`、`TabService`、`PhaseService`
+触发关键词：`TrainingTask`、`WorkbenchTab`、`WorkbenchMode`、`openProblemTab`、`openGameTab`、`mode transition`、`TabService`、`workbenchFlowService`、`workbenchModeService`
 
 ### 必读
 
-- **PRD**：2.1 TrainingTask 是训练任务实体、2.2 WorkbenchTab 是 UI 承载容器、2.3 统一 Play→Recall→Analysis、3.1 TrainingTask、3.2 WorkbenchTab、3.3 WorkbenchUiPolicy、4.1 核心关系、4.2 Phase 与 Attempt.status 的区别、4.3 为什么不能让 Tab 承担全部业务含义、4.4 Phase 状态机、5 Play→Recall→Analysis 工作流、20.1 验收标准 Task/Tab/Phase
-- **架构**：4.2 workbenchStore、5.2 workbenchTabService、5.3 workbenchPhaseService、8 依赖关系图、14 禁止事项和架构红线、15 最小实现切面建议
-- **实施计划**：Phase 0 基础设施、Phase 1 Task/Tab/Phase 骨架
+- **PRD**：核心训练闭环、Workbench Mode State Machine、Play / Recall / Analysis / Problem / Review 产品能力。
+- **Mode Orchestration Contract**：状态 owner、四个 mode companion state、transition effect、非法 transition、污染风险、类型合同。
+- **Position Source and Mutation Contract**：Workbench mode 到 `PositionSource` / `MutationContract` 的派生关系，尤其是 Problem 的 `problemAttemptMove`。
+- **Architecture Overview**：Mode Orchestration Layer、resolver / executor / owner service 迁移路径。
+- **Function / State Mapping**：函数和字段 owner，确认是否仍处于 legacy facade。
 
 ### 必须遵守
 
-- Problem 不是 mode，Problem 是训练任务来源
+- Problem 有两个层级：
+  - Problem entity / Problem task 是训练业务实体，表示一道题、惩罚题或题目来源。
+  - `WorkbenchMode.problem` 是 workbench 运行态 mode，表示用户正在做题。
 - Tab 是 UI 容器，Task 是业务实体，二者职责不同
 - Tab 可以关闭，Task 不会因此消失
 - 同一 Task 可以多次打开 Tab
-- Phase 转换必须走 `workbenchPhaseService` 显式状态机
-- 非法 Phase transition 必须被拒绝
+- Mode transition 必须走 `workbenchFlowService` 或后续同职责的 `workbenchModeService`
+- Task / Attempt / RecallSession 的状态更新由各自 service 负责，但不能绕过 mode transition guard
+- 非法 mode transition 必须被拒绝
 - 禁止 Component 直接写业务 Store
 - 禁止往 `sabaki.js` 新增训练业务
 
@@ -41,10 +57,11 @@
 src/modules/training/types/task.ts
 src/modules/training/types/tab.ts
 src/modules/training/store/workbenchStore.ts
-src/modules/training/workbench/workbenchTabService.ts      ← Phase 1 待建
-src/modules/training/workbench/workbenchPhaseService.ts     ← Phase 1 待建
+src/modules/training/workbench/workbenchTabService.ts
+src/modules/training/workbench/workbenchFlowService.ts
+src/modules/training/workbench/workbenchModeService.ts      ← 若拆分 transition effect，可新建
 src/modules/training/adapter/legacySabakiAdapter.ts
-src/components/training/TrainingWorkbenchContainer.tsx       ← 待建
+src/components/TrainingWorkbenchContainer.js
 ```
 
 ---
@@ -240,10 +257,10 @@ src/modules/training/repository/trainingRepository.ts
 1. 新训练业务不要继续塞进 sabaki.js
 2. Store 不调用 Service
 3. Component 不直接写业务 Store（通过 Service）
-4. Phase 转换必须走 workbenchPhaseService
+4. Mode transition 必须走 workbenchFlowService / workbenchModeService
 5. Repository 是训练 DB 唯一入口
 6. Adapter 只隔离 legacy API，不承载业务规则
-7. Problem 不是独立棋盘 mode
+7. Problem entity 不是 mode；WorkbenchMode.problem 是一等运行态 mode
 8. Attempt 是核心事实表
 9. MoveEvaluation 和 BadMove 分离
 10. 每个 Phase 实施结束后应用必须可运行

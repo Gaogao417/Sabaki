@@ -14,11 +14,13 @@
 重构目标不是继续完善一个通用 SGF 编辑器，而是把产品削成围棋训练工作台：
 
 - `play`: 真实对局，落子写入 game tree。
+- `problem`: 做题运行态，落子写入 mutable Attempt 和 problem runtime。
 - `recall / training`: 训练答题，写入 session / attempt，不自由编辑棋盘。
 - `edit / analysis`: 编辑独立棋盘局面并分析，写入 working snapshot，不污染当前 SGF tree。
 - `variation analysis`: 棋谱内试变化，写入 game-tree variation 或未来临时 variation。
 
-底层不再让 `mode` 决定一切，而是先回答两个问题：
+Workbench mode 仍然是上层主 region，但底层不再让 raw `mode` 决定一切。一次棋盘操作先由
+mode orchestration 派生读写边界，再回答两个问题：
 
 - 当前棋盘局面来自哪里？见 `PositionSource`。
 - 用户操作允许写到哪里？见 `MutationContract`。
@@ -84,17 +86,50 @@ switch (mutationContract) ...
 而是迁移成：
 
 ```txt
-Goban raw event
+ModeState / TransitionEffect
+  -> derive PositionSource + MutationContract
+  -> Goban raw event
   -> boardInteractionResolver
   -> BoardInteractionIntent + PositionSource + MutationContract
-  -> play / scratchEdit / recall / variation / legacy executor
-  -> state write + analysis / overlay effects
+  -> play / problem / scratchEdit / recall / variation / legacy executor
+  -> owner service write + analysis / overlay effects
 ```
 
 这使模块边界可以按“谁拥有写入和副作用”来切，而不是按 UI mode 切。一个
 `scratchEdit` contract 下可以有多个 intent，但它们都归属于 scratch edit executor；
 `recallAnswer` executor 不需要理解摆棋工具；`play` executor 不需要理解 marker、line 或
 reference snapshot。legacy 路径也可以被隔离成 fallback executor，等待后续删除。
+
+## Mode Orchestration Layer
+
+[Workbench Mode Orchestration Contract](../design/workbench-mode-orchestration-contract.md)
+是运行态状态机的 source of truth。它定义四个 workbench mode：
+
+- `Play`
+- `Problem`
+- `Recall`
+- `Analysis`
+
+这层负责：
+
+- `WorkbenchTab.mode`、`activeAttemptId`、`activeRecallSessionId`、`previousMode` 等 tab 字段。
+- `problemView`、`recallView`、`activeCheckpointId`、`pendingMoveEvaluations` 等 runtime
+  companion state。
+- Attempt mutable/frozen 边界。
+- OverlayRegion 和 EngineAnalysisRegion 的进入/退出效果。
+- 合法 transition、非法 transition 和污染防护。
+
+底层 `PositionSource` / `MutationContract` 文档不取代状态机；它们是状态机派生出的棋盘读写
+边界。新功能必须先经过 mode orchestration，再派生 source/contract。禁止绕过
+`workbenchFlowService` 或后续同职责的 `workbenchModeService` 直接 patch store。
+
+`Problem` 有两个层级：
+
+- `Problem` entity / task 是训练业务对象。
+- `WorkbenchMode.problem` 是用户正在做题的运行态 mode。
+
+当前代码仍存在 `play + problemView` 的 legacy 双重真相。把 Problem 从 legacy 截获迁成显式
+`WorkbenchMode.problem -> problemAttemptMove -> problemInteractionExecutor` 是第一批架构债。
 
 ## Replacement Strategy
 
@@ -189,8 +224,9 @@ type WorkingPosition = {
 `MutationContract` 是棋盘写权限：
 
 - `playMove`: 写 game tree、写 history、更新当前行棋方、触发正常对局分析。
+- `problemAttemptMove`: 写 mutable problem Attempt、problem runtime 和 evaluation handoff。
 - `scratchEdit`: 只写 working position，可触发分析，可保存为题目。
-- `recallAnswer`: 只写训练 session / attempt，不自由编辑局面。
+- `recallAnswer`: 只写 RecallSession / RecallAttempt，不自由编辑局面。
 - `variationMove`: 写 game-tree variation，或未来写临时 variation。
 
 关键原则：
@@ -209,6 +245,7 @@ type WorkingPosition = {
 目标拆分：
 
 - `playInteraction`: 点击空点就是真实落子。
+- `problemAttemptInteraction`: 点击空点是做题落子，写 Attempt 和 problem runtime。
 - `editInteraction`: 摆黑、摆白、删除、拖动、设置下一手。
 - `recallAnswerInteraction`: 点击候选点，检查答案并记录尝试。
 - `variationInteraction`: 从 game-tree node 试变化。
@@ -236,9 +273,11 @@ place-stone、erase、drag-stone、mark-point、draw-line。这样才能替换�
   输出 intent、position source、mutation contract，或者明确的 legacy/deferred intent。
   它不写 state、不弹菜单、不触发 analysis。
 - `playInteractionExecutor`: 只处理真实对局落子、悔棋相关的 game-tree 写入和对局分析刷新。
+- `problemInteractionExecutor`: 只处理做题落子、Attempt mutable write、ProblemView、
+  MoveEvaluation / BadMove handoff 和 submit 前运行态。
 - `scratchEditInteractionExecutor`: 只处理 working position、marker、line、next player、
   reference snapshot 和 scratch analysis 刷新。
-- `recallInteractionExecutor`: 只处理答案提交、attempt/session、提示、跳过和进度推进。
+- `recallInteractionExecutor`: 只处理答案提交、RecallAttempt / RecallSession、提示、跳过和进度推进。
 - `variationInteractionExecutor`: 只处理从 game-tree position 出发的变化写入或未来临时变化。
 - `legacyInteractionExecutor`: 暂时包住 scoring、estimator、find、guess、autoplay 和原生 SGF
   edit 等未迁移路径。
@@ -284,6 +323,7 @@ src/modules/
 
       executors/
         playInteractionExecutor.js
+        problemInteractionExecutor.js
         scratchEditInteractionExecutor.js
         recallInteractionExecutor.js
         variationInteractionExecutor.js
@@ -347,8 +387,8 @@ src/modules/
   摆子提子、marker map 和 line/arrow 操作。
 - `workbench/presets/`: 收纳 workspace-level 默认组合，例如默认 source、contract、
   overlay preset 和工具栏 preset；它只选择默认值，不拥有底层写权限。
-- `workbench/stores/`: 收纳 `workbenchStore`，拥有 workspace kind、`editWorkspace`、
-  selected tools 和 working positions。
+- `workbench/stores/`: 收纳 `workbenchStore`，拥有 WorkbenchTab、mode、previousMode、
+  active ids、workspace kind、`editWorkspace`、selected tools 和 working positions。
 - `document/`: 拥有 game tree、tree position、history 和 SGF 写入边界。play executor
   写真实棋谱时调用这里，而不是直接改 `sabaki.state.gameTrees`。
 - `analysis/`: 回答“当前分析对象是什么”。`boardAnalysisContext.js` 是现有
@@ -358,8 +398,8 @@ src/modules/
   `src/modules/analysis/`。
 - `engine/`: 包住 engine attach、detach、sync、analyze 和 genmove。现有
   `enginesyncer.js` 可以先被这里包装，不要求一次性搬文件。
-- `training/`: 拥有 recall / problem / review session、attempt 和 progress。recall executor
-  写这里，而不是复用 play move 或 scratch edit 写路径。
+- `training/`: 拥有 recall / problem / review session、attempt、problem runtime projection 和
+  progress。problem/recall executor 写这里，而不是复用 play move 或 scratch edit 写路径。
 - `overlays/`: 沿用现有 `src/modules/overlays` 作为 overlay 领域模块，不放在
   `workbench/` 下面。它从 `PositionSource + analysis + ownership` 派生 overlay 输入，
   内部仍可调用现有 overlay helper。
@@ -370,13 +410,13 @@ src/modules/
 
 - `workbench/contracts/positionSource.ts`: 定义 `PositionSource`，创建 `game-tree` 和 `scratch`
   source，提供从当前 state 派生 active source 的纯 helper。
-- `workbench/contracts/mutationContracts.ts`: 定义 `playMove`、`scratchEdit`、`recallAnswer`、
-  `variationMove` 以及 contract 判断 helper。
+- `workbench/contracts/mutationContracts.ts`: 定义 `playMove`、`problemAttemptMove`、
+  `scratchEdit`、`recallAnswer`、`variationMove` 以及 contract 判断 helper。
 - `workbench/contracts/workspaceDefaults.ts`: 保留 `mode/workspace -> default source/contract`
   的兼容映射。
 - `workbench/board-interactions/intents.ts`: 定义 `play-stone`、`place-black-stone`、
   `place-white-stone`、`erase-stone`、`drag-stone`、`mark-point`、`draw-line`、
-  `submit-recall-answer`、`open-variation-menu`、`save-as-problem` 以及 legacy fallback
+  `submit-problem-move`、`submit-recall-answer`、`open-variation-menu`、`save-as-problem` 以及 legacy fallback
   intents（`legacy-toggle-dead-stones`、`legacy-find-move`、`legacy-guess-move`、
   `legacy-problem-move`、`legacy-sgf-edit`、`legacy-analysis-fallback`、
   `legacy-autoplay`、`legacy-play-right-click`）等 intent。
@@ -388,6 +428,9 @@ src/modules/
   不承载业务分支。
 - `workbench/board-interactions/executors/playInteractionExecutor.js`: 正式落子、game-tree 写入、
   对局 analysis / engine move；真实写入委托给 `documentStore` 和 `analysisService`。
+- `workbench/board-interactions/executors/problemInteractionExecutor.js`: 做题落子、problem
+  runtime 更新、mutable Attempt 写入、pending evaluation 和 BadMove handoff；写入委托给
+  training problem services，不能写 RecallSession 或 frozen Attempt。
 - `workbench/board-interactions/executors/scratchEditInteractionExecutor.js`: 摆棋、擦除、拖动、
   marker、line、next player、reference snapshot 和 scratch analysis；working position 写入委托给
   `workbenchStore`，分析委托给 `analysisService`。
@@ -416,7 +459,7 @@ src/modules/
 - `analysis/gameTreeAnalysis.js`: 当前 game tree 和 variation analysis 的调度入口。
 - `engine/engineService.js`: engine attach/detach/sync/analyze/genmove 的 facade，内部可包装
   现有 engine helper。
-- `training/trainingStore.ts`: recall/problem/review session、attempt 和 progress 的唯一 owner。
+- `training/trainingStore.ts`: recall/problem/review session、attempt、problem runtime projection 和 progress 的唯一 owner。
 - `overlays/overlayStore.ts`: territory/compare/heatmap visibility 与 overlay input state。
 - `overlays/overlayLayers.ts`: overlay layer contract 和 layer id/source/render mode 常量。
 - `overlays/resolveOverlayInput.js`: 从 source、analysis、ownership、reference 派生 overlay input。
@@ -428,11 +471,12 @@ src/modules/
 长期 state ownership 应按领域拆开，而不是继续堆回 `sabaki.js`：
 
 - `documentStore`: 拥有 `gameTrees`、`treePosition`、history 和 SGF 写入。
-- `workbenchStore`: 拥有 workspace kind、`editWorkspace`、selected tools 和 working positions。
+- `workbenchStore`: 拥有 WorkbenchTab、mode、previousMode、active ids、workspace kind、
+  `editWorkspace`、selected tools 和 working positions。
 - `analysisService`: 拥有 scratch / game-tree / variation analysis request lifecycle、
   ownership cache 和 write-back boundary。
 - `engineService`: 拥有 engine attach、detach、sync、analyze 和 genmove。
-- `trainingStore`: 拥有 recall / problem / review session、attempt 和 progress。
+- `trainingStore`: 拥有 recall / problem / review session、attempt、problem runtime projection 和 progress。
 - `overlayStore`: 拥有 territory / compare / heatmap visibility 与 overlay input。
 - `uiStore`: 拥有 drawers、sidebars、layout 和 status overlays。
 
@@ -512,6 +556,7 @@ Workspace 是任务层，只负责编排默认组合：
 | Workspace | Position source | Mutation contract | Default overlay | Main controls |
 | --- | --- | --- | --- | --- |
 | Play | `game-tree` | `playMove` | Minimal | 新对局、悔棋、认输、引擎 |
+| Problem | `game-tree` or `scratch/problem-attempt` | `problemAttemptMove` | Hidden / problem hints | 提示、悔棋、提交、坏棋反馈 |
 | Recall | `game-tree` or `scratch/problem-attempt` | `recallAnswer` | Hidden | 提示、跳过、进度、结束 |
 | Edit Analysis | `scratch/current` | `scratchEdit` | Territory / ownership | 摆黑、摆白、删除、下一手、保存题目 |
 | Variation Analysis | `game-tree` | `variationMove` | Compare / territory | 候选点、变化树、回到实战、snapshot |
@@ -530,6 +575,18 @@ User click
   -> history
   -> board render
   -> engine analysis / overlay refresh
+```
+
+### Problem Attempt Move
+
+```txt
+User click
+  -> problemAttemptInteraction
+  -> problemAttemptMove contract
+  -> problem runtime + mutable Attempt write
+  -> pending MoveEvaluation / BadMove handoff
+  -> board render
+  -> submit transition freezes Attempt and enters Recall
 ```
 
 ### Scratch Edit
@@ -574,8 +631,8 @@ PositionSource
 - Document that scoring, estimator, find, guess, autoplay, and native SGF edit are legacy.
 - Keep old behavior compatible where practical.
 - Stop adding new workbench behavior to legacy mode branches.
-- Require every new workbench behavior to state its `PositionSource`,
-  `MutationContract`, and `BoardInteractionIntent`.
+- Require every new workbench behavior to state its `ModeState` / transition effect first,
+  then its derived `PositionSource`, `MutationContract`, and `BoardInteractionIntent`.
 - Use [Workbench Coding Conduct](../guides/workbench-coding-conduct.md) as the
   implementation gate.
 - Use [Workbench Phase 0 Behavior Baseline Tests](workbench-phase0-behavior-baseline-tests.md)
@@ -589,6 +646,7 @@ PositionSource
 - Ensure `sabaki.js` can expose the active `PositionSource` and `MutationContract`.
 - Map the current workspace or mode to the default source and contract:
   `play -> game-tree + playMove`,
+  `problem -> game-tree/problem-attempt + problemAttemptMove`,
   `recall -> game-tree/problem-attempt + recallAnswer`,
   `analysis/edit -> scratch/current + scratchEdit`,
   `variation-analysis -> game-tree + variationMove`,
@@ -674,7 +732,7 @@ PositionSource
   `scratchEdit` handler inside `clickVertex()`. The fallback is explicit:
   if the resolver returns a `LEGACY_*` intent or the executor returns
   `{handled: false}`, `clickVertex()` continues into the old branch.
-- Keep play, recall, scoring, estimator, find, guess, autoplay, problem, review, and
+- Keep play, recall, scoring, estimator, find, guess, autoplay, legacy problem, review, and
   native SGF edit on legacy paths.
 - Keep `sabaki.js` as the transition coordinator / legacy facade, but move
   edit-analysis state ownership into workbench and analysis modules instead of adding
@@ -763,6 +821,16 @@ PositionSource
   `trainingStore` boundaries only.
 - Prevent recall from calling play move helpers or mutating the current SGF tree.
 
+### Phase 9B: Migrate Problem Interaction
+
+- Add `src/modules/workbench/board-interactions/executors/problemInteractionExecutor.js`.
+- Treat `WorkbenchMode.problem` as a first-class mode, not `play + problemView`.
+- Board clicks write mutable Attempt and problem runtime until submit.
+- Submit freezes/finalizes the Attempt and enters the mode transition that creates Recall.
+- Problem may use game-tree rendering during migration, but it must not become ordinary
+  `playMove`; Attempt, ProblemView, MoveEvaluation, BadMove, and punishment Problem writes
+  stay in training services.
+
 ### Phase 10: Split Analysis Contexts
 
 - Introduce `src/modules/analysis/boardAnalysisContext.js`,
@@ -814,9 +882,11 @@ PositionSource
 - Move layout defaults, controls, and overlay defaults into workspace-level presets only
   after source, contract, resolver, executor, and overlay input boundaries are stable.
 - Move drawers, busy state, info overlays, and other UI-only state into `uiStore`.
-- New features should target workspace plus contract, not raw `mode`.
+- New features must pass mode orchestration first, then derive workspace/source/contract.
 - Hide legacy entrances before deleting code. `find`, `problem`, `guess`, `scoring`, and
-  other legacy branches should be frozen or wrapped before removal.
+  other legacy branches should be frozen or wrapped before removal. Legacy `problem` means the
+  old `play + problemView` interception path; it should migrate to first-class
+  `WorkbenchMode.problem`, not be deleted as a product capability.
 - Delete legacy branches only after migrated workspaces no longer depend on them and
   tests or telemetry confirm the branch is unused.
 

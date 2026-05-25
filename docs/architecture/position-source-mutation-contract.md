@@ -7,6 +7,20 @@ interaction surface, but board behavior must answer two smaller questions first:
 - Where does the displayed position come from?
 - Where may a board action write?
 
+The upper-level truth is still the workbench mode state machine. The relationship
+between the documents is:
+
+```txt
+ModeState / TransitionEffect
+  -> derive PositionSource + MutationContract
+  -> boardInteractionResolver
+  -> focused executor
+```
+
+`WorkbenchMode.problem` is a first-class workbench mode. `Problem` the entity is
+not a mode; it is the persisted training object that can be opened in
+`WorkbenchMode.problem`.
+
 The first phase keeps the existing UI intact and defines the contract that
 future work should implement against.
 
@@ -66,6 +80,15 @@ The current `editWorkspace.currentSnapshot` and
 
 ## Mutation Contracts
 
+```ts
+type MutationContract =
+  | 'playMove'
+  | 'problemAttemptMove'
+  | 'recallAnswer'
+  | 'scratchEdit'
+  | 'variationMove'
+```
+
 ### playMove
 
 Used for real play.
@@ -81,6 +104,31 @@ Allowed:
 Forbidden:
 
 - Mutating working positions.
+- Writing recall sessions or problem runtime.
+
+### problemAttemptMove
+
+Used when the user is solving a problem in `WorkbenchMode.problem`.
+
+Allowed:
+
+- Read the problem start position from a game tree node or a
+  `scratch/problem-attempt` working position.
+- Write the mutable problem Attempt while it is still `playing`.
+- Update problem runtime companion state such as `problemView`, eval cache,
+  pending move evaluations, and visible bad move ids.
+- Trigger problem move evaluation and bad-move detection.
+- On submit, freeze/finalize the Attempt and hand off to the mode transition
+  that creates a RecallSession when applicable.
+
+Forbidden:
+
+- Writing RecallSession, RecallAttempt, RecallCheckpoint, or MoveComment.
+- Mutating a frozen Attempt.
+- Writing analysis scratch workspace state.
+- Reusing `playMove` as the only write path; problem attempts must preserve
+  Attempt/runtime ownership even when they temporarily write a game-tree node
+  for legacy board display.
 
 ### scratchEdit
 
@@ -110,7 +158,7 @@ Used for recall or training answers.
 Allowed:
 
 - Read the expected move from a problem or game record.
-- Write to an attempt or session.
+- Write RecallSession / RecallAttempt progress.
 - Record correct, wrong, hint, or skipped answers.
 - Advance training progress on correct answers.
 
@@ -119,6 +167,7 @@ Forbidden:
 - Free board editing.
 - Writing to the current SGF game tree.
 - Mutating edit setup.
+- Modifying the source Attempt's `userLine`, `result`, or `status`.
 
 ### variationMove
 
@@ -153,6 +202,7 @@ Examples:
 - `drag-stone`
 - `mark-point`
 - `draw-line`
+- `submit-problem-move`
 - `submit-recall-answer`
 - `open-variation-menu`
 - `legacy-toggle-dead-stone`
@@ -177,6 +227,7 @@ Executor ownership:
 | Executor | Owns | Must not own |
 | --- | --- | --- |
 | `playInteractionExecutor` | Real moves, game-tree writes, play analysis refresh | Scratch markers, recall attempts |
+| `problemInteractionExecutor` | Problem attempt moves, mutable Attempt writes before submit, problem runtime, evaluation handoff | RecallSession writes, frozen Attempt writes, scratch analysis workspace |
 | `scratchEditInteractionExecutor` | Working positions, edit markers/lines, scratch analysis refresh | Current SGF game-tree writes |
 | `recallInteractionExecutor` | Answer attempts, hints, skipped/correct/wrong progress | Free board editing |
 | `variationInteractionExecutor` | Variation writes or future temporary variations | Scratch setup writes |
@@ -205,6 +256,7 @@ logic moves behind executor boundaries.
 | Workspace          | Position source                          | Mutation contract | Notes                                                                          |
 | ------------------ | ---------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
 | Play               | `game-tree`                              | `playMove`        | Simple overlays and play controls.                                             |
+| Problem            | `game-tree` or `scratch/problem-attempt` | `problemAttemptMove` | Doing a problem; mutable Attempt plus problem runtime until submit.          |
 | Edit analysis      | `scratch/current`                        | `scratchEdit`     | Current/reference working boards, territory compare, heatmaps, problem saving. |
 | Variation analysis | `game-tree`                              | `variationMove`   | Phase one keeps the interface; full UI can come later.                         |
 | Recall             | `game-tree` or `scratch/problem-attempt` | `recallAnswer`    | Answer-focused controls; overlays hidden by default.                           |
@@ -239,6 +291,7 @@ Rules:
 Core workspaces remain:
 
 - Play
+- Problem
 - Recall and training
 - Scratch analysis
 - Variation analysis
@@ -264,4 +317,4 @@ legacy modes.
   deserializing snapshots.
 - `src/modules/sabaki.js` seeds analysis workspace snapshots as working
   positions and exposes `playMove`, `scratchEdit`, `recallAnswer`, and
-  `variationMove` method boundaries.
+  `problemAttemptMove` / `variationMove` method boundaries.

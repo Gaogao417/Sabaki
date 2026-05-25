@@ -16,6 +16,36 @@
 
 本文以当前代码为准。报告里部分判断和当前代码存在差异，本文会在风险处标明。
 
+## 文档地位与抽象层
+
+本文是 workbench 运行态状态机的最高优先级 source of truth。其它架构文档如果讨论棋盘读写
+边界、函数迁移、字段 owner 或训练上下文导航，必须和本文保持一致。
+
+统一层级如下：
+
+```txt
+ModeState / TransitionEffect
+  -> derive PositionSource + MutationContract
+  -> boardInteractionResolver
+  -> focused executor
+  -> owner service / store / repository
+```
+
+`Play / Problem / Recall / Analysis` 是 workbench 的四个运行态 mode。`mode` 是上层主
+region，用来约束 companion state、transition、overlay region 和 engine/analysis region。
+底层棋盘读写权限仍由 `PositionSource`、`MutationContract` 和 focused executor 保证；不得
+把底层 resolver 重新写成一个巨型 `mode` switch。
+
+`Problem` 有两个抽象层，文档和代码讨论时必须区分：
+
+1. `Problem` entity / task: 训练业务实体，表示一道题、惩罚题或题目来源。
+2. `WorkbenchMode.problem`: workbench 运行态 mode，表示用户正在做题；它拥有
+   `problemView`、mutable Attempt、pending evaluations 和 visible bad move projection。
+
+Mode transition 的唯一编排入口是 `workbenchFlowService`，或后续同职责的
+`workbenchModeService`。Task、Attempt、RecallSession、Problem 等领域对象由各自 service
+负责写入，但这些 service 不能绕过 mode transition guard 去制造跨 mode companion state。
+
 ## Status Legend
 
 - **OK**: 当前代码基本符合合同。
@@ -279,7 +309,7 @@
 
    合同要求：非 analysis snapshot rejected；原 tab/Attempt 不变。
 
-## TypeScript 类型草案
+## TypeScript 类型合同
 
 ```ts
 type WorkbenchMode = 'play' | 'problem' | 'recall' | 'analysis';
@@ -436,6 +466,9 @@ type ModeEnterEffect = Pick<
   'tabPatch' | 'runtimePatch' | 'overlayPatch' | 'engineEffects' | 'persistence'
 >;
 ```
+
+这些类型不是临时建议，而是后续实现应收束到的合同形状。实现可以分阶段落地，但新增
+mode、transition、overlay 或 engine/analysis 行为必须能投影到这些 discriminated union。
 
 设计重点：
 
