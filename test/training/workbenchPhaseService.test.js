@@ -28,6 +28,8 @@ describe('workbenchPhaseService', () => {
 
   beforeEach(() => {
     store = createWorkbenchStore()
+    const taskImportCalls = {createTaskFromSnapshot: []}
+    const tabCalls = {openTask: [], openSnapshotProblemTab: []}
     service = createWorkbenchPhaseService({
       workbenchStore: store,
       repository: {
@@ -52,16 +54,45 @@ describe('workbenchPhaseService', () => {
           updatedAt: new Date().toISOString(),
         }),
       },
+      taskImportService: {
+        async createTaskFromSnapshot(input) {
+          taskImportCalls.createTaskFromSnapshot.push(input)
+          return {
+            id: 'task_snap_1',
+            rootPositionSgf: input.positionSgf,
+            sideToMove: input.sideToMove,
+            origin: {provider: 'snapshot', parentTaskId: input.parentTaskId},
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        },
+      },
       tabService: {
-        openSnapshotProblemTab: async (problemId, opts) => ({
-          id: 'tab_snap_1',
-          taskId: 'task_snap_1',
-          mode: 'play',
-          parentTabId: opts?.parentTabId,
-          childTabIds: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }),
+        calls: tabCalls,
+        openTask: async (opts) => {
+          tabCalls.openTask.push(opts)
+          return {
+            id: 'tab_snap_1',
+            taskId: opts.taskId,
+            mode: opts.mode,
+            parentTabId: opts.parentTabId,
+            childTabIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        },
+        openSnapshotProblemTab: async (problemId, opts) => {
+          tabCalls.openSnapshotProblemTab.push({problemId, opts})
+          return {
+            id: 'tab_snap_1',
+            taskId: 'task_snap_1',
+            mode: 'play',
+            parentTabId: opts?.parentTabId,
+            childTabIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        },
       },
     })
   })
@@ -277,13 +308,97 @@ describe('workbenchPhaseService', () => {
       assert.strictEqual(tab.mode, 'analysis')
     })
 
-    it('returns new tab with play mode', async () => {
+    it('returns new tab with problem mode', async () => {
       store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', mode: 'analysis' }))
 
       const newTab = await service.snapshotFromAnalysis('tab_1')
 
-      assert.strictEqual(newTab.mode, 'play')
+      assert.strictEqual(newTab.mode, 'problem')
       assert.strictEqual(newTab.parentTabId, 'tab_1')
+    })
+
+    it('P2-T03: creates snapshot task through taskImportService and opens it through openTask', async () => {
+      const calls = {
+        createProblemFromCurrentAnalysisPosition: [],
+        createTaskFromSnapshot: [],
+        openTask: [],
+        openSnapshotProblemTab: [],
+        createTask: [],
+      }
+      const spyService = createWorkbenchPhaseService({
+        workbenchStore: store,
+        repository: {
+          loadTask: async () => ({ id: 'task_1', rootPositionSgf: '(;SZ[9])' }),
+          createTask: async t => {
+            calls.createTask.push(t)
+            return t
+          },
+          transaction: async fn => fn(),
+        },
+        snapshotService: {
+          captureSnapshotInput: async input => ({
+            parentTaskId: input.sourceTaskId,
+            positionSgf: '(;SZ[9])',
+            sideToMove: 'black',
+            moveIndex: 7,
+          }),
+          createProblemFromCurrentAnalysisPosition: async input => {
+            calls.createProblemFromCurrentAnalysisPosition.push(input)
+            return {id: 'legacy_problem'}
+          },
+        },
+        taskImportService: {
+          createTaskFromSnapshot: async input => {
+            calls.createTaskFromSnapshot.push(input)
+            return {
+              id: 'task_snapshot_p2',
+              rootPositionSgf: input.positionSgf,
+              sideToMove: input.sideToMove,
+              origin: {provider: 'snapshot', parentTaskId: input.parentTaskId},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          },
+        },
+        tabService: {
+          openTask: async opts => {
+            calls.openTask.push(opts)
+            return {
+              id: 'tab_snapshot_p2',
+              taskId: opts.taskId,
+              mode: opts.mode,
+              parentTabId: opts.parentTabId,
+              childTabIds: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          },
+          openSnapshotProblemTab: async (problemId, opts) => {
+            calls.openSnapshotProblemTab.push({problemId, opts})
+            return {}
+          },
+        },
+      })
+
+      store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', mode: 'analysis' }))
+
+      const newTab = await spyService.snapshotFromAnalysis('tab_1')
+
+      assert.deepStrictEqual(calls.createTaskFromSnapshot, [{
+        parentTaskId: 'task_1',
+        positionSgf: '(;SZ[9])',
+        sideToMove: 'black',
+        moveIndex: 7,
+      }])
+      assert.deepStrictEqual(calls.openTask, [{
+        taskId: 'task_snapshot_p2',
+        mode: 'problem',
+        parentTabId: 'tab_1',
+      }])
+      assert.strictEqual(calls.createProblemFromCurrentAnalysisPosition.length, 0)
+      assert.strictEqual(calls.createTask.length, 0)
+      assert.strictEqual(calls.openSnapshotProblemTab.length, 0)
+      assert.strictEqual(newTab.id, 'tab_snapshot_p2')
     })
 
     it('throws if tab not found', async () => {

@@ -51,6 +51,9 @@ function createMockRepository(overrides = {}) {
     async loadTask(id) {
       return tasks[id] ?? overrides.tasks?.[id] ?? null
     },
+    async getProblem(id) {
+      return problems[id] ?? null
+    },
     async loadBadMove(id) {
       calls.loadBadMove.push(id)
       return badMoves[id] ?? null
@@ -393,6 +396,79 @@ describeOrSkip('taskImportService', () => {
       const {service} = createTestService()
       const task = await service.createManualTask({positionSgf: MINIMAL_SGF})
       assert.strictEqual(task.origin.externalId, undefined)
+    })
+  })
+
+  // =========================================================
+  // createTaskFromLegacyProblem
+  // =========================================================
+
+  describe('createTaskFromLegacyProblem', () => {
+    it('P2-T01: converts a local legacy problem into a standard TrainingTask', async () => {
+      const {service} = createTestService({
+        repository: {
+          problems: {
+            prob_local: {
+              id: 'prob_local',
+              positionSgf: MINIMAL_SGF,
+              sideToMove: 'white',
+              title: 'Local tesuji',
+              positionDescription: 'Corner shape',
+              taskGoal: 'Find the tesuji',
+              passRule: {requireNoSevereBadMove: true},
+              referenceLines: [{label: 'Main', moves: ['W[qq]'], source: 'human'}],
+              tags: ['local-problem'],
+              difficulty: 2,
+              status: 'inbox',
+            },
+          },
+        },
+      })
+
+      const task = await service.createTaskFromLegacyProblem({problemId: 'prob_local'})
+
+      assert.strictEqual(task.origin.provider, 'local')
+      assert.strictEqual(task.origin.externalId, 'prob_local')
+      assert.strictEqual(task.rootPositionSgf, MINIMAL_SGF)
+      assert.strictEqual(task.sideToMove, 'white')
+      assert.strictEqual(task.title, 'Local tesuji')
+      assert.strictEqual(task.prompt, 'Corner shape')
+      assert.strictEqual(task.goal, 'Find the tesuji')
+      assert.deepStrictEqual(task.passRule, {requireNoSevereBadMove: true})
+      assert.deepStrictEqual(task.referenceLines, [{label: 'Main', moves: ['W[qq]'], source: 'human'}])
+      assert.deepStrictEqual(task.tags, ['local-problem'])
+      assert.strictEqual(task.difficulty, 2)
+      assert.strictEqual(task.status, 'inbox')
+    })
+
+    it('P2-T02: creates no legacy Problem entity and no special kind', async () => {
+      const {service, repository} = createTestService({
+        repository: {
+          problems: {
+            prob_plain: {
+              id: 'prob_plain',
+              positionSgf: MINIMAL_SGF,
+              sideToMove: 'black',
+            },
+          },
+        },
+      })
+
+      const task = await service.createTaskFromLegacyProblem({problemId: 'prob_plain'})
+
+      assert.strictEqual(repository.calls.createProblem.length, 0)
+      assert.strictEqual(task.kind, undefined)
+      assert.strictEqual(task.source, undefined)
+      assert.strictEqual(repository.calls.createTask.length, 1)
+    })
+
+    it('P2-T01b: throws when the local legacy problem is missing', async () => {
+      const {service} = createTestService()
+
+      await assert.rejects(
+        () => service.createTaskFromLegacyProblem({problemId: 'missing_problem'}),
+        /problem not found/i,
+      )
     })
   })
 
