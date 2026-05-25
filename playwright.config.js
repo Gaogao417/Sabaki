@@ -20,6 +20,11 @@ module.exports = defineConfig({
       dependencies: [],
     },
     {
+      name: 'new-game-dialog',
+      testMatch: /new-game-dialog\.spec\.js/,
+      dependencies: [],
+    },
+    {
       name: 'analysis-overlay',
       testMatch: /analysis-overlay-baseline\.spec\.js/,
       dependencies: [],

@@ -215,9 +215,8 @@ class TrainingWorkbenchContainer extends Component {
       }
     }
 
-    async function handleNewGame() {
-      // Same as handleAddTask: create manual play task -> open tab
-      await handleAddTask()
+    function handleNewGame() {
+      sabaki.openDrawer('newgame')
     }
 
     function handleResign() {

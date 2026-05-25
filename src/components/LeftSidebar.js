@@ -169,8 +169,7 @@ export default class LeftSidebar extends Component {
               PanelButton,
               {
                 variant: 'primary',
-                onClick: () =>
-                  sabaki.newFile({playSound: true, showInfo: true}),
+                onClick: () => sabaki.openDrawer('newgame'),
               },
               '+ 新对局',
             ),
