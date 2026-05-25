@@ -1,6 +1,6 @@
 # Sabaki — Codex 仓库上下文
 
-本文件是 Codex 的仓库级 bootstrap、workflow 路由和硬边界入口。`.claude` 和 `CLAUDE.md` 暂时保留作为历史来源；新任务优先遵守本文件、`.codex/hooks.json` 和 `.codex/skills/` / `.codex/agents/`。
+本文件是 Codex 的仓库级 bootstrap、workflow 路由和硬边界入口。`.claude` 和 `CLAUDE.md` 暂时保留作为历史来源；新任务优先遵守本文件、`.codex/hooks.json` 和 `.codex/skills/`。
 
 ## Workflow 入口
 
@@ -16,52 +16,32 @@ Workflow 选择：
 
 ## Role 类型
 
-Workflow skill 负责 step 调度、上下游字段、gate ledger 和并行条件。角色分两类：
+Workflow skill 负责 step 调度、上下游字段和并行条件。角色全部作为主代理或明确分派的 worker skill 执行；不要要求不存在的独立审查代理。
 
-- **Agents（独立 gate）**：`contract-designer`、`frontend-contract-designer`、`contract-auditor`、`test-auditor`、`architecture-reviewer`、`visual-fidelity-reviewer`。这些必须用 `.codex/agents/*.toml`，并作为独立子代理执行，除非当前 Codex 工具策略阻止 spawn。
-- **Skills（执行/读取角色）**：`phase-intake-slice-planner`、`test-writer`、`implementation-agent`、`frontend-design-source-reader`、`visual-test-writer`、`frontend-implementation-agent`。这些由主代理或明确分派的 worker 执行，必须先处在当前 workflow skill 下。
+- **Workflow / planning skills**：`business-contract-workflow`、`workbench-wiring-workflow`、`frontend-visual-workflow`、`phase-intake-slice-planner`。
+- **Execution / review skills**：`test-writer`、`implementation-agent`、`frontend-design-source-reader`、`visual-test-writer`、`frontend-implementation-agent`。必要的 contract、audit、review 作为当前 workflow 下的普通步骤完成，不作为强制门禁。
 
 模型策略只允许 `gpt-5.5`，reasoning 只允许 `medium` / `high` / `xhigh`：
 
 - workflow skill / 路由：`medium`
 - 执行/读取 skill：`high`
-- contract / audit / review agents：`xhigh`
+- 深度审查：`xhigh`（仅在任务明确需要时使用）
 
-## Workflow Hard Stop
+## Workflow Planning
 
-任何 Phase / implementation-plan / Partial / cleanup / gaps 请求，读完对应 workflow skill
-和完成 Phase Intake / Slice Planner 仍不代表可以编辑测试或生产代码。
+任何 Phase / implementation-plan / Partial / cleanup / gaps 请求，先读对应 workflow skill，并用 Phase Intake / Slice Planner 产出可执行 step 计划。
 
-Phase Intake / Slice Planner 的产物必须是 step 计划，而不是一个总包 gate。串行步骤用 `step1..stepN`，并行步骤用 `step2.1..step2.N`。至少列出：
+Phase Intake / Slice Planner 的产物必须是 step 计划，而不是一个总包。串行步骤用 `step1..stepN`，并行步骤用 `step2.1..step2.N`。至少列出：
 
 ```text
 Step | Do | Mode | Depends on | Can run with | Locks / owner | Next role
 ```
 
-主代理必须按 step 计划调度后续 workflow：同一 dotted step 组（如 `step2.1..2.N`）且写入/测试范围不冲突的步骤应并行走对应 gate；共享写入文件必须指定一个 serial integrator step。除非 planner 明确标记步骤不可拆，否则不得把多个 ready steps 合并成一个 umbrella contract。
+主代理必须按 step 计划调度后续 workflow：同一 dotted step 组（如 `step2.1..2.N`）且写入/测试范围不冲突的步骤可以并行；共享写入文件必须指定一个 serial integrator step。除非 planner 明确标记步骤不可拆，否则不得把多个 ready steps 合并成一个 umbrella step。
 
-主代理在第一次文件编辑前必须按当前 workflow skill 输出或维护 gate ledger，并确认：
+开始编辑前，主代理只需要说明当前 `workflow`、`step`、写入范围和验证命令。归档、draft、pending-confirmation 或 superseded contract 只能作为背景资料，不能覆盖当前 product / architecture 真源。
 
-```text
-Edit gate check:
-workflow = ...
-step = ...
-contract = APPROVED / missing
-contract audit = APPROVED / missing
-tests = written / missing
-test audit = APPROVED / missing
-implementation allowed = yes/no
-```
-
-只有 `implementation allowed = yes` 时才允许编辑生产代码；只有当前角色是
-`test-writer` 且前置 contract gate 已通过时才允许编辑测试代码。归档、draft、
-pending-confirmation 或 superseded contract 只能作为背景资料，不能解锁实现。
-
-如果当前 workflow 要求的独立 gate agent 因当前 Codex 工具策略不能 spawn，
-主代理必须在编辑前暂停并请求用户明确授权对应 gate agents；不得自行本地审查、
-自行批准或跳过这些 gate。
-
-`AGENTS.md` 只保留仓库级路由、角色类型、模型档位和硬边界。需要调整具体步骤、上下游字段、切片规则、审查规则或视觉/Workbench 流程细节时，修改对应 workflow skill；需要调整独立 gate 提示词时，修改 `.codex/agents/*.toml`。
+`AGENTS.md` 只保留仓库级路由、角色类型、模型档位和硬边界。需要调整具体步骤、上下游字段、切片规则、审查规则或视觉/Workbench 流程细节时，修改对应 workflow skill。
 
 ## 项目概要
 

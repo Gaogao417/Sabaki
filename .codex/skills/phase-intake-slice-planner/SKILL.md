@@ -1,6 +1,6 @@
 ---
 name: phase-intake-slice-planner
-description: Sabaki lightweight read-only gate that turns phase/plan/gaps/cleanup/partial requests into an executable step plan with explicit parallel branches.
+description: Sabaki lightweight read-only planner that turns phase/plan/gaps/cleanup/partial requests into an executable step plan with explicit parallel branches.
 ---
 
 # Phase Intake / Slice Planner
@@ -20,7 +20,7 @@ Return a compact plan with:
 - out of scope
 - step list
 - shared locks / integrators
-- gate ledger seed
+- verification notes
 
 The step list is the scheduling contract. Always use this shape:
 
@@ -46,7 +46,7 @@ step2.3
 
 All `step2.x` entries are parallel unless their `Depends on` or `Locks / owner` says otherwise. If several parallel branches need the same file, create a later serial integrator step, for example `step3 integrate container wiring`.
 
-Downstream roles receive one step payload per agent instance. The main session must fan out ready dotted substeps before creating a new umbrella contract.
+Downstream work receives one step payload per worker or main-session pass. The main session should fan out ready dotted substeps before creating a new umbrella step.
 
 ## Step Size
 

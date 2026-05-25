@@ -48,31 +48,29 @@ UI control event
    - Do not collapse multiple ready steps into one umbrella contract unless the planner marks them indivisible.
    - Shared files such as `workbenchFlowService.ts`, `WorkbenchTab` types, stores, repositories, and container wiring are serial locks; assign one later integrator step for those files.
 
-3. `agent:contract-designer`
+3. Contract sketch
    - Input: one wiring step payload.
    - Output path: `docs/archive/daily-design/YYYY-MM-DD/<task-name>/test-contract-v0.N.md`.
    - Must cite active source truth.
    - Must list control event, container handler, controller command, service/repository boundary, store before/after, projection result, allowed side effects, forbidden side effects, and manual acceptance.
 
-4. `agent:contract-auditor`
-   - Blocks contracts that blur layer ownership or allow mocking the production subject under test.
-
-5. `$test-writer`
-   - Writes state-forward and state-return tests from the approved contract.
+4. `$test-writer`
+   - Writes state-forward and state-return tests from the contract sketch or current step plan.
    - Must include a harness/mock manifest.
    - May run in parallel only for dotted steps in the same ready group with disjoint test scope; otherwise use the named test integrator step.
 
-6. `agent:test-auditor`
+5. Test review
    - Rejects callback-only fake green tests, wrong-layer mocks, reverse-contract tests, and tests that manually mutate asserted state.
+   - This is a normal review step, not an independent approval role.
 
-7. `$implementation-agent`
-   - Implements minimal wiring against approved contract/tests.
+6. `$implementation-agent`
+   - Implements minimal wiring against the step plan and tests.
    - Keeps presentational panels presentational.
    - May run in parallel only for dotted steps in the same ready group with disjoint write scope.
    - Shared production files require one named integrator step; other workers must avoid those files or wait for the integrator handoff.
 
-8. `agent:architecture-reviewer`
+7. Architecture review
    - Reviews boundary leaks, duplicate state, hidden globals, direct service imports in UI components, and weak tests.
    - Must trace at least one UI event to projected UI update loop.
 
-Use `agent:visual-fidelity-reviewer` only if wiring changed visible layout or visual behavior enough to risk a UI regression.
+Use a visual review pass only if wiring changed visible layout or visual behavior enough to risk a UI regression.
