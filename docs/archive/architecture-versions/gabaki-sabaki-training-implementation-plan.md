@@ -2,10 +2,12 @@
 
 > 文档类型：长期实施计划对应 PRD：`gabaki-sabaki-training-prd-v0.5.md`
 > 对应架构：`gabaki-sabaki-training-architecture-v0.5.md`
-> 当前代码现状：训练域已落地一部分 v0.4 骨架，包括
-> `TrainingTask.kind/source`、`WorkbenchTab.phase`、`workbenchPhaseService`、`openGameTab/openProblemTab/openSnapshotProblemTab`、`training_bad_moves.generated_problem_id`、legacy
-> Review item type 等。v0.5 的第一步不是继续加功能，而是把这些 v0.4 建模收敛到
-> `TrainingTask + TaskOrigin + WorkbenchMode + Attempt`。
+> 当前代码现状：训练域已经落地一批 v0.5 切片，包括
+> `TrainingTask.origin` 兼容建模、`WorkbenchTab.mode`、`openTask`、
+> `workbenchFlowService`、`taskImportService`、Attempt moveActors、Problem AI
+> problemArea 过滤、BadMove 派生幂等、Review `openTask`、Workbench UI shell /
+> panels。后续重点不再是从零开始，而是补齐 v0.5 契约缺口，并清理仍在主路径上的
+> legacy shim。
 
 ---
 
@@ -21,6 +23,48 @@ Architecture v0.4      = legacy reference，只用于理解迁移前状态
 本计划只执行 v0.5 主路径。v0.4 的 `Phase`、`TrainingTaskKind`、
 `source_kind`、`openProblemTab`、`openSnapshotProblemTab` 等概念只用于识别和
 迁移 legacy 代码，不得作为新实现主路径。
+
+## 0.1 当前实现快照
+
+已经落地：
+
+```text
+TrainingTask.origin 兼容建模
+WorkbenchTab.mode
+workbenchTabService.openTask
+workbenchFlowService skeleton
+taskImportService skeleton + local/manual/snapshot/badMove paths
+Attempt userLine + moveActors
+Problem AI problemArea 二次过滤
+BadMove createTaskFromBadMove 幂等返回 generatedTaskId
+Review openDueItem → openTask
+Workbench shell / mode panels / right panels / bottom action bar
+```
+
+部分完成：
+
+```text
+legacy kind/source/phase 仍保留为兼容字段
+openGameTab / openProblemTab / openSnapshotProblemTab 仍存在
+workbenchFlowService 仍用 inline transition 和 previousMode/toMode
+Snapshot 仍有 createProblemFromCurrentAnalysisPosition / Problem path
+RecallSession 仍有 legacy source/type/startMove/endMove
+Review addToReviewQueue 已有，但缺少显式 ReviewEnrollmentPolicy
+```
+
+未完成的新契约：
+
+```text
+modeTransitions.ts
+AnalysisReturnTarget
+RecallSubstate
+RecallPolicy / expectedMoveIndexes
+AiMovePending 竞态保护
+完整 SnapshotTaskInput parent context / requestId
+ExplorationBranch
+ReviewEnrollmentPolicy
+UI keyboard command path / compact layout / disabled reason stories
+```
 
 ---
 
@@ -105,9 +149,10 @@ reviewScheduler
 模块超过约 200 行且有多个独立变化原因。
 ```
 
-## 1.3 v0.4 遗留收敛清单
+## 1.3 剩余 legacy debt
 
-继续开发前需要逐步消除或薄化：
+这些项目不是“完全未做”，而是当前实现中仍存在的兼容层或旧入口。后续开发应继续薄化，
+不能把它们恢复成新主路径：
 
 ```text
 TrainingTask.kind
@@ -124,7 +169,7 @@ Recall source_json / type / start_move / end_move
 Problem.type = punishment 作为主流程判断
 ```
 
-替换目标：
+收敛目标：
 
 ```text
 TrainingTask.origin
@@ -139,28 +184,27 @@ RecallSession.attemptId
 
 ## 1.4 实施方式：纵向切片 + 阶段式迁移
 
-Phase 0-9 仍然是长期迁移顺序，但不能等到 Phase 8 才第一次验证 UI
-工作台体验。Phase 0-1 完成后必须先做一个 walking skeleton：
+Phase 0-9 仍然是长期迁移顺序，但当前代码已经有基础 walking skeleton。后续不再
+按“从 Phase 0 重新开始”执行，而是在已有切片上逐步补齐契约。
 
 ```text
-Vertical Slice 0:
+已落地的基础切片：
   openTask
   render Play / Problem shell
   create Attempt
-  append one move
   Submit
   create RecallSession
-  render Recall shell
+  render Recall / Analysis shell
 ```
 
-之后每个阶段都带一个最小 UI 接入：
+之后每个契约补齐都必须带最小 UI 或 command-path 接入：
 
 ```text
-Phase 3 做 AI Move 时，同时接 Play / Problem 的 playerConfig UI
-Phase 4 做 BadMove 时，同时接 Analysis 的 BadMove summary card
-Phase 5 做 Checkpoint 时，同时接 RecallCheckpointPanel
-Phase 6 做 Snapshot 时，同时接全局 Snapshot button / shortcut
-Phase 7 做 Review 时，同时接 Review Inbox
+modeTransitions 补齐时，同时接 Analysis Return / Recall substate UI
+RecallPolicy 补齐时，同时接 Recall expectedMoves view model
+AiMovePending 补齐时，同时接 AI pending / interruption UI
+SnapshotTaskInput 补齐时，同时接全局 Snapshot button / shortcut
+ReviewEnrollmentPolicy 补齐时，同时接 Review Inbox / 加入复习入口
 ```
 
 每个切片都必须覆盖 service tests + 一个 UI smoke / integration test，避免 service
@@ -169,6 +213,8 @@ Phase 7 做 Review 时，同时接 Review Inbox
 ---
 
 # 2. Phase 0：v0.5 模型收敛
+
+状态：`Landed / cleanup remaining`
 
 目标：先把类型、Repository、DB
 mapper 和兼容读取统一到 v0.5 语义，不改变可见 UI 行为。
@@ -256,6 +302,8 @@ repository create/load/update task roundtrip tests。
 ---
 
 # 3. Phase 1：Workbench Mode + openTask 骨架
+
+状态：`Landed / contract gaps remaining`
 
 目标：用 `WorkbenchMode` 和统一 `openTask` 替代 v0.4 的 Phase / source-specific
 tab API。
@@ -364,6 +412,8 @@ playerConfig store/update tests。
 
 # 4. Phase 2：taskImportService 与材料入口
 
+状态：`Landed / wrapper cleanup remaining`
+
 目标：把所有外部来源处理集中到导入层，Workbench 后续只处理标准化 Task。
 
 范围：
@@ -426,6 +476,8 @@ legacy problem import compatibility tests。
 ---
 
 # 5. Phase 3：Attempt + AI Move + Submit + Recall
+
+状态：`Partial`
 
 目标：Play /
 Problem 产生 Attempt；按玩家配置处理 AI 应手；Submit 冻结 Attempt 并默认进入 Recall。
@@ -526,6 +578,8 @@ problem-like task → Problem → Submit → Recall integration tests。
 
 # 6. Phase 4：MoveEvaluation / BadMove
 
+状态：`Partial`
+
 目标：每手落子产生评价事实，major /
 severe 问题手沉淀为 BadMove，但不直接创建派生题。
 
@@ -580,6 +634,8 @@ submit with failed evaluation tests。
 
 # 7. Phase 5：Recall Checkpoint / Comment
 
+状态：`Partial`
+
 目标：Recall 遇到 major / severe BadMove 时进入主动纠错子流程。
 
 范围：
@@ -625,6 +681,8 @@ existing recall compatibility tests。
 ---
 
 # 8. Phase 6：Analysis / Global Snapshot
+
+状态：`Partial`
 
 目标：Analysis 成为低阻碍自由研究空间；Snapshot 成为所有模式可用的全局派生 Task 能力。
 
@@ -739,6 +797,8 @@ Play / Problem / Recall / Analysis snapshot integration tests。
 
 # 9. Phase 7：Review / BadMove 派生 Task
 
+状态：`Partial`
+
 目标：Review 直接调度 Task；BadMove 可派生成普通 TrainingTask 并进入长期复习队列。
 
 范围：
@@ -808,6 +868,8 @@ Dashboard due/inbox counts tests。
 ---
 
 # 10. Phase 8：UI 集成与工作台体验
+
+状态：`Partial`
 
 目标：把 v0.5 模式模型接到可用工作台，而不是只停留在 service 层。
 
@@ -917,6 +979,8 @@ legacy ProblemBar compatibility regression tests。
 
 # 11. Phase 9：Legacy Cleanup
 
+状态：`Pending`
+
 目标：训练业务不再依赖 `sabaki.js` global training state 和 legacy mode。
 
 关键任务：
@@ -987,31 +1051,25 @@ Analysis 自动写 Attempt
 # 13. 总体里程碑
 
 ```text
-Phase 0  v0.5 模型收敛                 已完成
-Phase 1  Workbench Mode + openTask      已完成
-Phase 2  taskImportService              已完成 (skeleton)
-Phase 3  Attempt + AI Move + Recall     进行中
-         - attemptService, recallService 已有
-         - aiMoveService 待实现
-         - W3 Goban 管道层已完成，数据源层待做
-Phase 4  MoveEvaluation + BadMove       2-3 周
-Phase 5  Recall Checkpoint              2-3 周
-Phase 6  Analysis + Global Snapshot     2-3 周
-Phase 7  Review + BadMove 派生 Task     1-2 周
-Phase 8  UI 集成与工作台体验            2-3 周
-Phase 9  Legacy Cleanup                 2 周
+Phase 0  v0.5 模型收敛                 Landed / cleanup remaining
+Phase 1  Workbench Mode + openTask      Landed / contract gaps remaining
+Phase 2  taskImportService              Landed / wrapper cleanup remaining
+Phase 3  Attempt + AI Move + Recall     Partial
+Phase 4  MoveEvaluation + BadMove       Partial
+Phase 5  Recall Checkpoint              Partial
+Phase 6  Analysis + Global Snapshot     Partial
+Phase 7  Review + BadMove 派生 Task     Partial
+Phase 8  UI 集成与工作台体验            Partial
+Phase 9  Legacy Cleanup                 Pending
 ```
 
 优先级判断：
 
 ```text
-Phase 0-1 是 v0.5 地基，必须先做；
-Vertical Slice 0 必须紧跟 Phase 0-1，用最小 UI 跑通 openTask → Attempt → Submit → Recall；
-Phase 2 防止 source 逻辑继续扩散；
-Phase 3-5 构成训练价值主干；
-Phase 6-7 完成派生题和长期复习闭环；
-Phase 8 是工作台体验补全，不是第一次 UI 集成；
-Phase 9 只在新路径稳定后做。
+Phase 0-2 已经形成 v0.5 基础切片，但仍要清掉 legacy 主路径残留；
+Phase 3-7 已有服务骨架和部分测试，下一步重点是补齐 v0.5 新契约；
+Phase 8 已有 UI shell/panels，下一步接真实 command path、快捷键和状态覆盖；
+Phase 9 只在新路径稳定后做，不提前做破坏性删除。
 ```
 
 ---
@@ -1045,50 +1103,36 @@ Container: 订阅 adapter + 转发 click，移除所有硬编码
 playInteractionExecutor: 接通 documentStore.playMove（替代 sabaki.clickVertex 降级）
 ```
 
-第一轮必须完成：
+下一轮真实优先级：
 
 ```text
-1. types/task.ts：TrainingTask + TaskOrigin
-2. types/tab.ts：WorkbenchMode / WorkbenchTab
-3. db migration：training_tasks origin_json + problem-like fields
-4. repository mapper：old source → origin
-5. workbenchTabService.openTask
-6. modeTransitions.ts table-driven skeleton
-7. workbenchFlowService skeleton
-8. workbenchUiPolicy 默认 mode 推导
-9. Vertical Slice 0 UI shell
+1. modeTransitions.ts + AnalysisReturnTarget + RecallSubstate
+2. RecallPolicy + expectedMoveIndexes + schema/mapper/tests
+3. AiMovePending + stale AI request rejection + auto-play limits
+4. Snapshot 统一走 snapshotService → taskImportService.createTaskFromSnapshot → openTask
+5. SnapshotTaskInput 补 requestId + full parent context + per-mode capture rules
+6. ReviewEnrollmentPolicy：Snapshot 默认 manual，BadMove derived task 默认 auto
+7. UI keyboard command path + compact layout + disabled reason / key empty states
 ```
 
-第二轮：
+必须补的测试：
 
 ```text
-1. taskImportService skeleton
-2. importLocalSgf / createManualTask
-3. legacy openProblemTab wrapper → import/openTask
-4. openTask 跑通 Play / Problem 两种 UI
+mode transition table-driven tests
+Analysis return restore tests
+RecallPolicy expected move derivation tests
+AI stale request rejection tests
+Snapshot per-mode capture + requestId idempotency tests
+ReviewEnrollmentPolicy tests
+UI keyboard command-path and disabled-state tests
 ```
 
-第三轮：
+文档更新验收：
 
 ```text
-1. attemptService 与 v0.5 task 字段对齐
-2. aiMoveService skeleton
-3. Play black/white human|ai
-4. Problem opponent self|ai
-5. Problem AI problemArea 约束
-6. submit → recall transaction
-7. recall_sessions attemptId + recallPolicy + expectedMoveIndexes
-8. AI stale request rejection
-9. Play / Problem 落子写 Attempt
-```
-
-第四轮：
-
-```text
-1. playTrainingMonitor 接入 mode
-2. generatedProblemId → generatedTaskId
-3. BadMove 派生 Task
-4. ReviewSchedule taskId 化
+只更新 implementation plan，不改代码、不改架构文档、不改 UI spec。
+运行 git diff --check。
+代码测试不作为本次文档更新前置条件；当前工作区可能没有可用 mocha binary。
 ```
 
 ---
