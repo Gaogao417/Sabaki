@@ -48,6 +48,7 @@ export type MoveActor = {
 export type TrainingTask = {
   id: string
 
+  initialPositionSgf?: string
   rootPositionSgf: string
   sideToMove?: 'black' | 'white'
 
