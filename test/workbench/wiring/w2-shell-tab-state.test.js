@@ -318,9 +318,9 @@ describeFlow('W2 State Transitions: workbenchFlowService', () => {
     it('restores mode to the pre-analysis mode', () => {
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', previousMode: 'recall'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', analysisReturnTarget: {mode: 'recall'}}))
 
-      service.returnFromAnalysis('tab_1', 'recall')
+      service.returnFromAnalysis({tabId: 'tab_1'})
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
       assert.strictEqual(tab.mode, 'recall')
@@ -329,9 +329,9 @@ describeFlow('W2 State Transitions: workbenchFlowService', () => {
     it('clears previousMode after restore', () => {
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', previousMode: 'problem'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', previousMode: 'problem', analysisReturnTarget: {mode: 'problem'}}))
 
-      service.returnFromAnalysis('tab_1', 'problem')
+      service.returnFromAnalysis({tabId: 'tab_1'})
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
       assert.strictEqual(tab.previousMode, undefined)

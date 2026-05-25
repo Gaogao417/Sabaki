@@ -4,6 +4,9 @@ export {
   type WorkbenchTabServiceDeps,
 } from './workbenchTabService'
 
+/**
+ * @deprecated Use createWorkbenchFlowService instead.
+ */
 export {
   createWorkbenchPhaseService,
   type WorkbenchPhaseService,

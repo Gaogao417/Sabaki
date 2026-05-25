@@ -6,6 +6,7 @@ import type { TrainingRepository } from '../repository/trainingRepository'
 
 const VALID_PHASES: Set<string> = new Set(['play', 'recall', 'analysis'])
 
+/** @deprecated Use WorkbenchFlowService instead. */
 export type PhaseTransition =
   | 'submit'
   | 'complete'
@@ -25,6 +26,7 @@ export const PHASE_TRANSITION_RESULT: Record<string, WorkbenchMode> = {
   'analysis:restart': 'play',
 }
 
+/** @deprecated Use WorkbenchFlowService instead. */
 export type WorkbenchPhaseService = {
   transition(tabId: string, transition: PhaseTransition): void
   getPhase(tabId: string): WorkbenchMode | null
@@ -52,6 +54,7 @@ export class InvalidPhaseTransitionError extends Error {
   }
 }
 
+/** @deprecated Use createWorkbenchFlowService instead. This module will not receive new features. */
 export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): WorkbenchPhaseService {
   const { workbenchStore, repository, snapshotService, tabService, logger } = deps
 

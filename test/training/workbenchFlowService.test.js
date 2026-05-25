@@ -137,6 +137,7 @@ describeIf('workbenchFlowService', () => {
           freezeAttempt: async id => { order.push('freeze') },
         },
         recallService: {
+          createRecallFromAttempt: undefined,
           createRecallSession: async input => { order.push('recall'); return {id: 'rs_1'} },
         },
       })
@@ -496,26 +497,26 @@ describeIf('workbenchFlowService', () => {
   })
 
   describe('returnFromAnalysis — analysis → previous mode', () => {
-    it('restores mode to the specified toMode', () => {
+    it('restores mode from analysisReturnTarget', () => {
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', previousMode: 'recall'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', analysisReturnTarget: {mode: 'recall', recallSubstate: 'normal'}}))
 
-      service.returnFromAnalysis('tab_1', 'recall')
+      service.returnFromAnalysis({tabId: 'tab_1'})
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
       assert.strictEqual(tab.mode, 'recall')
     })
 
-    it('clears previousMode', () => {
+    it('clears analysisReturnTarget', () => {
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', previousMode: 'play'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', analysisReturnTarget: {mode: 'play'}}))
 
-      service.returnFromAnalysis('tab_1', 'play')
+      service.returnFromAnalysis({tabId: 'tab_1'})
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
-      assert.strictEqual(tab.previousMode, undefined)
+      assert.strictEqual(tab.analysisReturnTarget, undefined)
     })
   })
 
@@ -1105,6 +1106,7 @@ describeIf('workbenchFlowService', () => {
         const createdSessions = []
         const deps = createMockDeps({
           recallService: {
+            createRecallFromAttempt: undefined,
             createRecallSession: async input => {
               createdSessions.push({...input})
               return {id: 'rs_new', ...input}

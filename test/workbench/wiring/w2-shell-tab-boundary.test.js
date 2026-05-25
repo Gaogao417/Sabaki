@@ -247,7 +247,13 @@ describeFlow('W2-T18: workbenchFlowService rejects illegal mode transitions', ()
       deps.store.addTab(makeTab({id: 'tab_1', mode: from}))
 
       assert.throws(
-        () => service[method]('tab_1'),
+        () => {
+          if (method === 'returnFromAnalysis') {
+            service[method]({tabId: 'tab_1'})
+          } else {
+            service[method]('tab_1')
+          }
+        },
         /InvalidModeTransitionError|Invalid mode transition/,
         `${label} should throw InvalidModeTransitionError`
       )
@@ -293,13 +299,13 @@ describeFlow('W2-T18: workbenchFlowService rejects illegal mode transitions', ()
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
       const tabConfig = from === 'analysis'
-        ? {mode: 'analysis', previousMode: 'play'}
+        ? {mode: 'analysis', analysisReturnTarget: {mode: 'play'}}
         : {mode: from}
       deps.store.addTab(makeTab({id: 'tab_1', ...tabConfig}))
 
       // Should not throw
       if (method === 'returnFromAnalysis') {
-        service[method]('tab_1', 'play')
+        service[method]({tabId: 'tab_1'})
       } else {
         service[method]('tab_1')
       }

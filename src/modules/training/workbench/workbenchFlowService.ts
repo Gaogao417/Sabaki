@@ -5,22 +5,7 @@ import type { TrainingRepository } from '../repository/trainingRepository'
 import type { SnapshotService } from '../analysis/snapshotService'
 import type { WorkbenchTabService } from './workbenchTabService'
 import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
-
-const MODE_TRANSITIONS: Record<WorkbenchMode, string[]> = {
-  play: ['submit', 'enterAnalysis'],
-  problem: ['submit', 'enterAnalysis'],
-  recall: ['completeRecall', 'enterAnalysis'],
-  analysis: ['returnFromAnalysis'],
-}
-
-const TRANSITION_RESULT: Record<string, WorkbenchMode | null> = {
-  'play:submit': 'recall',
-  'problem:submit': 'recall',
-  'recall:completeRecall': 'analysis',
-  'play:enterAnalysis': 'analysis',
-  'problem:enterAnalysis': 'analysis',
-  'recall:enterAnalysis': 'analysis',
-}
+import { resolveTransition } from './modeTransitions'
 
 export class InvalidModeTransitionError extends Error {
   constructor(
@@ -69,7 +54,8 @@ export type DashboardData = {
 export type WorkbenchFlowService = {
   submit(tabId: string): Promise<void>
   enterAnalysis(tabId: string): void
-  returnFromAnalysis(tabId: string, toMode: WorkbenchMode): void
+  returnFromAnalysis(input: {tabId: string}): void
+  enterRecall(input: {tabId: string; attemptId: string}): Promise<{id: string}>
   completeRecall(tabId: string): void
   restartAttempt(tabId: string): void
   startAttempt(tabId: string): Promise<void>
@@ -90,12 +76,45 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
   }
 
   function assertTransition(tab: WorkbenchTab, method: string): void {
-    const allowed = MODE_TRANSITIONS[tab.mode]
-    if (!allowed || !allowed.includes(method)) {
+    // Legacy events not in modeTransitions state machine
+    if (method === 'completeRecall') {
+      if (tab.mode !== 'recall') {
+        logger?.info('flow.transition.rejected', 'Transition rejected', {
+          tabId: tab.id,
+          from: tab.mode,
+          method,
+        })
+        throw new InvalidModeTransitionError(tab.id, tab.mode, method)
+      }
+      return
+    }
+
+    // Legacy: enterAnalysis from recall without active session was allowed by old code.
+    // The pure state machine requires hasActiveRecallSession, but the service preserves
+    // backward compatibility for recall tabs without a session.
+    if (method === 'enterAnalysis' && tab.mode === 'recall' && !tab.activeRecallSessionId) {
+      return
+    }
+
+    const result = resolveTransition({
+      from: tab.mode,
+      event: method as 'submit' | 'enterAnalysis' | 'returnFromAnalysis' | 'restartAttempt' | 'snapshot',
+      hasActiveAttempt: !!tab.activeAttemptId,
+      isAttemptFrozen: false,
+      hasActiveRecallSession: !!tab.activeRecallSessionId,
+      hasTask: !!tab.taskId,
+      hasCheckpoint: false,
+      isCorrectionSubmitted: false,
+      isCheckpointAiRevealed: false,
+      isCheckpointSavedOrSkipped: false,
+      hasAnalysisReturnTarget: !!tab.analysisReturnTarget,
+    })
+    if (!result.allowed) {
       logger?.info('flow.transition.rejected', 'Transition rejected', {
         tabId: tab.id,
         from: tab.mode,
         method,
+        reason: result.reason,
       })
       throw new InvalidModeTransitionError(tab.id, tab.mode, method)
     }
@@ -123,7 +142,6 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
 
   function submit(tabId: string): Promise<void> {
     const tab = getTab(tabId)
-    assertTransition(tab, 'submit')
 
     logger?.info('flow.submit', 'Submit attempt', {
       tabId,
@@ -132,12 +150,25 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     })
 
     if (!tab.activeAttemptId) {
+      // Legacy path: no active attempt, directly transition to recall.
+      // The pure state machine rejects this case (P1G-T07), but the service
+      // preserves backward compatibility for callers without an attempt.
+      if (tab.mode !== 'play' && tab.mode !== 'problem') {
+        logger?.info('flow.transition.rejected', 'Transition rejected', {
+          tabId: tab.id,
+          from: tab.mode,
+          method: 'submit',
+        })
+        throw new InvalidModeTransitionError(tab.id, tab.mode, 'submit')
+      }
       workbenchStore.updateTab(tabId, { mode: 'recall' })
       logger?.info('flow.submit', 'Submit completed (no active attempt, direct recall)', {
         tabId,
       })
       return Promise.resolve()
     }
+
+    assertTransition(tab, 'submit')
 
     return (async () => {
       // Step 1: Freeze attempt
@@ -166,6 +197,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       // Step 6: Transition mode only after all work succeeds
       workbenchStore.updateTab(tabId, {
         mode: 'recall',
+        recallSubstate: 'normal',
         activeRecallSessionId: session.id,
       })
 
@@ -192,9 +224,16 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       attemptId: tab.activeAttemptId ?? null,
     })
 
+    const analysisReturnTarget = {
+      mode: tab.mode as 'play' | 'problem' | 'recall',
+      recallSubstate: tab.recallSubstate,
+      treePosition: tab.currentTreePosition,
+    }
+
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
       previousMode: tab.mode,
+      analysisReturnTarget,
       analysisContext: {
         taskId: tab.taskId,
         source: tab.mode as AnalysisContextSource,
@@ -205,28 +244,74 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     logger?.info('flow.enterAnalysis', 'Analysis mode entered', {
       tabId,
       previousMode: tab.mode,
+      analysisReturnTarget,
     })
   }
 
-  function returnFromAnalysis(tabId: string, toMode: WorkbenchMode): void {
-    const tab = getTab(tabId)
+  function returnFromAnalysis(input: {tabId: string}): void {
+    const tab = getTab(input.tabId)
+
+    if (!tab.analysisReturnTarget) {
+      logger?.info('flow.returnFromAnalysis', 'Return rejected: no analysisReturnTarget', {
+        tabId: input.tabId,
+      })
+      throw new InvalidModeTransitionError(input.tabId, tab.mode, 'returnFromAnalysis')
+    }
+
     assertTransition(tab, 'returnFromAnalysis')
 
+    const target = tab.analysisReturnTarget
+
     logger?.info('flow.returnFromAnalysis', 'Return from analysis', {
-      tabId,
-      toMode,
-      previousMode: tab.previousMode ?? null,
+      tabId: input.tabId,
+      targetMode: target.mode,
+      targetRecallSubstate: target.recallSubstate ?? null,
+      targetTreePosition: target.treePosition ?? null,
     })
 
-    workbenchStore.updateTab(tabId, {
-      mode: toMode,
+    workbenchStore.updateTab(input.tabId, {
+      mode: target.mode,
+      recallSubstate: target.recallSubstate,
+      currentTreePosition: target.treePosition,
       previousMode: undefined,
+      analysisReturnTarget: undefined,
     })
 
     logger?.info('flow.returnFromAnalysis', 'Returned from analysis', {
-      tabId,
-      toMode,
+      tabId: input.tabId,
+      toMode: target.mode,
     })
+  }
+
+  async function enterRecall(input: {tabId: string; attemptId: string}): Promise<{id: string}> {
+    const tab = getTab(input.tabId)
+
+    logger?.info('flow.enterRecall', 'Enter recall mode', {
+      tabId: input.tabId,
+      attemptId: input.attemptId,
+      fromMode: tab.mode,
+    })
+
+    // Create recall session from the attempt
+    const session = await createRecallForAttempt({
+      ...tab,
+      activeAttemptId: input.attemptId,
+    })
+
+    workbenchStore.updateTab(input.tabId, {
+      mode: 'recall',
+      recallSubstate: 'normal',
+      activeRecallSessionId: session.id,
+    })
+
+    runtimeStore?.setActiveRecallSession(session.id)
+
+    logger?.info('flow.enterRecall', 'Recall mode entered', {
+      tabId: input.tabId,
+      sessionId: session.id,
+    })
+
+    return session
   }
 
   function completeRecall(tabId: string): void {
@@ -389,6 +474,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     submit,
     enterAnalysis,
     returnFromAnalysis,
+    enterRecall,
     completeRecall,
     restartAttempt,
     startAttempt,
