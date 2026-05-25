@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/cache-session-title.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|apply_patch|functions.apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/check-no-window-sabaki.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/check-arch-boundaries.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/notify-codex-done.sh"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|permission",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/notify-permission-needed.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

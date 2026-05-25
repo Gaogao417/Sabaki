@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sabaki Workflows"
+  short_description: "Run Sabaki contract and review workflows."
+  default_prompt: "Use the Sabaki workflow guardrails for this task."
