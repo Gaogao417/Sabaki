@@ -1,21 +1,21 @@
 # Gabaki / Sabaki 工作台 UI/UX 与前端实现规格
 
-> 目标：在现有 `ui-ux-spec-0.5` 的视觉骨架上，修正信息架构、模式定义、关键交互和验收标准，使 Workbench UI 严格对齐 `gabaki-sabaki-training-prd-v0.5.md` 与 `gabaki-sabaki-training-architecture-v0.5.md`。本文定义前端可实现、可截图验收的工作台规格，但不替代 PRD 或 Architecture 的产品与架构真源。
+> 目标：在现有 `ui-ux-spec-0.5` 的视觉骨架上，修正信息架构、模式定义、关键交互和验收标准，使 Workbench UI 严格对齐当前 PRD 与 v0.5 模块架构。本文定义前端可实现、可截图验收的工作台规格，但不替代 PRD 或 Architecture 的产品与架构真源。
 
 ## 0. 真源与视觉参考关系
 
 产品与架构判断的优先级如下：
 
-1. 产品真源：`docs/design/gabaki-sabaki-training-prd-v0.5.md`
-2. 架构真源：`docs/design/gabaki-sabaki-training-architecture-v0.5.md`
-3. 迁移执行真源：`docs/design/gabaki-sabaki-training-implementation-plan.md`
+1. 产品真源：`docs/product/sabaki-training-prd.md`
+2. 架构真源：`docs/architecture/gabaki-sabaki-training-architecture-v0.5.md`
+3. 迁移执行真源：`docs/architecture/gabaki-sabaki-training-implementation-plan.md`
 4. UI 基础稿：当前 `workbench-ui-ux-spec.md` / `ui-ux-spec-0.5`
 
-`docs/design/gabaki-sabaki-training-architecture.md` 是 v0.4 legacy reference，
+`docs/archive/architecture-versions/gabaki-sabaki-training-architecture.md` 是 v0.4 legacy reference，
 只能用于理解迁移前状态。新 UI 不得继续把 `Phase`、`TrainingTaskKind`、
 `source_kind`、`openProblemTab` 或 `openSnapshotProblemTab` 当作主路径。
 
-`docs/design/workbench-ref-pics/` 已经过时，不能作为 UI/UX 产品真源。历史图片最多作为非约束视觉参考，用于保持浅色桌面应用、三栏工作台、棋盘居中、左右卡片面板和底部工具栏的整体气质。若历史图片与 PRD v0.5 或 Architecture v0.5 冲突，一律以 PRD v0.5 与 Architecture v0.5 为准。
+`docs/ui_ux/workbench-ref-pics/` 是历史视觉参考，不能作为 UI/UX 产品真源。历史图片最多作为非约束视觉参考，用于保持浅色桌面应用、三栏工作台、棋盘居中、左右卡片面板和底部工具栏的整体气质。若历史图片与当前 PRD 或 Architecture v0.5 冲突，一律以当前 PRD 与 Architecture v0.5 为准。
 
 核心原则：
 

@@ -1,6 +1,6 @@
 # Gabaki / Sabaki 魔改版围棋训练系统 PRD
 
-> 版本：v0.1  
+> 版本：v0.6  
 > 文档类型：产品需求文档（PRD）  
 > 核心定位：面向个人训练的围棋学习工具  
 > 当前目标：从“AI 分析棋盘”升级为“实战记忆 + 复盘出题 + 自由做题 + 错手惩罚题生成”的训练系统
@@ -9,9 +9,12 @@
 
 本文是 Gabaki / Sabaki 魔改版训练系统的产品全量蓝图，定义产品目标、训练闭环、核心功能、数据对象和验收方向。
 
-- 当前工作台视觉实现以 [Workbench UI/UX Spec](../design/workbench-ui-ux-spec.md) 为准。
-- 当前视觉参考图归档在 [Workbench Reference Pictures](../design/workbench-ref-pics/README.md)。
+- 历史 v0.5 PRD 归档在 [Gabaki / Sabaki Training PRD v0.5](../archive/prd-versions/gabaki-sabaki-training-prd-v0.5.md)，仅用于追溯上一版收敛口径；当前产品真源以本文为准。
+- 当前工作台视觉实现以 [Workbench UI/UX Spec](../ui_ux/workbench-ui-ux-spec.md) 为准。
+- 当前视觉参考图归档在 [Workbench Reference Pictures](../ui_ux/workbench-ref-pics/)。
 - 当前运行态状态机以 [Workbench Mode Orchestration Contract](../design/workbench-mode-orchestration-contract.md) 为准。
+- 当前模块架构以 [Training Architecture v0.5](../architecture/gabaki-sabaki-training-architecture-v0.5.md) 为准。
+- 当前长期迁移执行以 [Training Implementation Plan](../architecture/gabaki-sabaki-training-implementation-plan.md) 为准。
 - 棋盘读写边界以 [Position Source and Mutation Contract](../architecture/position-source-mutation-contract.md) 为准。
 - 如 PRD 与具体 UI/UX 方案存在范围差异，产品能力边界以 PRD 为准；具体阶段的布局、视觉层级和控件呈现以对应 UI/UX 方案为准。
 

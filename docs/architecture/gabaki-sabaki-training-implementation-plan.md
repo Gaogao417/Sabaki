@@ -1,7 +1,9 @@
 # Gabaki / Sabaki Training Implementation Plan
 
-> 文档类型：长期实施计划对应 PRD：`gabaki-sabaki-training-prd-v0.5.md`
-> 对应架构：`gabaki-sabaki-training-architecture-v0.5.md`
+> 文档类型：长期实施计划
+> 对应 PRD：`docs/product/sabaki-training-prd.md`
+> 历史 PRD 基线：`docs/archive/prd-versions/gabaki-sabaki-training-prd-v0.5.md`
+> 对应架构：`docs/architecture/gabaki-sabaki-training-architecture-v0.5.md`
 > 当前代码现状：训练域已经落地一批 v0.5 切片，包括
 > `TrainingTask.origin` 兼容建模、`WorkbenchTab.mode`、`openTask`、
 > `workbenchFlowService`、`taskImportService`、Attempt moveActors、Problem AI

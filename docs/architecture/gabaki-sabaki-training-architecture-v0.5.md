@@ -1,7 +1,8 @@
 # Gabaki / Sabaki 训练系统模块架构文档 v0.5
 
 > 文档类型：模块架构与实现指导  
-> 对应 PRD：Gabaki / Sabaki 围棋训练系统 PRD v0.5  
+> 对应 PRD：`docs/product/sabaki-training-prd.md`  
+> 历史 PRD 基线：`docs/archive/prd-versions/gabaki-sabaki-training-prd-v0.5.md`  
 > 当前目标：在不破坏 Sabaki 既有核心架构的前提下，把训练系统从 legacy global
 > mode 迁移到 `TrainingTask + WorkbenchTab + WorkbenchMode + Attempt`
 > 架构；同时把 `source` 从核心模型降级为 `origin metadata`。

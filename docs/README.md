@@ -13,6 +13,8 @@ Welcome to the Sabaki/Gabaki developer documentation. This repository has been s
 *How components, services, repositories, and state machines are wired together.*
 
 - [Workbench Architecture Overview](architecture/workbench-architecture-overview.md) — Core architecture, directories, and dependencies.
+- [Training Architecture v0.5](architecture/gabaki-sabaki-training-architecture-v0.5.md) — Active v0.5 module architecture and terminology convergence.
+- [Training Implementation Plan](architecture/gabaki-sabaki-training-implementation-plan.md) — Active long-running migration execution plan.
 - [Position Source and Mutation Contract](architecture/position-source-mutation-contract.md) — Multi-source position bindings, attempt loops, and recall flow contracts.
 - [Sabaki Function Module Mapping](architecture/sabaki-function-module-mapping.md) — Mapping of legacy Sabaki components to new training modules.
 - [Sabaki State Field Mapping](architecture/sabaki-state-field-mapping.md) — State synchronization contract between document store and runtime stores.
@@ -48,7 +50,7 @@ Welcome to the Sabaki/Gabaki developer documentation. This repository has been s
 
 - [Daily Design Spike Log](archive/daily-design/) — Chronological archive of test-writing contracts by day.
 - [Legacy PRD Versions](archive/prd-versions/) — Versioned PRD archive (v0.2 to v0.5).
-- [Legacy Architecture Versions](archive/architecture-versions/) — Archived implementation plans.
+- [Legacy Architecture Versions](archive/architecture-versions/) — Deprecated architecture versions.
 - [Visual Refactor Screenshot Plan](archive/design-reports/design-report-ui-refactor-screenshot-plan.md)
 - [Territory & Analysis UX spike](archive/design-reports/design-report-territory-analysis-ux.md)
 - [Territory Overlay Spike](archive/design-reports/design-report-territory-overlay.md)

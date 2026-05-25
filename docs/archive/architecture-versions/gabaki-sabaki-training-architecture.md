@@ -3,8 +3,8 @@
 > 注意：Legacy reference。本文件为 v0.4 历史架构，仅用于理解迁移前状态。
 > 新实现不得继续使用 `Phase` / `TrainingTaskKind` / `source_kind` /
 > `openProblemTab` / `openSnapshotProblemTab` 作为主路径。以
-> `gabaki-sabaki-training-architecture-v0.5.md` +
-> `gabaki-sabaki-training-implementation-plan.md` 为准。
+> `../../architecture/gabaki-sabaki-training-architecture-v0.5.md` +
+> `../../architecture/gabaki-sabaki-training-implementation-plan.md` 为准。
 
 > 文档类型：模块架构与实现指导  
 > 对应 PRD：Gabaki / Sabaki 围棋训练系统 PRD v0.4  
@@ -12,8 +12,8 @@
 
 相关文档：
 
-- [Training PRD v0.4](./gabaki-sabaki-training-prd-v0.4.md)
-- [Training Implementation Plan](./gabaki-sabaki-training-implementation-plan.md)
+- [Training PRD v0.4](../prd-versions/gabaki-sabaki-training-prd-v0.4.md)
+- [Training Implementation Plan](../../architecture/gabaki-sabaki-training-implementation-plan.md)
 
 ---
 

@@ -7,8 +7,8 @@
 
 相关文档：
 
-- [Training Architecture](./gabaki-sabaki-training-architecture.md)
-- [Training Implementation Plan](./gabaki-sabaki-training-implementation-plan.md)
+- [Training Architecture v0.4](../architecture-versions/gabaki-sabaki-training-architecture.md)
+- [Training Implementation Plan](../../architecture/gabaki-sabaki-training-implementation-plan.md)
 
 ---
 

@@ -51,7 +51,7 @@ Sabaki 是一个围棋/SGF 编辑器，基于 Electron + React 架构。
 
 当任务涉及”已画好的 workbench UI 接入真实训练业务”时，必须使用 Workbench Wiring Workflow：
 
-0. **真源优先** — 必须先读 `docs/design/gabaki-sabaki-training-prd-v0.5.md` 和 `docs/design/gabaki-sabaki-training-architecture-v0.5.md`。它们是产品与架构唯一事实来源；`workbench-ui-ux-spec.md` 只提供 UI/control placement；所有 W0 inventory、completion plan、test contract 都是派生产物。
+0. **真源优先** — 必须先读 `docs/product/sabaki-training-prd.md`、`docs/architecture/gabaki-sabaki-training-architecture-v0.5.md` 和 `docs/architecture/gabaki-sabaki-training-implementation-plan.md`。它们是产品、架构与迁移执行真源；`docs/ui_ux/workbench-ui-ux-spec.md` 只提供 UI/control placement；所有 W0 inventory、completion plan、test contract 都是派生产物。
 1. **接线契约** — 委托 `contract-designer` agent 明确 `UI event -> container callback -> controller command -> service/adapter/repository -> store/Sabaki state -> projection -> UI` 全链路，并引用 PRD/Architecture v0.5 证据。契约必须指定每个 handler 被哪个命名 UI 组件消费。主 agent 禁止自行编写接线契约。
 2. **契约审查** — 委托 `contract-auditor` agent 审查契约。返回 REQUEST_CHANGES 或 BLOCK 时必须修改契约后重审，不得跳过。
 3. **接线测试** — 委托 `test-writer` agent 编写 container/controller/store/projection 测试，必须覆盖状态前进和状态回流，不能只测 callback 被调用。每个非 deferred handler 必须有测试证明命名 UI 组件消费它。主 agent 禁止自行编写接线测试。

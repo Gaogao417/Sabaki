@@ -10,10 +10,12 @@
 | --- | --- | --- |
 | 1 | `docs/product/sabaki-training-prd.md` | 产品闭环与能力边界。 |
 | 2 | `docs/design/workbench-mode-orchestration-contract.md` | Workbench 运行态状态机 source of truth。 |
-| 3 | `docs/architecture/position-source-mutation-contract.md` | 棋盘读写边界：position source、mutation contract、executor。 |
-| 4 | `docs/architecture/workbench-architecture-overview.md` | 迁移架构：mode orchestration -> source/contract -> resolver -> executor -> owner service。 |
-| 5 | `docs/architecture/sabaki-function-module-mapping.md` | `sabaki.js` 函数迁移目标。 |
-| 6 | `docs/architecture/sabaki-state-field-mapping.md` | 字段和 companion state owner。 |
+| 3 | `docs/architecture/gabaki-sabaki-training-architecture-v0.5.md` | v0.5 模块架构与术语收敛。 |
+| 4 | `docs/architecture/gabaki-sabaki-training-implementation-plan.md` | 长期迁移执行计划，与 v0.5 architecture 一起维护。 |
+| 5 | `docs/architecture/position-source-mutation-contract.md` | 棋盘读写边界：position source、mutation contract、executor。 |
+| 6 | `docs/architecture/workbench-architecture-overview.md` | 迁移架构：mode orchestration -> source/contract -> resolver -> executor -> owner service。 |
+| 7 | `docs/architecture/sabaki-function-module-mapping.md` | `sabaki.js` 函数迁移目标。 |
+| 8 | `docs/architecture/sabaki-state-field-mapping.md` | 字段和 companion state owner。 |
 
 核心口径：
 
