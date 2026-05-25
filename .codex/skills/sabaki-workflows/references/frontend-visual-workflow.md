@@ -6,7 +6,7 @@ Do not use the generic `contract-designer -> test-writer -> implementation-agent
 
 Do not use this workflow for Workbench wiring. If the task is to connect finished controls to controller/service/store behavior, use `workbench-wiring-workflow.md` instead. Visual tests may verify visible regressions, but they do not prove wiring.
 
-This is the Codex-native copy of the former `.claude/workflows/frontend-visual-workflow.md`. Use the role references in this skill directory as the active prompts.
+This is the Codex-native copy of the former `.claude/workflows/frontend-visual-workflow.md`. Use the matching role skills as the active prompts.
 
 ## When To Use
 
@@ -43,11 +43,11 @@ Use this workflow for:
 
 ## Codex Delegation and Model Policy
 
-- `frontend-design-source-reader`: do not spawn; main Codex agent reads the visual source.
-- `frontend-contract-designer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
-- `visual-test-writer`: do not spawn; main Codex agent writes visual tests.
-- `frontend-implementation-agent`: do not spawn; main Codex agent implements.
-- `visual-fidelity-reviewer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `$frontend-design-source-reader`: do not spawn; main Codex agent reads the visual source after loading `$sabaki-workflows` and `$frontend-design-source-reader`.
+- `$frontend-contract-designer`: spawn a Codex subagent with `model=gpt-5.5`, `reasoning_effort=xhigh`, and an initial prompt that explicitly says `Use $sabaki-workflows and $frontend-contract-designer`.
+- `$visual-test-writer`: do not spawn; main Codex agent writes visual tests after loading `$sabaki-workflows` and `$visual-test-writer`.
+- `$frontend-implementation-agent`: do not spawn; main Codex agent implements after loading `$sabaki-workflows` and `$frontend-implementation-agent`.
+- `$visual-fidelity-reviewer`: spawn a Codex subagent with `model=gpt-5.5`, `reasoning_effort=xhigh`, and an initial prompt that explicitly says `Use $sabaki-workflows and $visual-fidelity-reviewer`.
 
 Do not use Zhipu / GLM models for these subagent roles.
 

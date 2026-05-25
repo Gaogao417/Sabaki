@@ -1,4 +1,4 @@
 interface:
   display_name: "Sabaki Workflows"
-  short_description: "Run Sabaki contract and review workflows."
-  default_prompt: "Use the Sabaki workflow guardrails for this task."
+  short_description: "Run Sabaki workflow gates and slice plans."
+  default_prompt: "Use $sabaki-workflows to classify, slice, contract, test, implement, and review this Sabaki task."

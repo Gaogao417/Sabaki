@@ -4,7 +4,7 @@ Use this workflow when the workbench UI already exists visually and the task is 
 
 This workflow is different from the frontend visual workflow. Visual work proves that the page looks right. Wiring work proves that user actions change the correct backend state, and that backend state changes flow back into the UI.
 
-This is the Codex-native copy of the former `.claude/workflows/workbench-wiring-workflow.md`. Use the role references in this skill directory as the active prompts.
+This is the Codex-native copy of the former `.claude/workflows/workbench-wiring-workflow.md`. Use the matching role skills as the active prompts.
 
 ## Non-Negotiable Source Of Truth
 
@@ -65,8 +65,16 @@ If a task only implements the first half of this loop, it is incomplete unless t
 
 ## Agent Order
 
+0. `$phase-intake-slice-planner`
+   - Runs before `contract-designer` for phase-level, plan-level, gaps, cleanup remaining, contract gaps remaining, partial, or cross-boundary Workbench wiring requests.
+   - Reads active source truth, implementation plans, prior contracts, audit reports, current code, and current tests.
+   - Outputs `SINGLE_SLICE` for small tasks, or a slice graph with contract seeds, dependencies, parallel batches, serial blockers, known issues index, and verdict ledger seed.
+   - Does not write full contracts, tests, or production code.
+   - `contract-designer` may only receive one slice, or multiple slices explicitly marked independent and safe to contract in parallel.
+
 1. `contract-designer`
    - Produces a wiring contract.
+   - Uses the selected slice id, contract seed, source refs, write scope, test scope, dependency edges, and serial blockers from `$phase-intake-slice-planner` when intake was triggered.
    - Archives it at `docs/archive/daily-design/YYYY-MM-DD/<task>/test-contract-v0.N.md`.
    - Must first produce a "source alignment" section citing active product, architecture, and UI/UX documents.
    - Must list control events, controller commands, service calls, store before/after state, projection results, allowed side effects, forbidden side effects, and manual acceptance.
@@ -92,6 +100,7 @@ If a task only implements the first half of this loop, it is incomplete unless t
      - Downstream Covered By
    - Must output APPROVE, APPROVE_WITH_NOTES, REQUEST_CHANGES, or BLOCK.
    - If the auditor returns REQUEST_CHANGES or BLOCK, do not start test writing.
+   - If the auditor returns APPROVE_WITH_NOTES, copy notes into downstream `required_constraints`; source mismatch, scope risk, or test weakness notes require human confirmation.
 
 3. `test-writer`
    - Writes tests from the approved wiring contract.
@@ -117,12 +126,14 @@ If a task only implements the first half of this loop, it is incomplete unless t
    - Must output APPROVE, APPROVE_WITH_NOTES, REQUEST_CHANGES, or BLOCK.
    - If the auditor returns REQUEST_CHANGES or BLOCK, do not start implementation.
    - If the auditor returns APPROVE or APPROVE_WITH_NOTES, a human must explicitly decide whether to proceed.
+   - APPROVE_WITH_NOTES notes must be copied into implementation constraints.
 
-5. Human gate
+5. Slice gate / human gate
    - Reviews the test-auditor report.
    - Confirms any deferred rows and scope tradeoffs.
    - Explicitly authorizes implementation to begin.
-   - This workflow intentionally does not add an orchestrator agent; task breakdown remains human-directed.
+   - Checks that the current slice is still small enough: one primary owner, preferably at most 3 production files, at most 2 test files, at most 8 contract rows, and no unresolved source conflict.
+   - If the slice has expanded into a bundle, return to `$phase-intake-slice-planner` before implementation.
 
 6. `implementation-agent`
    - Implements minimal production wiring against the approved contract and tests.
@@ -133,20 +144,30 @@ If a task only implements the first half of this loop, it is incomplete unless t
 7. `architecture-reviewer`
    - Reviews the diff for boundary leaks, duplicate state, direct service imports in UI components, store impurity, hidden globals, and weak tests.
    - Must explicitly trace at least one implemented loop from UI event to projected UI update.
+   - Its verdict must be recorded in the gate ledger. REQUEST_CHANGES and BLOCK are blocking verdicts.
 
 Use `visual-fidelity-reviewer` only if the wiring changed visible layout or visual behavior enough to risk a UI regression.
 
 ## Codex Delegation and Model Policy
 
-- `contract-designer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
-- `contract-auditor`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
-- `test-writer`: do not spawn; main Codex agent writes wiring tests.
-- `test-auditor`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
-- `implementation-agent`: do not spawn; main Codex agent implements wiring.
-- `architecture-reviewer`: spawn a Codex subagent with `model=gpt-5.5` and `reasoning_effort=xhigh`.
-- `visual-fidelity-reviewer`: spawn only when this workflow explicitly needs visual review; use `model=gpt-5.5` and `reasoning_effort=xhigh`.
+- `$phase-intake-slice-planner`: do not spawn; main Codex agent runs this lightweight read-only gate after loading `$sabaki-workflows` and `$phase-intake-slice-planner`.
+- `$contract-designer`: spawn a Codex subagent with `model=gpt-5.5`, `reasoning_effort=xhigh`, and an initial prompt that explicitly says `Use $sabaki-workflows and $contract-designer`.
+- `$contract-auditor`: spawn a Codex subagent with `model=gpt-5.5`, `reasoning_effort=xhigh`, and an initial prompt that explicitly says `Use $sabaki-workflows and $contract-auditor`.
+- `$test-writer`: do not spawn; main Codex agent writes wiring tests after loading `$sabaki-workflows` and `$test-writer`.
+- `$test-auditor`: spawn a Codex subagent with `model=gpt-5.5`, `reasoning_effort=xhigh`, and an initial prompt that explicitly says `Use $sabaki-workflows and $test-auditor`.
+- `$implementation-agent`: do not spawn; main Codex agent implements wiring after loading `$sabaki-workflows` and `$implementation-agent`.
+- `$architecture-reviewer`: spawn a Codex subagent with `model=gpt-5.5`, `reasoning_effort=xhigh`, and an initial prompt that explicitly says `Use $sabaki-workflows and $architecture-reviewer`.
+- `$visual-fidelity-reviewer`: spawn only when this workflow explicitly needs visual review; use `model=gpt-5.5`, `reasoning_effort=xhigh`, and an initial prompt that explicitly says `Use $sabaki-workflows and $visual-fidelity-reviewer`.
 
 Do not use Zhipu / GLM models for subagent roles.
+
+## Gate Ledger
+
+- `REQUEST_CHANGES` / `BLOCK`: pause the affected slice, revise the relevant artifact, and re-audit before continuing downstream.
+- `APPROVE_WITH_NOTES`: continue only after notes are copied into downstream `required_constraints`; require human confirmation for source mismatch, scope risk, or test weakness.
+- User takeover resumes only the current slice's next minimal action. Do not widen scope after takeover.
+- Any agent over 10 minutes marks `slice_too_large`; split before the next attempt.
+- Repeated harness/test infrastructure failures return to `$test-auditor`.
 
 ## Required Acceptance Layers
 
