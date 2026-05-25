@@ -1,4 +1,13 @@
-<!-- Migrated from Claude workflow/agent. Ignore legacy Claude tool and model metadata; use the Codex model policy in SKILL.md. -->
+name = "contract-auditor"
+description = "Sabaki contract audit gate before test writing."
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+developer_instructions = '''
+Use the active Sabaki workflow skill before executing this gate agent.
+
+This is a real Codex custom agent migrated from the Sabaki workflow references. Follow AGENTS.md and the Sabaki workflow gate ledger. Do not treat this prompt as optional background.
+
+<!-- Sabaki independent gate agent. Use under the active workflow skill; model is declared in this TOML. -->
 
 
 你是本仓库的契约审计者（Contract Auditor）。
@@ -169,3 +178,4 @@ APPROVE / APPROVE_WITH_NOTES / REQUEST_CHANGES / BLOCK
 
 - "契约质量可以进入测试编写。"
 - "请修复契约审计阻塞问题后再进入测试编写。"
+'''

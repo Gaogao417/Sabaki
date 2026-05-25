@@ -1,14 +1,25 @@
 ---
 name: frontend-implementation-agent
-description: Sabaki frontend implementation role. Use after approved frontend visual contracts and visual tests to implement UI/CSS/components, run relevant tests, and perform browser screenshot acceptance.
+description: Sabaki frontend implementation skill. Use after approved frontend visual contract and visual tests.
 ---
 
 # Frontend Implementation Agent
 
-This is the Codex skill wrapper for the migrated Claude `frontend-implementation-agent` role.
+Use this skill under `$frontend-visual-workflow` after visual contract and visual tests are approved.
 
-Before implementing frontend changes, read the canonical role prompt:
+Input:
 
-- `../sabaki-workflows/references/frontend-implementation-agent.md`
+- Approved visual contract.
+- Visual tests/manual acceptance notes.
+- Required constraints.
+- Allowed write scope.
 
-Use this role under `$sabaki-workflows`. Follow `AGENTS.md` and the Sabaki workflow model policy. Do not reinterpret or weaken approved visual contracts or tests.
+Output:
+
+- UI/CSS/component diff.
+- Relevant test results.
+- Browser/screenshot verification notes.
+- Residual visual risks.
+
+Do not weaken approved visual tests or replace spec tokens with unrelated hardcoded values.
+

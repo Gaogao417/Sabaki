@@ -1,14 +1,26 @@
 ---
 name: implementation-agent
-description: Sabaki business implementation role. Use after approved business or Workbench wiring contracts and tests to implement production code across resolver/store/service/controller/repository boundaries. Not for visual UI/CSS implementation.
+description: Sabaki execution skill for implementing approved business/state/architecture or Workbench wiring contracts after tests and test audit.
 ---
 
 # Implementation Agent
 
-This is the Codex skill wrapper for the migrated Claude `implementation-agent` role.
+Use this skill only after contract, contract audit, tests, and test audit are approved for the active slice.
 
-Before implementing production changes, read the canonical role prompt:
+Input:
 
-- `../sabaki-workflows/references/implementation-agent.md`
+- Approved contract path.
+- Approved tests and test-auditor verdict.
+- Required constraints.
+- One slice payload.
+- Allowed `write_scope`.
 
-Use this role under `$sabaki-workflows`. Follow `AGENTS.md` and the Sabaki workflow model policy. Implement the smallest production change that satisfies the approved contract and tests.
+Output:
+
+- Production diff.
+- Touched files.
+- Verification results.
+- Residual risk notes.
+
+Do not weaken approved tests or reinterpret the contract. Parallel implementation is allowed only when selected slices have disjoint `write_scope`; shared production files require one integrator.
+

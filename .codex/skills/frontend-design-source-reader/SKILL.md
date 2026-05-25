@@ -1,14 +1,23 @@
 ---
 name: frontend-design-source-reader
-description: Sabaki frontend visual source reader role. Use before frontend visual contracts to read UI specs, screenshots, design notes, existing CSS/components, and produce a visual source index. Do not implement.
+description: Sabaki frontend visual source reader. Use to read UI specs, screenshots/Figma refs, CSS, and components before visual contract design.
 ---
 
 # Frontend Design Source Reader
 
-This is the Codex skill wrapper for the migrated Claude `frontend-design-source-reader` role.
+Use this skill under `$frontend-visual-workflow`.
 
-Before producing a visual source index, read the canonical role prompt:
+Input:
 
-- `../sabaki-workflows/references/frontend-design-source-reader.md`
+- User goal.
+- UI/UX specs, screenshots, Figma refs, or design notes.
+- Current CSS/components.
 
-Use this role under `$sabaki-workflows`. Follow `AGENTS.md` and the Sabaki workflow model policy. This role is read-only unless the active workflow explicitly asks for an archived source index artifact.
+Output:
+
+- Visual source index with exact source refs.
+- Required layout, dimensions, token names, copy, states, responsive behavior, screenshot/manual acceptance expectations.
+- Current implementation gaps.
+
+This role is read-only unless the active workflow asks for an archived source index. Do not write tests or production code.
+

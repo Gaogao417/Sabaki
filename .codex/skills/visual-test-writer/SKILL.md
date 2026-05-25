@@ -1,14 +1,25 @@
 ---
 name: visual-test-writer
-description: Sabaki visual test writer role. Use after an approved frontend visual contract to write static token, computed style, Playwright layout, screenshot, and manual visual acceptance tests without changing production code.
+description: Sabaki visual test writer. Use after an approved frontend visual contract to write visual/token/layout/screenshot tests.
 ---
 
 # Visual Test Writer
 
-This is the Codex skill wrapper for the migrated Claude `visual-test-writer` role.
+Use this skill under `$frontend-visual-workflow` after the visual contract is approved.
 
-Before writing visual tests, read the canonical role prompt:
+Input:
 
-- `../sabaki-workflows/references/visual-test-writer.md`
+- Approved frontend visual contract.
+- Allowed test scope.
+- Required constraints.
 
-Use this role under `$sabaki-workflows`. Follow `AGENTS.md` and the Sabaki workflow model policy. Do not modify production code in this role.
+Output:
+
+- Static token tests.
+- CSS/static parsing tests.
+- Computed-style tests.
+- Playwright layout/screenshot tests when applicable.
+- Manual visual acceptance notes.
+
+Do not modify production code. Do not reduce visual requirements to class name, `data-testid`, or callback existence checks.
+

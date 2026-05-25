@@ -1,14 +1,25 @@
 ---
 name: test-writer
-description: Sabaki business test writer role. Use after an approved business or Workbench wiring contract to write contract tests without changing production code. Not for frontend visual screenshot/style contracts.
+description: Sabaki execution skill for writing contract tests from approved business or Workbench wiring contracts.
 ---
 
 # Test Writer
 
-This is the Codex skill wrapper for the migrated Claude `test-writer` role.
+Use this skill only after a current contract and contract audit are approved for the active slice.
 
-Before writing tests, read the canonical role prompt:
+Input:
 
-- `../sabaki-workflows/references/test-writer.md`
+- Approved contract path.
+- Contract-auditor verdict and required constraints.
+- One slice payload.
+- Allowed `test_scope`.
 
-Use this role under `$sabaki-workflows`. Follow `AGENTS.md` and the Sabaki workflow model policy. Do not modify production code in this role.
+Output:
+
+- Test diff.
+- Harness/mock manifest.
+- Expected RED/GREEN/DEFERRED status.
+- Test command list.
+
+Do not modify production code. Do not widen scope beyond the slice. Parallel test writing is allowed only when selected slices have disjoint `test_scope`; otherwise use one test integrator.
+

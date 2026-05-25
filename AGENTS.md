@@ -1,16 +1,59 @@
 # Sabaki — Codex 仓库上下文
 
-本文件是 Codex 的仓库级 bootstrap 和硬边界入口。`.claude` 和 `CLAUDE.md` 暂时保留作为历史来源；新任务优先遵守本文件、`.codex/hooks.json` 和 `$sabaki-workflows` skill。
+本文件是 Codex 的仓库级 bootstrap、workflow 路由和硬边界入口。`.claude` 和 `CLAUDE.md` 暂时保留作为历史来源；新任务优先遵守本文件、`.codex/hooks.json` 和 `.codex/skills/` / `.codex/agents/`。
 
 ## Workflow 入口
 
-任何 Sabaki 业务、状态、架构、Workbench 接线、测试、前端视觉或 workflow 任务，主代理第一步必须显式使用 `$sabaki-workflows`。不得只读 `AGENTS.md` 后直接进入某个角色。
+任何 Sabaki 业务、状态、架构、Workbench 接线、测试、前端视觉或 workflow 任务，主代理第一步必须按本节选择一个 workflow skill。不得只读 `AGENTS.md` 后直接进入某个角色。
 
-`$sabaki-workflows` 是唯一 workflow 编排入口，负责请求分类、Phase Intake / Slice Planner、业务/Workbench/前端流程选择、gate ledger、角色顺序、模型策略、提交边界和审查阻断规则。
+Workflow 选择：
 
-角色 skill 只作为叶子角色提示词使用。执行任一角色时，必须同时处在 `$sabaki-workflows` 和同名角色 skill 下；spawn 子代理时，子代理初始 prompt 必须点名 `$sabaki-workflows` 和对应角色 `$skill`。
+- `$business-contract-workflow` — 业务行为、状态流、resolver/store/service 边界、副作用、核心交互契约、架构敏感实现。
+- `$workbench-wiring-workflow` — 已完成视觉的 Workbench UI 接线到 training domain state/service/controller/store。
+- `$frontend-visual-workflow` — UI/CSS/layout/design-token/responsive/screenshot/Figma/spec fidelity 和纯视觉偏差。
 
-`AGENTS.md` 不再重复 workflow 步骤、模型策略、切片规则、审查规则或视觉/Workbench 流程细节。需要调整流程时，修改 `$sabaki-workflows` 及其 references；本文件只保留仓库硬边界和入口规则。
+如果任务混合行为和视觉，先按业务或 Workbench 接线 workflow 处理状态/行为，再按前端视觉 workflow 处理可见表面。
+
+## Role 类型
+
+Workflow skill 负责任务顺序、上下游字段、gate ledger 和并行条件。角色分两类：
+
+- **Agents（独立 gate）**：`contract-designer`、`frontend-contract-designer`、`contract-auditor`、`test-auditor`、`architecture-reviewer`、`visual-fidelity-reviewer`。这些必须用 `.codex/agents/*.toml`，并作为独立子代理执行，除非当前 Codex 工具策略阻止 spawn。
+- **Skills（执行/读取角色）**：`phase-intake-slice-planner`、`test-writer`、`implementation-agent`、`frontend-design-source-reader`、`visual-test-writer`、`frontend-implementation-agent`。这些由主代理或明确分派的 worker 执行，必须先处在当前 workflow skill 下。
+
+模型策略只允许 `gpt-5.5`，reasoning 只允许 `medium` / `high` / `xhigh`：
+
+- workflow skill / 路由：`medium`
+- 执行/读取 skill：`high`
+- contract / audit / review agents：`xhigh`
+
+## Workflow Hard Stop
+
+任何 Phase / implementation-plan / Partial / cleanup / gaps 请求，读完对应 workflow skill
+和完成 Phase Intake / Slice Planner 仍不代表可以编辑测试或生产代码。
+
+主代理在第一次文件编辑前必须按当前 workflow skill 输出或维护 gate ledger，并确认：
+
+```text
+Edit gate check:
+workflow = ...
+slice = ...
+contract = APPROVED / missing
+contract audit = APPROVED / missing
+tests = written / missing
+test audit = APPROVED / missing
+implementation allowed = yes/no
+```
+
+只有 `implementation allowed = yes` 时才允许编辑生产代码；只有当前角色是
+`test-writer` 且前置 contract gate 已通过时才允许编辑测试代码。归档、draft、
+pending-confirmation 或 superseded contract 只能作为背景资料，不能解锁实现。
+
+如果当前 workflow 要求的独立 gate agent 因当前 Codex 工具策略不能 spawn，
+主代理必须在编辑前暂停并请求用户明确授权对应 gate agents；不得自行本地审查、
+自行批准或跳过这些 gate。
+
+`AGENTS.md` 只保留仓库级路由、角色类型、模型档位和硬边界。需要调整具体步骤、上下游字段、切片规则、审查规则或视觉/Workbench 流程细节时，修改对应 workflow skill；需要调整独立 gate 提示词时，修改 `.codex/agents/*.toml`。
 
 ## 项目概要
 
