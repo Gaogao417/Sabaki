@@ -999,11 +999,11 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
       })
     })
 
-    // --- T4-13: BottomActionBar play renders onResign + onEndAttempt buttons ---
+    // --- T4-13: BottomActionBar play keeps submit/end/resign out of the quiet bottom bar ---
 
-    describe('T4-13: BottomActionBar play renders onResign + onEndAttempt', function () {
-      it('play mode renders buttons with data-testid "action-resign" and "action-end-attempt"', function () {
-        const {getByTestId} = renderToDom(
+    describe('T4-13: BottomActionBar play omits top-level finish actions', function () {
+      it('play mode does not render action-resign or action-end-attempt in bottom bar', function () {
+        const {queryByTestId, getByTestId} = renderToDom(
           h(BottomActionBar, {
             mode: 'play',
             onUndo: () => {},
@@ -1019,45 +1019,38 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
           })
         )
 
-        const resignBtn = getByTestId('action-resign')
-        assert.ok(resignBtn, 'BottomActionBar play must render action-resign -- Contract T4-13')
-
-        const endAttemptBtn = getByTestId('action-end-attempt')
-        assert.ok(endAttemptBtn, 'BottomActionBar play must render action-end-attempt -- Contract T4-13')
+        assert.strictEqual(queryByTestId('action-resign'), null,
+          'BottomActionBar play must not render action-resign after noise reduction')
+        assert.strictEqual(queryByTestId('action-end-attempt'), null,
+          'BottomActionBar play must not render action-end-attempt after noise reduction')
+        assert.ok(getByTestId('action-undo'), 'BottomActionBar play still renders local board actions')
       })
 
-      it('clicking action-resign fires onResign callback', function () {
+      it('top ModeActions still exposes resign callback', function () {
         let resignCalled = false
         const {getByTestId, fireEvent} = renderToDom(
-          h(BottomActionBar, {
+          h(ModeActions, {
             mode: 'play',
-            onUndo: () => {},
-            onPass: () => {},
+            onNewGame: () => {},
+            onSettings: () => {},
+            onEnd: () => {},
             onResign: () => { resignCalled = true },
-            onEndAttempt: () => {},
-            onMarkDoubtful: () => {},
-            onSelect: () => {},
-            onHandShape: () => {},
-            onZoomIn: () => {},
-            onZoomOut: () => {},
-            onFullscreen: () => {},
           })
         )
 
-        // BottomActionBar.js:117-119 calls callbacks[btn.callback]() where btn.callback='onResign'
-        const resignBtn = getByTestId('action-resign')
+        const resignBtn = getByTestId('mode-action-resign')
         fireEvent.click(resignBtn)
 
         assert.strictEqual(resignCalled, true,
-          'Clicking action-resign must fire onResign callback -- Contract T4-13')
+          'Clicking mode-action-resign must fire onResign callback -- Contract T4-13')
       })
     })
 
-    // --- T4-14: BottomActionBar problem renders onSubmitAnswer button ---
+    // --- T4-14: BottomActionBar problem omits submit button; top action owns submit ---
 
-    describe('T4-14: BottomActionBar problem renders onSubmitAnswer', function () {
-      it('problem mode renders button with data-testid "action-submit-answer"', function () {
-        const {getByTestId} = renderToDom(
+    describe('T4-14: BottomActionBar problem omits onSubmitAnswer', function () {
+      it('problem mode does not render action-submit-answer in bottom bar', function () {
+        const {queryByTestId, getByTestId} = renderToDom(
           h(BottomActionBar, {
             mode: 'problem',
             onUndo: () => {},
@@ -1074,35 +1067,28 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
           })
         )
 
-        const submitAnswerBtn = getByTestId('action-submit-answer')
-        assert.ok(submitAnswerBtn, 'BottomActionBar problem must render action-submit-answer -- Contract T4-14')
+        assert.strictEqual(queryByTestId('action-submit-answer'), null,
+          'BottomActionBar problem must not render action-submit-answer after noise reduction')
+        assert.ok(getByTestId('action-request-hint'), 'BottomActionBar problem still renders local hint action')
       })
 
-      it('clicking action-submit-answer fires onSubmitAnswer callback', function () {
+      it('top ModeActions still exposes submit callback', function () {
         let submitCalled = false
         const {getByTestId, fireEvent} = renderToDom(
-          h(BottomActionBar, {
+          h(ModeActions, {
             mode: 'problem',
-            onUndo: () => {},
-            onRedo: () => {},
-            onPass: () => {},
-            onRequestHint: () => {},
-            onSubmitAnswer: () => { submitCalled = true },
-            onAbandonAnswer: () => {},
-            onSelect: () => {},
-            onHandShape: () => {},
-            onZoomIn: () => {},
-            onZoomOut: () => {},
-            onFullscreen: () => {},
+            onSubmit: () => { submitCalled = true },
+            onAbandon: () => {},
+            onSettings: () => {},
+            onAnalysis: () => {},
           })
         )
 
-        // BottomActionBar.js:117-119 calls callbacks[btn.callback]() where btn.callback='onSubmitAnswer'
-        const submitAnswerBtn = getByTestId('action-submit-answer')
+        const submitAnswerBtn = getByTestId('mode-action-submit')
         fireEvent.click(submitAnswerBtn)
 
         assert.strictEqual(submitCalled, true,
-          'Clicking action-submit-answer must fire onSubmitAnswer callback -- Contract T4-14')
+          'Clicking mode-action-submit must fire onSubmit callback -- Contract T4-14')
       })
     })
   })

@@ -58,20 +58,19 @@ describe('ModeActions (T-3)', () => {
     assert.strictEqual(buttons.length, 4, `Expected 4 buttons for problem mode, got ${buttons.length}`)
   })
 
-  // --- T-3c: mode='recall' renders 4 buttons ---
-  it('T-3c: mode=recall renders 4 buttons (mark, hint, verify, analysis)', () => {
+  // --- T-3c: mode='recall' renders quiet top actions ---
+  it('T-3c: mode=recall renders 3 buttons (analysis, end, snapshot)', () => {
     const {queryAllByTestId} = renderToDom(
       h(ModeActions, {
         mode: 'recall',
-        onMark: () => {},
-        onHint: () => {},
-        onVerify: () => {},
         onAnalysis: () => {},
+        onEnd: () => {},
+        onSnapshot: () => {},
       })
     )
 
     const buttons = queryAllByTestId('mode-action-btn')
-    assert.strictEqual(buttons.length, 4, `Expected 4 buttons for recall mode, got ${buttons.length}`)
+    assert.strictEqual(buttons.length, 3, `Expected 3 buttons for recall mode, got ${buttons.length}`)
   })
 
   // --- T-3d: mode='analysis' renders 3 buttons ---
@@ -262,7 +261,7 @@ describe('ModeActions Chinese labels (T-U2-4)', () => {
   // Production subject: ModeActions component
   // Production import path: src/components/workbench/shell/ModeActions.js
   // Production bug: Recall buttons still use English labels
-  //   instead of Chinese (标记/提示/校对/进入复盘)
+  //   instead of Chinese (进入复盘/结束回忆/Snapshot)
   // Controlled dependencies: props are inline
   it('T-U2-4c: Recall mode uses Chinese labels', () => {
     const {container} = renderToDom(
@@ -275,10 +274,9 @@ describe('ModeActions Chinese labels (T-U2-4)', () => {
     )
 
     const text = container.textContent
-    assert.ok(text.includes('标记'), 'Expected Recall label "标记"')
-    assert.ok(text.includes('提示'), 'Expected Recall label "提示"')
-    assert.ok(text.includes('校对'), 'Expected Recall label "校对"')
     assert.ok(text.includes('进入复盘'), 'Expected Recall label "进入复盘"')
+    assert.ok(text.includes('结束回忆'), 'Expected Recall label "结束回忆"')
+    assert.ok(text.includes('Snapshot'), 'Expected Recall label "Snapshot"')
   })
 
   // --- T-U2-4d: Analysis labels ---

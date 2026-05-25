@@ -6,9 +6,9 @@ import {h} from 'preact'
  */
 const MODE_BUTTONS = {
   play: [
-    {testId: 'mode-action-new-game', label: '新对局', callback: 'onNewGame'},
+    {testId: 'mode-action-new-game', label: '+ 新对局', callback: 'onNewGame'},
     {testId: 'mode-action-settings', label: '对局设置', callback: 'onSettings'},
-    {testId: 'mode-action-end', label: '结束', callback: 'onEnd'},
+    {testId: 'mode-action-end', label: '结束当前 attempt', callback: 'onEnd'},
     {testId: 'mode-action-resign', label: '认输', callback: 'onResign', variant: 'danger'},
   ],
   problem: [
@@ -18,14 +18,13 @@ const MODE_BUTTONS = {
     {testId: 'mode-action-analysis', label: '进入复盘', callback: 'onAnalysis'},
   ],
   recall: [
-    {testId: 'mode-action-mark', label: '标记', callback: 'onMark'},
-    {testId: 'mode-action-hint', label: '提示', callback: 'onHint'},
-    {testId: 'mode-action-verify', label: '校对', callback: 'onVerify'},
     {testId: 'mode-action-analysis', label: '进入复盘', callback: 'onAnalysis'},
+    {testId: 'mode-action-end', label: '结束回忆', callback: 'onEnd'},
+    {testId: 'mode-action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},
   ],
   analysis: [
-    {testId: 'mode-action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},
-    {testId: 'mode-action-settings', label: '设置', callback: 'onSettings'},
+    {testId: 'mode-action-snapshot', label: 'Snapshot / 派生新 Task', callback: 'onSnapshot'},
+    {testId: 'mode-action-settings', label: '复盘设置', callback: 'onSettings'},
     {testId: 'mode-action-return', label: '返回', callback: 'onReturn'},
   ],
 }

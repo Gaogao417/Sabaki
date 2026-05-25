@@ -773,41 +773,33 @@ describe('W8-P3 Task5: UI Command Mapping (T5-12, T5-13)', function () {
   // Production subject: ModeActions (mode='recall')
   // Real: ModeActions, preact render
   // No mocks needed
-  it('T5-12: ModeActions recall renders mark, hint, verify, and analysis buttons', function () {
+  it('T5-12: ModeActions recall renders analysis, end, and snapshot buttons', function () {
     const { queryByTestId, queryAllByTestId } = renderToDom(
       h(ModeActions, {
         mode: 'recall',
-        onMark: () => {},
-        onHint: () => {},
-        onVerify: () => {},
         onAnalysis: () => {},
+        onEnd: () => {},
+        onSnapshot: () => {},
       })
     )
 
-    // Recall mode must render exactly 4 buttons
     const buttons = queryAllByTestId('mode-action-btn')
-    assert.strictEqual(buttons.length, 4,
-      'ModeActions recall must render 4 buttons')
-
-    // Verify each button by testId
-    const markBtn = queryByTestId('mode-action-mark')
-    assert.ok(markBtn, 'ModeActions recall must have button[data-testid="mode-action-mark"]')
-
-    const hintBtn = queryByTestId('mode-action-hint')
-    assert.ok(hintBtn, 'ModeActions recall must have button[data-testid="mode-action-hint"]')
-
-    const verifyBtn = queryByTestId('mode-action-verify')
-    assert.ok(verifyBtn, 'ModeActions recall must have button[data-testid="mode-action-verify"]')
+    assert.strictEqual(buttons.length, 3,
+      'ModeActions recall must render 3 quiet top actions')
 
     const analysisBtn = queryByTestId('mode-action-analysis')
     assert.ok(analysisBtn, 'ModeActions recall must have button[data-testid="mode-action-analysis"]')
+    assert.ok(queryByTestId('mode-action-end'),
+      'ModeActions recall must have button[data-testid="mode-action-end"]')
+    assert.ok(queryByTestId('mode-action-snapshot'),
+      'ModeActions recall must have button[data-testid="mode-action-snapshot"]')
   })
 
-  // T5-13: BottomActionBar recall renders onMarkCheckpoint + onHint + onVerifySkip + onEnterAnalysis
+  // T5-13: BottomActionBar recall renders only local recall controls
   // Production subject: BottomActionBar (mode='recall')
   // Real: BottomActionBar, preact render
   // No mocks needed
-  it('T5-13: BottomActionBar recall renders mark-checkpoint, hint, verify-skip, and enter-analysis buttons', function () {
+  it('T5-13: BottomActionBar recall renders hint and verify-skip only', function () {
     const { queryByTestId } = renderToDom(
       h(BottomActionBar, {
         mode: 'recall',
@@ -818,8 +810,8 @@ describe('W8-P3 Task5: UI Command Mapping (T5-12, T5-13)', function () {
       })
     )
 
-    const markCpBtn = queryByTestId('action-mark-checkpoint')
-    assert.ok(markCpBtn, 'BottomActionBar recall must have button[data-testid="action-mark-checkpoint"]')
+    assert.strictEqual(queryByTestId('action-mark-checkpoint'), null,
+      'BottomActionBar recall must not render unwired action-mark-checkpoint')
 
     const hintBtn = queryByTestId('action-hint')
     assert.ok(hintBtn, 'BottomActionBar recall must have button[data-testid="action-hint"]')
@@ -827,8 +819,8 @@ describe('W8-P3 Task5: UI Command Mapping (T5-12, T5-13)', function () {
     const verifySkipBtn = queryByTestId('action-verify-skip')
     assert.ok(verifySkipBtn, 'BottomActionBar recall must have button[data-testid="action-verify-skip"]')
 
-    const enterAnalysisBtn = queryByTestId('action-enter-analysis')
-    assert.ok(enterAnalysisBtn, 'BottomActionBar recall must have button[data-testid="action-enter-analysis"]')
+    assert.strictEqual(queryByTestId('action-enter-analysis'), null,
+      'BottomActionBar recall must not duplicate the top enter-analysis action')
   })
 })
 

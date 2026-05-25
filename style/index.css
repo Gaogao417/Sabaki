@@ -4184,10 +4184,10 @@ button:active {
 .workbench-shell__main {
   display: grid;
   grid-template-columns:
-    minmax(240px, 300px)
-    minmax(420px, 1fr)
-    minmax(240px, 300px);
-  gap: 16px;
+    minmax(290px, 300px)
+    minmax(560px, 1fr)
+    minmax(290px, 300px);
+  gap: 32px;
   min-height: 0;
   overflow: hidden;
 }

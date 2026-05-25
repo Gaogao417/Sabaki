@@ -1,64 +1,18 @@
 import {h} from 'preact'
 
-// Lazy import: GameGraph.js imports gametree.js and other modules that may
-// have Electron-specific dependencies. Use try-catch to tolerate test harnesses.
-let GameGraph = null
-try {
-  const graphMod = require('../../sidebars/GameGraph.js')
-  if (graphMod && graphMod.default) {
-    GameGraph = graphMod.default
-  }
-} catch (_) { /* GameGraph unavailable in test harness */ }
-
 /**
- * WorkbenchRightPanel is a presentational wrapper that renders
- * GameGraph (top) + RightModePanel children (bottom) in the
- * right column of the WorkbenchShell.
+ * WorkbenchRightPanel renders the lightweight mode inspector.
+ *
+ * The full game graph is no longer mounted as a fixed default block here. It
+ * remains available through mode-specific variation/analysis surfaces, keeping
+ * the first screen quieter and the board visually dominant.
  *
  * Props:
- * @param {Object} props.gameTree - Game tree object
- * @param {string} props.treePosition - Current tree position ID
- * @param {number} props.graphGridSize - Grid size for graph rendering
- * @param {number} props.graphNodeSize - Node size for graph rendering
- * @param {boolean} props.showGameGraph - Whether to show the game graph
- * @param {Object} props.gameCurrents - Current game currents (indexed object)
- * @param {Function} props.onGraphClick - Callback for graph node click
  * @param {import('preact').VNode} props.modePanel - RightModePanel VNode child
  */
-export default function WorkbenchRightPanel({
-  gameTree,
-  treePosition,
-  graphGridSize,
-  graphNodeSize,
-  showGameGraph,
-  gameCurrents,
-  onGraphClick,
-  modePanel,
-}) {
+export default function WorkbenchRightPanel({modePanel}) {
   return h('div', {class: 'workbench-right-panel'},
-    showGameGraph !== false && GameGraph && gameTree
-      ? h('div', {
-          class: 'workbench-right-panel__graph',
-          style: {
-            flex: '1 1 0',
-            minHeight: '180px',
-            maxHeight: '45%',
-            overflow: 'hidden',
-            position: 'relative',
-          },
-        },
-          h(GameGraph, {
-            gameTree,
-            treePosition,
-            graphGridSize,
-            graphNodeSize,
-            showGameGraph,
-            gameCurrents,
-            onNodeClick: onGraphClick,
-          }),
-        )
-      : h('div', {class: 'workbench-right-panel__graph-placeholder'}),
-    h('div', {class: 'workbench-right-panel__mode', style: {flex: '1 1 0', overflowY: 'auto'}},
+    h('div', {class: 'workbench-right-panel__mode'},
       modePanel,
     ),
   )

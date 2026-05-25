@@ -60,7 +60,6 @@ function noopProps(overrides = {}) {
 /** Common buttons expected in all modes */
 const commonButtons = [
   'action-select',
-  'action-hand-shape',
   'action-zoom-in',
   'action-zoom-out',
   'action-fullscreen',
@@ -84,8 +83,6 @@ describe('BottomActionBar (T-4.3)', function () {
     const playButtons = [
       'action-undo',
       'action-pass',
-      'action-resign',
-      'action-end-attempt',
       'action-mark-doubtful',
       ...commonButtons,
     ]
@@ -120,8 +117,6 @@ describe('BottomActionBar (T-4.3)', function () {
       'action-redo',
       'action-pass',
       'action-request-hint',
-      'action-submit-answer',
-      'action-abandon-answer',
       ...commonButtons,
     ]
 
@@ -148,10 +143,8 @@ describe('BottomActionBar (T-4.3)', function () {
   // Controlled dependencies: props are inline
   it('T-4.3c: recall mode renders correct buttons', () => {
     const recallButtons = [
-      'action-mark-checkpoint',
       'action-hint',
       'action-verify-skip',
-      'action-enter-analysis',
       ...commonButtons,
     ]
 
@@ -182,7 +175,6 @@ describe('BottomActionBar (T-4.3)', function () {
       'action-redo',
       'action-clear',
       'action-edit-position',
-      'action-snapshot',
       ...commonButtons,
     ]
 

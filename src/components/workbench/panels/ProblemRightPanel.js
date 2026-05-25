@@ -46,7 +46,7 @@ export default function ProblemRightPanel({
       'data-testid': 'hint-card',
       class: 'wb-card',
     },
-      h('div', {class: 'wb-panel-title'}, 'Hint'),
+      h('div', {class: 'wb-panel-title'}, '提示'),
       hint != null
         ? h('div', {class: 'wb-problem-right-panel__hint-content'}, hint)
         : h('div', {style: 'font-size: 13px; color: var(--ui-text-tertiary)'},

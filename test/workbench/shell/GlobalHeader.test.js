@@ -44,18 +44,11 @@ describe('GlobalHeader (T-1.2c)', () => {
 })
 
 // ============================================================================
-// Phase U2: StoneStatus Integration + Avatar Removal + Chinese Labels
+// Phase U2: Noise reduction + Avatar Removal
 // ============================================================================
 
 describe('GlobalHeader Phase U2 (T-U2-1e, T-U2-5, T-U2-6)', () => {
-  // --- T-U2-1e: renders StoneStatus (black stone indicator present) ---
-  // Production subject: GlobalHeader component
-  // Production import path: src/components/workbench/shell/GlobalHeader.js
-  // Production bug: GlobalHeader does not render StoneStatus, or StoneStatus
-  //   does not produce a .wb-stone-indicator--black element
-  // Controlled dependencies: props are inline; StoneStatus is rendered as a child
-  //   component within GlobalHeader
-  it('T-U2-1e: renders StoneStatus with black stone indicator', () => {
+  it('T-U2-1e: does NOT render StoneStatus in quiet app chrome', () => {
     const {container} = renderToDom(
       h(GlobalHeader, {
         taskTitle: 'Test',
@@ -68,7 +61,7 @@ describe('GlobalHeader Phase U2 (T-U2-1e, T-U2-5, T-U2-6)', () => {
     )
 
     const blackIndicator = container.querySelector('.wb-stone-indicator--black')
-    assert.ok(blackIndicator, 'Expected .wb-stone-indicator--black inside GlobalHeader')
+    assert.strictEqual(blackIndicator, null, 'StoneStatus belongs in ModeBar, not GlobalHeader')
   })
 
   // --- T-U2-5a: no avatar element ---
@@ -110,35 +103,22 @@ describe('GlobalHeader Phase U2 (T-U2-1e, T-U2-5, T-U2-6)', () => {
     assert.strictEqual(initialsEl, null, '.wb-global-header__avatar-initials should NOT be present')
   })
 
-  // --- T-U2-6a: mode chip uses Chinese label ---
-  // Production subject: GlobalHeader component
-  // Production import path: src/components/workbench/shell/GlobalHeader.js
-  // Production bug: mode chip shows English label instead of Chinese
-  // Controlled dependencies: props are inline, mode varies
-  it('T-U2-6a: mode chip uses Chinese label', () => {
-    const cases = [
-      {mode: 'play', expected: '对局'},
-      {mode: 'problem', expected: '题目'},
-      {mode: 'recall', expected: '回忆'},
-      {mode: 'analysis', expected: '复盘'},
-    ]
+  it('T-U2-6a: does NOT render mode chip or material utilities in app chrome', () => {
+    const {container} = renderToDom(
+      h(GlobalHeader, {
+        taskTitle: 'Test',
+        mode: 'problem',
+        statusChips: [],
+        onOpenFoxGames: () => {},
+        onOpenOneOhOneWeiqi: () => {},
+        onOpenPreferences: () => {},
+      })
+    )
 
-    for (const {mode, expected} of cases) {
-      const {container} = renderToDom(
-        h(GlobalHeader, {
-          taskTitle: 'Test',
-          mode,
-          statusChips: [],
-        })
-      )
-
-      const modeChip = container.querySelector('.wb-global-header__mode-chip')
-      assert.ok(modeChip, `Expected .wb-global-header__mode-chip for mode="${mode}"`)
-      assert.strictEqual(
-        modeChip.textContent.trim(),
-        expected,
-        `Mode chip for "${mode}" should show "${expected}", got "${modeChip.textContent.trim()}"`
-      )
-    }
+    const modeChip = container.querySelector('.wb-global-header__mode-chip')
+    assert.strictEqual(modeChip, null, 'Mode chip belongs in ModeBar, not GlobalHeader')
+    assert.ok(!container.textContent.includes('野狐'), 'GlobalHeader should not render 野狐 utility')
+    assert.ok(!container.textContent.includes('101'), 'GlobalHeader should not render 101 utility')
+    assert.ok(!container.textContent.includes('偏好'), 'GlobalHeader should not render 偏好 utility')
   })
 })

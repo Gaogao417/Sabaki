@@ -40,16 +40,16 @@ export default function ProblemModePanel({
 
     if (state === 'disabled') {
       return h('div', {class: 'wb-state-disabled'},
-        h('div', {'data-testid': 'disabled-overlay', class: 'wb-state-disabled__overlay'}, 'Disabled'),
+        h('div', {'data-testid': 'disabled-overlay', class: 'wb-state-disabled__overlay'}, '暂不可用'),
       )
     }
 
     if (state === 'error') {
       return h('div', {class: 'wb-state-error'},
         h('div', {class: 'wb-state-error__icon'}, '!'),
-        h('div', {class: 'wb-state-error__message'}, 'Something went wrong'),
+        h('div', {class: 'wb-state-error__message'}, '当前题目状态异常'),
         h('div', {class: 'wb-state-error__retry'},
-          h('button', {'data-testid': 'error-overlay', class: 'wb-btn wb-btn-secondary wb-btn--sm'}, 'Retry'),
+          h('button', {'data-testid': 'error-overlay', class: 'wb-btn wb-btn-secondary wb-btn--sm'}, '重试'),
         ),
       )
     }
@@ -57,15 +57,15 @@ export default function ProblemModePanel({
     if (state === 'success') {
       return h('div', {class: 'wb-state-success'},
         h('div', {'data-testid': 'success-indicator', class: 'wb-state-success__icon'}, '✓'),
-        h('div', {class: 'wb-state-success__message'}, 'Complete'),
+        h('div', {class: 'wb-state-success__message'}, '已提交'),
       )
     }
 
     if (state === 'empty') {
       return h(EmptyStatePanel, {
         icon: 'square',
-        title: 'No Problem Loaded',
-        description: 'Load a problem to begin solving.',
+        title: '暂无题目',
+        description: '打开题目后开始作答。',
       })
     }
 

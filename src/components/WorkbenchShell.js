@@ -130,10 +130,9 @@ export default function WorkbenchShell({
       // Main content area
       h('div', {class: 'workbench-shell__main'},
 
-        // Left panel: EnginePeerList + mode-specific panel
+        // Left panel: mode-specific task surface
         h('div', {class: 'workbench-shell__left-panel'},
           h(WorkbenchLeftPanel, {
-            engineProps: rest,
             modePanel: leftPanel[mode] || leftPanel.play,
           }),
         ),
@@ -143,17 +142,9 @@ export default function WorkbenchShell({
           h(MainBoardStage, {mode, boardProps: rest.boardProps}, children),
         ),
 
-        // Right panel: GameGraph + mode-specific content
+        // Right panel: mode-specific inspector
         h('div', {class: 'workbench-shell__right-panel'},
           h(WorkbenchRightPanel, {
-            mode,
-            gameTree: rest.gameTree,
-            treePosition: rest.treePosition,
-            graphGridSize: rest.graphGridSize,
-            graphNodeSize: rest.graphNodeSize,
-            showGameGraph: rest.showGameGraph,
-            gameCurrents: rest.gameCurrents,
-            onGraphClick: rest.onGraphClick,
             modePanel: h(RightModePanel, {mode, ...rest}),
           }),
         ),

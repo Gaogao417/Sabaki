@@ -252,16 +252,20 @@ describe('Phase U1 -- CSS Design Atoms', () => {
       )
     })
 
-    // --- C-03: border-radius uses var(--radius-md) or var(--radius-lg) ---
+    // --- C-03: border-radius uses card/shell radius token ---
     // Production bug: border-radius uses wrong value
-    it('C-03: border-radius uses var(--radius-md) or var(--radius-lg)', () => {
+    it('C-03: border-radius uses var(--radius-card), var(--radius-md), or var(--radius-lg)', () => {
       const rule = extractRule(cssContent, '.wb-card')
       assert.ok(rule, '.wb-card rule not found')
 
       const radiusValue = getDeclarationValue(rule, 'border-radius')
       assert.ok(
-        radiusValue && (radiusValue.includes('var(--radius-md)') || radiusValue.includes('var(--radius-lg)')),
-        `.wb-card border-radius should use var(--radius-md) or var(--radius-lg), got: ${radiusValue}`
+        radiusValue && (
+          radiusValue.includes('var(--radius-card)') ||
+          radiusValue.includes('var(--radius-md)') ||
+          radiusValue.includes('var(--radius-lg)')
+        ),
+        `.wb-card border-radius should use a radius token, got: ${radiusValue}`
       )
     })
 

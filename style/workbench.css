@@ -10,7 +10,7 @@
 
 :root {
   /* Layout constants */
-  --wb-header-h: 52px;
+  --wb-header-h: 38px;
   --wb-mode-bar-h: 78px;
   --wb-action-bar-h: 68px;
   --wb-tab-bar-h: 48px;
@@ -74,7 +74,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--wb-gap);
+  padding: 0 14px;
   background: var(--ui-bg-strong);
   border-bottom: 1px solid var(--ui-border);
   gap: 12px;
@@ -85,8 +85,9 @@
 .wb-global-header__right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   -webkit-app-region: no-drag;
+  min-width: 0;
 }
 
 .wb-global-header__right {
@@ -101,13 +102,13 @@
 }
 
 .wb-global-header__title {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ui-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 320px;
+  max-width: 420px;
 }
 
 .wb-global-header__chips {
@@ -167,7 +168,7 @@
 }
 
 .wb-global-header--compact {
-  height: 44px;
+  height: 34px;
 }
 
 /* ========================================================================
@@ -986,7 +987,7 @@
 .wb-card {
   background: var(--ui-card);
   border: 1px solid var(--ui-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-card);
   box-shadow: var(--ui-shadow-sm);
   padding: var(--wb-card-padding);
 }
@@ -1770,6 +1771,21 @@
   display: flex;
   flex-direction: column;
   gap: var(--wb-card-gap);
+}
+
+.workbench-left-panel,
+.workbench-right-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.workbench-left-panel__mode,
+.workbench-right-panel__mode {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Right panel stat rows */

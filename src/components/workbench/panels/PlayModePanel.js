@@ -62,16 +62,16 @@ export default function PlayModePanel({
 
     if (state === 'disabled') {
       return h('div', {class: 'wb-state-disabled'},
-        h('div', {'data-testid': 'disabled-overlay', class: 'wb-state-disabled__overlay'}, 'Disabled'),
+        h('div', {'data-testid': 'disabled-overlay', class: 'wb-state-disabled__overlay'}, '暂不可用'),
       )
     }
 
     if (state === 'error') {
       return h('div', {class: 'wb-state-error'},
         h('div', {class: 'wb-state-error__icon'}, '!'),
-        h('div', {class: 'wb-state-error__message'}, 'Something went wrong'),
+        h('div', {class: 'wb-state-error__message'}, '当前对局状态异常'),
         h('div', {class: 'wb-state-error__retry'},
-          h('button', {'data-testid': 'error-overlay', class: 'wb-btn wb-btn-secondary wb-btn--sm'}, 'Retry'),
+          h('button', {'data-testid': 'error-overlay', class: 'wb-btn wb-btn-secondary wb-btn--sm'}, '重试'),
         ),
       )
     }
@@ -79,15 +79,15 @@ export default function PlayModePanel({
     if (state === 'success') {
       return h('div', {class: 'wb-state-success'},
         h('div', {'data-testid': 'success-indicator', class: 'wb-state-success__icon'}, '✓'),
-        h('div', {class: 'wb-state-success__message'}, 'Complete'),
+        h('div', {class: 'wb-state-success__message'}, '已完成'),
       )
     }
 
     if (state === 'empty') {
       return h(EmptyStatePanel, {
         icon: 'circle',
-        title: 'No Game Loaded',
-        description: 'Start a new game to begin playing.',
+        title: '暂无对局',
+        description: '新建对局后开始训练。',
       })
     }
 

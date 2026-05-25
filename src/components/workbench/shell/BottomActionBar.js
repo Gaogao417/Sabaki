@@ -8,37 +8,29 @@ import AnnotationToolbar from '../shared/AnnotationToolbar.js'
 const MODE_ACTIONS = {
   play: [
     {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
-    {testId: 'action-pass', label: '弃权', callback: 'onPass'},
-    {testId: 'action-resign', label: '认输', callback: 'onResign', variant: 'danger'},
-    {testId: 'action-end-attempt', label: '结束', callback: 'onEndAttempt'},
+    {testId: 'action-pass', label: 'Pass', callback: 'onPass'},
     {testId: 'action-mark-doubtful', label: '标记疑问手', callback: 'onMarkDoubtful'},
   ],
   problem: [
     {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
     {testId: 'action-redo', label: '重做', callback: 'onRedo'},
-    {testId: 'action-pass', label: '弃权', callback: 'onPass'},
+    {testId: 'action-pass', label: 'Pass', callback: 'onPass'},
     {testId: 'action-request-hint', label: '提示', callback: 'onRequestHint'},
-    {testId: 'action-submit-answer', label: '提交答案', callback: 'onSubmitAnswer', variant: 'primary'},
-    {testId: 'action-abandon-answer', label: '放弃', callback: 'onAbandonAnswer'},
   ],
   recall: [
-    {testId: 'action-mark-checkpoint', label: '标记检查点', callback: 'onMarkCheckpoint'},
     {testId: 'action-hint', label: '提示', callback: 'onHint'},
     {testId: 'action-verify-skip', label: '校对跳过', callback: 'onVerifySkip'},
-    {testId: 'action-enter-analysis', label: '进入复盘', callback: 'onEnterAnalysis'},
   ],
   analysis: [
     {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
     {testId: 'action-redo', label: '重做', callback: 'onRedo'},
     {testId: 'action-clear', label: '清除', callback: 'onClear'},
     {testId: 'action-edit-position', label: '编辑局面', callback: 'onEditPosition'},
-    {testId: 'action-snapshot', label: '快照', callback: 'onSnapshot', variant: 'primary'},
   ],
 }
 
 const VIEW_ACTIONS = [
   {testId: 'action-select', label: '选择', callback: 'onSelect'},
-  {testId: 'action-hand-shape', label: '手型', callback: 'onHandShape'},
   {testId: 'action-zoom-in', label: '放大', callback: 'onZoomIn'},
   {testId: 'action-zoom-out', label: '缩小', callback: 'onZoomOut'},
   {testId: 'action-fullscreen', label: '全屏', callback: 'onFullscreen'},
