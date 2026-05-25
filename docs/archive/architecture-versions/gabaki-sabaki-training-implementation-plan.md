@@ -31,13 +31,19 @@ Architecture v0.4      = legacy reference，只用于理解迁移前状态
 ```text
 TrainingTask.origin 兼容建模
 WorkbenchTab.mode
+WorkbenchTab.recallSubstate / analysisReturnTarget
+modeTransitions.ts 纯状态机骨架
 workbenchTabService.openTask
 workbenchFlowService skeleton
 taskImportService skeleton + local/manual/snapshot/badMove paths
 Attempt userLine + moveActors
+RecallPolicy + expectedMoveIndexes 数据与派生函数
 Problem AI problemArea 二次过滤
 BadMove createTaskFromBadMove 幂等返回 generatedTaskId
 Review openDueItem → openTask
+gobanDataAdapter + boardInteractionController + projectGobanProps
+workbenchPhaseService @deprecated 标记
+ModeBar disabled policy / Analysis return UI policy
 Workbench shell / mode panels / right panels / bottom action bar
 ```
 
@@ -46,25 +52,76 @@ Workbench shell / mode panels / right panels / bottom action bar
 ```text
 legacy kind/source/phase 仍保留为兼容字段
 openGameTab / openProblemTab / openSnapshotProblemTab 仍存在
-workbenchFlowService 仍用 inline transition 和 previousMode/toMode
-workbenchPhaseService 仍被导出、测试和 wiring 使用，但只应视为 legacy compatibility
-Snapshot 仍有 createProblemFromCurrentAnalysisPosition / Problem path
+workbenchFlowService 已调用 modeTransitions，但仍有 legacy bypass、previousMode mirror 和分散 enter/exit effect
+workbenchPhaseService 已 deprecated，但仍被导出、测试和部分 wrapper 使用
+Snapshot 仍有 createProblemFromCurrentAnalysisPosition / Problem path，且 flowService 当前未限制 analysis-only
 RecallSession 仍有 legacy source/type/startMove/endMove
 Review addToReviewQueue 已有，但缺少显式 ReviewEnrollmentPolicy
+Problem board path 已可按 WorkbenchMode.problem 路由，但 openProblemTab 仍会 legacy setMode('play')
+Analysis workspace / overlay / scratch effect 仍主要由 sabaki.setMode('analysis') 执行
 ```
 
 未完成的新契约：
 
 ```text
-modeTransitions.ts
-AnalysisReturnTarget
-RecallSubstate
-RecallPolicy / expectedMoveIndexes
+ModeState / companion state resolver（只读聚合 tab/runtime/overlay/engine）
+ModeEnterEffect / ModeExitEffect 原子编排入口
+Snapshot analysis-only precondition + child problem tab contract
+FrozenAttempt / MutableAttempt 写入边界和 repository allowlist
+Problem explicit mode 主路径：不再依赖 legacy play + problemView 双重真相
+Problem undo 同步回滚 tree / runtime / Attempt.userLine
+Recall complete 不污染 Attempt.userLine/result/status；recallCompleted/status 需迁出或 allowlist
+Recall/Analysis overlay and engine projection gating
 AiMovePending 竞态保护
 完整 SnapshotTaskInput parent context / requestId
 ExplorationBranch
 ReviewEnrollmentPolicy
 UI keyboard command path / compact layout / disabled reason stories
+```
+
+## 0.2 2026-05-25 Mode Orchestration Contract 对齐
+
+本计划从 2026-05-25 起必须优先对齐
+`docs/design/workbench-mode-orchestration-contract.md`。该合同是 Workbench 运行态状态机的
+source of truth；当它和早期 PRD / Architecture v0.5 / 本计划旧文本冲突时，以该合同为准。
+
+合同带来的计划修正：
+
+```text
+Snapshot 不再是任意 mode 的全局派生能力；
+主路径收紧为 analysis -> snapshot problem child tab。
+
+Problem entity / task 不是 mode；
+WorkbenchMode.problem 是一等运行态 mode，不能继续依赖 sabaki.state.mode='play' + runtime.problemView。
+
+Recall / Analysis 只能读取 FrozenAttempt；
+RecallSession、RecallAttempt、Checkpoint、Comment、Snapshot 是独立事实，不能隐式补丁 Attempt.userLine/result/status。
+
+Mode transition 必须收束 tab patch、runtime patch、overlay patch、engine/scratch effect；
+不能只 patch WorkbenchTab.mode，然后把 workspace / overlay / engine 副作用留给 sabaki.setMode。
+
+OverlayRegion 和 EngineAnalysisRegion 是受 mode 约束的 orthogonal region；
+territory/compare 只属于 analysis，stale async callback 必须被 generation / target guard 丢弃。
+```
+
+当前代码和合同的对齐判断：
+
+```text
+OK:
+  - modeTransitions.ts、AnalysisReturnTarget、RecallSubstate 已存在。
+  - gobanDataAdapter / boardInteractionController 已把 WorkbenchMode 注入 resolver。
+  - projectGobanProps 已在 recall 下隐藏 analysis overlay。
+  - overlayStore 已有 analysis-only territory/compare guard 和 generation invalidation。
+
+Gap / Risk:
+  - modeTransitions.ts 和 workbenchFlowService 仍允许 snapshot from any mode。
+  - snapshotService.captureSnapshotInput 支持 play/problem/recall/analysis，缺 analysis scratch precondition。
+  - recallService.completeRecall 仍 patch source Attempt 的 recallCompleted/status。
+  - problemFlowService.undoProblemMove 只回滚 runtime cache，未回滚 Attempt.userLine。
+  - openProblemTab legacyCompatibility 仍把 sabaki.state.mode 设成 play。
+  - workbenchFlowService.enterAnalysis/returnFromAnalysis 未统一创建/清理 editWorkspace、overlay、scratch analysis。
+  - resolveAnalysisDisplay 仍允许 recall analysis projection；projectGobanProps 已隐藏，App/sidebar projection 需统一。
+  - workbenchStore.updateTab / trainingRuntimeStore setters 仍是无 companion-state guard 的 shallow mutation。
 ```
 
 ---
@@ -85,7 +142,7 @@ legacy global mode
 ```text
 Play / Problem → Submit → Recall
 Recall → Analysis 可选
-任意 Mode → Snapshot → new TrainingTask
+Analysis → Snapshot → child Problem Task / child Tab
 BadMove → new TrainingTask → ReviewSchedule
 ```
 
@@ -213,10 +270,10 @@ Phase 0-9 仍然是长期迁移顺序，但当前代码已经有基础 walking s
 之后每个契约补齐都必须带最小 UI 或 command-path 接入：
 
 ```text
-modeTransitions 补齐时，同时接 Analysis Return / Recall substate UI
+ModeEnterEffect / ModeExitEffect 补齐时，同时接 Analysis Return / Recall substate UI
 RecallPolicy 补齐时，同时接 Recall expectedMoves view model
 AiMovePending 补齐时，同时接 AI pending / interruption UI
-SnapshotTaskInput 补齐时，同时接全局 Snapshot button / shortcut
+SnapshotTaskInput 收紧时，同时接 Analysis-only Snapshot button / shortcut disabled reason
 ReviewEnrollmentPolicy 补齐时，同时接 Review Inbox / 加入复习入口
 ```
 
@@ -316,7 +373,7 @@ repository create/load/update task roundtrip tests。
 
 # 3. Phase 1：Workbench Mode + openTask 骨架
 
-状态：`Landed / contract gaps remaining`
+状态：`Landed / mode-effect gaps remaining`
 
 目标：用 `WorkbenchMode` 和统一 `openTask` 替代 v0.4 的 Phase / source-specific
 tab API。
@@ -383,7 +440,7 @@ type AnalysisReturnTarget = {
 ```text
 play/problem --submit--> recall
 recall --complete--> analysis 或 end
-any mode --snapshot--> new tab, mode = problem/play
+analysis --snapshot--> child tab, mode = problem
 play/problem --enterAnalysis--> analysis
 recall --enterAnalysis--> analysis
 analysis --returnFromAnalysis--> AnalysisReturnTarget
@@ -399,6 +456,23 @@ analysis --returnFromAnalysis--> AnalysisReturnTarget
    - Problem Mode：problemOpponent 为 self 或 ai；
    - AI 设置包括 engineId、timeLimitMs / maxVisits、autoPlay。
 
+当前判断（基于 2026-05-25 代码）：
+
+```text
+已落地：
+  - WorkbenchMode / RecallSubstate / AnalysisReturnTarget 类型。
+  - modeTransitions.ts 纯函数和基础 table-driven tests。
+  - openTask 默认 mode 推导、playerConfig 存储、workbenchPhaseService deprecated 标记。
+  - returnFromAnalysis 读取 analysisReturnTarget，不再接受外部 toMode。
+
+仍需收敛：
+  - modeTransitions snapshot event 仍允许 from any mode，需改为 analysis-only。
+  - workbenchFlowService assertTransition 有 legacy bypass，需按合同逐步删除或隔离。
+  - completeRecall 仍是 flowService 外加 recallService fire-and-forget，不是原子 TransitionEffect。
+  - previousMode 仍与 analysisReturnTarget 并存；只可作为 legacy adapter projection。
+  - workbenchStore.updateTab 和 runtimeStore setters 缺 companion-state invariant guard。
+```
+
 验收：
 
 ```text
@@ -407,7 +481,7 @@ openTask(free task) 默认 mode = play；
 显式 mode 优先于默认推导；
 Submit 必须从 play/problem 进入 recall；
 Analysis 不再被强制作为 Recall 后的第三关；
-Snapshot 不改变当前 tab，而是创建新 tab；
+Snapshot 只允许 Analysis scratch context 派生 child Problem tab，且不改变当前 tab；
 旧入口仍可兼容。
 Play tab 可保存黑白方 human / ai 配置；
 Problem tab 可保存对方 self / ai 配置。
@@ -421,7 +495,8 @@ mode transition table-driven tests；
 AnalysisReturnTarget restore tests；
 RecallSubstate transition tests；
 legacy openProblemTab wrapper tests；
-snapshot creates child tab tests；
+analysis snapshot creates child tab tests；
+snapshot from play/problem/recall rejected tests；
 panel routing tests。
 playerConfig store/update tests。
 ```
@@ -477,7 +552,7 @@ review
 ```text
 野狐 / 本地 SGF 导入为 free task，默认 Play；
 101 / 本地题库导入为 problem-like task，默认 Problem；
-Snapshot / BadMove 派生题仍是普通 Task；
+Analysis Snapshot / BadMove 派生题仍是普通 Task；
 origin 只用于显示、追溯、同步和调试；
 openTask 不知道 fox / 101 / snapshot / bad_move。
 ```
@@ -565,6 +640,24 @@ tab.mode = recall
    - Submit 顶部主按钮和底部按钮走同一 `workbenchFlowService.submit`；
    - Recall shell 显示 `RecallSession.expectedMoves` 派生后的进度。
 
+当前判断（基于 2026-05-25 代码）：
+
+```text
+已落地：
+  - attemptService create/append/freeze/finalize 基础生命周期。
+  - boardInteractionController 已在 play/problem 落子后 appendMove，并为 AI move 标记 actor='ai'。
+  - aiMoveService 有 problemArea engine 参数与返回后二次过滤。
+  - RecallPolicy / expectedMoveIndexes 已有类型、派生函数和 repository/service 测试。
+  - TrainingWorkbenchContainer 已接 playerConfig 控件和 submit command path。
+
+仍需收敛：
+  - AiMovePending 目前不是显式 runtime fact；缺 requestId/tabId/attemptId/positionHash stale guard。
+  - attemptService guard 只挡 appendMove；repository.updateAttempt 仍可直接改 frozen Attempt 的 userLine/result/status。
+  - recallService.completeRecall 仍写 source Attempt.recallCompleted/status，需要迁到 RecallSession/followup state 或冻结后 metadata allowlist。
+  - problemFlowService.undoProblemMove 未回滚 Attempt.userLine，Problem 三方状态可能不同步。
+  - Problem submit 仍有 legacy problemService punishment path，需要和普通 Task / BadMove derivation policy 收敛。
+```
+
 验收：
 
 ```text
@@ -575,9 +668,11 @@ Play 可配置黑白双方为 human / ai；
 Problem 可配置对方为 self / ai；
 Problem AI 不会在 problemArea 外落子；
 旧 AI 请求不会在用户悔棋、切 Tab、进入 Analysis 或重新开始 Attempt 后写入；
-Submit 后 Attempt.status = submitted/recalling；
+Submit 后 Attempt frozen，RecallSession created，tab.mode = recall；
 RecallSession.attemptId 指向被冻结 Attempt；
 RecallSession.expectedMoves 与 recallPolicy / expectedMoveIndexes 一致；
+Recall / Analysis 不得修改 frozen Attempt.userLine/result/status；
+Problem undo 后 tree、runtime problemView、Attempt.userLine 三者一致；
 tab.mode 切换为 recall；
 Play / Problem UI 能通过真实 command path 创建 Attempt、触发 AI、Submit 到 Recall；
 Analysis 自由摆棋不修改 Attempt.userLine。
@@ -594,6 +689,9 @@ AI vs AI auto-play limit tests；
 submit transaction tests；
 recallService create-from-attempt tests；
 recallPolicy tests；
+frozen Attempt repository write guard tests；
+completeRecall no Attempt userLine/result/status write tests；
+problem undo rolls back Attempt.userLine tests；
 free task → Play → Submit → Recall integration tests；
 problem-like task → Problem → Submit → Recall integration tests；
 Play / Problem UI command-path smoke tests。
@@ -638,6 +736,15 @@ src/modules/training/types/badMove.ts
    - Play / Problem 右栏展示 pending / evaluated / failed 评价状态；
    - BadMove 入口只打开 Analysis 或派生 Task，不直接创建 legacy Problem。
 
+Mode orchestration contract 补充约束：
+
+```text
+pending MoveEvaluation 可以在 Attempt frozen 后完成；
+完成后只能写 MoveEvaluation / BadMove，不得写 Attempt.userLine/result/status。
+game-tree live analysis 和 scratch analysis 必须携带 target/context，
+不得把 game-tree analysis 写入 editWorkspace，也不得把 scratch result 写回真实 tree。
+```
+
 验收：
 
 ```text
@@ -647,6 +754,7 @@ src/modules/training/types/badMove.ts
 major / severe 生成 BadMove；
 minor / none 不生成 BadMove；
 Submit 时 failed evaluation 不作为决定性 pass/fail 依据。
+engine analysis update 在 Attempt frozen 后不修改 Attempt；
 Analysis UI 能看到 BadMove summary，并可从该卡片进入分析或派生 Task。
 ```
 
@@ -658,6 +766,8 @@ pending/evaluated/failed monitor tests；
 bad move severity threshold tests；
 generatedTaskId repository tests；
 submit with failed evaluation tests；
+post-freeze evaluation does not update Attempt tests；
+analysis target isolation tests；
 Analysis BadMove summary card smoke tests。
 ```
 
@@ -693,6 +803,15 @@ src/components/training/panels/RecallCheckpointPanel.tsx
    - Analysis Return 能回到 checkpoint substate；
    - 跳过 checkpoint 的 Review 候选使用同一 enrollment path。
 
+Mode orchestration contract 补充约束：
+
+```text
+Checkpoint 是 Recall substate，不是 WorkbenchMode。
+correctionDraft / activeCheckpointId 是 runtime companion state，只能在 recall 或临时 analysis return context 中存在。
+Reveal AI、comment、resume 只能写 RecallCheckpoint / MoveComment / RecallSession；
+不得修改 source Attempt.userLine/result/status。
+```
+
 验收：
 
 ```text
@@ -717,11 +836,12 @@ RecallCheckpointPanel command-path smoke tests。
 
 ---
 
-# 8. Phase 6：Analysis / Global Snapshot
+# 8. Phase 6：Analysis / Snapshot Child Problem
 
-状态：`Partial`
+状态：`Partial / contract realignment required`
 
-目标：Analysis 成为低阻碍自由研究空间；Snapshot 成为所有模式可用的全局派生 Task 能力。
+目标：Analysis 成为低阻碍自由研究空间；Snapshot 只从 Analysis scratch context
+派生 child Problem Task / child Tab，不再作为 Play / Problem / Recall 的全局动作。
 
 范围：
 
@@ -730,7 +850,11 @@ src/modules/training/types/analysis.ts
 src/modules/training/analysis/snapshotService.ts
 src/modules/training/import/taskImportService.ts
 src/modules/training/workbench/workbenchFlowService.ts
-src/components/training/panels/AnalysisModePanel.tsx
+src/modules/training/workbench/modeTransitions.ts
+src/modules/analysis/scratchAnalysis.ts
+src/components/workbench/panels/AnalysisModePanel.js
+src/components/workbench/shell/ModeActions.js
+src/components/workbench/shell/BottomActionBar.js
 ```
 
 关键任务：
@@ -738,6 +862,7 @@ src/components/training/panels/AnalysisModePanel.tsx
 1. 定义 `AnalysisContext`：
    - `taskId`
    - `attemptId`
+   - `recallSessionId`
    - `checkpointId`
    - `positionHash`
    - `positionSgf`
@@ -747,20 +872,28 @@ src/components/training/panels/AnalysisModePanel.tsx
    - `basePositionHash`
    - `baseMoveIndex`
    - `moves`
-   - `createdFrom.taskId / attemptId / checkpointId / badMoveId`
+   - `createdFrom.taskId / attemptId / recallSessionId / checkpointId / badMoveId`
    MVP 可先不落表，但 UI runtime 必须显式保存 active branch。
-3. Analysis 面板展示：
-   - BadMove list
-   - AI candidate lines
-   - Recall comments
-   - Attempt userLine
-   - correction line
-4. `enterAnalysis` 可从 Play / Problem / Recall / completed Recall 进入，并保存
-   `AnalysisReturnTarget`。
-5. Analysis 自由摆棋默认不写回 Attempt。
-6. `snapshotService.captureSnapshotInput` 支持从 Play / Problem / Recall /
-   Analysis 捕获当前局面和父级关系，不打开 Tab。
-7. `SnapshotTaskInput` 至少包含：
+3. `enterAnalysis` 可从 Play / Problem / Recall 进入，并保存 `AnalysisReturnTarget`。
+4. `enterAnalysis` 的 ModeEnterEffect 必须统一编排：
+   - patch tab `{mode:'analysis', previousMode, analysisReturnTarget, analysisContext}`；
+   - 创建或恢复 scratch editWorkspace；
+   - 清理非 analysis overlay，允许 territory pending；
+   - schedule scratch analysis；
+   - suspend source game-tree writes into scratch target。
+5. `returnFromAnalysis` 的 ModeExitEffect 必须统一编排：
+   - 只返回 `analysisReturnTarget.mode`；
+   - 清 `analysisReturnTarget` / `previousMode`；
+   - 清 territory/compare，bump overlay generation；
+   - 清或封存 scratch editWorkspace；
+   - late scratch analysis result 不得写回真实 tree / source Attempt。
+6. Analysis 自由摆棋默认只写 scratch workspace，不写 Attempt，也不写真实 SGF tree。
+7. `snapshotService.captureSnapshotInput` 收紧为 analysis-only：
+   - active tab 必须 `mode:'analysis'`；
+   - 必须有 scratch/current snapshot 或 active ExplorationBranch；
+   - source tab / source Attempt 只读；
+   - Play / Problem / Recall 调用必须 rejected/no-op 且不创建 Task。
+8. `SnapshotTaskInput` 至少包含：
    - `requestId`
    - `positionSgf`
    - `positionHash`
@@ -770,57 +903,73 @@ src/components/training/panels/AnalysisModePanel.tsx
    - `parentRecallSessionId`
    - `parentCheckpointId`
    - `parentMoveIndex`
-   - `parentMode`
+   - `parentMode:'analysis'`
    - `sourceTreePosition`
    - `sourceBranchId`
    - `reason`
    - `inheritedProblemArea`
-8. 各 mode 的“当前局面”规则必须写死：
-   - Play 捕获 documentStore 当前局面 + activeAttemptId + moveIndex；
-   - Problem 捕获当前作答线局面 + optional inherited problemArea；
-   - Recall normal 在 expected position 与用户复现位置中二选一，并写测试；
-   - Recall checkpoint 捕获 correctionDraft，origin 写 parentCheckpointId；
-   - Analysis 捕获 active ExplorationBranch 当前局面。
 9. `taskImportService.createTaskFromSnapshot` 创建普通 TrainingTask：
 
 ```text
 origin.provider = 'snapshot'
-origin.parentTaskId = currentTaskId
-origin.parentAttemptId = currentAttemptId
-origin.parentMoveIndex = currentMoveIndex
+origin.parentTaskId = source task id
+origin.parentAttemptId = source attempt id
+origin.parentMoveIndex = source move index
 ```
 
-10. `requestId` 必须保证 Snapshot 重复提交幂等。
+10. `requestId` 必须保证 Analysis Snapshot 重复提交幂等。
 11. `workbenchFlowService.snapshotFromCurrentContext` 编排：
 
 ```text
+assert active tab mode === analysis
 captureSnapshotInput
-→ createTaskFromSnapshot
-→ openTask(newTaskId, mode:'problem' 或默认推导)
+→ taskImportService.createTaskFromSnapshot
+→ tabService.openTask(newTaskId, mode:'problem', parentTabId: sourceTabId)
 ```
 
-12. UI 必须提供统一 Snapshot 命令：
-   - 所有模式支持快捷键；
-   - 所有模式有按钮或菜单入口；
-   - 快捷键和按钮走同一条 service path。
-13. 同阶段接入 UI command path：
-   - 顶部、底部和快捷键 `S` 都调用同一个 Snapshot command；
-   - Analysis panel 显示 active ExplorationBranch；
-   - Snapshot 成功状态显示新 Task / Tab 链接，不改变当前 Tab。
+12. UI Snapshot 命令只在 Analysis mode 可执行：
+   - Analysis 顶部按钮、底部按钮和快捷键 `S` 调用同一 service path；
+   - Play / Problem / Recall 中隐藏或 disabled，并显示不能 Snapshot 的原因；
+   - Snapshot 成功状态显示 new Task / child Tab 链接，不改变当前 Analysis tab。
+13. Analysis 面板展示：
+   - active ExplorationBranch；
+   - BadMove list；
+   - AI candidate lines；
+   - Recall comments；
+   - source Attempt userLine；
+   - checkpoint correction line。
+
+当前判断（基于 2026-05-25 代码）：
+
+```text
+已落地：
+  - flowService.snapshotFromCurrentContext 会创建 snapshot task 并 open child problem tab。
+  - snapshotService.captureSnapshotInput 不打开 Tab。
+  - Analysis ModeActions / BottomActionBar 已有 Snapshot 按钮。
+  - Analysis no-attempt-mutation 有基础测试。
+
+仍需收敛：
+  - flowService 和 modeTransitions 仍允许 snapshot from any mode。
+  - snapshotService.captureSnapshotInput 仍支持 play/problem/recall，缺 scratch workspace precondition。
+  - flowService 直接 createTask，未统一走 taskImportService.createTaskFromSnapshot。
+  - snapshot requestId / idempotency / parent context 不完整。
+  - ModeEnterEffect / ModeExitEffect 尚未收束 overlay、scratch workspace 和 engine target。
+```
 
 验收：
 
 ```text
 Analysis 可以看到当前 task / attempt / bad moves / comments；
-Analysis 摆棋不污染 Attempt.userLine；
+Analysis 摆棋不污染 Attempt.userLine，也不写真实 SGF tree；
 Analysis 有 active ExplorationBranch 表示当前变化线；
-Play / Problem / Recall / Analysis 都可 Snapshot 创建新 TrainingTask；
+只有 Analysis 可 Snapshot 创建新 TrainingTask；
+Play / Problem / Recall Snapshot rejected，且无 Problem/Task/Tab side effect；
 Snapshot origin 包含 parent mode / parent ids / source branch；
 同一 requestId 重复提交不会创建重复 Task；
-Snapshot 打开新 Tab；
-当前 Tab 保持原 mode；
-全局 Snapshot 按钮、底部按钮和快捷键走同一 command path；
-不再使用 snapshot_problem kind。
+Snapshot 打开 child Problem tab；
+当前 Analysis tab 保持 analysis mode；
+Analysis Snapshot 按钮、底部按钮和快捷键走同一 command path；
+不再使用 snapshot_problem kind 作为新主路径。
 ```
 
 测试：
@@ -828,12 +977,14 @@ Snapshot 打开新 Tab；
 ```text
 AnalysisContext tests；
 ExplorationBranch runtime tests；
-snapshotService unit tests；
-SnapshotTaskInput per-mode capture tests；
+snapshotService analysis-only precondition tests；
+SnapshotTaskInput analysis capture tests；
 snapshot requestId idempotency tests；
 Analysis no-attempt-mutation tests；
-Play / Problem / Recall / Analysis snapshot integration tests；
-Snapshot button / shortcut command-path smoke tests。
+Analysis scratch no-game-tree-mutation tests；
+snapshot from play/problem/recall rejected tests；
+Analysis Snapshot button / shortcut command-path smoke tests；
+Play / Problem / Recall snapshot disabled reason tests。
 ```
 
 ---
@@ -880,13 +1031,13 @@ TrainingTask(origin.provider='bad_move')
    - `auto_due_now`
    - `auto_scheduled`
 8. 默认策略：
-   - Snapshot：`manual`
+   - Analysis Snapshot：`manual`
    - BadMove derived task：`auto_due_now` 或 `auto_scheduled`
    - skipped checkpoint：`manual` 或 `auto_scheduled`
 9. Punishment 不再是特殊 Tab，也不再自动打断当前流程。
 10. 同阶段接入 UI command path：
    - Review Inbox 点击只走 `reviewService.openDueItem → openTask`；
-   - Snapshot 成功状态提供“加入复习”入口；
+   - Analysis Snapshot 成功状态提供“加入复习”入口；
    - BadMove 派生 Task 成功状态显示 enrollment 结果。
 
 验收：
@@ -894,7 +1045,7 @@ TrainingTask(origin.provider='bad_move')
 ```text
 BadMove 可生成普通 Task；
 BadMove 派生 Task 按 policy 进入 inbox / review；
-Snapshot 默认只给“加入复习”候选，不自动塞满 inbox；
+Analysis Snapshot 默认只给“加入复习”候选，不自动塞满 inbox；
 同一 badMoveId 重复派生不会创建重复 Task；
 Review item 打开后只是普通 openTask；
 Review Inbox 和“加入复习”按钮都走真实 service path；
@@ -943,6 +1094,7 @@ src/components/bars/RecallBar.js
    不跳动。
 3. Play / Problem / Recall / Analysis 的主操作各自只有一个当前最强主按钮；
    顶部、底部和快捷键不得出现语义不一致的 Submit / Snapshot / Return。
+   Snapshot 只能在 Analysis mode 可执行；其它 mode 必须隐藏或 disabled，并给出原因。
 4. 复核底层棋盘接线债务，若仍未收敛则补齐：
    - `gobanDataAdapter` 输出 `GobanPropsInput`；
    - `boardInteractionController` 统一 click → resolver → executor；
@@ -962,7 +1114,7 @@ src/components/bars/RecallBar.js
    - `Space` 下一步 / 提交 recall move；
    - `Enter` 当前主动作；
    - `A` Enter Analysis / Return；
-   - `S` Snapshot；
+   - `S` Analysis Snapshot；非 Analysis mode 下不触发派生 Task；
    - `H` Hint；
    - `Cmd/Ctrl+Z` Undo。
 9. 空态 / 加载态 / 错误态必须组件化覆盖：
@@ -972,7 +1124,8 @@ src/components/bars/RecallBar.js
    - AI move pending；
    - problemArea 未设置；
    - Recall 无 expected moves；
-   - Snapshot 当前局面不可捕获。
+   - Analysis Snapshot 当前局面不可捕获；
+   - 非 Analysis mode 不能 Snapshot。
 10. 截图 / Storybook 验收覆盖 1440px、紧凑窗口和关键 disabled 状态。
 11. 保持 Sabaki 现有棋盘、引擎、分析、overlay 行为可用。
 
@@ -984,6 +1137,7 @@ Play / Problem / Recall / Analysis 的核心 command path 已在 Phase 3-7 接�
 Phase 8 不新增业务流程，只修正 UI 一致性、可达性和状态覆盖；
 紧凑窗口下主按钮和棋盘仍可用；
 键盘 shortcut 与按钮走同一 service path；
+非 Analysis mode 的 Snapshot UI 不会调用 flowService.snapshotFromCurrentContext；
 空态 / loading / error / disabled 状态给出 inline reason；
 Review 打开 due item 后进入 Play 或 Problem；
 UI 不直接写 business store；
@@ -999,6 +1153,7 @@ Play / Problem / Recall / Analysis smoke tests；
 Review Inbox open task integration tests；
 compact layout smoke tests；
 keyboard shortcut command-path tests；
+Analysis-only Snapshot UI gating tests；
 disabled reason / empty-state story tests；
 1440px + compact screenshot checks；
 legacy ProblemBar compatibility regression tests。
@@ -1081,12 +1236,12 @@ Analysis 自动写 Attempt
 
 ```text
 Phase 0  v0.5 模型收敛                 Landed / cleanup remaining
-Phase 1  Workbench Mode + openTask      Landed / contract gaps remaining
+Phase 1  Workbench Mode + openTask      Landed / mode-effect gaps remaining
 Phase 2  taskImportService              Landed / wrapper cleanup remaining
 Phase 3  Attempt + AI Move + Recall     Partial
 Phase 4  MoveEvaluation + BadMove       Partial
 Phase 5  Recall Checkpoint              Partial
-Phase 6  Analysis + Global Snapshot     Partial
+Phase 6  Analysis + Snapshot Child      Partial / contract realignment required
 Phase 7  Review + BadMove 派生 Task     Partial
 Phase 8  UI Hardening / 工作台体验验收  Partial
 Phase 9  Legacy Cleanup                 Pending
@@ -1096,8 +1251,8 @@ Phase 9  Legacy Cleanup                 Pending
 
 ```text
 Phase 0-2 已经形成 v0.5 基础切片，但仍要清掉 legacy 主路径残留；
-Phase 1 的下一步先把 phaseService 明确降级为 deprecated legacy compatibility；
-Phase 3-7 已有服务骨架和部分测试，下一步重点是补齐 v0.5 新契约并同步接 UI command path；
+Phase 1 的下一步不是再补类型，而是把 TransitionEffect / companion invariant 收束到 flow service；
+Phase 3-7 已有服务骨架和部分测试，下一步重点是补齐 mode orchestration contract 并同步接 UI command path；
 Phase 8 已有 UI shell/panels，只做体验硬化、状态覆盖和截图验收；
 Phase 9 只在新路径稳定后做，不提前做破坏性删除。
 ```
@@ -1106,7 +1261,7 @@ Phase 9 只在新路径稳定后做，不提前做破坏性删除。
 
 # 14. 当前最小实现切面
 
-## 已完成（2026-05-20）
+## 已完成（2026-05-20 至 2026-05-25）
 
 ```text
 W0 控件清单: w0-control-inventory-and-command-map-v0.1.md ✅
@@ -1122,36 +1277,51 @@ W3 Goban 接线管道层: w3-goban-wiring-contract-v0.1.md ✅
   - MainBoardStage 渲染真实 Goban ✅
   - WorkbenchShell 透传 boardProps ✅
   - GAP-G4 recall overlay 泄露防护 ✅
+W3.5 数据源 + 点击控制器 ✅
+  - gobanDataAdapter snapshot + subscribe ✅
+  - boardInteractionController click → resolver → executor ✅
+  - Container 订阅 adapter + 转发 onVertexClick ✅
+  - playInteractionExecutor 接通 documentStore.playMove ✅
+Phase 0/1 gap cleanup ✅
+  - workbenchPhaseService @deprecated ✅
+  - modeTransitions.ts / AnalysisReturnTarget / RecallSubstate ✅
+  - RecallPolicy / expectedMoveIndexes schema + mapper + tests ✅
+  - playerConfig store/update tests ✅
 ```
 
-## W3 待做（数据源层 + 点击控制器）
+## 合同对齐待做（Mode Orchestration）
 
 ```text
-gobanDataAdapter: 订阅 board/overlay/settings 数据源，输出 GobanPropsInput snapshot + subscribe
-boardInteractionController: 统一 click → resolver → executor 路径
-Container: 订阅 adapter + 转发 click，移除所有硬编码
-playInteractionExecutor: 接通 documentStore.playMove（替代 sabaki.clickVertex 降级）
+ModeState / companion resolver: 只读聚合 tab/runtime/overlay/engine state
+ModeEnterEffect / ModeExitEffect: tab/runtime/overlay/engine/scratch effect 原子编排
+Snapshot: 从 any-mode 收紧到 analysis-only child problem tab
+FrozenAttempt: repository allowlist + Recall/Analysis no-write guard
+Problem: 显式 WorkbenchMode.problem 主路径 + undo 同步 Attempt.userLine
+Recall complete: 不再写 source Attempt.userLine/result/status，recallCompleted/status 迁出或 allowlist
+Analysis projection: resolveAnalysisDisplay / App / Sidebar 与 projectGobanProps gating 统一
+Stale async: overlay / scratch analysis / AI move 都有 generation 或 requestId guard
 ```
 
 下一轮真实优先级：
 
 ```text
-1. 标记 workbenchPhaseService 为 deprecated legacy compatibility，禁止继续扩展
-2. modeTransitions.ts + AnalysisReturnTarget + RecallSubstate
-3. RecallPolicy + expectedMoveIndexes + schema/mapper/tests
-4. AiMovePending + stale AI request rejection + auto-play limits
-5. Snapshot 统一走 snapshotService → taskImportService.createTaskFromSnapshot → openTask
-6. SnapshotTaskInput 补 requestId + full parent context + per-mode capture rules
-7. ReviewEnrollmentPolicy：Snapshot 默认 manual，BadMove derived task 默认 auto
-8. UI keyboard command path + compact layout + disabled reason / key empty states
+1. ModeState / companion resolver（只读，不改业务），作为 transition guard 输入。
+2. ModeEnterEffect / ModeExitEffect 收束到 workbenchFlowService 或同职责 workbenchModeService。
+3. Snapshot analysis-only：modeTransitions、flowService、snapshotService、UI disabled reason、测试一起改。
+4. FrozenAttempt 写入边界：repository.updateAttempt allowlist + Recall/Analysis no-write tests。
+5. Problem explicit mode：openProblemTab legacy setMode('play') 降级为 adapter projection；undo 回滚 Attempt.userLine。
+6. Recall complete 污染清理：RecallSession/followup state 承担完成标记，Attempt 不再被复盘写状态。
+7. AiMovePending + stale AI request rejection + auto-play limits。
+8. ReviewEnrollmentPolicy：Analysis Snapshot 默认 manual，BadMove derived task 默认 auto。
+9. UI keyboard command path + compact layout + disabled reason / key empty states。
 ```
 
 执行原则：
 
 ```text
-第 1 项只做弃用标记和调用点收敛，不新增功能；
-第 2-7 项每完成一个，都必须同阶段接对应 UI command path 和 smoke test；
-第 8 项只做横向体验硬化，不补做前面阶段遗漏的业务接线。
+第 1-2 项是后续所有 mode 行为的前置，不做可见功能扩张；
+第 3-8 项每完成一个，都必须同阶段接对应 UI command path 和 smoke test；
+第 9 项只做横向体验硬化，不补做前面阶段遗漏的业务接线。
 ```
 
 必须补的测试：
@@ -1159,9 +1329,13 @@ playInteractionExecutor: 接通 documentStore.playMove（替代 sabaki.clickVert
 ```text
 mode transition table-driven tests
 Analysis return restore tests
-RecallPolicy expected move derivation tests
+ModeEnterEffect / ModeExitEffect transition tests
+Snapshot analysis-only rejection + requestId idempotency tests
+FrozenAttempt repository write guard tests
+Recall complete no Attempt pollution tests
+Problem undo Attempt rollback tests
+Analysis/Recall projection gating tests
 AI stale request rejection tests
-Snapshot per-mode capture + requestId idempotency tests
 ReviewEnrollmentPolicy tests
 UI keyboard command-path and disabled-state tests
 ```
@@ -1190,10 +1364,10 @@ RecallPolicy 显式决定 expectedMoves，不靠隐式 userLine 推断
 Checkpoint 是 Recall 子流程
 Analysis Return 必须恢复 AnalysisReturnTarget
 Analysis 不污染 Attempt
-Snapshot 创建新 Task，不复用当前 Tab
+Analysis Snapshot 创建 child Problem Task / child Tab，不复用或修改当前 Tab
 Problem AI 落子必须受 problemArea / analysis area 限制
 AI 请求过期后不可写入 documentStore 或 Attempt
-Snapshot / BadMove 派生必须幂等
+Analysis Snapshot / BadMove 派生必须幂等
 ReviewSchedule 直接引用 taskId
 Store 控制在 2～3 个
 Repository 是唯一训练 DB 入口
@@ -1215,5 +1389,6 @@ openRecallSegmentTab
 Analysis 自动写回 Attempt.userLine
 Problem AI 在题目范围外自动落子
 旧 AI 请求在切 Tab / 悔棋 / 进入 Analysis 后继续落子
-Snapshot 默认自动塞满 Review Inbox
+Play / Problem / Recall 直接 Snapshot 创建 Task
+Analysis Snapshot 默认自动塞满 Review Inbox
 ```
