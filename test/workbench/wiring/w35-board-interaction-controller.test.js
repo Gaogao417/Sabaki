@@ -91,6 +91,7 @@ function createControllerDeps(options = {}) {
     editWorkspaceOps: [],
     editAnalysisInvalidate: [],
     editAnalysisSchedule: [],
+    scratchCommits: [],
     attemptAppendMove: [],
     monitorUserMove: [],
     aiMoveRequest: [],
@@ -130,6 +131,7 @@ function createControllerDeps(options = {}) {
   const editWorkspaceDeps = {
     invalidateEditAnalysis: () => { calls.editAnalysisInvalidate.push({}) },
     scheduleEditWorkspaceAnalysis: () => { calls.editAnalysisSchedule.push({}) },
+    commitScratchResult: (result) => { calls.scratchCommits.push(result) },
   }
 
   const legacySabaki = {
@@ -419,7 +421,7 @@ describe('W3.5 boardInteractionController', function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
 
-      await controller.handleBoardClick({
+      const result = await controller.handleBoardClick({
         vertex: [10, 10],
         event: {button: 0, ctrlKey: false, metaKey: false},
         activeTab: makeTab({mode: 'analysis'}),
@@ -436,6 +438,16 @@ describe('W3.5 boardInteractionController', function () {
       assert.ok(
         deps._calls.editAnalysisInvalidate.length > 0 || deps._calls.editAnalysisSchedule.length > 0,
         'scratch edit must trigger edit analysis invalidation or scheduling',
+      )
+      assert.strictEqual(
+        deps._calls.scratchCommits.length,
+        1,
+        'scratch edit result must be committed back to editWorkspace',
+      )
+      assert.strictEqual(
+        deps._calls.scratchCommits[0],
+        result,
+        'controller must commit the exact scratch executor result returned to the caller',
       )
     })
   })

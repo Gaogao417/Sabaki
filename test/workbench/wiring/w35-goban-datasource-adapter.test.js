@@ -210,6 +210,8 @@ function createAdapterDeps(options = {}) {
     activeTabId = tabs[0]?.id ?? null,
     taskCache = {},
     getBoard,
+    getBoardFromSnapshot,
+    getRawAnalysisForPosition,
   } = options
 
   const workbenchStore = createMockWorkbenchStore(tabs, activeTabId)
@@ -245,6 +247,8 @@ function createAdapterDeps(options = {}) {
     subscribeToRuntimeStore: (cb) => runtimeStore.subscribe(cb),
     subscribeToAnalysisUpdates: (cb) => analysisResultAdapter.subscribeToAnalysisUpdates(cb),
     getBoard: getBoard || ((gameTree, treePosition) => createMockBoardState()),
+    getBoardFromSnapshot,
+    getRawAnalysisForPosition,
     // Expose internals for test assertions
     _writeCalls: writeCalls,
     _workbenchStore: workbenchStore,
@@ -326,6 +330,66 @@ describe('W3.5 gobanDataAdapter', function () {
         'node_move_7',
         'boardState.treePosition must come from documentStore, not hardcoded',
       )
+    })
+  })
+
+  describe('Regression: editWorkspace render source', function () {
+    it('uses active editWorkspace snapshot, markers, lines, and scratch analysis in analysis mode', function () {
+      const editBoard = createMockBoardState({source: 'edit-snapshot', lines: []})
+      const currentMarkerMap = Array(19).fill(null).map(() => Array(19).fill(null))
+      currentMarkerMap[4][4] = {type: 'circle'}
+      const currentLines = [{v1: [3, 3], v2: [10, 10], type: 'line'}]
+      const currentAnalysis = {
+        variations: [{vertex: [16, 16], visits: 100, winrate: 0.55}],
+      }
+
+      const deps = createAdapterDeps({
+        sabakiState: createMockSabakiState({
+          showAnalysis: true,
+          analysisType: 'winrate',
+          editWorkspace: {
+            activeTab: 'current',
+            currentSnapshot: {id: 'snap_current'},
+            referenceSnapshot: null,
+            currentMarkerMap,
+            referenceMarkerMap: null,
+            currentLines,
+            referenceLines: null,
+            currentAnalysis,
+            referenceAnalysis: null,
+            lineFirstVertex: null,
+          },
+        }),
+        tabs: [makeTab({id: 'tab_1', mode: 'analysis'})],
+        getBoard: () => createMockBoardState({source: 'document-tree'}),
+        getBoardFromSnapshot: () => editBoard,
+      })
+      const adapter = createAdapter(deps)
+      if (!adapter) return this.skip()
+
+      const snapshot = adapter.getSnapshot()
+
+      assert.strictEqual(
+        snapshot.boardState.board,
+        editBoard,
+        'analysis board must render from editWorkspace snapshot, not document tree',
+      )
+      assert.deepStrictEqual(
+        snapshot.boardState.board.lines,
+        currentLines,
+        'editWorkspace lines must be attached to the rendered board',
+      )
+      assert.strictEqual(
+        snapshot.overlayState.markerMap,
+        currentMarkerMap,
+        'editWorkspace marker map must be projected to Goban overlay',
+      )
+      assert.strictEqual(
+        snapshot.overlayState.analysis,
+        currentAnalysis,
+        'scratch analysis must be projected instead of stale tree analysis',
+      )
+      assert.strictEqual(snapshot.settings.editWorkspaceActive, true)
     })
   })
 

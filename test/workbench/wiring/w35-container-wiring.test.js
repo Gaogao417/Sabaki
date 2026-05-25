@@ -72,6 +72,7 @@ function createSpyFlowService() {
     returnFromAnalysis: [],
     completeRecall: [],
     snapshotFromCurrentContext: [],
+    startAttempt: [],
   }
   return {
     calls,
@@ -80,6 +81,7 @@ function createSpyFlowService() {
     returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({ tabId, toMode }) },
     completeRecall(tabId) { calls.completeRecall.push({ tabId }) },
     async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({ tabId }) },
+    async startAttempt(tabId) { calls.startAttempt.push({ tabId }) },
   }
 }
 
@@ -89,7 +91,10 @@ function createSpyTabService() {
     calls,
     switchTab(tabId) { calls.switchTab.push({ tabId }) },
     async closeTab(tabId) { calls.closeTab.push({ tabId }) },
-    async openTask(opts) { calls.openTask.push(opts) },
+    async openTask(opts) {
+      calls.openTask.push(opts)
+      return {id: 'opened_tab_1', ...opts}
+    },
   }
 }
 
@@ -108,7 +113,11 @@ function createNoopLegacyController() {
 /**
  * Create a test harness with real Container + real stores + spy services.
  */
-function createHarness({ tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null } = {}) {
+function createHarness({
+  tabs = [makeTab()],
+  activeTabId = tabs[0]?.id ?? null,
+  sabakiPatch = {},
+} = {}) {
   const workbenchStore = createWorkbenchStore()
   const runtimeStore = createTrainingRuntimeStore()
   const flowService = createSpyFlowService()
@@ -138,6 +147,7 @@ function createHarness({ tabs = [makeTab()], activeTabId = tabs[0]?.id ?? null }
     getTrainingContext() {
       return trainingContext
     },
+    ...sabakiPatch,
   }
 
   const container = new TrainingWorkbenchContainer({ sabaki })
@@ -366,6 +376,95 @@ describe('W3.5 Container Wiring', function () {
       }
       assert.strictEqual(thrown, null,
         'onVertexClick must not throw for a valid empty-point click in play mode')
+    })
+  })
+
+  describe('Regression: analysis entry opens scratch workspace', function () {
+    it('onAnalysis opens Sabaki analysis workspace and enables analysis overlay flags', function () {
+      const editWorkspace = {activeTab: 'current'}
+      const sabakiState = {
+        mode: 'play',
+        editWorkspace: null,
+        showAnalysis: false,
+        analysisType: null,
+      }
+      const calls = {setMode: [], setState: [], scheduleEditWorkspaceAnalysis: []}
+
+      const {shellProps, flowService} = createHarness({
+        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+        sabakiPatch: {
+          state: sabakiState,
+          setMode(mode) {
+            calls.setMode.push(mode)
+            sabakiState.mode = mode
+            if (mode === 'analysis') sabakiState.editWorkspace = editWorkspace
+          },
+          setState(patch) {
+            calls.setState.push(patch)
+            Object.assign(sabakiState, patch)
+          },
+          createAnalysisWorkspace() {
+            return editWorkspace
+          },
+          scheduleEditWorkspaceAnalysis(tab) {
+            calls.scheduleEditWorkspaceAnalysis.push(tab)
+          },
+        },
+      })
+
+      shellProps.onAnalysis()
+
+      assert.deepStrictEqual(
+        flowService.calls.enterAnalysis,
+        [{tabId: 'tab_1'}],
+        'onAnalysis must still delegate to flowService.enterAnalysis',
+      )
+      assert.strictEqual(
+        sabakiState.mode,
+        'analysis',
+        'onAnalysis must switch the legacy Sabaki mode so scratch workspace tools activate',
+      )
+      assert.strictEqual(
+        sabakiState.editWorkspace,
+        editWorkspace,
+        'onAnalysis must create or keep an editWorkspace for analysis interactions',
+      )
+      assert.strictEqual(
+        sabakiState.showAnalysis,
+        true,
+        'onAnalysis must enable analysis overlay display',
+      )
+      assert.strictEqual(
+        sabakiState.analysisType,
+        'winrate',
+        'onAnalysis must provide a default analysisType for Goban overlays',
+      )
+    })
+  })
+
+  describe('Regression: new game is AI-drivable', function () {
+    it('onNewGame opens a play tab with default playerConfig and starts an attempt', async function () {
+      const {shellProps, tabService, flowService} = createHarness({
+        tabs: [makeTab({id: 'tab_1', mode: 'play'})],
+      })
+
+      await shellProps.onNewGame()
+
+      assert.strictEqual(
+        tabService.calls.openTask.length,
+        1,
+        'new game must open a task tab',
+      )
+      assert.deepStrictEqual(
+        tabService.calls.openTask[0].playerConfig,
+        {black: 'human', white: 'human', ai: {autoPlay: true}},
+        'new game must initialize playerConfig so later AI side changes are actionable',
+      )
+      assert.deepStrictEqual(
+        flowService.calls.startAttempt,
+        [{tabId: 'opened_tab_1'}],
+        'new game must start an attempt so training AI auto-reply can run',
+      )
     })
   })
 
