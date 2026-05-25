@@ -105,6 +105,7 @@ loadRecallSession(oldSessionId)
 | P0-T13 | STATE | MUST_AUTOMATE | 旧 DB 行 (无 recall_policy 列) load 后 recallPolicy = 'fullLine' | 高 | 向后兼容 |
 | P0-T14 | STATE | MUST_AUTOMATE | 旧 DB 行 (无 expected_move_indexes_json 列) load 后 expectedMoveIndexes = [0..N-1] | 高 | 向后兼容 |
 | P0-T15 | ARCHITECTURE_BOUNDARY | MUST_AUTOMATE | recallPolicy 不影响 WorkbenchMode 转换 | 中 | 边界保护 |
+| P0-T16 | ARCHITECTURE_BOUNDARY | MUST_AUTOMATE | `TrainingTask` 类型声明包含 v0.5 标准材料字段 `initialPositionSgf?: string`，与 repository / DB mapper 运行时字段一致 | 高 | TS 调用方无法按 v0.5 模型创建标准材料实体 |
 
 ## 10. 必须自动化的测试
 
@@ -203,6 +204,11 @@ loadRecallSession(oldSessionId)
 - 预期: RecallPolicy 不作为 WorkbenchMode 转换的 guard 或 effect 条件
 - 注: 此项为代码审查契约，可由 architecture-reviewer 在 PR review 时确认
 
+**P0-T16**: TrainingTask type declares initialPositionSgf
+- 前置: Phase 0 计划要求 TrainingTask 成为标准化材料实体，且 repository / DB mapper 已经读写 initialPositionSgf
+- 操作: 静态检查 `src/modules/training/types/task.ts` 中 `TrainingTask` 声明
+- 预期: `TrainingTask` 包含 `initialPositionSgf?: string`
+
 ## 11. 仅手动验收
 
 无。所有验收均可自动化。
@@ -258,6 +264,7 @@ loadRecallSession(oldSessionId)
 | P0-T10 | PURE_LOGIC | deriveExpectedMoves (humanMovesOnly, no moveActors) | RecallPolicy type, attempt shape | none | none | none | fallback to fullLine | P0-T03 |
 | P0-T11 | PURE_LOGIC | deriveExpectedMoves (sideToMoveOnly, no sideToMove) | RecallPolicy type, attempt shape | none | none | none | fallback to fullLine | P0-T03 |
 | P0-T02 | SERVICE_REPOSITORY_TRANSITION | repo.createRecallSession -> repo.loadRecallSession | real SQLite, real migrate, real trainingDbApi, real trainingRepository | none | none | none | roundtrip preserves recallPolicy + expectedMoveIndexes | not-covered (Phase 0 terminal) |
+| P0-T16 | ARCHITECTURE_BOUNDARY | `TrainingTask` type declaration | `src/modules/training/types/task.ts` | none | none | none | type shape includes `initialPositionSgf?: string` | repository create/load roundtrip tests |
 | P0-T03 | SERVICE_REPOSITORY_TRANSITION | repo.createRecallSession (no recallPolicy) -> repo.loadRecallSession | real SQLite, real migrate, real trainingDbApi, real trainingRepository | none | none | none | recallPolicy defaults to 'fullLine' | not-covered (Phase 0 terminal) |
 | P0-T04 | SERVICE_REPOSITORY_TRANSITION | repo.createRecallSession (no expectedMoveIndexes) -> repo.loadRecallSession | real SQLite, real migrate, real trainingDbApi, real trainingRepository | none | none | none | expectedMoveIndexes defaults to [0..N-1] | not-covered (Phase 0 terminal) |
 | P0-T05 | SIDE_EFFECT_BOUNDARY | migrate() | real SQLite, real DbClient | none | none | none | new columns exist after migration | P0-T06 |

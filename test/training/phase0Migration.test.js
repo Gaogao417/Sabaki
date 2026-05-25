@@ -1,4 +1,5 @@
 import assert from 'assert'
+import fs from 'fs'
 import initSqlJs from 'sql.js'
 
 import { createDbClient } from '../../src/modules/db/client.js'
@@ -837,6 +838,21 @@ describe('Phase 0 Migration - Group 5: v0.5 API Paths', () => {
     assert.strictEqual(task.id, 'task_21')
     assert.strictEqual(task.rootPositionSgf, '(;SZ[9])')
     // v0.5: kind/source are not required; origin may be undefined
+  })
+
+  // T-21b: Phase 0 model contract requires initialPositionSgf on TrainingTask.
+  // This static type-shape test protects TypeScript callers because repository
+  // and DB mappers already read/write the field at runtime.
+  it('T-21b: TrainingTask type declares initialPositionSgf', () => {
+    const source = fs.readFileSync('src/modules/training/types/task.ts', 'utf8')
+    const trainingTaskBlock = source.match(/export type TrainingTask = \{[\s\S]*?\n\}/)
+
+    assert.ok(trainingTaskBlock, 'TrainingTask type declaration must exist')
+    assert.match(
+      trainingTaskBlock[0],
+      /\binitialPositionSgf\?:\s*string\b/,
+      'TrainingTask must declare optional initialPositionSgf for v0.5 model convergence',
+    )
   })
 
   // T-22: createReviewSchedule with taskId succeeds (no itemId/itemType needed)
