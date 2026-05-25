@@ -78,7 +78,7 @@ function createSpyFlowService() {
     calls,
     async submit(tabId) { calls.submit.push({ tabId }) },
     enterAnalysis(tabId) { calls.enterAnalysis.push({ tabId }) },
-    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({ tabId, toMode }) },
+    returnFromAnalysis(input) { calls.returnFromAnalysis.push(input) },
     completeRecall(tabId) { calls.completeRecall.push({ tabId }) },
     async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({ tabId }) },
     async startAttempt(tabId) { calls.startAttempt.push({ tabId }) },

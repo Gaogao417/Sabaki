@@ -93,7 +93,7 @@ function createTestLogger() {
 // --- Tab Factory ---
 
 function makeAnalysisTab(overrides: Record<string, unknown> = {}) {
-  return {
+  const base = {
     id: 'tab_analysis_1',
     taskId: 'task_analysis_1',
     mode: 'analysis',
@@ -104,6 +104,11 @@ function makeAnalysisTab(overrides: Record<string, unknown> = {}) {
     updatedAt: new Date().toISOString(),
     ...overrides,
   }
+  // Ensure analysisReturnTarget is consistent with previousMode for return-from-analysis
+  if (!base.analysisReturnTarget) {
+    base.analysisReturnTarget = {mode: base.previousMode ?? 'play'}
+  }
+  return base
 }
 
 // --- Spy Factories ---
@@ -585,7 +590,7 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         assert.strictEqual(before.mode, 'analysis', 'Precondition: mode=analysis')
         assert.strictEqual(before.previousMode, 'recall', 'Precondition: previousMode=recall')
 
-        harness.flowService.returnFromAnalysis('tab_return1', 'recall')
+        harness.flowService.returnFromAnalysis({tabId: 'tab_return1'})
 
         const after = harness.workbenchStore.getState().tabs[0]
         assert.strictEqual(after.mode, 'recall',
@@ -608,7 +613,7 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         const before = harness.workbenchStore.getState().tabs[0]
         assert.strictEqual(before.previousMode, 'problem', 'Precondition: previousMode=problem')
 
-        harness.flowService.returnFromAnalysis('tab_return2', 'problem')
+        harness.flowService.returnFromAnalysis({tabId: 'tab_return2'})
 
         const after = harness.workbenchStore.getState().tabs[0]
         assert.strictEqual(after.previousMode, undefined,
@@ -619,10 +624,10 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
     // --- T6-06: previousMode undefined defaults to 'play' (Container layer) ---
 
     describe('T6-06: previousMode undefined defaults to play', function () {
-      it('Container passes "play" as toMode when activeTab.previousMode is undefined', function () {
-        // This test verifies the Container handler behavior.
-        // Container.handleReturnFromAnalysis reads activeTab.previousMode || 'play'
-        // Contract T6-06 allows spy flowService.
+      it('Container calls returnFromAnalysis({tabId}) and flowService reads analysisReturnTarget', function () {
+        // After Phase 1 signature change, Container no longer passes toMode.
+        // flowService.returnFromAnalysis({tabId}) reads tab.analysisReturnTarget internally.
+        // When analysisReturnTarget is absent, defaults to 'play'.
         const harness = createHarness({
           tabs: [makeAnalysisTab({
             id: 'tab_default_play',
@@ -631,8 +636,6 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
           })],
         })
 
-        // Container.handleReturnFromAnalysis reads activeTab from render()
-        // which pulls from workbenchStore.getState()
         const shellProps = harness.getShellProps()
 
         assert.strictEqual(typeof shellProps.onReturn, 'function',
@@ -640,8 +643,8 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         shellProps.onReturn()
 
         assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_default_play', toMode: 'play'},
-        ], 'Container must pass "play" as toMode when previousMode is undefined -- Contract T6-06, Container.js L118: activeTab.previousMode || "play"')
+          {tabId: 'tab_default_play'},
+        ], 'Container must call flowService.returnFromAnalysis({tabId}) -- Contract T6-06')
       })
     })
   })
@@ -762,7 +765,7 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
     // --- T6-11: handleReturnFromAnalysis calls flowService.returnFromAnalysis ---
 
     describe('T6-11: handleReturnFromAnalysis delegation', function () {
-      it('onReturn calls flowService.returnFromAnalysis(activeTab.id, previousMode||"play")', function () {
+      it('onReturn calls flowService.returnFromAnalysis({tabId})', function () {
         const harness = createHarness({
           tabs: [makeAnalysisTab({
             id: 'tab_del_return',
@@ -779,8 +782,8 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         shellProps.onReturn()
 
         assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_del_return', toMode: 'recall'},
-        ], 'handleReturnFromAnalysis must call flowService.returnFromAnalysis(activeTab.id, previousMode||"play") -- Contract T6-11, Arch v0.5 5.3')
+          {tabId: 'tab_del_return'},
+        ], 'handleReturnFromAnalysis must call flowService.returnFromAnalysis({tabId: activeTab.id}) -- Contract T6-11, Arch v0.5 5.3')
       })
     })
 
@@ -849,7 +852,7 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         let notified = false
         harness.workbenchStore.subscribe(() => { notified = true })
 
-        harness.flowService.returnFromAnalysis('tab_sub_return', 'play')
+        harness.flowService.returnFromAnalysis({tabId: 'tab_sub_return'})
 
         assert.strictEqual(notified, true,
           'Subscriber must be notified after returnFromAnalysis -- Contract T6-12')

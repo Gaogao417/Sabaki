@@ -44,7 +44,7 @@ function createSpyFlowService() {
     calls,
     async submit(tabId) { calls.submit.push({tabId}) },
     enterAnalysis(tabId) { calls.enterAnalysis.push({tabId}) },
-    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({tabId, toMode}) },
+    returnFromAnalysis(input) { calls.returnFromAnalysis.push({tabId: input.tabId}) },
     completeRecall(tabId) { calls.completeRecall.push({tabId}) },
     async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({tabId}) },
   }
@@ -202,7 +202,7 @@ describe('W2 Container Wiring: flow commands', () => {
     ])
   })
 
-  it('wires analysis return to returnFromAnalysis(activeTabId, previousMode)', async () => {
+  it('wires analysis return to returnFromAnalysis({tabId})', async () => {
     const {shellProps, flowService} = createHarness({
       tabs: [makeTab({id: 'tab_analysis', mode: 'analysis', previousMode: 'recall'})],
     })
@@ -210,7 +210,7 @@ describe('W2 Container Wiring: flow commands', () => {
     await callRequired(shellProps, 'onReturn')
 
     assert.deepStrictEqual(flowService.calls.returnFromAnalysis, [
-      {tabId: 'tab_analysis', toMode: 'recall'},
+      {tabId: 'tab_analysis'},
     ])
   })
 

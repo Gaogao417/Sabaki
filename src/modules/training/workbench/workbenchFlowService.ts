@@ -350,7 +350,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
 
   function restartAttempt(tabId: string): void {
     const tab = getTab(tabId)
-    const targetMode = tab.previousMode ?? 'play'
+    const targetMode = tab.analysisReturnTarget?.mode ?? tab.previousMode ?? 'play'
 
     logger?.info('flow.restartAttempt', 'Restart attempt', {
       tabId,

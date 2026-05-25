@@ -531,7 +531,7 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
       assert.strictEqual(harness.flowService.calls.returnFromAnalysis.length, 1,
         'flowService.returnFromAnalysis must be called when returning from analysis -- Regression R-T07')
       assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis[0],
-        {tabId: 'tab_rt7_return', toMode: 'problem'})
+        {tabId: 'tab_rt7_return'})
     })
   })
 

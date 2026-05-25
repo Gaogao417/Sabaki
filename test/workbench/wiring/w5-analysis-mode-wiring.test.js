@@ -112,7 +112,7 @@ function createSpyFlowService() {
     calls,
     async submit(tabId) { calls.submit.push({tabId}) },
     enterAnalysis(tabId) { calls.enterAnalysis.push({tabId}) },
-    returnFromAnalysis(tabId, toMode) { calls.returnFromAnalysis.push({tabId, toMode}) },
+    returnFromAnalysis(input) { calls.returnFromAnalysis.push(input) },
     completeRecall(tabId) { calls.completeRecall.push({tabId}) },
     async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({tabId}) },
     restartAttempt(tabId) { calls.restartAttempt.push({tabId}) },
@@ -503,7 +503,7 @@ describe('W5 Analysis Mode Wiring', function () {
     // --- W5-T05: returnFromAnalysis to previousMode ---
 
     describe('W5-T05: returnFromAnalysis to previousMode', function () {
-      it('calls flowService.returnFromAnalysis(tabId, recall); mode=recall, previousMode=undefined', function () {
+      it('calls flowService.returnFromAnalysis({tabId}); mode=recall, previousMode=undefined', function () {
         const harness = createHarness({
           tabs: [makeAnalysisTab({id: 'tab_a', mode: 'analysis', previousMode: 'recall'})],
         })
@@ -517,10 +517,10 @@ describe('W5 Analysis Mode Wiring', function () {
           'Container must expose onReturn callback')
         shellProps.onReturn()
 
-        // Verify flowService.returnFromAnalysis was called with correct tabId and toMode
+        // Verify flowService.returnFromAnalysis was called with {tabId} (no toMode)
         assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_a', toMode: 'recall'},
-        ], 'flowService.returnFromAnalysis must be called with (tabId, previousMode)')
+          {tabId: 'tab_a'},
+        ], 'flowService.returnFromAnalysis must be called with {tabId} only')
 
         // Simulate what flowService.returnFromAnalysis does to the store
         harness.workbenchStore.updateTab('tab_a', {
@@ -539,7 +539,7 @@ describe('W5 Analysis Mode Wiring', function () {
     // --- W5-T06: returnFromAnalysis defaults to 'play' ---
 
     describe('W5-T06: returnFromAnalysis defaults to play', function () {
-      it('passes play as toMode when previousMode is undefined', function () {
+      it('calls flowService.returnFromAnalysis({tabId}) which reads analysisReturnTarget or defaults to play', function () {
         const harness = createHarness({
           tabs: [makeAnalysisTab({id: 'tab_a2', mode: 'analysis', previousMode: undefined})],
         })
@@ -547,12 +547,12 @@ describe('W5 Analysis Mode Wiring', function () {
         const shellProps = harness.getShellProps()
         shellProps.onReturn()
 
-        // The Container handler defaults to 'play' when previousMode is undefined
+        // The Container handler calls with {tabId} only; flowService reads analysisReturnTarget
         assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_a2', toMode: 'play'},
-        ], 'returnFromAnalysis must default toMode to play when previousMode is undefined -- Arch v0.5 5.3')
+          {tabId: 'tab_a2'},
+        ], 'returnFromAnalysis must be called with {tabId} only -- Arch v0.5 5.3')
 
-        // Simulate flowService behavior
+        // Simulate flowService behavior (defaults to 'play' when no analysisReturnTarget)
         harness.workbenchStore.updateTab('tab_a2', {
           mode: 'play',
           previousMode: undefined,

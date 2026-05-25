@@ -146,7 +146,7 @@ class TrainingWorkbenchContainer extends Component {
         flowService.enterAnalysis(activeTab.id)
         ensureAnalysisWorkspace()
       } else if (action === 'returnFromAnalysis') {
-        flowService.returnFromAnalysis(activeTab.id, activeTab.previousMode || 'play')
+        flowService.returnFromAnalysis({tabId: activeTab.id})
         exitAnalysisWorkspace()
       }
     }
@@ -177,8 +177,7 @@ class TrainingWorkbenchContainer extends Component {
 
     function handleReturnFromAnalysis() {
       if (!activeTab) return
-      const toMode = activeTab.previousMode || 'play'
-      flowService.returnFromAnalysis(activeTab.id, toMode)
+      flowService.returnFromAnalysis({tabId: activeTab.id})
       exitAnalysisWorkspace()
     }
 
@@ -238,10 +237,7 @@ class TrainingWorkbenchContainer extends Component {
       }
 
       if (activeTab.mode === 'analysis') {
-        flowService.returnFromAnalysis(
-          activeTab.id,
-          activeTab.previousMode || 'play',
-        )
+        flowService.returnFromAnalysis({tabId: activeTab.id})
         exitAnalysisWorkspace()
       }
     }

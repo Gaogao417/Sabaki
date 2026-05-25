@@ -24,7 +24,7 @@ type Call<T = Record<string, unknown>> = T
 export type SpyFlowServiceCalls = {
   submit: Array<Call<{tabId: string}>>
   enterAnalysis: Array<Call<{tabId: string}>>
-  returnFromAnalysis: Array<Call<{tabId: string; toMode: WorkbenchMode}>>
+  returnFromAnalysis: Array<Call<{tabId: string}>>
   completeRecall: Array<Call<{tabId: string}>>
   restartAttempt: Array<Call<{tabId: string}>>
   startAttempt: Array<Call<{tabId: string}>>
@@ -98,8 +98,8 @@ export function createSpyFlowService(
     enterAnalysis(tabId: string) {
       calls.enterAnalysis.push({tabId})
     },
-    returnFromAnalysis(tabId: string, toMode: WorkbenchMode) {
-      calls.returnFromAnalysis.push({tabId, toMode})
+    returnFromAnalysis(input: {tabId: string}) {
+      calls.returnFromAnalysis.push({tabId: input.tabId})
     },
     completeRecall(tabId: string) {
       calls.completeRecall.push({tabId})
