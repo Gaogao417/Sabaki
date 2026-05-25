@@ -1,5 +1,11 @@
 # Gabaki / Sabaki 训练系统模块架构文档
 
+> 注意：Legacy reference。本文件为 v0.4 历史架构，仅用于理解迁移前状态。
+> 新实现不得继续使用 `Phase` / `TrainingTaskKind` / `source_kind` /
+> `openProblemTab` / `openSnapshotProblemTab` 作为主路径。以
+> `gabaki-sabaki-training-architecture-v0.5.md` +
+> `gabaki-sabaki-training-implementation-plan.md` 为准。
+
 > 文档类型：模块架构与实现指导  
 > 对应 PRD：Gabaki / Sabaki 围棋训练系统 PRD v0.4  
 > 当前目标：在不破坏 Sabaki 既有核心架构的前提下，把训练系统从 legacy global mode 迁移到 `TrainingTask + WorkbenchTab + Phase + Attempt` 架构。

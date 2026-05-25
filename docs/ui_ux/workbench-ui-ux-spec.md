@@ -8,7 +8,12 @@
 
 1. 产品真源：`docs/design/gabaki-sabaki-training-prd-v0.5.md`
 2. 架构真源：`docs/design/gabaki-sabaki-training-architecture-v0.5.md`
-3. UI 基础稿：当前 `workbench-ui-ux-spec.md` / `ui-ux-spec-0.5`
+3. 迁移执行真源：`docs/design/gabaki-sabaki-training-implementation-plan.md`
+4. UI 基础稿：当前 `workbench-ui-ux-spec.md` / `ui-ux-spec-0.5`
+
+`docs/design/gabaki-sabaki-training-architecture.md` 是 v0.4 legacy reference，
+只能用于理解迁移前状态。新 UI 不得继续把 `Phase`、`TrainingTaskKind`、
+`source_kind`、`openProblemTab` 或 `openSnapshotProblemTab` 当作主路径。
 
 `docs/design/workbench-ref-pics/` 已经过时，不能作为 UI/UX 产品真源。历史图片最多作为非约束视觉参考，用于保持浅色桌面应用、三栏工作台、棋盘居中、左右卡片面板和底部工具栏的整体气质。若历史图片与 PRD v0.5 或 Architecture v0.5 冲突，一律以 PRD v0.5 与 Architecture v0.5 为准。
 
@@ -62,10 +67,18 @@
 ### 1.2 窄窗口响应式规则
 
 ```txt
->= 1280px  三栏全展示
-1000-1279  右栏折叠为抽屉，左栏收窄至 260px
-< 1000px   左栏也折叠，棋盘居中占满，侧栏变为可唤出抽屉
+>= 1440px  三栏全展示
+1280-1439  右栏默认折叠为抽屉，左栏保留但收窄至 260px
+1000-1279  左栏和右栏都可折叠，优先保留棋盘与底部主动作
+< 1000px   侧栏全部变为可唤出抽屉，棋盘居中占满
 ```
+
+紧凑模式规则：
+
+- `<1440px` 时左侧栏允许默认折叠，右侧面板使用 overlay / drawer。
+- Bottom Action Bar 必须保留当前模式主按钮和 2-3 个最高频动作。
+- 棋盘稳定性优先于侧栏完整展示；面板展开不得导致棋盘跳动。
+- 超长状态文案进入 tooltip / popover，不能挤压主按钮。
 
 ### 1.3 App chrome 状态栏
 
@@ -181,7 +194,7 @@ Problem / 做题棋盘：
 
 Recall / 回忆棋盘：
 
-- 默认用于逐手复现 frozen `Attempt.userLine`。
+- 默认用于逐手复现 `RecallSession.expectedMoves`。
 - 开启"先复现原线"时，显示用户已正确复现的落子编号；当前需要输入的答案不直接显示。
 - 关闭"先复现原线"时，棋盘围绕 checkpoint 当前局面，支持用户摆 correction line。
 - 错误、提示和 AI candidates 以侧栏为主，棋盘标记保持克制。
@@ -515,7 +528,8 @@ AI 分析
 
 Recall 有两种使用方式：
 
-1. 默认：先复现原线。用户逐手复现 frozen `Attempt.userLine`。
+1. 默认：先复现原线。用户按 `RecallPolicy` 逐手复现 frozen Attempt 派生出的
+   `expectedMoves`。
 2. 可选：关闭"先复现原线"。用户不必先浮现完整 attempt userLine，可以直接进入坏棋 / checkpoint 纠错流程，并选择是否 reveal AI candidates。
 
 ### 7.1 默认：先复现原线
@@ -528,7 +542,7 @@ Recall 有两种使用方式：
 回忆模式
 先复现原线                         [开关：开]
 
-回忆 frozen Attempt.userLine
+回忆 RecallSession.expectedMoves
 
       50%
 
@@ -545,7 +559,8 @@ Recall 有两种使用方式：
 
 - `先复现原线` 开关放在左栏核心任务卡片标题区域或模式说明下方，默认开启。
 - 环形进度图为主要视觉元素，绿色进度。
-- 用户输入下一手后，系统校对是否匹配 frozen `Attempt.userLine` 的下一手。
+- 用户输入下一手后，系统校对是否匹配 `RecallSession.expectedMoves` 的下一手。
+- 当 `RecallPolicy = humanMovesOnly` 时，AI / 对手应手可作为上下文展示，但不要求用户输入。
 - 默认不显示 AI 候选，也不显示完整参考答案。
 - `提示` 只能逐步给出方向性信息；显示明确答案必须由用户主动请求，且有状态记录。
 - 命中 major / severe BadMove 时触发 checkpoint，引导用户先自己修正。
@@ -794,7 +809,10 @@ AI candidates --
 - 当前选中工具有浅灰/浅紫背景。
 - 撤销、重做、清空、缩放放右侧。
 - Snapshot 创建的是普通 `TrainingTask`，不是独立 Problem 实体。
-- Analysis 中自由摆棋默认使用 scratch / exploration 上下文，不污染 Attempt。
+- Analysis 中自由摆棋默认使用 scratch / `ExplorationBranch` 上下文，不污染 Attempt。
+- Snapshot 必须捕获 active `ExplorationBranch` 当前局面；除非
+  `analysisContext` 明确指向 Attempt 尾局面，否则不能回读 `Attempt.userLine`
+  的尾局面。
 
 ### 8.1 Analysis 运行状态
 
@@ -851,7 +869,36 @@ Recall / 回忆
 - 顶部工具栏结构不变，仅右侧动作按钮和模式标签高亮切换。
 - 底部工具栏结构不变，仅文案和模式相关工具切换。
 
-## 10. 底部工作区栏
+### 9.4 状态机与返回目标
+
+UI 必须与 Architecture v0.5 的状态机表一致：
+
+- Checkpoint 是 Recall 的 substate，不是第五个 mode。
+- 从 Recall checkpoint 进入 Analysis 时，返回目标必须保存
+  `previousMode`、`recallSubstate`、`treePosition` 和 `moveIndex`。
+- `返回上一个模式` 只能恢复保存过的 `AnalysisReturnTarget`，不能只按按钮文案猜测。
+- Snapshot 是全局命令；执行后打开新 Task / Tab，当前 Tab 的 mode 和 substate 不变。
+
+## 10. 键盘优先操作
+
+围棋训练需要低摩擦键盘流。快捷键必须和按钮走同一条 command path：
+
+| 快捷键 | 行为 |
+|--------|------|
+| `Space` | 下一步 / 提交 recall move |
+| `Enter` | 当前模式主动作 |
+| `A` | Enter Analysis / Return |
+| `S` | Snapshot |
+| `H` | Hint |
+| `Cmd/Ctrl+Z` | Undo |
+
+要求：
+
+- 当前模式主动作 disabled 时，`Enter` 不执行副作用，并显示同按钮一致的 disabled reason。
+- `S` 触发 Snapshot 时必须使用当前 mode 的 capture rule。
+- 在输入框、评论框、命名字段聚焦时，单字母快捷键暂停，避免误触。
+
+## 11. 底部工作区栏
 
 底部栏四个模式共用白色浮层风格。
 
@@ -892,7 +939,7 @@ Analysis / 复盘底部：
 标注工具组 + Edit position + Snapshot + 撤销/重做/清空 + 缩放
 ```
 
-### 10.1 底部栏动作边界
+### 11.1 底部栏动作边界
 
 底部栏可以放模式局部操作，但必须满足：
 
@@ -901,7 +948,7 @@ Analysis / 复盘底部：
 - Snapshot 在底部出现时必须走与顶部同一条 command path。
 - 底部不放全局材料库、全局 Review 队列或跨任务管理入口。
 
-## 11. 状态覆盖要求
+## 12. 状态覆盖要求
 
 每个模式至少实现以下状态变体，确保不只是静态截图：
 
@@ -912,7 +959,22 @@ Analysis / 复盘底部：
 5. **Loading 状态**：引擎思考中、AI 分析中、保存中、AI 应手中。
 6. **Disabled 状态**：未连接引擎时的分析按钮、Problem 无 problemArea 时的 AI 应手、未选择局面时的标注工具、无 frozen Attempt 时的 Recall 入口。
 
-## 12. 组件结构与命名
+必须有独立 UI reason 的关键状态：
+
+| 状态 | UI 要求 |
+|------|---------|
+| 没有 active task | 中央或侧栏显示可打开材料 / 新建 Task 的空态，不显示假棋局 |
+| engine 未连接 | AI / analysis 相关按钮 disabled，并显示连接入口或重试 |
+| analysis result pending | 右栏显示 loading，不阻塞普通落子 |
+| AI move pending | 底部栏和当前控制卡显示 `AI 应手中`，用户中断会取消 pending request |
+| problemArea 未设置 | Problem AI disabled，提示设置范围或改为自己控制 |
+| Recall 无 expected moves | Recall 主动作 disabled，并提示检查 RecallPolicy / Attempt |
+| Snapshot 当前局面不可捕获 | Snapshot disabled，显示不可捕获原因 |
+
+禁用按钮必须有 tooltip / inline reason；错误提示优先显示在相关卡片内，toast
+只用于补充反馈。
+
+## 13. 组件结构与命名
 
 建议的组件拆分层次，避免写成巨型组件：
 
@@ -963,7 +1025,7 @@ MaterialLibraryDialog          ← 独立 window / dialog
   RightDrawer                  ← 右侧抽屉覆盖层
 ```
 
-## 13. 视觉 Token / CSS 建议
+## 14. 视觉 Token / CSS 建议
 
 ```css
 :root {
@@ -1086,9 +1148,9 @@ MaterialLibraryDialog          ← 独立 window / dialog
 }
 ```
 
-## 14. 验收标准
+## 15. 验收标准
 
-### 14.1 视觉验收 checklist
+### 15.1 视觉验收 checklist
 
 全局验收：
 
@@ -1099,6 +1161,7 @@ MaterialLibraryDialog          ← 独立 window / dialog
 - [ ] 棋盘是页面最大视觉中心，左右栏没有压缩棋盘。
 - [ ] 左右面板为白色圆角卡片，边框和阴影克制。
 - [ ] 底部工作区栏存在，并按四个模式展示状态和工具。
+- [ ] `<1440px` 紧凑模式下棋盘、主按钮和 2-3 个常用动作仍可用。
 - [ ] `文件 > 材料库...` 打开独立材料库 window / dialog。
 - [ ] Workbench 左侧栏只显示当前 mode 相关内容，不显示全局材料列表。
 
@@ -1128,7 +1191,8 @@ Recall / 回忆验收：
 
 - [ ] `回忆模式` 标签为绿色激活态。
 - [ ] 左栏有 `先复现原线` 开关，默认开启。
-- [ ] 开启时显示回忆进度、输入状态、提示、校对和 frozen Attempt.userLine 复现流程。
+- [ ] 开启时显示回忆进度、输入状态、提示、校对和 `RecallSession.expectedMoves` 复现流程。
+- [ ] `RecallPolicy = humanMovesOnly` 时，AI / 对手应手作为上下文展示，不要求用户输入。
 - [ ] 关闭时显示 checkpoint 队列、当前 checkpoint、用户修正和 `查看 AI` 操作。
 - [ ] 默认状态不直接暴露 AI candidates 或完整答案。
 - [ ] `标记 checkpoint` 可创建手动 checkpoint，并绑定当前局面 / moveNumber / position snapshot。
@@ -1142,15 +1206,17 @@ Analysis / 复盘验收：
 - [ ] 右栏显示 AI 分析、局面点评、变化树、对比和快照对比。
 - [ ] Snapshot 创建普通 TrainingTask，并根据 Task 字段进入 Play 或 Problem。
 - [ ] 自由摆棋不修改当前 Attempt.userLine。
+- [ ] Snapshot 捕获 active ExplorationBranch 当前局面。
 - [ ] 底部中央显示标注工具条、Edit position、Snapshot 和缩放工具。
 
-### 14.2 交互验收 checklist
+### 15.2 交互验收 checklist
 
 模式切换：
 
 - [ ] 点击顶部四段模式标签切换视图，棋盘不跳动。
 - [ ] 切换模式后左右栏内容正确更新，主色切换。
 - [ ] 切换回来时恢复之前的模式内部状态。
+- [ ] Analysis `返回上一个模式` 恢复 previous mode、Recall substate、tree position 和 moveIndex。
 - [ ] 无 frozen Attempt 时 Recall 入口 disabled 或给出明确引导。
 - [ ] Problem-like Task 默认进入 Problem；无题面 Task 默认进入 Play。
 
@@ -1166,8 +1232,10 @@ Analysis / 复盘验收：
 - [ ] Problem 的 no problemArea + AI opponent disabled 状态有独立 story。
 - [ ] Recall 的 `先复现原线` 开 / 关各有独立 story。
 - [ ] Analysis 的 Snapshot / 派生新 Task 成功状态有独立 story。
+- [ ] 键盘快捷键与按钮走同一条 command path。
+- [ ] Snapshot 不可捕获、Recall 无 expected moves、AI move pending 都有独立 story。
 
-### 14.3 截图 / Storybook 验收
+### 15.3 截图 / Storybook 验收
 
 - 为四个模式分别创建固定 route 或 Storybook story。
 - 使用相同 mock data 渲染 Play、Problem、Recall、Analysis。
@@ -1182,7 +1250,7 @@ Analysis / 复盘验收：
   6. Analysis 是否用 Snapshot / 派生新 Task 表达材料沉淀。
   7. 四个模式是否只是主色和内容变化，而不是四套完全不同 UI。
 
-## 15. 非目标
+## 16. 非目标
 
 当前复现阶段不要做：
 
@@ -1196,6 +1264,6 @@ Analysis / 复盘验收：
 8. 不要让 AI 分析、变化树或快照对比比棋盘更抢眼。
 9. 不要把历史参考图片当成产品真源。
 
-## 16. 给 Coding Agent 的一句话任务描述
+## 17. 给 Coding Agent 的一句话任务描述
 
-请基于 PRD v0.5 与 Architecture v0.5，实现一个浅色、现代、克制的 Sabaki 四模式三栏工作台：traffic lights 所在 app chrome 行展示当前标题、保存、引擎、Attempt / Recall 等轻量状态；顶部工具栏为黑白状态、Play / Problem / Recall / Analysis 四段 mode segmented control 和当前模式动作；中央木纹棋盘始终最大且切换模式时不跳动；左侧只展示当前 mode 的任务和局部操作；材料库从 `文件 > 材料库...` 打开独立 window / dialog；右侧展示辅助信息、分析空态、checkpoint、对比和快照；底部展示各模式工作区状态与局部工具。Play 用蓝色，Problem 用琥珀色，Recall 用绿色，Analysis 用紫色。Play 只在认输、终局或显式结束 attempt 后 freeze；Problem 提交答案后 freeze 并进入 Recall；Recall 默认先复现 frozen Attempt.userLine，并支持关闭该开关直接处理 checkpoint；Analysis 使用 Snapshot / 派生新 Task 沉淀材料，且自由摆棋不污染 Attempt。
+请基于 PRD v0.5 与 Architecture v0.5，实现一个浅色、现代、克制的 Sabaki 四模式三栏工作台：traffic lights 所在 app chrome 行展示当前标题、保存、引擎、Attempt / Recall 等轻量状态；顶部工具栏为黑白状态、Play / Problem / Recall / Analysis 四段 mode segmented control 和当前模式动作；中央木纹棋盘始终最大且切换模式时不跳动；左侧只展示当前 mode 的任务和局部操作；材料库从 `文件 > 材料库...` 打开独立 window / dialog；右侧展示辅助信息、分析空态、checkpoint、对比和快照；底部展示各模式工作区状态与局部工具。Play 用蓝色，Problem 用琥珀色，Recall 用绿色，Analysis 用紫色。Play 只在认输、终局或显式结束 attempt 后 freeze；Problem 提交答案后 freeze 并进入 Recall；Recall 默认按 RecallPolicy 复现 `RecallSession.expectedMoves`，并支持关闭该开关直接处理 checkpoint；Analysis 使用 ExplorationBranch + Snapshot / 派生新 Task 沉淀材料，且自由摆棋不污染 Attempt。

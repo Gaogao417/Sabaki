@@ -8,6 +8,34 @@
 
 ---
 
+# 前置：文档关系与术语收敛
+
+四份核心文档的权威关系固定为：
+
+```text
+UI-UX Spec v0.5        = 产品体验权威
+Architecture v0.5      = 工程架构权威
+Implementation Plan    = 迁移执行权威
+Architecture v0.4      = legacy reference，只用于理解迁移前状态
+```
+
+开发新路径时必须以本文和 Implementation Plan 为准。v0.4 架构文档中的
+`Phase`、`TrainingTaskKind`、`source_kind`、`openProblemTab`、
+`openSnapshotProblemTab` 等词只能作为迁移背景，不得作为新实现主路径。
+
+术语映射：
+
+```text
+v0.4 Phase              → v0.5 WorkbenchMode
+v0.4 source_kind        → v0.5 TaskOrigin
+v0.4 Problem entity     → v0.5 TrainingTask problem-like fields
+v0.4 openProblemTab     → v0.5 taskImportService + openTask
+v0.4 generatedProblemId → v0.5 generatedTaskId
+v0.4 Review item_type   → v0.5 ReviewSchedule.taskId
+```
+
+---
+
 # 0. v0.5 架构总原则
 
 ## 0.1 最大变化
@@ -78,6 +106,54 @@ analysisService 知道 RecallCheckpoint
 snapshotService 打开 Tab
 Review 直接处理 problem / recall_segment item type
 根据 origin.provider 分叉主流程
+```
+
+## 0.4 正式状态机契约
+
+模式转换必须收敛到一个可测试的状态机模块，例如
+`src/modules/training/workbench/modeTransitions.ts`。Service 可以编排副作用，
+但不得把 mode guard / effect 规则散落在多个 UI callback 中。
+
+```ts
+type WorkbenchMode = 'play' | 'problem' | 'recall' | 'analysis'
+
+type RecallSubstate =
+  | 'normal'
+  | 'checkpoint_correction'
+  | 'checkpoint_ai_revealed'
+  | 'checkpoint_commenting'
+
+type AnalysisReturnTarget = {
+  mode: 'play' | 'problem' | 'recall'
+  recallSubstate?: RecallSubstate
+  treePosition?: string
+  moveIndex?: number
+}
+```
+
+状态机表：
+
+| from | event | guard | effect |
+|------|-------|-------|--------|
+| play / problem | submit | `activeAttempt && !frozen` | freeze attempt, create recall, `mode=recall`, `recallSubstate=normal` |
+| recall | enterAnalysis | `activeRecallSession` | save `analysisReturnTarget`, `mode=analysis` |
+| play / problem | enterAnalysis | `task exists` | save `analysisReturnTarget`, `mode=analysis` |
+| analysis | return | `analysisReturnTarget exists` | restore previous mode, recall substate, tree position, move index |
+| analysis | restartAttempt | `task exists` | create new attempt, infer `mode=play/problem` |
+| recall | startCheckpoint | `activeRecallSession && checkpoint exists` | `recallSubstate=checkpoint_correction` |
+| recall | revealAi | `checkpoint_correction && correction submitted` | `recallSubstate=checkpoint_ai_revealed` |
+| recall | commentCheckpoint | `checkpoint_ai_revealed` | `recallSubstate=checkpoint_commenting` |
+| recall | resumeRecall | `checkpoint saved/skipped` | clear active checkpoint, `recallSubstate=normal` |
+| any | snapshot | capturable position exists | create new task + new tab; keep current tab mode unchanged |
+
+必须保持的 invariant：
+
+```text
+Checkpoint 永远是 Recall substate，不是 WorkbenchMode。
+Analysis → Return 必须恢复 previous mode、Recall substate、tree position 和 moveIndex。
+Snapshot 不修改当前 tab，也不复用当前 tab 作为新 task。
+Analysis 自由摆棋不写 Attempt.userLine。
+所有非法转换必须 reject / throw，并记录结构化日志。
 ```
 
 ---
@@ -407,7 +483,9 @@ type WorkbenchTab = {
   playerConfig?: WorkbenchPlayerConfig
   activeAttemptId?: string
   activeRecallSessionId?: string
+  recallSubstate?: RecallSubstate
   analysisContext?: AnalysisContext
+  analysisReturnTarget?: AnalysisReturnTarget
   currentTreePosition?: string
   parentTabId?: string
   childTabIds: string[]
@@ -418,6 +496,19 @@ type WorkbenchTab = {
 type WorkbenchStoreState = {
   tabs: WorkbenchTab[]
   activeTabId: string | null
+}
+
+type AnalysisContext = {
+  taskId: string
+  attemptId?: string
+  recallSessionId?: string
+  checkpointId?: string
+  badMoveId?: string
+  positionHash?: string
+  positionSgf?: string
+  sourceTreePosition?: string
+  activeBranchId?: string
+  createdFrom: 'play' | 'problem' | 'recall' | 'checkpoint' | 'bad_move' | 'snapshot'
 }
 
 type WorkbenchStore = {
@@ -441,7 +532,16 @@ type WorkbenchPlayerConfig = {
     maxVisits?: number
     timeLimitMs?: number
     autoPlay: boolean
+    autoPlayLimits?: AutoPlayLimits
   }
+}
+
+type AutoPlayLimits = {
+  maxAutoMovesPerRun: number
+  stopOnPassPass: boolean
+  stopOnResign: boolean
+  stopOnNoLegalMove: boolean
+  stopOnUserInterruption: boolean
 }
 ```
 
@@ -469,19 +569,41 @@ type TrainingRuntimeState = {
   activeAttemptId?: string
   activeRecallSessionId?: string
   activeCheckpointId?: string
-  aiMovePending?: {
-    tabId: string
-    color: 'black' | 'white'
-  }
+  aiMovePending?: AiMovePending
 
   pendingMoveEvaluations: Record<string, MoveEvaluation>
 
   correctionDraft?: {
     checkpointId: string
     moves: string[]
+    positionHash?: string
   }
 
+  explorationBranches: Record<string, ExplorationBranch>
+  activeExplorationBranchId?: string
   visibleBadMoveIds: string[]
+}
+
+type AiMovePending = {
+  requestId: string
+  tabId: string
+  attemptId: string
+  positionHash: string
+  color: 'black' | 'white'
+  startedAt: string
+}
+
+type ExplorationBranch = {
+  id: string
+  basePositionHash: string
+  baseMoveIndex?: number
+  moves: string[]
+  createdFrom: {
+    taskId: string
+    attemptId?: string
+    checkpointId?: string
+    badMoveId?: string
+  }
 }
 
 type TrainingRuntimeStore = {
@@ -491,10 +613,16 @@ type TrainingRuntimeStore = {
   setActiveAttempt(id?: string): void
   setActiveRecallSession(id?: string): void
   setActiveCheckpoint(id?: string): void
-  setAiMovePending(pending?: {tabId: string; color: 'black' | 'white'}): void
+  setAiMovePending(pending?: AiMovePending): void
   upsertPendingMoveEvaluation(evaluation: MoveEvaluation): void
   removePendingMoveEvaluation(evaluationId: string): void
-  setCorrectionDraft(draft?: {checkpointId: string; moves: string[]}): void
+  setCorrectionDraft(draft?: {
+    checkpointId: string
+    moves: string[]
+    positionHash?: string
+  }): void
+  upsertExplorationBranch(branch: ExplorationBranch): void
+  setActiveExplorationBranch(id?: string): void
   setVisibleBadMoveIds(ids: string[]): void
 }
 ```
@@ -623,11 +751,11 @@ type WorkbenchFlowService = {
   enterAnalysis(input: {
     tabId: string
     context?: Partial<AnalysisContext>
+    returnTarget?: AnalysisReturnTarget
   }): Promise<void>
 
   returnFromAnalysis(input: {
     tabId: string
-    toMode?: 'play' | 'problem' | 'recall'
   }): Promise<void>
 
   restartAttempt(tabId: string): Promise<TrainingAttempt>
@@ -662,6 +790,9 @@ analysis --restartAttempt--> play/problem
 
 ```text
 Submit 必须 freeze Attempt。
+enterAnalysis 必须保存 AnalysisReturnTarget。
+returnFromAnalysis 只能使用保存过的 AnalysisReturnTarget，不允许靠临时 toMode 猜测。
+Recall checkpoint 只能改变 recallSubstate，不允许把 checkpoint 变成独立 mode。
 Analysis 不得隐式修改 Attempt.userLine。
 Snapshot 不得复用当前 Tab 作为新 Task。
 Snapshot 必须允许没有 taskId 的自由落子 Tab；这种情况下新 Task 的
@@ -722,6 +853,36 @@ Problem Mode 的 AI 落子必须受 `TrainingTask.problemArea` 约束：
 对 engine 返回 move 做二次过滤；
 范围外 move 必须 reject；
 没有范围或没有范围内候选时，不自动落子。
+```
+
+### 异步与竞态安全
+
+发起 AI 请求时必须记录 `AiMovePending`，至少包含
+`requestId`、`tabId`、`attemptId`、`positionHash`、`color` 和 `startedAt`。
+
+AI 返回时必须重新校验：
+
+```text
+当前 active tab 仍是 pending.tabId；
+activeAttemptId 仍是 pending.attemptId；
+当前 positionHash 仍等于 pending.positionHash；
+当前 mode 仍允许 AI 落子；
+返回 move 合法；
+Problem Mode 返回 move 在 task.problemArea 内。
+```
+
+任一校验失败时，旧请求结果必须丢弃，不能写入 documentStore 或 Attempt。
+用户悔棋、切 Tab、进入 Analysis、重新开始 Attempt、提交 Attempt 或关闭自动对弈，
+都应使旧 `AiMovePending.requestId` 失效。
+
+AI vs AI 自动对弈必须受 `AutoPlayLimits` 限制：
+
+```text
+maxAutoMovesPerRun
+stopOnPassPass
+stopOnResign
+stopOnNoLegalMove
+stopOnUserInterruption
 ```
 
 ### 边界
@@ -856,7 +1017,10 @@ type EvaluationRules = {
 
 ```ts
 type RecallService = {
-  createRecallFromAttempt(attemptId: string): Promise<RecallSession>
+  createRecallFromAttempt(input: {
+    attemptId: string
+    recallPolicy?: RecallPolicy
+  }): Promise<RecallSession>
 
   submitRecallMove(input: {
     recallSessionId: string
@@ -865,14 +1029,42 @@ type RecallService = {
 
   completeRecall(recallSessionId: string): Promise<void>
 }
+
+type RecallPolicy = 'fullLine' | 'humanMovesOnly' | 'sideToMoveOnly'
 ```
 
 MVP 不做复杂 RecallSource。
 
-Recall 只回忆：
+Attempt 始终保存真实产出的完整线：
 
 ```text
 Attempt.userLine
+```
+
+RecallSession 必须显式保存：
+
+```ts
+type RecallSession = {
+  attemptId: string
+  recallPolicy: RecallPolicy
+  expectedMoves: string[]
+  expectedMoveIndexes: number[]
+}
+```
+
+策略语义：
+
+```text
+fullLine        回忆整条 Attempt.userLine，包括 AI / 对手应手
+humanMovesOnly  只回忆 moveActors 标记为 human 的手
+sideToMoveOnly  只回忆 TrainingTask.sideToMove 对应一方的手
+```
+
+默认策略：
+
+```text
+Play Mode    fullLine
+Problem Mode humanMovesOnly，除非 task 或 UI 显式要求 fullLine
 ```
 
 ## 5.9 recallCheckpointService
@@ -931,6 +1123,23 @@ type SnapshotService = {
     reason?: string
   }): Promise<SnapshotTaskInput>
 }
+
+type SnapshotTaskInput = {
+  requestId: string
+  positionSgf: string
+  positionHash: string
+  sideToMove: 'black' | 'white'
+  parentTaskId?: string
+  parentAttemptId?: string
+  parentRecallSessionId?: string
+  parentCheckpointId?: string
+  parentMoveIndex?: number
+  parentMode: WorkbenchMode
+  sourceTreePosition?: string
+  sourceBranchId?: string
+  reason?: string
+  inheritedProblemArea?: ProblemArea
+}
 ```
 
 `SnapshotService` 不创建 Tab。
@@ -952,6 +1161,30 @@ snapshotService.captureSnapshotInput
 命令路径：捕获当前局面、创建 `origin.provider='snapshot'` 的新 Task、通过
 `workbenchTabService.openTask` 打开新 Tab；只是不写 `origin.parentTaskId`。
 
+### 当前局面捕获规则
+
+Snapshot 在四个模式下的“当前局面”定义必须显式：
+
+```text
+Play:
+  capture documentStore current position + activeAttemptId + moveIndex
+
+Problem:
+  capture current answer-line position + optional inherited problemArea / prompt / goal
+
+Recall normal:
+  capture recall current index 对应的 expected position，或 capture 用户当前复现位置；
+  MVP 必须二选一并写入测试，不允许混用
+
+Recall checkpoint:
+  capture checkpoint correctionDraft 当前局面；
+  parentCheckpointId 必须写入 origin
+
+Analysis:
+  capture active ExplorationBranch 当前局面；
+  不读取 Attempt.userLine 的尾局面，除非 analysisContext 明确指向它
+```
+
 ## 5.11 reviewService
 
 ### 责任
@@ -970,7 +1203,19 @@ type ReviewService = {
     taskId: string
     result: TrainingAttemptResult
   }): Promise<void>
+
+  enrollTask(input: {
+    taskId: string
+    policy: ReviewEnrollmentPolicy
+    dueAt?: string
+  }): Promise<ReviewSchedule | null>
 }
+
+type ReviewEnrollmentPolicy =
+  | 'none'
+  | 'manual'
+  | 'auto_due_now'
+  | 'auto_scheduled'
 ```
 
 ### 关键变化
@@ -986,6 +1231,17 @@ taskId
 ```text
 itemType = problem / recall_segment
 ```
+
+默认 enrollment 策略：
+
+```text
+Snapshot: manual
+BadMove derived task: auto_due_now 或 auto_scheduled
+Skipped checkpoint: manual 或 auto_scheduled
+```
+
+Analysis 中频繁创建 Snapshot 时不得默认塞满 Review Inbox；除非用户显式选择或
+调用方传入 auto 策略，否则 Snapshot 只创建 Task 和“加入复习”候选。
 
 ---
 
@@ -1109,7 +1365,7 @@ type TrainingRepository = {
 ```text
 submit：freeze attempt + evaluate result + create recall session
 completeRecall：complete recall + update attempt + update review schedule
-snapshot：create task + create review schedule? + open tab 前持久化
+snapshot：create task + optional review enrollment + open tab 前持久化
 createTaskFromBadMove：create task + update bad move + create review schedule
 ```
 
@@ -1259,7 +1515,9 @@ CREATE TABLE recall_sessions (
   attempt_id TEXT NOT NULL,
   tab_id TEXT,
 
+  recall_policy TEXT NOT NULL,
   expected_moves_json TEXT NOT NULL,
+  expected_move_indexes_json TEXT NOT NULL,
   current_move_index INTEGER NOT NULL,
 
   completed INTEGER DEFAULT 0,
@@ -1275,7 +1533,8 @@ CREATE TABLE recall_sessions (
 
 ```text
 MVP 不再有 source_json / type / start_move / end_move。
-Recall 只回忆 attempt.userLine。
+RecallSession 从 Attempt.userLine 派生 expected_moves_json，但必须显式保存
+recall_policy 和 expected_move_indexes_json。
 ```
 
 ## 7.6 recall_attempts
@@ -1365,7 +1624,28 @@ Review 不再有 item_type / item_id。
 Review 直接调度 task_id。
 ```
 
-## 7.10 后置表
+## 7.10 索引与幂等约束
+
+建议索引：
+
+```sql
+CREATE INDEX idx_attempts_task_id ON training_attempts(task_id);
+CREATE INDEX idx_evaluations_attempt_move ON move_evaluations(attempt_id, move_index);
+CREATE INDEX idx_bad_moves_attempt ON bad_moves(attempt_id);
+CREATE INDEX idx_review_due_at ON review_schedule(due_at);
+CREATE INDEX idx_review_task_id ON review_schedule(task_id);
+```
+
+幂等规则：
+
+```text
+同一个 badMoveId createTaskFromBadMove 重复调用时，不重复生成 task。
+同一个 snapshot requestId 重复提交时，不重复创建 task。
+submit(tabId) 对已 frozen attempt 重复调用时 reject，或返回已有 RecallSession。
+AI move request 过期后不可写入 Attempt。
+```
+
+## 7.11 后置表
 
 后续才考虑：
 
@@ -1502,14 +1782,16 @@ User clicks board intersection
 → trainingRuntimeStore.upsertPendingMoveEvaluation
 → aiMoveService.maybePlayAiMove({tabId, afterMoveBy:'human'})
 → if next side is AI:
+     create AiMovePending(requestId, tabId, attemptId, positionHash, color)
      generateAiMove with playerConfig
-     validateAiMove
+     validateAiMove including request freshness and problemArea
      existing play executor / documentStore append AI move
      attemptService.appendMove({attemptId, move: aiMove, actor:'ai'})
 ```
 
 Problem Mode 中 `validateAiMove` 必须强制检查
-`task.problemArea`；不允许范围外 AI 落子进入 documentStore 或 Attempt。
+`task.problemArea`；还必须校验 `requestId`、`attemptId`、`positionHash` 和当前
+mode。任何过期或范围外 AI 落子都不允许进入 documentStore 或 Attempt。
 
 analysis update 后：
 
@@ -1589,8 +1871,8 @@ User writes comment
 
 ```text
 EnterAnalysisButton.onClick
-→ workbenchFlowService.enterAnalysis({tabId, context})
-→ workbenchStore.updateTab({mode:'analysis', analysisContext})
+→ workbenchFlowService.enterAnalysis({tabId, context, returnTarget})
+→ workbenchStore.updateTab({mode:'analysis', analysisContext, analysisReturnTarget})
 → attemptService.markAnalysisOpened? if attempt exists
 → AnalysisModePanel loads badMoves / comments / candidates
 ```
@@ -1611,10 +1893,11 @@ SnapshotButton.onClick
 Snapshot 是全局命令，不是 Analysis 专属命令：
 
 ```text
-Play     捕获当前实战 / 续弈局面
-Problem  捕获当前作答中间局面
-Recall   捕获当前回忆 / checkpoint 局面
-Analysis 捕获当前自由研究分支
+Play     捕获 documentStore 当前局面 + activeAttemptId + moveIndex
+Problem  捕获当前作答线局面 + optional inherited problemArea
+Recall   normal 捕获 recall 当前 expected position 或用户复现位置，MVP 二选一
+Recall   checkpoint 捕获 correctionDraft，origin 写 parentCheckpointId
+Analysis 捕获 active ExplorationBranch 当前局面
 ```
 
 快捷键和按钮应走同一条 command path。
@@ -1624,9 +1907,10 @@ Analysis 捕获当前自由研究分支
 ```text
 CreatePunishmentTaskButton.onClick 或 Recall complete 后自动创建
 → taskImportService.createTaskFromBadMove({badMoveId})
+→ if badMove.generatedTaskId exists: return existing task
 → trainingRepository.createTask(origin.provider='bad_move')
 → trainingRepository.updateBadMove({generatedTaskId})
-→ reviewService.createScheduleForTask
+→ reviewService.enrollTask({policy:'auto_due_now' 或 'auto_scheduled'})
 ```
 
 ## 9.9 Review 打开到期 Task
@@ -1837,21 +2121,29 @@ move_actors_json roundtrip
 move_evaluation pending/evaluated/failed
 bad_move generated_task_id
 recall_session attempt_id binding
+recall_policy / expected_move_indexes roundtrip
 review_schedule task_id binding
+repository indexes exist
 transaction rollback
+snapshot requestId idempotency
+badMove derived task idempotency
 ```
 
 ## 13.3 Service Tests
 
 ```text
 openTask 默认 mode 推导
+modeTransitions table-driven tests
 submit 创建 RecallSession
+RecallPolicy fullLine / humanMovesOnly / sideToMoveOnly tests
 Recall checkpoint 流程
 Snapshot 创建新 Task 但不打开旧 Tab
 Review openDueItem 只通过 taskId 打开
 Analysis 不修改 Attempt.userLine
 Play 黑白 AI 配置触发正确方自动落子
 Problem AI 应手必须限制在 problemArea 内
+AI stale request rejection tests
+ReviewEnrollmentPolicy tests
 ```
 
 ## 13.4 Integration Tests
@@ -1878,9 +2170,13 @@ origin 只做追溯，不参与主流程判断
 WorkbenchTab 保存 UI 状态，不保存训练事实
 Attempt 是用户产出的一条线
 RecallSession 绑定 Attempt
+RecallPolicy 显式决定 expectedMoves，不靠 Attempt.userLine 隐式推断
+Checkpoint 是 Recall substate，不是 WorkbenchMode
+Analysis Return 必须恢复 AnalysisReturnTarget
 Analysis 不污染 Attempt
 Snapshot 创建新 Task，不复用当前 Tab
 Problem AI 落子必须受 task.problemArea / analysis area 限制
+AI 请求必须校验 requestId / attemptId / positionHash，过期不可写
 ReviewSchedule 直接引用 taskId
 Store 控制在 2～3 个
 Repository 是唯一训练 DB 入口

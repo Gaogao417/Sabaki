@@ -9,6 +9,21 @@
 
 ---
 
+# 0. 文档权威关系
+
+```text
+UI-UX Spec v0.5        = 产品体验权威
+Architecture v0.5      = 工程架构权威
+Implementation Plan    = 迁移执行权威
+Architecture v0.4      = legacy reference，只用于理解迁移前状态
+```
+
+本计划只执行 v0.5 主路径。v0.4 的 `Phase`、`TrainingTaskKind`、
+`source_kind`、`openProblemTab`、`openSnapshotProblemTab` 等概念只用于识别和
+迁移 legacy 代码，不得作为新实现主路径。
+
+---
+
 # 1. v0.5 实施原则
 
 ## 1.1 主线目标
@@ -122,6 +137,35 @@ ReviewSchedule.taskId
 RecallSession.attemptId
 ```
 
+## 1.4 实施方式：纵向切片 + 阶段式迁移
+
+Phase 0-9 仍然是长期迁移顺序，但不能等到 Phase 8 才第一次验证 UI
+工作台体验。Phase 0-1 完成后必须先做一个 walking skeleton：
+
+```text
+Vertical Slice 0:
+  openTask
+  render Play / Problem shell
+  create Attempt
+  append one move
+  Submit
+  create RecallSession
+  render Recall shell
+```
+
+之后每个阶段都带一个最小 UI 接入：
+
+```text
+Phase 3 做 AI Move 时，同时接 Play / Problem 的 playerConfig UI
+Phase 4 做 BadMove 时，同时接 Analysis 的 BadMove summary card
+Phase 5 做 Checkpoint 时，同时接 RecallCheckpointPanel
+Phase 6 做 Snapshot 时，同时接全局 Snapshot button / shortcut
+Phase 7 做 Review 时，同时接 Review Inbox
+```
+
+每个切片都必须覆盖 service tests + 一个 UI smoke / integration test，避免 service
+层长时间脱离真实工作台交互。
+
 ---
 
 # 2. Phase 0：v0.5 模型收敛
@@ -163,12 +207,22 @@ src/modules/db.js
 6. 将 `ReviewSchedule` 迁移为直接引用 `taskId`。
 7. 将 `RecallSession` 收敛为绑定 `attemptId`，MVP 不再保留复杂 RecallSource。
 8. `TrainingAttempt` 增加 `moveActors`，用于标记 human / ai 落子来源。
-9. DB migration 采用增量兼容策略：
+9. `RecallSession` 增加 `recallPolicy` 和 `expectedMoveIndexes`：
+   - `fullLine`
+   - `humanMovesOnly`
+   - `sideToMoveOnly`
+10. DB migration 采用增量兼容策略：
    - 新增 v0.5 字段；
    - 旧 `kind/source_json` 可读但不再作为新写入事实；
    - mapper 将旧 source 映射成 `origin`；
    - 旧 review item 映射成 `taskId`，无法映射时进入 migration warning。
-10. `trainingRepository` 暴露 v0.5 API，同时保留必要 legacy wrapper。
+11. 增加必要索引：
+   - `training_attempts(task_id)`
+   - `move_evaluations(attempt_id, move_index)`
+   - `bad_moves(attempt_id)`
+   - `review_schedule(due_at)`
+   - `review_schedule(task_id)`
+12. `trainingRepository` 暴露 v0.5 API，同时保留必要 legacy wrapper。
 
 验收：
 
@@ -180,6 +234,8 @@ ReviewSchedule 新写入只需要 taskId；
 BadMove 派生关系使用 generatedTaskId；
 Problem task 可保存 problemArea；
 Attempt 可保存 moveActors；
+RecallSession 可保存 recallPolicy / expectedMoveIndexes；
+必要索引存在；
 现有入口没有可见行为变化。
 ```
 
@@ -192,6 +248,8 @@ WorkbenchTab phase → mode mapper tests；
 ReviewSchedule taskId migration tests；
 problemArea roundtrip tests；
 moveActors roundtrip tests；
+RecallPolicy / expectedMoveIndexes roundtrip tests；
+index existence tests；
 repository create/load/update task roundtrip tests。
 ```
 
@@ -218,19 +276,34 @@ src/components/TrainingWorkbenchContainer.js
 
 ```ts
 type WorkbenchMode = 'play' | 'problem' | 'recall' | 'analysis'
+
+type RecallSubstate =
+  | 'normal'
+  | 'checkpoint_correction'
+  | 'checkpoint_ai_revealed'
+  | 'checkpoint_commenting'
+
+type AnalysisReturnTarget = {
+  mode: 'play' | 'problem' | 'recall'
+  recallSubstate?: RecallSubstate
+  treePosition?: string
+  moveIndex?: number
+}
 ```
 
-2. 实现 `workbenchTabService.openTask({taskId, mode?, parentTabId?})`。
-3. 默认 mode 推导：
+2. 新建 `modeTransitions.ts`，用表驱动方式集中定义 mode / substate 的
+   event、guard、effect 和 invariant。
+3. 实现 `workbenchTabService.openTask({taskId, mode?, parentTabId?})`。
+4. 默认 mode 推导：
 
 ```text
 有 prompt / goal / passRule / referenceLines → problem
 否则 → play
 ```
 
-4. 将 `openGameTab` / `openProblemTab` / `openSnapshotProblemTab` 改为 legacy
+5. 将 `openGameTab` / `openProblemTab` / `openSnapshotProblemTab` 改为 legacy
    compatibility wrapper，内部走 `taskImportService` 或 `openTask`。
-5. 新建 `workbenchFlowService`，替代 `workbenchPhaseService`：
+6. 新建 `workbenchFlowService`，替代 `workbenchPhaseService`：
    - `startAttempt`
    - `submit`
    - `enterRecall`
@@ -239,7 +312,7 @@ type WorkbenchMode = 'play' | 'problem' | 'recall' | 'analysis'
    - `returnFromAnalysis`
    - `restartAttempt`
    - `snapshotFromCurrentContext`
-6. 转换规则：
+7. 转换规则：
 
 ```text
 play/problem --submit--> recall
@@ -247,12 +320,15 @@ recall --complete--> analysis 或 end
 any mode --snapshot--> new tab, mode = problem/play
 play/problem --enterAnalysis--> analysis
 recall --enterAnalysis--> analysis
-analysis --returnFromAnalysis--> previous mode
+analysis --returnFromAnalysis--> AnalysisReturnTarget
 ```
 
-7. 非法转换 reject / throw 并记录日志。
-8. UI panel 渲染改为按 `tab.mode` 分发。
-9. `WorkbenchTab` 增加 `playerConfig`：
+8. Analysis Return 必须恢复 previous mode、Recall substate、tree position 和
+   moveIndex，不能只靠 `toMode` 猜测。
+9. Checkpoint 是 Recall substate，不是 mode。
+10. 非法转换 reject / throw 并记录日志。
+11. UI panel 渲染改为按 `tab.mode` 分发。
+12. `WorkbenchTab` 增加 `playerConfig`：
    - Play Mode：black / white 分别为 human 或 ai；
    - Problem Mode：problemOpponent 为 self 或 ai；
    - AI 设置包括 engineId、timeLimitMs / maxVisits、autoPlay。
@@ -276,6 +352,8 @@ Problem tab 可保存对方 self / ai 配置。
 ```text
 openTask default mode tests；
 mode transition table-driven tests；
+AnalysisReturnTarget restore tests；
+RecallSubstate transition tests；
 legacy openProblemTab wrapper tests；
 snapshot creates child tab tests；
 panel routing tests。
@@ -373,6 +451,11 @@ src/modules/workbench/board-interactions/*
    - Play Mode 根据 black / white human|ai 配置决定是否自动落子；
    - Problem Mode 根据 problemOpponent self|ai 决定对方是否由 AI 应手；
    - AI 走法参数来自 `tab.playerConfig.ai`；
+   - 发起请求时记录 `AiMovePending(requestId, tabId, attemptId, positionHash,
+     color, startedAt)`；
+   - 返回时校验 active tab、active attempt、positionHash、mode、合法性和
+     problemArea；
+   - 过期请求必须丢弃，不能写 documentStore 或 Attempt；
    - AI 落子后统一走 board command，并调用
      `attemptService.appendMove({actor:'ai'})`。
 4. Problem Mode 的 AI 应手必须受 `TrainingTask.problemArea` 约束：
@@ -392,9 +475,20 @@ create RecallSession from Attempt
 tab.mode = recall
 ```
 
-6. `RecallSession` 只绑定 `attemptId`，`expectedMoves` 来自 `Attempt.userLine`。
-7. `trainingRuntimeStore` 只保存运行态引用和 UI draft，不保存完整业务历史。
-8. 启动时能发现 incomplete attempts / recall sessions。
+6. `RecallSession` 绑定 `attemptId`，但 `expectedMoves` 必须由 `RecallPolicy`
+   派生：
+   - `fullLine`
+   - `humanMovesOnly`
+   - `sideToMoveOnly`
+   并保存 `expectedMoveIndexes`。
+7. Play Mode 双方都为 AI 时必须有自动对弈节流和停止条件：
+   - `maxAutoMovesPerRun`
+   - `stopOnPassPass`
+   - `stopOnResign`
+   - `stopOnNoLegalMove`
+   - `stopOnUserInterruption`
+8. `trainingRuntimeStore` 只保存运行态引用和 UI draft，不保存完整业务历史。
+9. 启动时能发现 incomplete attempts / recall sessions。
 
 验收：
 
@@ -405,8 +499,10 @@ AI 落子写入 userLine 且 moveActors 标记为 ai；
 Play 可配置黑白双方为 human / ai；
 Problem 可配置对方为 self / ai；
 Problem AI 不会在 problemArea 外落子；
+旧 AI 请求不会在用户悔棋、切 Tab、进入 Analysis 或重新开始 Attempt 后写入；
 Submit 后 Attempt.status = submitted/recalling；
 RecallSession.attemptId 指向被冻结 Attempt；
+RecallSession.expectedMoves 与 recallPolicy / expectedMoveIndexes 一致；
 tab.mode 切换为 recall；
 Analysis 自由摆棋不修改 Attempt.userLine。
 ```
@@ -417,8 +513,11 @@ Analysis 自由摆棋不修改 Attempt.userLine。
 attemptService lifecycle tests；
 aiMoveService play side controller tests；
 aiMoveService problem area constraint tests；
+aiMoveService stale request rejection tests；
+AI vs AI auto-play limit tests；
 submit transaction tests；
 recallService create-from-attempt tests；
+recallPolicy tests；
 free task → Play → Submit → Recall integration tests；
 problem-like task → Problem → Submit → Recall integration tests。
 ```
@@ -547,18 +646,47 @@ src/components/training/panels/AnalysisModePanel.tsx
    - `checkpointId`
    - `positionHash`
    - `positionSgf`
-   - `source`
-2. Analysis 面板展示：
+   - `createdFrom`
+2. 定义 runtime `ExplorationBranch`：
+   - `id`
+   - `basePositionHash`
+   - `baseMoveIndex`
+   - `moves`
+   - `createdFrom.taskId / attemptId / checkpointId / badMoveId`
+   MVP 可先不落表，但 UI runtime 必须显式保存 active branch。
+3. Analysis 面板展示：
    - BadMove list
    - AI candidate lines
    - Recall comments
    - Attempt userLine
    - correction line
-3. `enterAnalysis` 可从 Play / Problem / Recall / completed Recall 进入。
-4. Analysis 自由摆棋默认不写回 Attempt。
-5. `snapshotService.captureSnapshotInput` 支持从 Play / Problem / Recall /
+4. `enterAnalysis` 可从 Play / Problem / Recall / completed Recall 进入，并保存
+   `AnalysisReturnTarget`。
+5. Analysis 自由摆棋默认不写回 Attempt。
+6. `snapshotService.captureSnapshotInput` 支持从 Play / Problem / Recall /
    Analysis 捕获当前局面和父级关系，不打开 Tab。
-6. `taskImportService.createTaskFromSnapshot` 创建普通 TrainingTask：
+7. `SnapshotTaskInput` 至少包含：
+   - `requestId`
+   - `positionSgf`
+   - `positionHash`
+   - `sideToMove`
+   - `parentTaskId`
+   - `parentAttemptId`
+   - `parentRecallSessionId`
+   - `parentCheckpointId`
+   - `parentMoveIndex`
+   - `parentMode`
+   - `sourceTreePosition`
+   - `sourceBranchId`
+   - `reason`
+   - `inheritedProblemArea`
+8. 各 mode 的“当前局面”规则必须写死：
+   - Play 捕获 documentStore 当前局面 + activeAttemptId + moveIndex；
+   - Problem 捕获当前作答线局面 + optional inherited problemArea；
+   - Recall normal 在 expected position 与用户复现位置中二选一，并写测试；
+   - Recall checkpoint 捕获 correctionDraft，origin 写 parentCheckpointId；
+   - Analysis 捕获 active ExplorationBranch 当前局面。
+9. `taskImportService.createTaskFromSnapshot` 创建普通 TrainingTask：
 
 ```text
 origin.provider = 'snapshot'
@@ -567,7 +695,8 @@ origin.parentAttemptId = currentAttemptId
 origin.parentMoveIndex = currentMoveIndex
 ```
 
-7. `workbenchFlowService.snapshotFromCurrentContext` 编排：
+10. `requestId` 必须保证 Snapshot 重复提交幂等。
+11. `workbenchFlowService.snapshotFromCurrentContext` 编排：
 
 ```text
 captureSnapshotInput
@@ -575,7 +704,7 @@ captureSnapshotInput
 → openTask(newTaskId, mode:'problem' 或默认推导)
 ```
 
-8. UI 必须提供统一 Snapshot 命令：
+12. UI 必须提供统一 Snapshot 命令：
    - 所有模式支持快捷键；
    - 所有模式有按钮或菜单入口；
    - 快捷键和按钮走同一条 service path。
@@ -585,7 +714,10 @@ captureSnapshotInput
 ```text
 Analysis 可以看到当前 task / attempt / bad moves / comments；
 Analysis 摆棋不污染 Attempt.userLine；
+Analysis 有 active ExplorationBranch 表示当前变化线；
 Play / Problem / Recall / Analysis 都可 Snapshot 创建新 TrainingTask；
+Snapshot origin 包含 parent mode / parent ids / source branch；
+同一 requestId 重复提交不会创建重复 Task；
 Snapshot 打开新 Tab；
 当前 Tab 保持原 mode；
 不再使用 snapshot_problem kind。
@@ -595,7 +727,10 @@ Snapshot 打开新 Tab；
 
 ```text
 AnalysisContext tests；
+ExplorationBranch runtime tests；
 snapshotService unit tests；
+SnapshotTaskInput per-mode capture tests；
+snapshot requestId idempotency tests；
 Analysis no-attempt-mutation tests；
 Play / Problem / Recall / Analysis snapshot integration tests。
 ```
@@ -633,15 +768,27 @@ TrainingTask(origin.provider='bad_move')
 ```
 
 6. 创建 BadMove 派生 Task 后：
+   - 如果 `badMove.generatedTaskId` 已存在，直接返回已有 Task；
    - 更新 `badMove.generatedTaskId`
-   - 创建 ReviewSchedule(taskId)
-7. Punishment 不再是特殊 Tab，也不再自动打断当前流程。
+   - 根据 `ReviewEnrollmentPolicy` 创建或跳过 ReviewSchedule
+7. 定义 `ReviewEnrollmentPolicy`：
+   - `none`
+   - `manual`
+   - `auto_due_now`
+   - `auto_scheduled`
+8. 默认策略：
+   - Snapshot：`manual`
+   - BadMove derived task：`auto_due_now` 或 `auto_scheduled`
+   - skipped checkpoint：`manual` 或 `auto_scheduled`
+9. Punishment 不再是特殊 Tab，也不再自动打断当前流程。
 
 验收：
 
 ```text
 BadMove 可生成普通 Task；
-派生 Task 进入 inbox / review；
+BadMove 派生 Task 按 policy 进入 inbox / review；
+Snapshot 默认只给“加入复习”候选，不自动塞满 inbox；
+同一 badMoveId 重复派生不会创建重复 Task；
 Review item 打开后只是普通 openTask；
 Review 不依赖 mode='review'；
 Review 不再使用 item_type = problem / recall_segment。
@@ -651,7 +798,9 @@ Review 不再使用 item_type = problem / recall_segment。
 
 ```text
 reviewService schedule tests；
+ReviewEnrollmentPolicy tests；
 badMove → task creation tests；
+badMove derived task idempotency tests；
 Review openDueItem → openTask integration tests；
 Dashboard due/inbox counts tests。
 ```
@@ -713,7 +862,26 @@ src/components/bars/RecallBar.js
    - incomplete attempts
    - incomplete recall sessions
    - recent bad-move derived tasks
-10. 保持 Sabaki 现有棋盘、引擎、分析、overlay 行为可用。
+10. 紧凑窗口规则：
+   - `<1440px` 左栏默认可折叠，右栏默认 drawer / overlay；
+   - Bottom Action Bar 保留主按钮和 2-3 个常用动作；
+   - 棋盘优先保持稳定，不因面板内容变化跳动。
+11. 键盘流：
+   - `Space` 下一步 / 提交 recall move；
+   - `Enter` 当前主动作；
+   - `A` Enter Analysis / Return；
+   - `S` Snapshot；
+   - `H` Hint；
+   - `Cmd/Ctrl+Z` Undo。
+12. 空态 / 加载态 / 错误态必须组件化覆盖：
+   - 没有 active task；
+   - engine 未连接；
+   - analysis result pending；
+   - AI move pending；
+   - problemArea 未设置；
+   - Recall 无 expected moves；
+   - Snapshot 当前局面不可捕获。
+13. 保持 Sabaki 现有棋盘、引擎、分析、overlay 行为可用。
 
 验收：
 
@@ -725,6 +893,9 @@ Problem 可选择对方为 AI 或自己；
 Problem AI 应手必须受题目 analysis area 限制；
 Recall 可进入 Checkpoint；
 所有模式可通过快捷键 / 按钮 Snapshot；
+紧凑窗口下主按钮和棋盘仍可用；
+键盘 shortcut 与按钮走同一 service path；
+空态 / loading / error / disabled 状态给出 inline reason；
 Review 打开 due item 后进入 Play 或 Problem；
 UI 不直接写 business store；
 Container 不直接拼装 board 数据，通过 adapter 订阅；
@@ -737,6 +908,8 @@ Container 不直接拼装 board 数据，通过 adapter 订阅；
 TrainingWorkbenchContainer mode routing tests；
 Play / Problem / Recall / Analysis smoke tests；
 Review Inbox open task integration tests；
+compact layout smoke tests；
+keyboard shortcut command-path tests；
 legacy ProblemBar compatibility regression tests。
 ```
 
@@ -833,10 +1006,11 @@ Phase 9  Legacy Cleanup                 2 周
 
 ```text
 Phase 0-1 是 v0.5 地基，必须先做；
+Vertical Slice 0 必须紧跟 Phase 0-1，用最小 UI 跑通 openTask → Attempt → Submit → Recall；
 Phase 2 防止 source 逻辑继续扩散；
 Phase 3-5 构成训练价值主干；
 Phase 6-7 完成派生题和长期复习闭环；
-Phase 8 让能力进入真实工作台；
+Phase 8 是工作台体验补全，不是第一次 UI 集成；
 Phase 9 只在新路径稳定后做。
 ```
 
@@ -879,8 +1053,10 @@ playInteractionExecutor: 接通 documentStore.playMove（替代 sabaki.clickVert
 3. db migration：training_tasks origin_json + problem-like fields
 4. repository mapper：old source → origin
 5. workbenchTabService.openTask
-6. workbenchFlowService skeleton
-7. workbenchUiPolicy 默认 mode 推导
+6. modeTransitions.ts table-driven skeleton
+7. workbenchFlowService skeleton
+8. workbenchUiPolicy 默认 mode 推导
+9. Vertical Slice 0 UI shell
 ```
 
 第二轮：
@@ -901,8 +1077,9 @@ playInteractionExecutor: 接通 documentStore.playMove（替代 sabaki.clickVert
 4. Problem opponent self|ai
 5. Problem AI problemArea 约束
 6. submit → recall transaction
-7. recall_sessions attemptId 化
-8. Play / Problem 落子写 Attempt
+7. recall_sessions attemptId + recallPolicy + expectedMoveIndexes
+8. AI stale request rejection
+9. Play / Problem 落子写 Attempt
 ```
 
 第四轮：
@@ -926,10 +1103,14 @@ origin 只做追溯，不参与主流程判断
 WorkbenchTab 保存 UI 状态，不保存训练事实
 Attempt 是用户产出的一条线
 RecallSession 绑定 Attempt
+RecallPolicy 显式决定 expectedMoves，不靠隐式 userLine 推断
 Checkpoint 是 Recall 子流程
+Analysis Return 必须恢复 AnalysisReturnTarget
 Analysis 不污染 Attempt
 Snapshot 创建新 Task，不复用当前 Tab
 Problem AI 落子必须受 problemArea / analysis area 限制
+AI 请求过期后不可写入 documentStore 或 Attempt
+Snapshot / BadMove 派生必须幂等
 ReviewSchedule 直接引用 taskId
 Store 控制在 2～3 个
 Repository 是唯一训练 DB 入口
@@ -948,4 +1129,6 @@ openRecallSegmentTab
 每个实体一个 Store
 Analysis 自动写回 Attempt.userLine
 Problem AI 在题目范围外自动落子
+旧 AI 请求在切 Tab / 悔棋 / 进入 Analysis 后继续落子
+Snapshot 默认自动塞满 Review Inbox
 ```
