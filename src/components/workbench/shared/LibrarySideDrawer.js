@@ -30,6 +30,15 @@ function dateText(value) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
 }
 
+const externalSourceLabels = {
+  fox: '野狐对局',
+  oneOhOne: '101 错题',
+}
+
+function getErrorMessage(err) {
+  return err?.message || String(err || '同步失败')
+}
+
 export default class LibrarySideDrawer extends Component {
   constructor() {
     super()
@@ -40,6 +49,7 @@ export default class LibrarySideDrawer extends Component {
       inboxProblems: [],
       savedGames: [],
       query: '',
+      externalSourceStatus: {},
     }
   }
 
@@ -77,8 +87,17 @@ export default class LibrarySideDrawer extends Component {
     return type || 'history'
   }
 
+  getLibraryDataProvider() {
+    return this.props.libraryDataProvider || this.props.repository || null
+  }
+
   async loadProblemLibrary() {
-    if (window.sabaki?.db == null) {
+    let provider = this.getLibraryDataProvider()
+    if (
+      provider == null ||
+      typeof provider.getDashboardSummary !== 'function' ||
+      typeof provider.getProblemsByStatus !== 'function'
+    ) {
       this.setState({
         loading: false,
         summary: {dueCount: 0, inboxCount: 0, recentPunishmentCount: 0},
@@ -90,8 +109,8 @@ export default class LibrarySideDrawer extends Component {
     this.setState({loading: true})
 
     try {
-      let summary = await window.sabaki.db.getDashboardSummary()
-      let inboxProblems = await window.sabaki.db.getProblemsByStatus('inbox', 12)
+      let summary = await provider.getDashboardSummary()
+      let inboxProblems = await provider.getProblemsByStatus('inbox', 12)
       this.setState({summary, inboxProblems, loading: false})
     } catch (err) {
       this.setState({
@@ -103,17 +122,97 @@ export default class LibrarySideDrawer extends Component {
   }
 
   async loadSavedGames() {
-    if (window.sabaki?.db?.getRecentGames == null) {
+    let provider = this.getLibraryDataProvider()
+    if (provider == null || typeof provider.getRecentGames !== 'function') {
       this.setState({savedGames: []})
       return
     }
 
     try {
-      let savedGames = await window.sabaki.db.getRecentGames(30)
+      let savedGames = await provider.getRecentGames(30)
       this.setState({savedGames})
     } catch (_) {
       this.setState({savedGames: []})
     }
+  }
+
+  setExternalSourceStatus(source, patch) {
+    this.setState(({externalSourceStatus}) => ({
+      externalSourceStatus: {
+        ...externalSourceStatus,
+        [source]: {
+          ...(externalSourceStatus[source] || {}),
+          ...patch,
+        },
+      },
+    }))
+  }
+
+  getExternalSourceState(source, projectedStates = {}) {
+    let projected =
+      projectedStates[source] ||
+      (source === 'oneOhOne' ? projectedStates['101'] : null) ||
+      {}
+    let local = this.state.externalSourceStatus[source] || {}
+    let status = local.status || projected.status || 'idle'
+    let loading = status === 'loading' || projected.loading === true
+    let error = local.error || projected.error || null
+    let disabled = loading || projected.disabled === true
+
+    return {
+      status,
+      loading,
+      error,
+      disabled,
+      disabledReason:
+        projected.disabledReason ||
+        (error ? getErrorMessage(error) : ''),
+    }
+  }
+
+  async handleExternalSourceClick(source, handler) {
+    let state = this.getExternalSourceState(
+      source,
+      this.props.librarySourceStates,
+    )
+    if (state.disabled || typeof handler !== 'function') return
+
+    this.setExternalSourceStatus(source, {status: 'loading', error: null})
+
+    try {
+      await handler()
+      this.setExternalSourceStatus(source, {status: 'synced', error: null})
+    } catch (err) {
+      this.setExternalSourceStatus(source, {
+        status: 'error',
+        error: getErrorMessage(err),
+      })
+    }
+  }
+
+  renderExternalSourceButton(source, testId, state, handler) {
+    let statusText =
+      state.loading ? '同步中' :
+        state.error ? '失败' :
+          state.status === 'synced' ? '已同步' : ''
+
+    return h('button', {
+      type: 'button',
+      'data-testid': testId,
+      class: [
+        'wb-library-drawer__source',
+        state.loading ? 'wb-library-drawer__source--loading' : '',
+        state.error ? 'wb-library-drawer__source--error' : '',
+      ].filter(Boolean).join(' '),
+      disabled: state.disabled,
+      'aria-busy': state.loading ? 'true' : 'false',
+      'data-status': state.status,
+      title: state.disabledReason,
+      onClick: () => this.handleExternalSourceClick(source, handler),
+    },
+      externalSourceLabels[source],
+      statusText && h('small', {}, statusText),
+    )
   }
 
   renderHistory() {
@@ -436,6 +535,9 @@ export default class LibrarySideDrawer extends Component {
     type = 'history',
     onClose = () => {},
     onSwitch = () => {},
+    onOpenFoxGames = () => {},
+    onOpenOneOhOneWeiqi = () => {},
+    librarySourceStates = {},
   }) {
     if (!open) return null
     let activeType = this.normalizeType(type)
@@ -463,19 +565,36 @@ export default class LibrarySideDrawer extends Component {
         !isProblemLibrary && h('div', {class: 'wb-library-drawer__tabs'},
           h('button', {
             type: 'button',
+            'data-testid': 'library-tab-history',
             class: activeType === 'history' ? 'active' : '',
             onClick: () => onSwitch('history'),
           }, '历史记录'),
           h('button', {
             type: 'button',
+            'data-testid': 'library-tab-kifu',
             class: activeType === 'kifu' ? 'active' : '',
             onClick: () => onSwitch('kifu'),
           }, '棋谱库'),
           h('button', {
             type: 'button',
+            'data-testid': 'library-tab-game-records',
             class: activeType === 'game-records' ? 'active' : '',
             onClick: () => onSwitch('game-records'),
           }, '对局库'),
+        ),
+        !isProblemLibrary && h('div', {class: 'wb-library-drawer__sources'},
+          this.renderExternalSourceButton(
+            'fox',
+            'library-source-fox',
+            this.getExternalSourceState('fox', librarySourceStates),
+            onOpenFoxGames,
+          ),
+          this.renderExternalSourceButton(
+            'oneOhOne',
+            'library-source-101',
+            this.getExternalSourceState('oneOhOne', librarySourceStates),
+            onOpenOneOhOneWeiqi,
+          ),
         ),
         activeType === 'problems'
           ? this.renderProblemLibrary()

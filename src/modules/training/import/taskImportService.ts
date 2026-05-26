@@ -85,6 +85,27 @@ function extractFileName(filePath: string): string {
   return fileName.replace(/\.sgf$/i, '') || fileName
 }
 
+async function findSyncedTask(
+  repository: TrainingRepository,
+  source: {
+    provider: 'fox' | '101'
+    externalId: string
+    legacy:
+      | { kind: 'game'; gameId: string }
+      | { kind: 'problem'; problemId: string }
+  }
+): Promise<TrainingTask | null> {
+  if (typeof repository.findTaskBySource === 'function') {
+    const byLegacySource = await repository.findTaskBySource(source.legacy)
+    if (byLegacySource) return byLegacySource
+  }
+
+  if (typeof repository.listTasksByOriginProvider !== 'function') return null
+
+  const tasks = await repository.listTasksByOriginProvider(source.provider)
+  return tasks.find(task => task.origin?.externalId === source.externalId) ?? null
+}
+
 // --- Factory ---
 
 export function createTaskImportService(
@@ -102,6 +123,17 @@ export function createTaskImportService(
   async function importFoxGame(input: {
     gameId: string
   }): Promise<TrainingTask> {
+    const existingTask = await findSyncedTask(repository, {
+      provider: 'fox',
+      externalId: input.gameId,
+      legacy: { kind: 'game', gameId: input.gameId },
+    })
+    if (existingTask) return existingTask
+
+    if (!foxAdapter || !sgfAdapter) {
+      throw new Error('Fox sync adapter is not configured')
+    }
+
     const result = await foxAdapter!.fetchSgf(input.gameId)
 
     if (!result.success) {
@@ -166,6 +198,17 @@ export function createTaskImportService(
   async function import101Problem(input: {
     problemId: string
   }): Promise<TrainingTask> {
+    const existingTask = await findSyncedTask(repository, {
+      provider: '101',
+      externalId: input.problemId,
+      legacy: { kind: 'problem', problemId: input.problemId },
+    })
+    if (existingTask) return existingTask
+
+    if (!weiqi101Db) {
+      throw new Error('101 sync database is not configured')
+    }
+
     const problem = await weiqi101Db!.getWeiqi101Problem(input.problemId)
 
     if (!problem) {
