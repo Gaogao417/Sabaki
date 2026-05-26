@@ -212,6 +212,7 @@ function makeRecallInput(overrides = {}) {
       target: {kind: 'none'},
       ...overrides.engine,
     }),
+    overlay: overrides.overlay,
     sabaki: baseSabaki({state: {mode: 'recall'}, ...overrides.sabaki}),
   })
 }
