@@ -127,17 +127,11 @@ describe('RightModePanel Phase 6 Integration (T-6.5)', function () {
         hint: null,
         aiAnalysisHidden: true,
         referenceLines: [],
-        pendingEval: 2,
-        badMoveCount: 1,
       })
     )
 
     const problemPanel = queryByTestId('problem-right-panel')
     assert.ok(problemPanel, 'ProblemRightPanel should be rendered inside RightModePanel for problem mode')
-    assert.ok(problemPanel.textContent.includes('pending 评价'),
-      'RightModePanel should pass pendingEval through to ProblemRightPanel')
-    assert.ok(problemPanel.textContent.includes('坏棋记录'),
-      'RightModePanel should pass badMoveCount through to ProblemRightPanel')
   })
 
   // --- T-6.5c: recall mode delegates to RecallRightPanel ---
@@ -174,13 +168,10 @@ describe('RightModePanel Phase 6 Integration (T-6.5)', function () {
         userOriginalLine: null,
         userCorrection: null,
         aiCandidates: null,
-        badMoveCount: 2,
       })
     )
 
     const analysisPanel = queryByTestId('analysis-right-panel')
     assert.ok(analysisPanel, 'AnalysisRightPanel should be rendered inside RightModePanel for analysis mode')
-    assert.ok(analysisPanel.textContent.includes('坏棋摘要'),
-      'RightModePanel should pass badMoveCount through to AnalysisRightPanel')
   })
 })

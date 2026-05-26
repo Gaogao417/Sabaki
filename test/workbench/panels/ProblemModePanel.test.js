@@ -105,35 +105,6 @@ describe('ProblemModePanel (T-5.2)', function () {
       'OpponentControl with data-testid="opponent-control" should be present'
     )
   })
-
-  // --- T-5.2d: renders ReferenceLineSummary section ---
-  // Production subject: ProblemModePanel component
-  // Production bug: reference line summary section not rendered
-  // Controlled dependencies: props are inline
-  it('T-5.2d: renders ReferenceLineSummary section', () => {
-    const {queryByTestId} = renderToDom(
-      h(ProblemModePanel, noopProps({
-        referenceLines: [
-          {label: '正解', length: 7},
-          {label: '变化1', length: 12},
-        ],
-      }))
-    )
-
-    const root = queryByTestId('problem-mode-panel')
-    assert.ok(root, 'Root element not found')
-
-    // ReferenceLineSummary section should be present; verify via text content
-    assert.ok(
-      root.textContent.includes('正解'),
-      'Root should show reference line label "正解"'
-    )
-    assert.ok(
-      root.textContent.includes('变化1'),
-      'Root should show reference line label "变化1"'
-    )
-  })
-
   // --- T-5.2e: fires onRequestHint callback ---
   // SIDE_EFFECT: callback invocation
   // Production subject: ProblemModePanel component

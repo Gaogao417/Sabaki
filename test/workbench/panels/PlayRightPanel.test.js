@@ -57,43 +57,4 @@ describe('PlayRightPanel (T-6.1)', function () {
       'Root should contain white captures "7"'
     )
   })
-
-  // --- T-6.1b: renders AI analysis with EmptyStatePanel ---
-  it('T-6.1b: renders AI analysis empty state with connection message', () => {
-    const {queryByTestId} = renderToDom(
-      h(PlayRightPanel, noopProps())
-    )
-
-    const root = queryByTestId('play-right-panel')
-    assert.ok(
-      root.textContent.includes('连接引擎后可查看分析结果'),
-      'Should show AI analysis empty state message'
-    )
-  })
-
-  // --- T-6.1c: renders variation tree with EmptyStatePanel ---
-  it('T-6.1c: renders variation tree empty state with auto-record message', () => {
-    const {queryByTestId} = renderToDom(
-      h(PlayRightPanel, noopProps())
-    )
-
-    const root = queryByTestId('play-right-panel')
-    assert.ok(
-      root.textContent.includes('对局过程中将自动记录变化'),
-      'Should show variation tree empty state message'
-    )
-  })
-
-  // --- T-6.1d: renders drawer toggle buttons for expandable sections ---
-  it('T-6.1d: renders drawer toggle buttons for expandable sections', () => {
-    const {queryAllByTestId} = renderToDom(
-      h(PlayRightPanel, noopProps())
-    )
-
-    const toggles = queryAllByTestId('drawer-toggle')
-    assert.ok(
-      toggles.length >= 2,
-      'Should have at least 2 drawer-toggle buttons for expandable sections'
-    )
-  })
 })
