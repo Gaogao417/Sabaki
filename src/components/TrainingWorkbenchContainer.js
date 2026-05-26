@@ -829,6 +829,10 @@ class TrainingWorkbenchContainer extends Component {
     const gameCurrentsIndexed = shellProps.gameCurrents && shellProps.gameIndex != null
       ? shellProps.gameCurrents[shellProps.gameIndex]
       : shellProps.gameCurrents
+    const libraryProjection = shellProps.libraryProjection ||
+      this.state.dashboardData?.libraryProjection ||
+      sabaki.getTrainingContext()?.libraryProjection ||
+      null
 
     return h(WorkbenchShell, {
       ...shellProps,
@@ -841,6 +845,7 @@ class TrainingWorkbenchContainer extends Component {
       boardProps,
       activeAnnotationTool: sabaki.state?.selectedTool || 'stone_1',
       libraryDrawerType: this.state.libraryDrawerType,
+      libraryProjection,
     })
   }
 

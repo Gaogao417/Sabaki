@@ -115,6 +115,8 @@ export default function WorkbenchShell({
       onNewGame: rest.onNewGame,
       onStartReview,
       onStartProblem,
+      libraryProjection: rest.libraryProjection,
+      librarySourceStates: rest.librarySourceStates || rest.libraryProjection,
     }),
     h('div', {class: 'workbench-shell__inner'},
 
@@ -132,7 +134,7 @@ export default function WorkbenchShell({
       ),
 
       // Row 2: Toolbar — ModeBar (StoneStatus + Segmented + Actions)
-      h(ModeBar, {activeMode: mode, onModeChange, ...rest}),
+      h(ModeBar, {activeMode: mode, onModeChange, taskTitle, ...rest}),
 
       // Main content area
       h('div', {
