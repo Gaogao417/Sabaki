@@ -4,7 +4,7 @@ import type {
   TrainingAttempt,
 } from '../types/index'
 import type { TrainingRepository } from '../repository/trainingRepository'
-import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
+import type { RecallView, TrainingRuntimeStore } from '../store/trainingRuntimeStore'
 import type { RecallCheckpointService } from './recallCheckpointService'
 
 export type RecallService = {
@@ -33,6 +33,14 @@ export type RecallServiceDeps = {
 
 export function createRecallService(deps: RecallServiceDeps): RecallService {
   const { repository, runtimeStore, checkpointService, logger } = deps
+
+  async function refreshRecallView(recallSessionId: string): Promise<void> {
+    const session = await repository.loadRecallSession(recallSessionId)
+    if (!session) return
+
+    const attempts = await repository.listRecallAttempts(recallSessionId)
+    runtimeStore.setRecallView(mapRecallSessionToRecallView(session, attempts))
+  }
 
   async function createRecallFromAttempt(attemptId: string): Promise<RecallSession> {
     const attempt = await repository.loadAttempt(attemptId)
@@ -145,6 +153,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
 
     // Only advance on correct moves; incorrect stays at same index for retry
     if (!isCorrect) {
+      await refreshRecallView(input.recallSessionId)
       logger?.info('recall.move', 'Recall move incorrect, index not advanced', {
         sessionId: input.recallSessionId,
         moveIndex,
@@ -171,6 +180,8 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
       })
     }
 
+    await refreshRecallView(input.recallSessionId)
+
     logger?.info('recall.move', 'Recall move submitted', {
       sessionId: input.recallSessionId,
       moveIndex,
@@ -194,6 +205,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     })
 
     runtimeStore.setActiveRecallSession(undefined)
+    runtimeStore.setRecallView(null)
 
     logger?.info('recall.complete', 'RecallSession completed', {
       sessionId: recallSessionId,
@@ -229,6 +241,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
 
     await repository.createRecallSession(session)
     runtimeStore.setActiveRecallSession(id)
+    runtimeStore.setRecallView(mapRecallSessionToRecallView(session, []))
 
     return session
   }
@@ -238,6 +251,28 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     createRecallFromGame,
     submitRecallMove,
     completeRecall,
+  }
+}
+
+export function mapRecallSessionToRecallView(
+  session: RecallSession,
+  attempts: RecallAttempt[] = [],
+): RecallView {
+  return {
+    recallSessionId: session.id,
+    taskId: session.taskId ?? '',
+    tabId: session.tabId,
+    moveIndex: session.currentMoveIndex ?? 0,
+    expectedMoves: session.expectedMoves.map((vertex, index) => ({
+      sign: index % 2 === 0 ? 1 : -1,
+      vertex: vertex || null,
+    })),
+    userAttempts: attempts.map((attempt) => ({
+      vertex: attempt.userMove,
+      isCorrect: attempt.isCorrect,
+    })),
+    showHint: false,
+    completed: session.completed,
   }
 }
 

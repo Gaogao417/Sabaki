@@ -6,6 +6,7 @@ import type {
 } from '../types/index'
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
+import { mapRecallSessionToRecallView } from './recallService'
 
 export type RecallCheckpointService = {
   shouldTriggerCheckpoint(input: {
@@ -45,6 +46,14 @@ export type RecallCheckpointServiceDeps = {
 
 export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps): RecallCheckpointService {
   const { repository, runtimeStore, logger } = deps
+
+  async function refreshRecallView(recallSessionId: string): Promise<void> {
+    const session = await repository.loadRecallSession(recallSessionId)
+    if (!session) return
+
+    const attempts = await repository.listRecallAttempts(recallSessionId)
+    runtimeStore.setRecallView(mapRecallSessionToRecallView(session, attempts))
+  }
 
   async function shouldTriggerCheckpoint(input: {
     recallSessionId: string
@@ -102,6 +111,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     await repository.updateBadMove(input.badMoveId, { recallCheckpointId: id })
 
     runtimeStore.setActiveCheckpoint(id)
+    await refreshRecallView(input.recallSessionId)
 
     logger?.info('checkpoint.start', 'Checkpoint started', {
       checkpointId: id,
@@ -241,6 +251,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
 
     runtimeStore.setActiveCheckpoint(undefined)
     runtimeStore.setCorrectionDraft(undefined)
+    await refreshRecallView(session.id)
 
     logger?.info('checkpoint.skip', 'Checkpoint skipped', {
       checkpointId,
@@ -276,6 +287,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     })
 
     runtimeStore.setActiveCheckpoint(undefined)
+    await refreshRecallView(session.id)
 
     logger?.info('checkpoint.resume', 'Resumed recall after checkpoint', {
       checkpointId,

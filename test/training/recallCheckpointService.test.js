@@ -288,6 +288,19 @@ describe('recallCheckpointService — Phase 5 contracts', () => {
       const session = repo.store.sessions['session_1']
       assert.strictEqual(session.currentMoveIndex, 2)
     })
+
+    it('refreshes recallView after skip advances recall', async () => {
+      seedCheckpoint(repo, { status: 'pending_correction' })
+      seedSession(repo, { currentMoveIndex: 1 })
+      runtimeStore.setActiveCheckpoint('cp_1')
+
+      await service.skipCheckpoint('cp_1')
+
+      const view = runtimeStore.getState().recallView
+      assert.strictEqual(view.recallSessionId, 'session_1')
+      assert.strictEqual(view.moveIndex, 2)
+      assert.strictEqual(runtimeStore.getState().activeCheckpointId, undefined)
+    })
   })
 
   // ------------------------------------------------------------------
@@ -495,11 +508,11 @@ describe('recallCheckpointService — Phase 5 contracts', () => {
       // activeCheckpointId should be set
       assert.ok(stateAfter.activeCheckpointId, 'activeCheckpointId should be set')
 
-      // The runtime store does NOT have a "tab mode" field.
-      // The architecture boundary assertion is that startCheckpoint only
-      // modifies activeCheckpointId and does not set any mode/view state.
-      // The runtime store has recallView, problemView, reviewQueueView — none should be set.
-      assert.strictEqual(stateAfter.recallView, null, 'startCheckpoint must not set recallView')
+      // The runtime store does NOT have a "tab mode" field. startCheckpoint
+      // may refresh recallView projection for subscribers, but must not
+      // create a mode surrogate or touch non-recall companion views.
+      assert.strictEqual(stateAfter.recallView.recallSessionId, 'session_1',
+        'startCheckpoint should refresh recallView for recall UI projection')
       assert.strictEqual(stateAfter.problemView, null, 'startCheckpoint must not set problemView')
       assert.strictEqual(stateAfter.reviewQueueView, null, 'startCheckpoint must not set reviewQueueView')
       assert.strictEqual(stateAfter.activeAttemptId, undefined, 'startCheckpoint must not set activeAttemptId')

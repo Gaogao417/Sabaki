@@ -70,6 +70,19 @@ describe('recallService', () => {
       assert.ok(runtimeStore.getState().activeRecallSessionId)
     })
 
+    it('hydrates recallView in runtime store', async () => {
+      seedAttempt(repo)
+
+      const session = await service.createRecallFromAttempt('attempt_1')
+      const view = runtimeStore.getState().recallView
+
+      assert.strictEqual(view.recallSessionId, session.id)
+      assert.strictEqual(view.taskId, 'task_1')
+      assert.strictEqual(view.moveIndex, 0)
+      assert.deepStrictEqual(view.expectedMoves.map(move => move.vertex), ['D4', 'Q16', 'C3'])
+      assert.deepStrictEqual(view.userAttempts, [])
+    })
+
     it('throws if attempt not found', async () => {
       await assert.rejects(
         () => service.createRecallFromAttempt('nonexistent'),
@@ -117,6 +130,17 @@ describe('recallService', () => {
       assert.strictEqual(session.currentMoveIndex, 0)
     })
 
+    it('refreshes recallView after an incorrect move', async () => {
+      await service.submitRecallMove({ recallSessionId: sessionId, userMove: 'E5' })
+
+      const view = runtimeStore.getState().recallView
+      assert.strictEqual(view.recallSessionId, sessionId)
+      assert.strictEqual(view.moveIndex, 0)
+      assert.deepStrictEqual(view.userAttempts, [
+        {vertex: 'E5', isCorrect: false},
+      ])
+    })
+
     it('blocks submission while checkpoint is active', async () => {
       // Move to index 0 then trigger a checkpoint at index 0
       seedBadMove(repo, { moveIndex: 0, severity: 'major' })
@@ -137,6 +161,17 @@ describe('recallService', () => {
 
       const session = repo.store.sessions[sessionId]
       assert.strictEqual(session.currentMoveIndex, 1)
+    })
+
+    it('refreshes recallView after a correct move advances', async () => {
+      await service.submitRecallMove({ recallSessionId: sessionId, userMove: 'D4' })
+
+      const view = runtimeStore.getState().recallView
+      assert.strictEqual(view.recallSessionId, sessionId)
+      assert.strictEqual(view.moveIndex, 1)
+      assert.deepStrictEqual(view.userAttempts, [
+        {vertex: 'D4', isCorrect: true},
+      ])
     })
 
     it('throws if session not found', async () => {
@@ -180,6 +215,11 @@ describe('recallService', () => {
       // Session should stay at index 1 (checkpoint blocks advance)
       assert.strictEqual(repo.store.sessions[sessionId].currentMoveIndex, 1)
       assert.ok(runtimeStore.getState().activeCheckpointId)
+      assert.strictEqual(runtimeStore.getState().recallView.moveIndex, 1)
+      assert.deepStrictEqual(
+        runtimeStore.getState().recallView.userAttempts.map(attempt => attempt.vertex),
+        ['D4', 'Q16'],
+      )
     })
 
     it('triggers checkpoint on severe bad move', async () => {
@@ -359,6 +399,19 @@ describe('recallCheckpointService', () => {
 
       await service.startCheckpoint({ recallSessionId: 'session_1', badMoveId: 'bm_1' })
       assert.ok(runtimeStore.getState().activeCheckpointId)
+    })
+
+    it('refreshes recallView when checkpoint starts', async () => {
+      seedSession(repo, { currentMoveIndex: 1 })
+      seedBadMove(repo)
+
+      const cp = await service.startCheckpoint({ recallSessionId: 'session_1', badMoveId: 'bm_1' })
+      const view = runtimeStore.getState().recallView
+
+      assert.strictEqual(runtimeStore.getState().activeCheckpointId, cp.id)
+      assert.strictEqual(view.recallSessionId, 'session_1')
+      assert.strictEqual(view.moveIndex, 1)
+      assert.deepStrictEqual(view.expectedMoves.map(move => move.vertex), ['D4', 'Q16', 'C3'])
     })
 
     it('links checkpoint back to bad move to prevent duplicate trigger', async () => {
@@ -565,6 +618,7 @@ describe('recallCheckpointService', () => {
 
       assert.strictEqual(repo.store.sessions['session_1'].currentMoveIndex, 2)
       assert.strictEqual(runtimeStore.getState().activeCheckpointId, undefined)
+      assert.strictEqual(runtimeStore.getState().recallView.moveIndex, 2)
       assert.ok(repo.store.checkpoints['cp_1'].completedAt)
     })
 

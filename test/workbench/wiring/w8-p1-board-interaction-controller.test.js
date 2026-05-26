@@ -822,6 +822,91 @@ describe('W8-P1 Board Interaction Controller', function () {
 
       unsub()
     })
+
+    it('W8P1-T25: recall board answer refreshes runtime recallView without game-tree writes', async function () {
+      await repository.createRecallSession({
+        id: 'rs_project',
+        taskId: 'task_1',
+        tabId: 'tab_1',
+        attemptId: undefined,
+        type: 'line_recall',
+        source: {kind: 'game', gameId: 'game_1'},
+        startMove: 0,
+        endMove: undefined,
+        expectedMoves: ['dd', 'pp'],
+        currentMoveIndex: 0,
+        completed: false,
+        createdAt: new Date().toISOString(),
+      })
+      runtimeStore.setActiveRecallSession('rs_project')
+      runtimeStore.setRecallView({
+        recallSessionId: 'rs_project',
+        taskId: 'task_1',
+        tabId: 'tab_1',
+        moveIndex: 0,
+        expectedMoves: [
+          {sign: 1, vertex: 'dd'},
+          {sign: -1, vertex: 'pp'},
+        ],
+        userAttempts: [],
+        showHint: false,
+        completed: false,
+      })
+
+      const documentStoreCalls = []
+      const controller = createBoardInteractionController({
+        getPlayServices: () => ({
+          documentStore: {
+            playMove: async (vertex, opts) => {
+              documentStoreCalls.push({vertex, opts})
+              return {valid: true, changed: true, treePosition: 'node_2'}
+            },
+          },
+        }),
+        getRecallAdapter: () => ({
+          submitBoardClick: async (vertex) => {
+            const userMove = String.fromCharCode(97 + vertex[0]) + String.fromCharCode(97 + vertex[1])
+            const attempt = await recallService.submitRecallMove({
+              recallSessionId: 'rs_project',
+              userMove,
+            })
+            const session = await repository.loadRecallSession('rs_project')
+            return {
+              handled: true,
+              changed: true,
+              isCorrect: attempt.isCorrect,
+              completed: session ? session.completed : false,
+              recallMoveIndex: session ? session.currentMoveIndex : 0,
+              attempt,
+            }
+          },
+        }),
+        getEditWorkspaceContext: () => null,
+        getEditWorkspaceDeps: () => ({}),
+        getLegacySabaki: () => ({clickVertex: () => {}}),
+        getIsMac: () => false,
+      })
+
+      const result = await controller.handleBoardClick({
+        vertex: [3, 3],
+        event: {button: 0, ctrlKey: false, metaKey: false},
+        activeTab: makeTab({mode: 'recall', activeRecallSessionId: 'rs_project'}),
+        settings: {selectedTool: 'stone_1'},
+        board: makeMockBoard(),
+        editWorkspacePresent: false,
+        task: null,
+        runtimeState: runtimeStore.getState(),
+      })
+
+      assert.strictEqual(result.handled, true)
+      assert.strictEqual(result.isCorrect, true)
+      assert.strictEqual(documentStoreCalls.length, 0,
+        'Recall board answers must not write through documentStore/game tree')
+      assert.strictEqual(runtimeStore.getState().recallView.moveIndex, 1)
+      assert.deepStrictEqual(runtimeStore.getState().recallView.userAttempts, [
+        {vertex: 'dd', isCorrect: true},
+      ])
+    })
   })
 
   // =====================================================================
