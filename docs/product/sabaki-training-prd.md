@@ -1,17 +1,19 @@
 # Gabaki / Sabaki 魔改版围棋训练系统 PRD
 
-> 版本：v0.6  
+> 版本：v0.7  
 > 文档类型：产品需求文档（PRD）  
 > 核心定位：面向个人训练的围棋学习工具  
-> 当前目标：从“AI 分析棋盘”升级为“实战记忆 + 复盘出题 + 自由做题 + 错手惩罚题生成”的训练系统
+> 当前目标：从“AI 分析棋盘”升级为“Attempt 主动回忆纠错 + 复盘出题 + 自由做题 + 错手惩罚 + 长期复习”的训练系统
 
 ## 文档地位
 
 本文是 Gabaki / Sabaki 魔改版训练系统的产品全量蓝图，定义产品目标、训练闭环、核心功能、数据对象和验收方向。
 
-- 历史 v0.5 PRD 归档在 [Gabaki / Sabaki Training PRD v0.5](../archive/prd-versions/gabaki-sabaki-training-prd-v0.5.md)，仅用于追溯上一版收敛口径；当前产品真源以本文为准。
+- 历史 v0.5 PRD 归档在 [Gabaki / Sabaki Training PRD v0.5](../archive/prd-versions/gabaki-sabaki-training-prd-v0.5.md)，用于追溯 Attempt / RecallCheckpoint 的收敛口径。
+- 历史 v0.6 PRD 归档在 [Gabaki / Sabaki Training PRD v0.6](../archive/prd-versions/gabaki-sabaki-training-prd-v0.6.md)，用于追溯 Game / Problem Editor / Punishment Problem / Review 的产品化扩展。
+- 当前 v0.7 是 v0.5 与 v0.6 的合并修正版：保留 v0.6 的产品闭环，恢复 v0.5 的 Attempt 中心和 Recall 中主动纠错 checkpoint。
 - 当前工作台视觉实现以 [Workbench UI/UX Spec](../ui_ux/workbench-ui-ux-spec.md) 为准。
-- 当前视觉参考图归档在 [Workbench Reference Pictures](../ui_ux/workbench-ref-pics/)。
+- 当前六屏视觉参考归档在 [2026-05-26 Six Screen References](../ui_ux/workbench-ref-pics/2026-05-26-six-screen/)。
 - 当前运行态状态机以 [Workbench Mode Orchestration Contract](../design/workbench-mode-orchestration-contract.md) 为准。
 - 当前模块架构以 [Training Architecture v0.5](../architecture/gabaki-sabaki-training-architecture-v0.5.md) 为准。
 - 当前长期迁移执行以 [Training Implementation Plan](../architecture/gabaki-sabaki-training-implementation-plan.md) 为准。
@@ -36,8 +38,10 @@
 
 ```text
 Play 对战
+→ Submit / freeze TrainingAttempt
 → Recall 回忆/背谱
-→ Analysis 复盘
+→ RecallCheckpoint 主动修正问题手
+→ Analysis 自由复盘
 → Snapshot 出题
 → Problem 做题
 → Bad Move 检测
@@ -51,20 +55,26 @@ Play 对战
 
 ### 2.1 一句话定位
 
-一个以“实战棋谱记忆 + AI 复盘出题 + 自由变化提交 + 错手惩罚题生成”为核心的个人围棋训练工具。
+一个以“实战/做题 Attempt → 主动回忆 → 问题手自我修正 → AI 复盘出题 → 错手惩罚题 → 长期复习”为核心的个人围棋训练工具。
 
 ### 2.2 核心价值
 
-本工具帮助用户完成三件事：
+本工具帮助用户完成五件事：
 
 1. **把每一盘棋留下来**  
    不只是保存 SGF，而是保存为可回忆、可复盘、可出题、可复习的训练材料。
 
-2. **把复盘结果变成题目**  
+2. **把用户产出冻结成 Attempt**  
+   Play / Problem 中的用户走法在提交后冻结为 `TrainingAttempt.userLine`，后续 Recall、Analysis、BadMove 和 Review 都围绕该事实展开。
+
+3. **先自己回忆并修正问题手**  
+   major / severe BadMove 不直接跳到答案，而是在 Recall 中触发 `RecallCheckpoint`：用户先摆 correction line，再 reveal AI candidates，再写 comment。
+
+4. **把复盘结果变成题目**  
    通过 snapshot 机制，将关键局面转化为带局面说明、参考变化和判断规则的题目。
 
-3. **把错误走法变成新的训练材料**  
-   用户做题时出现坏棋，系统自动 snapshot 错误局面，生成“对方如何惩罚这手”的惩罚题。
+5. **把错误走法变成新的训练材料**  
+   用户做题或 Recall checkpoint 中暴露出的坏棋，可以进入惩罚题 inbox 或 Review 队列，训练“对方如何惩罚这手”。
 
 ---
 
@@ -78,7 +88,7 @@ Play 对战
 - 会使用 AI 复盘；
 - 想提高实战训练效率；
 - 愿意自己判断提交时机；
-- 重视背谱、复盘、错手惩罚和长期复习；
+- 重视背谱、主动纠错、复盘、错手惩罚和长期复习；
 - 需要一个比普通 Sabaki / KataGo GUI 更贴近个人训练的工具。
 
 ### 3.2 非目标用户
@@ -99,12 +109,42 @@ Play 对战
 
 功能设计必须优先服务训练闭环，而不是追求棋谱编辑器的大而全。
 
-### 4.2 回忆优先于复盘
+### 4.2 Attempt 是核心事实
 
-对局结束后默认进入 Recall Mode，而不是直接进入 AI Analysis Mode。  
-用户先尝试回忆棋局，再借助 AI 复盘，避免形成“下完直接看答案”的习惯。
+系统真正要保存和训练的不是“页面状态”，而是用户在 Play / Problem 中产出的一条线：
 
-### 4.3 题目必须有局面说明
+```text
+TrainingTask / Problem
+→ TrainingAttempt.userLine
+→ MoveEvaluation
+→ BadMove
+→ RecallSession
+→ RecallCheckpoint
+→ Analysis / Snapshot / Review
+```
+
+提交后 Attempt 必须冻结；Recall、Analysis、Punishment、Review 都引用 Attempt 事实，不反向改写它。
+
+### 4.3 回忆优先于复盘
+
+Play / Problem 提交后默认进入 Recall Mode，而不是直接进入 AI Analysis Mode。  
+用户先尝试回忆自己的线，并在问题手处先自己修正，再借助 AI 复盘，避免形成“下完直接看答案”的习惯。
+
+### 4.4 RecallCheckpoint 优先于直接看答案
+
+major / severe BadMove 的第一处理不是“自动生成题”或“直接显示 AI 答案”，而是 Recall 中的主动纠错：
+
+```text
+命中 major / severe BadMove
+→ 停在 checkpoint 局面
+→ 用户先摆 correction line
+→ 用户保存修正图
+→ reveal AI candidates
+→ 写 comment
+→ 继续 Recall 或进入 Analysis
+```
+
+### 4.5 题目必须有局面说明
 
 Snapshot 出题时，题目不能只有“黑先/白先，下一手”。  
 每道题必须有局面说明，至少说明：
@@ -114,19 +154,27 @@ Snapshot 出题时，题目不能只有“黑先/白先，下一手”。
 - 本题训练目标；
 - 为什么这个局面值得练。
 
-### 4.4 做题允许自由探索
+### 4.6 做题允许自由探索
 
 围棋题不强制用户走唯一答案。  
 用户可以自由下变化，系统负责监控每一手是否出现明显坏棋。
 
-### 4.5 提交时机由用户决定
+### 4.7 提交时机由用户决定
 
 用户认为自己已经想清楚，可以主动提交。  
 系统在提交时评估整条变化是否成立。
 
-### 4.6 错误走法自动沉淀
+### 4.8 错误走法自动沉淀，但不替代主动纠错
 
-用户做题时的错误走法不是简单丢弃，而是自动 snapshot 成惩罚题，进入后续复习队列。
+用户做题或 Recall 中的错误走法不是简单丢弃，但沉淀顺序必须保持训练性：
+
+```text
+先在 RecallCheckpoint 中主动修正
+再在 Analysis 中对比研究
+最后按需要生成 Punishment Problem / Review item
+```
+
+Punishment Problem 是错误沉淀机制，不是 RecallCheckpoint 的替代品。
 
 ---
 
@@ -137,32 +185,43 @@ Snapshot 出题时，题目不能只有“黑先/白先，下一手”。
 ```text
 1. Play Mode
    用户和 AI 对战 / 指定局面续弈
+   用户产生 TrainingAttempt.userLine
 
-2. Recall Mode
-   对局结束后默认进入回忆模式
-   用户尝试复现整盘棋或关键片段
+2. Submit
+   用户主动提交或对局结束
+   系统冻结 Attempt，并生成 MoveEvaluation / BadMove
 
-3. Analysis Mode
-   用户进入复盘模式
-   使用 AI / reference board 比较实战与推荐变化
+3. Recall Mode
+   用户先回忆 Attempt 原线
+   命中 major / severe BadMove 时进入 RecallCheckpoint
 
-4. Snapshot to Problem
+4. RecallCheckpoint
+   用户先摆 correction line
+   再 reveal AI candidates
+   再写 comment
+   然后继续 Recall
+
+5. Analysis Mode
+   用户进入自由复盘
+   使用 AI / reference board 比较实战、修正图与推荐变化
+
+6. Snapshot to Problem
    用户从关键局面 snapshot 出正式题目
    系统要求补充或生成局面说明
 
-5. Problem Mode
+7. Problem Mode
    用户做题，自由下变化
    系统实时检测坏棋
 
-6. Submit
+8. Problem Submit
    用户自行决定何时提交
    系统判断变化是否通过
 
-7. Punishment Problem
-   如果用户出现明显坏棋
+9. Punishment Problem
+   如果用户在 Problem 或 Recall checkpoint 中出现明显坏棋
    系统自动生成“对方如何惩罚这手”的惩罚题
 
-8. Review Mode
+10. Review Mode
    系统根据复习计划、错误记录和题目状态安排复习
 ```
 
@@ -179,22 +238,28 @@ Play / Problem / Recall / Analysis
 - `Problem` entity / task：一道题、惩罚题或题目来源，是训练业务对象。
 - `WorkbenchMode.problem`：用户正在做题的运行态 mode，拥有 `problemView`、mutable Attempt、
   pending evaluations 和 visible bad move projection。
+- `TrainingAttempt`：Play / Problem 中用户产出的一条线，是 Recall、Analysis、BadMove 和 Review
+  的核心事实。提交后冻结，不因后续复盘或修正而改写。
+- `RecallCheckpoint`：Recall 中的问题手主动纠错子流程，不是独立 mode，也不是普通 Problem。
 - `Review`：复习队列和入口，不一定是棋盘 mode。用户从 Review 打开具体题目后进入
   `WorkbenchMode.problem`。
 - `Punishment Problem`：`Problem.type = 'punishment'`，不是新 mode。
 
-Snapshot 只能从 `WorkbenchMode.analysis` 的 scratch/current 局面派生：
+Snapshot 是全局可发现动作，但落库创建 Problem 前必须先投影到 `WorkbenchMode.analysis`
+的 scratch/current 局面：
 
 ```text
-Analysis scratch/current
+Play / Problem / Recall visible position
+→ enter Analysis scratch/current projection
 → Snapshot
 → Problem entity / Task
 → child Problem tab
 → WorkbenchMode.problem
 ```
 
-禁止从 Play / Problem / Recall 的 live mutable context 直接 snapshot 成新 Problem；否则会把
-source Attempt、game-tree live analysis 或 recall follow-up 状态混进派生题。
+因此 UI 可以在 Play / Problem / Recall 暴露 Snapshot 按钮，但 service 不允许从这些 live
+mutable context 直接创建 Problem；必须经由 Analysis scratch source，避免把 source Attempt、
+game-tree live analysis 或 recall follow-up 状态混进派生题。
 
 ---
 
@@ -252,6 +317,7 @@ type Game = {
 
 ```text
 保存棋局
+→ 冻结 TrainingAttempt
 → 创建默认 Recall Session
 → 进入 Recall Mode
 ```
@@ -277,8 +343,11 @@ type Game = {
 
 ### 6.2.3 模式入口
 
-Play Mode 结束后默认进入。  
-用户也可以从 Game Detail 页面手动进入。
+Play / Problem 提交后默认进入。  
+用户也可以从 Game Detail、Attempt Detail 或 Review 中手动进入。
+
+Recall 的输入不是 live game tree，而是冻结后的 `TrainingAttempt.userLine`。Recall 可以同时引用
+原始 Game 棋谱、题目参考变化和 BadMove 列表，但不能改写已冻结 Attempt。
 
 ### 6.2.4 回忆类型
 
@@ -332,20 +401,66 @@ Play Mode 结束后默认进入。
 
 MVP 阶段可先只做“是否与实战手一致”。
 
-### 6.2.6 提示与反馈
+### 6.2.6 RecallCheckpoint 主动纠错
 
-回忆模式下落子错误时播放错误音效，不做分级提示系统。
+当 Recall 命中来自 Attempt 的 major / severe BadMove，系统必须进入 checkpoint 子流程。该流程是
+v0.7 的训练核心：
 
-### 6.2.7 回忆结果记录
+```text
+1. 停在 bad move 之前的局面
+2. 标出原手与严重程度，但不立即显示 AI 正解
+3. 用户在棋盘上先摆 correction line
+4. 用户保存修正图
+5. 系统 reveal AI candidates / AI reference line
+6. 用户填写 comment：
+   - 原手为什么不好？
+   - 我的修正思路是什么？
+   - 与 AI 的差异是什么？
+7. checkpoint 完成后继续 Recall 或进入 Analysis
+```
+
+Checkpoint 状态：
+
+```ts
+type RecallCheckpoint = {
+  id: string
+  recallSessionId: string
+  attemptId: string
+  badMoveId: string
+  moveNumber: number
+  originalMove: string
+  severity: 'major' | 'severe'
+  positionBeforeMoveSgf: string
+  correctionLine: string[]
+  aiCandidateLines?: ReferenceLine[]
+  commentId?: string
+  status:
+    | 'awaiting_correction'
+    | 'correction_saved'
+    | 'ai_revealed'
+    | 'comment_saved'
+    | 'skipped'
+}
+```
+
+### 6.2.7 提示与反馈
+
+普通回忆落子错误时播放错误音效，不做复杂分级提示系统。  
+Checkpoint 中的提示必须遵守“先自我修正，后 reveal AI”的顺序；在 correction line 保存前，不显示完整 AI candidates。
+
+### 6.2.8 回忆结果记录
 
 ```ts
 type RecallSession = {
   id: string
-  gameId: string
+  attemptId: string
+  gameId?: string
+  taskId?: string
   mode: 'full_game' | 'key_segment' | 'local_segment' | 'mistake_segment'
   startMove: number
   endMove?: number
   attempts: RecallAttempt[]
+  checkpointIds: string[]
   createdAt: string
   completedAt?: string
 }
@@ -360,13 +475,18 @@ type RecallAttempt = {
 }
 ```
 
-### 6.2.8 产出
+### 6.2.9 产出
 
 Recall Mode 产出：
 
 - 记错的手；
 - 记不住的片段；
+- 已完成或跳过的 RecallCheckpoint；
+- 用户 correction line；
+- AI candidates 对比；
+- 用户 comment；
 - 值得复盘的关键节点；
+- 可选的 Punishment Problem 草稿；
 - 可选的后续复习项。
 
 ---
@@ -380,6 +500,7 @@ Recall Mode 产出：
 ### 6.3.2 入口
 
 - Recall Mode 结束后进入；
+- RecallCheckpoint 完成后进入；
 - Game Detail 页面进入；
 - 题目详情页面进入；
 - 惩罚题回溯进入。
@@ -403,6 +524,7 @@ Reference Board 用于展示：
 
 - AI 推荐变化；
 - 用户实战变化；
+- 用户 Recall correction line；
 - 用户自定义参考变化；
 - 题目答案变化；
 - 惩罚变化。
@@ -430,11 +552,19 @@ MVP 阶段优先实现：
 
 ### 6.3.6 Snapshot 出题
 
-用户在复盘中可以将当前局面 snapshot 为题目。
+用户可以从任意工作台 mode 发现 Snapshot 动作，但真正创建题目前必须落在 Analysis scratch/current
+source 上。
 
-工程约束：Snapshot 只能从 Analysis Mode 的 scratch/current 局面派生。Play / Problem / Recall
-不能直接 snapshot 成 Problem；如果需要出题，必须先进入 Analysis 并以 scratch workspace 作为
-source。
+```text
+Play / Problem / Recall 点击 Snapshot
+→ 系统进入 Analysis，并创建 scratch projection
+→ 用户确认当前局面、参考变化和笔记
+→ Snapshot 出题
+```
+
+工程约束：Snapshot service 只能从 Analysis Mode 的 scratch/current 局面派生。Play / Problem /
+Recall 不能直接 snapshot 成 Problem；如果需要出题，必须先进入 Analysis 并以 scratch workspace
+作为 source。
 
 Snapshot 时必须保存：
 
@@ -579,6 +709,8 @@ MVP 默认规则：
 ### 6.5.1 目标
 
 用户基于题目局面自由下变化，系统监控是否出现坏棋，并在用户提交时判断是否通过。
+Problem Mode 和 Play Mode 一样产出 `TrainingAttempt`；`ProblemAttempt` 只作为题目上下文中的视图名称，
+不应成为脱离 Attempt 主表的第二套事实模型。
 
 ### 6.5.2 基本流程
 
@@ -665,15 +797,20 @@ Level 5：显示完整惩罚变化。
 ### 6.5.7 Attempt 数据结构
 
 ```ts
-type ProblemAttempt = {
+type TrainingAttempt = {
   id: string
-  problemId: string
+  taskId?: string
+  problemId?: string
+  gameId?: string
+  mode: 'play' | 'problem'
   startedAt: string
   submittedAt?: string
+  status: 'playing' | 'submitted' | 'abandoned'
   userLine: string[]
   moveEvaluations: MoveEvaluation[]
   result?: 'pass' | 'soft_pass' | 'fail' | 'abandoned'
   hintLevelUsed: number
+  badMoveIds: string[]
   generatedPunishmentProblemIds: string[]
 }
 
@@ -692,29 +829,35 @@ type MoveEvaluation = {
 }
 ```
 
+提交后 `TrainingAttempt.userLine`、`moveEvaluations`、`result` 和 `badMoveIds` 进入冻结状态。Recall
+和 Analysis 可以创建 correction / reference / note，但不能改写这些提交事实。
+
 ---
 
 ## 6.6 Punishment Problem：惩罚题
 
 ### 6.6.1 目标
 
-当用户在做题中下出错误走法时，系统自动生成新题，训练“对方如何惩罚这手”。
+当用户在 Problem Attempt 或 RecallCheckpoint 中暴露出错误走法时，系统可以生成新题，训练“对方如何惩罚这手”。
+Punishment Problem 是错误沉淀机制，不替代 Recall 中的主动 correction line。
 
 ### 6.6.2 生成条件
 
 满足任一条件可生成惩罚题：
 
 ```text
-1. 用户某手导致目差剧烈恶化
-2. 用户某手导致胜率剧烈下降
+1. Problem Attempt 中用户某手导致目差剧烈恶化
+2. Problem Attempt 中用户某手导致胜率剧烈下降
 3. AI 显示对方有明确强手
-4. 用户手动标记“这手需要惩罚题”
+4. RecallCheckpoint 完成后，用户或系统标记“这手需要惩罚题”
+5. 用户手动标记“这手需要惩罚题”
 ```
 
 MVP 阶段：
 
 ```text
-只要 scoreDrop 超过阈值，即可生成惩罚题草稿。
+Problem Attempt 中 major / severe scoreDrop 可生成惩罚题草稿。
+RecallCheckpoint 中已保存 correction line 后，允许手动生成惩罚题草稿。
 ```
 
 ### 6.6.3 自动生成内容
@@ -724,8 +867,9 @@ MVP 阶段：
 ```ts
 type PunishmentProblem = Problem & {
   type: 'punishment'
-  parentProblemId: string
+  parentProblemId?: string
   parentAttemptId: string
+  parentCheckpointId?: string
   badMove: string
   punishSide: 'black' | 'white'
   punishMove?: string
@@ -1055,15 +1199,18 @@ severe：亏 8 目以上
 
 ```text
 Game
+ ├─ TrainingTask / Problem
+ ├─ TrainingAttempt
+ │   ├─ MoveEvaluation
+ │   └─ BadMove
  ├─ RecallSession
+ │   └─ RecallCheckpoint
  ├─ AnalysisSession
  ├─ Problem
  │   ├─ ReferenceLine
- │   ├─ ProblemAttempt
- │   │   ├─ MoveEvaluation
- │   │   └─ BadMove
- │   │       └─ PunishmentProblem
+ │   ├─ TrainingAttempt
  │   └─ ReviewSchedule
+ └─ PunishmentProblem
 ```
 
 ## 10.1 Game
@@ -1074,17 +1221,21 @@ Game
 
 见 6.4.2。
 
-## 10.3 ProblemAttempt
+## 10.3 TrainingAttempt / ProblemAttempt View
 
 见 6.5.7。
+
+`ProblemAttempt` 只表示 `TrainingAttempt.mode = 'problem'` 的业务视图；实现层不得再建立一套与
+`TrainingAttempt` 平行的 attempt 主事实。
 
 ## 10.4 BadMove
 
 ```ts
 type BadMove = {
   id: string
-  problemId: string
+  problemId?: string
   attemptId: string
+  checkpointId?: string
   moveIndex: number
   move: string
   positionBeforeMoveSgf: string
@@ -1140,7 +1291,10 @@ type PositionNote = {
 
 ```text
 Play 结束
+→ Submit / freeze Attempt
 → Recall 背谱
+→ RecallCheckpoint 主动修正 major / severe BadMove
+→ Analysis 对比原线 / 修正图 / AI candidates
 → Analysis snapshot 出题
 → Problem 做题
 → 提交判断
@@ -1162,6 +1316,9 @@ Play 结束
 - 判断是否与实战手一致；
 - 记录错误手；
 - 错误时播放提示音；
+- 对 major / severe BadMove 生成 RecallCheckpoint；
+- Checkpoint 中用户必须先保存 correction line，才能 reveal AI candidates；
+- Checkpoint 支持保存用户 comment；
 - 允许结束后进入 Analysis Mode。
 
 ### C. Analysis Mode v1
@@ -1169,6 +1326,7 @@ Play 结束
 - 支持 Main Board；
 - 支持 Reference Board；
 - 支持当前变化与参考变化切换；
+- 支持展示 Recall correction line 与 AI candidates 对比；
 - 支持 snapshot 当前局面。
 
 ### D. Problem Editor v1
@@ -1224,42 +1382,58 @@ Play 结束
 ## 12.1 Play → Recall
 
 - 用户完成一盘对局后（确认比分或认输），系统自动保存棋局到 games 表；
+- 系统创建并冻结本局 `TrainingAttempt.userLine`；
 - 系统自动进入 Recall Mode；
 - 用户可以从头复现棋谱；
 - 系统可以判断每手是否与实战一致；
 - 落子错误时播放提示音；
-- 系统记录回忆错误点。
+- 系统记录回忆错误点；
+- major / severe BadMove 会进入 RecallCheckpoint。
 
-## 12.2 Recall → Analysis
+## 12.2 RecallCheckpoint
+
+- Checkpoint 停在 bad move 前局面；
+- UI 标出原手、严重程度和目差变化；
+- 保存 correction line 前不得展示完整 AI candidates；
+- 用户可以保存 correction line；
+- 保存后可以 reveal AI candidates；
+- 用户可以写 comment；
+- 完成后可以继续 Recall 或进入 Analysis；
+- Checkpoint 不改写原始 Attempt。
+
+## 12.3 Recall → Analysis
 
 - 用户可以从回忆模式进入复盘模式；
 - 复盘模式可以定位到回忆错误点；
-- 用户可以在复盘模式中查看原始棋谱。
+- 用户可以在复盘模式中查看原始棋谱、用户修正图和 AI candidates。
 
-## 12.3 Analysis → Problem
+## 12.4 Analysis → Problem
 
-- 用户可以在任意局面 snapshot；
+- 用户可以在任意 mode 发现 Snapshot 入口；
+- 系统必须先投影到 Analysis scratch/current，再创建 Problem；
 - 题目必须包含局面说明；
 - 题目必须包含先行方；
 - 保存后进入题库或 inbox。
 
-## 12.4 Problem Attempt
+## 12.5 Problem Attempt
 
 - 用户可以在题目中自由下变化；
 - 系统可以对每手请求 AI 评估；
 - 系统可以检测 scoreDrop；
 - 系统可以提示坏棋；
 - 用户可以自行点击提交；
-- 系统给出通过 / 勉强通过 / 失败结论。
+- 系统给出通过 / 勉强通过 / 失败结论；
+- 提交后 Attempt 冻结，并可进入 Recall。
 
-## 12.5 Punishment Problem
+## 12.6 Punishment Problem
 
 - 用户下出严重坏棋后，系统可以生成 bad move 记录并存入 bad_moves 表；
 - 系统可以根据 AI top move 生成惩罚题；
 - 惩罚题包含来源题、错误手、惩罚方、局面说明模板；
-- 惩罚题进入 inbox。
+- 惩罚题进入 inbox；
+- 惩罚题生成不跳过 RecallCheckpoint 的 correction line。
 
-## 12.6 Review
+## 12.7 Review
 
 - 系统能展示到期题；
 - 用户完成复习后，系统更新下一次复习时间；
@@ -1384,18 +1558,21 @@ minor bad move 只记录，不生成题
 
 1. Game 数据保存；
 2. RecallSession 数据；
-3. Problem 数据；
-4. ProblemAttempt 数据；
-5. BadMove / PunishmentProblem 数据。
+3. TrainingAttempt 数据；
+4. MoveEvaluation / BadMove 数据；
+5. RecallCheckpoint 数据；
+6. Problem / PunishmentProblem 数据。
 
 ## Phase 2：最小可用训练链路
 
 1. Play 结束进入 Recall；
-2. Recall 完成进入 Analysis；
-3. Analysis snapshot 出题；
-4. Problem Mode 做题；
-5. 提交判断；
-6. 生成惩罚题。
+2. Submit 冻结 Attempt 并生成 BadMove；
+3. Recall 中完成 Checkpoint 修正；
+4. Recall 完成进入 Analysis；
+5. Analysis snapshot 出题；
+6. Problem Mode 做题；
+7. 提交判断；
+8. 生成惩罚题。
 
 ## Phase 3：体验优化
 
@@ -1439,11 +1616,11 @@ minor bad move 只记录，不生成题
 
 ## Problem Attempt
 
-用户做某一道题的一次尝试。
+用户做某一道题的一次尝试。实现层是 `TrainingAttempt.mode = 'problem'` 的视图，不是独立主事实表。
 
 ## Bad Move
 
-用户做题过程中出现的明显坏棋。
+用户在 Play / Problem Attempt 或 RecallCheckpoint 中暴露出的明显坏棋。
 
 ## Punishment Problem
 
@@ -1463,13 +1640,16 @@ minor bad move 只记录，不生成题
 
 本产品的第一阶段不追求成为完整围棋平台，而要优先验证一件事：
 
-> 一盘实战棋，能否稳定转化为可回忆、可复盘、可做题、可惩罚、可复习的训练材料。
+> 一条用户真实 Attempt，能否稳定转化为可回忆、可主动修正、可复盘、可做题、可惩罚、可复习的训练材料。
 
 只要以下闭环跑通，产品就具备核心价值：
 
 ```text
 下完一盘棋
+→ 冻结自己的 Attempt
 → 先背下来
+→ 遇到问题手先自己摆修正图
+→ 再看 AI candidates 并写 comment
 → 再复盘关键处
 → 把关键局面变成题
 → 做题时自由探索
