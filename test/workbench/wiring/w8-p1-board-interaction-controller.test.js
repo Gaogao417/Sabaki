@@ -321,8 +321,8 @@ describe('W8-P1 Board Interaction Controller', function () {
       assert.strictEqual(result.status, RESOLVE_STATUSES.REJECTED)
     })
 
-    // W8P1-T03: problem + vertex inside problemArea -> resolved (playMove)
-    it('W8P1-T03: problem mode click inside problemArea resolves to play-stone', function () {
+    // W8P1-T03: problem + vertex inside problemArea -> resolved (problemAttemptMove)
+    it('W8P1-T03: problem mode click inside problemArea resolves to problem attempt move', function () {
       const result = resolveClick({
         workbenchMode: 'problem',
         vertex: [3, 3],
@@ -333,7 +333,7 @@ describe('W8-P1 Board Interaction Controller', function () {
 
       assert.strictEqual(result.status, RESOLVE_STATUSES.RESOLVED)
       assert.strictEqual(result.intent, BOARD_INTENTS.PLAY_STONE)
-      assert.strictEqual(result.mutationContract, 'playMove')
+      assert.strictEqual(result.mutationContract, 'problemAttemptMove')
     })
 
     // W8P1-T04: problem + vertex outside problemArea -> rejected
@@ -441,8 +441,8 @@ describe('W8-P1 Board Interaction Controller', function () {
       assert.strictEqual(result.status, RESOLVE_STATUSES.REJECTED)
     })
 
-    // W8P1-T20: problem without problemArea -> resolved (playMove)
-    it('W8P1-T20: problem mode without problemArea resolves to play-stone', function () {
+    // W8P1-T20: problem without problemArea -> resolved (problemAttemptMove)
+    it('W8P1-T20: problem mode without problemArea resolves to problem attempt move', function () {
       const result = resolveClick({
         workbenchMode: 'problem',
         vertex: [10, 10],
@@ -453,7 +453,7 @@ describe('W8-P1 Board Interaction Controller', function () {
 
       assert.strictEqual(result.status, RESOLVE_STATUSES.RESOLVED)
       assert.strictEqual(result.intent, BOARD_INTENTS.PLAY_STONE)
-      assert.strictEqual(result.mutationContract, 'playMove')
+      assert.strictEqual(result.mutationContract, 'problemAttemptMove')
     })
   })
 

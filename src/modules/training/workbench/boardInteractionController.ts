@@ -9,6 +9,7 @@
  *   - All deps injected; no direct store/service imports.
  *   - Controller only routes; executors write.
  *   - Resolver stays pure.
+ *   - problemAttemptMove must write through problemFlowService, not the game tree.
  *   - recallAnswer must NOT modify the game tree.
  *   - scratchEdit must NOT modify Attempt.userLine.
  */
@@ -23,8 +24,21 @@ import {executeScratchEdit} from '../../workbench/board-interactions/executors/s
 export type BoardInteractionControllerDeps = {
   getPlayServices: () => {
     documentStore: {playMove(vertex: [number, number], options?: unknown): Promise<unknown>}
-    engineService?: {generateReply(treePosition: string, player: unknown): void}
+    engineService?: {
+      generateReply(treePosition: string, player: unknown): void
+      getAnalysisForPosition?(treePosition: string): unknown | null
+    }
     analysisService?: {scheduleLiveAnalysis(treePosition: string): void}
+    problemFlowService?: {
+      appendProblemMove(input: {
+        move: string
+        vertex: number[]
+        playerSign: number
+        positionBeforeHash?: string
+        positionAfterHash?: string
+        preMoveAnalysis: unknown | null
+      }): Promise<unknown>
+    }
     attemptService?: {
       appendMove(attemptId: string, move: string, actor?: 'human' | 'ai'): Promise<void>
     }
@@ -128,7 +142,7 @@ function extractPlayerConfig(raw: unknown): {currentSide?: 'human' | 'ai'; [key:
  * This fallback handles modes like 'problem' that are not yet mapped to a
  * workspace kind in workspaceDefaults.ts. The mapping is based on which executor
  * the intent semantically belongs to:
- *   - PLAY_STONE -> playMove
+ *   - PLAY_STONE -> playMove / problemAttemptMove
  *   - SUBMIT_RECALL_ANSWER -> recallAnswer
  *   - PLACE_BLACK_STONE, PLACE_WHITE_STONE, ERASE_STONE, DRAG_STONE,
  *     MARK_POINT, DRAW_LINE -> scratchEdit
@@ -147,6 +161,75 @@ function inferContractFromIntent(intent: string): string | null {
     return 'scratchEdit'
   }
   return null
+}
+
+function getProblemPlayerSign(input: {
+  task: {sideToMove?: 'black' | 'white'} | null
+  activeTab: {playerConfig?: unknown}
+}): number {
+  if (input.task?.sideToMove === 'white') return -1
+  if (input.task?.sideToMove === 'black') return 1
+
+  const playerConfig = extractPlayerConfig(input.activeTab.playerConfig)
+  const sideToMove = playerConfig?.sideToMove ?? playerConfig?.currentColor
+  return sideToMove === 'white' ? -1 : 1
+}
+
+function getPositionBeforeHash(positionSource: unknown): string | undefined {
+  if (positionSource == null || typeof positionSource !== 'object') return undefined
+
+  const source = positionSource as {kind?: unknown; treePosition?: unknown}
+  return source.kind === 'game-tree' && typeof source.treePosition === 'string'
+    ? source.treePosition
+    : undefined
+}
+
+async function executeProblemAttemptMove(
+  result: ReturnType<typeof resolveBoardInteraction>,
+  input: {
+    activeTab: {playerConfig?: unknown}
+    task: {sideToMove?: 'black' | 'white'} | null
+  },
+  services: ReturnType<BoardInteractionControllerDeps['getPlayServices']>,
+): Promise<unknown> {
+  if (
+    result.status !== RESOLVE_STATUSES.RESOLVED ||
+    result.intent !== BOARD_INTENTS.PLAY_STONE ||
+    result.mutationContract !== 'problemAttemptMove'
+  ) {
+    return {
+      handled: false,
+      changed: false,
+      reason: `unsupported problem attempt result: ${result.status}/${result.intent}/${result.mutationContract}`,
+    }
+  }
+
+  const problemFlowService = services.problemFlowService
+  if (!problemFlowService) {
+    return {handled: false, changed: false, reason: 'missing problemFlowService'}
+  }
+
+  const vertex = result.payload?.vertex as [number, number]
+  const move = vertexToSgfMove(vertex)
+  const positionBeforeHash = getPositionBeforeHash(result.positionSource)
+  const preMoveAnalysis = positionBeforeHash == null
+    ? null
+    : services.engineService?.getAnalysisForPosition?.(positionBeforeHash) ?? null
+  const flowResult = await problemFlowService.appendProblemMove({
+    move,
+    vertex,
+    playerSign: getProblemPlayerSign(input),
+    positionBeforeHash,
+    preMoveAnalysis,
+  })
+
+  return {
+    handled: flowResult != null,
+    changed: flowResult != null,
+    ...(flowResult != null && typeof flowResult === 'object'
+      ? flowResult as Record<string, unknown>
+      : {}),
+  }
 }
 
 function vertexToSgfMove(vertex: [number, number]): string {
@@ -270,6 +353,11 @@ export function createBoardInteractionController(
       // When mutationContract is null (e.g. problem mode which is not yet mapped
       // in workspaceDefaults), fall back to intent-based routing.
       const effectiveContract = result.mutationContract ?? inferContractFromIntent(result.intent)
+
+      if (effectiveContract === 'problemAttemptMove') {
+        const playServices = deps.getPlayServices()
+        return await executeProblemAttemptMove(result, {activeTab, task}, playServices)
+      }
 
       if (effectiveContract === 'playMove') {
         const playServices = deps.getPlayServices()

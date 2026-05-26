@@ -651,7 +651,7 @@ describe('PRD training smoke tests (service/controller/store)', () => {
     assert.strictEqual(activeTab.mode, 'problem')
   })
 
-  it('routes a board click through controller to attempt, monitor, and AI reply stores', async () => {
+  it('routes a problem board click through controller to problem attempt flow', async () => {
     const harness = createHarness({
       tasks: {
         task_ai: makeTask({
@@ -671,6 +671,33 @@ describe('PRD training smoke tests (service/controller/store)', () => {
       monitorMoves: [],
       aiInputs: [],
     }
+    harness.runtimeStore.setProblemView({
+      taskId: 'task_ai',
+      tabId: 'tab_ai',
+      attemptId: attempt.id,
+      problemId: 'task_ai',
+      legacyProblemSession: {id: 'task_ai', sideToMove: 'white'},
+      evalCache: [],
+      badMoves: [],
+      submitted: false,
+      result: null,
+    })
+    const problemFlowService = createProblemFlowService({
+      runtimeStore: harness.runtimeStore,
+      repository: harness.repository,
+      attemptService: harness.attemptService,
+      monitor: {
+        async onUserMove(input) {
+          calls.monitorMoves.push(clone(input))
+        },
+      },
+      problemService: {
+        async createPunishmentProblemFromBadMove() {
+          return {problem: {id: 'punishment_1'}}
+        },
+      },
+      reviewService: harness.reviewService,
+    })
     const controller = createBoardInteractionController({
       getPlayServices: () => ({
         documentStore: {
@@ -679,13 +706,9 @@ describe('PRD training smoke tests (service/controller/store)', () => {
             return {valid: true, changed: true, treePosition: `node_${calls.documentMoves.length}`}
           },
         },
+        problemFlowService,
         repository: harness.repository,
         attemptService: harness.attemptService,
-        monitor: {
-          async onUserMove(input) {
-            calls.monitorMoves.push(clone(input))
-          },
-        },
         aiMoveService: {
           async maybePlayAiMove(input) {
             calls.aiInputs.push(clone(input))
@@ -719,10 +742,10 @@ describe('PRD training smoke tests (service/controller/store)', () => {
 
     const updatedAttempt = harness.repository.store.attempts[attempt.id]
 
-    assert.deepStrictEqual(calls.documentMoves, [[3, 3], [16, 16]])
-    assert.deepStrictEqual(updatedAttempt.userLine, ['dd', 'qq'])
-    assert.deepStrictEqual(updatedAttempt.moveActors.map(actor => actor.actor), ['human', 'ai'])
+    assert.deepStrictEqual(calls.documentMoves, [])
+    assert.deepStrictEqual(updatedAttempt.userLine, ['dd'])
+    assert.deepStrictEqual(updatedAttempt.moveActors.map(actor => actor.actor), ['human'])
     assert.deepStrictEqual(calls.monitorMoves.map(call => call.move), ['dd'])
-    assert.deepStrictEqual(calls.aiInputs[0].task.problemArea, [[3, 3], [16, 16]])
+    assert.deepStrictEqual(calls.aiInputs, [])
   })
 })

@@ -190,6 +190,7 @@ describe('W3 Goban Resolver: resolveBoardInteraction with WorkbenchMode', functi
 
       assert.strictEqual(result.status, RESOLVE_STATUSES.RESOLVED)
       assert.strictEqual(result.intent, BOARD_INTENTS.PLAY_STONE)
+      assert.strictEqual(result.mutationContract, 'problemAttemptMove')
     })
 
     it('rejects vertex outside problemArea', () => {
@@ -214,6 +215,7 @@ describe('W3 Goban Resolver: resolveBoardInteraction with WorkbenchMode', functi
       }))
 
       assert.strictEqual(result.status, RESOLVE_STATUSES.RESOLVED)
+      assert.strictEqual(result.mutationContract, 'problemAttemptMove')
     })
 
     it('accepts any vertex when problemArea is null', () => {
@@ -226,6 +228,7 @@ describe('W3 Goban Resolver: resolveBoardInteraction with WorkbenchMode', functi
       }))
 
       assert.strictEqual(result.status, RESOLVE_STATUSES.RESOLVED)
+      assert.strictEqual(result.mutationContract, 'problemAttemptMove')
     })
   })
 

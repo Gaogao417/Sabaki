@@ -92,6 +92,7 @@ function createControllerDeps(options = {}) {
     editAnalysisInvalidate: [],
     editAnalysisSchedule: [],
     scratchCommits: [],
+    problemAppendMove: [],
     attemptAppendMove: [],
     monitorUserMove: [],
     aiMoveRequest: [],
@@ -142,6 +143,12 @@ function createControllerDeps(options = {}) {
 
   const defaultPlayServices = {
     documentStore,
+    problemFlowService: {
+      async appendProblemMove(input) {
+        calls.problemAppendMove.push(input)
+        return {moveIndex: calls.problemAppendMove.length - 1, evalCache: [], badMoves: []}
+      },
+    },
     ...playServicesPatch,
   }
 
@@ -255,7 +262,7 @@ describe('W3.5 boardInteractionController', function () {
       )
     })
 
-    it('click in problem mode on valid point also calls documentStore.playMove', async function () {
+    it('click in problem mode on valid point calls problemFlowService, not documentStore.playMove', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
 
@@ -270,12 +277,19 @@ describe('W3.5 boardInteractionController', function () {
         runtimeState: {},
       })
 
-      assert.strictEqual(deps._calls.documentStorePlayMove.length, 1,
-        'documentStore.playMove must be called for problem mode play-stone')
+      assert.strictEqual(deps._calls.problemAppendMove.length, 1,
+        'problemFlowService.appendProblemMove must be called for problem mode play-stone')
+      assert.strictEqual(deps._calls.documentStorePlayMove.length, 0,
+        'problem mode attempt moves must not write directly to documentStore.playMove')
       assert.deepStrictEqual(
-        deps._calls.documentStorePlayMove[0].vertex,
+        deps._calls.problemAppendMove[0].vertex,
         [3, 3],
         'vertex must be [3,3]',
+      )
+      assert.strictEqual(
+        deps._calls.problemAppendMove[0].move,
+        'dd',
+        'move must be converted to SGF vertex string',
       )
     })
 
@@ -546,6 +560,8 @@ describe('W3.5 boardInteractionController', function () {
 
       assert.strictEqual(deps._calls.documentStorePlayMove.length, 0,
         'No write to documentStore for vertex outside problemArea')
+      assert.strictEqual(deps._calls.problemAppendMove.length, 0,
+        'No write to problemFlowService for vertex outside problemArea')
     })
 
     it('right-click in play mode on empty point is deferred to legacy, not play move', async function () {

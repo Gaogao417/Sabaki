@@ -254,6 +254,22 @@ function resolveRecall(input: ResolverInput): BoardInteractionResult {
   return noop('recall: occupied point', input)
 }
 
+function resolveProblemAttempt(input: ResolverInput): BoardInteractionResult {
+  const result = resolvePlay(input)
+
+  if (
+    result.status === RESOLVE_STATUSES.RESOLVED &&
+    result.intent === BOARD_INTENTS.PLAY_STONE
+  ) {
+    return {
+      ...result,
+      mutationContract: 'problemAttemptMove' as MutationContract,
+    }
+  }
+
+  return result
+}
+
 // --- Helpers for workbench-mode routing ---
 
 function vertexInList(v: [number, number], list: [number, number][]): boolean {
@@ -287,8 +303,7 @@ export function resolveBoardInteraction(
           return noop('problem: vertex outside problemArea', input)
         }
       }
-      // Resolve as play
-      return resolvePlay(input)
+      return resolveProblemAttempt(input)
     }
     if (workbenchMode === 'recall') {
       return resolveRecall(input)
