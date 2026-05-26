@@ -467,6 +467,58 @@ function createHarnessWithRealSnapshotService({
   }
 }
 
+function installAnalysisScratchHarness(harness: ReturnType<typeof createHarness>) {
+  const snapshot = {
+    id: 'scratch_current_1',
+    role: 'current',
+    width: 2,
+    height: 2,
+    nextPlayer: 1,
+    signMap: [
+      [0, 0],
+      [0, 0],
+    ],
+  }
+  const state = {
+    mode: 'analysis',
+    selectedTool: 'stone_1',
+    editWorkspace: {
+      activeTab: 'current',
+      currentSnapshot: snapshot,
+      referenceSnapshot: null,
+      currentMarkerMap: [
+        [{type: 'circle'}, null],
+        [null, {type: 'triangle'}],
+      ],
+      referenceMarkerMap: null,
+      currentLines: [{v1: [0, 0], v2: [1, 1], type: 'line'}],
+      referenceLines: null,
+      lineFirstVertex: {type: 'arrow', vertex: [0, 1]},
+    },
+  }
+
+  Object.assign(harness.sabaki, {
+    state,
+    setState(patch: any) {
+      Object.assign(state, typeof patch === 'function' ? patch(state) : patch)
+    },
+    scheduleEditWorkspaceAnalysis() {},
+    commitEditResult(result: any) {
+      if (result.markerMap != null) {
+        state.editWorkspace.currentMarkerMap = result.markerMap
+      }
+      if (result.lines != null) {
+        state.editWorkspace.currentLines = result.lines
+      }
+      if (result.lineFirstVertex !== undefined) {
+        state.editWorkspace.lineFirstVertex = result.lineFirstVertex
+      }
+    },
+  })
+
+  return state
+}
+
 // =====================================================
 // Tests
 // =====================================================
@@ -784,6 +836,57 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
           {tabId: 'tab_del_return'},
         ], 'handleReturnFromAnalysis must call flowService.returnFromAnalysis({tabId: activeTab.id}) -- Contract T6-11, Arch v0.5 5.3')
+      })
+    })
+
+    describe('T6-18: Analysis edit bar scratch command delegation', function () {
+      it('onAnnotationToolChange updates the analysis tool projected into board scratch handling', function () {
+        const harness = createHarness({
+          tabs: [makeAnalysisTab({id: 'tab_edit_tool'})],
+        })
+        const state = installAnalysisScratchHarness(harness)
+
+        const shellProps = harness.getShellProps()
+
+        assert.strictEqual(shellProps.activeAnnotationTool, 'stone_1',
+          'Container must project selectedTool into the analysis edit bar')
+
+        shellProps.onAnnotationToolChange('stone_-1')
+
+        assert.strictEqual(state.selectedTool, 'stone_-1',
+          'Analysis edit bar tool command must update the scratch/current tool selection')
+      })
+
+      it('onClear clears scratch/current markers and lines without calling game-tree undo/redo', function () {
+        const harness = createHarness({
+          tabs: [makeAnalysisTab({id: 'tab_edit_clear'})],
+        })
+        const state = installAnalysisScratchHarness(harness)
+        let undoCalls = 0
+        let redoCalls = 0
+        Object.assign(harness.sabaki, {
+          undo() { undoCalls += 1 },
+          redo() { redoCalls += 1 },
+        })
+
+        const shellProps = harness.getShellProps()
+
+        shellProps.onClear()
+        shellProps.onUndo()
+        shellProps.onRedo()
+
+        assert.deepStrictEqual(state.editWorkspace.currentMarkerMap, [
+          [null, null],
+          [null, null],
+        ], 'Clear must write only scratch/current marker map')
+        assert.deepStrictEqual(state.editWorkspace.currentLines, [],
+          'Clear must write only scratch/current lines')
+        assert.strictEqual(state.editWorkspace.lineFirstVertex, null,
+          'Clear/undo must reset scratch/current line-first state')
+        assert.strictEqual(undoCalls, 0,
+          'Analysis undo must not dispatch sabaki.undo to the source game tree')
+        assert.strictEqual(redoCalls, 0,
+          'Analysis redo must not dispatch sabaki.redo to the source game tree')
       })
     })
 

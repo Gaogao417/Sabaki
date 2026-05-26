@@ -196,6 +196,12 @@ export default function BottomActionBar({
 
     if (mode === 'analysis') {
       return [
+        h('div', {class: 'wb-visual-annotation-strip'},
+          h(AnnotationToolbar, {
+            activeTool: activeAnnotationTool || 'stone_1',
+            onToolChange: onAnnotationToolChange,
+          }),
+        ),
         visualButton('←  上一步', callbacks.onUndo),
         visualButton('下一手  →', callbacks.onRedo),
         visualButton('⊕  添加参考变化', callbacks.onSnapshot, {
@@ -244,7 +250,7 @@ export default function BottomActionBar({
           class: 'wb-bottom-action-bar__annotation-tools',
         },
           h(AnnotationToolbar, {
-            activeTool: activeAnnotationTool || 'arrow',
+            activeTool: activeAnnotationTool || 'stone_1',
             onToolChange: onAnnotationToolChange,
           }),
         ),

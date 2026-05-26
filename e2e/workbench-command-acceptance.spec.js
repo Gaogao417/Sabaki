@@ -25,6 +25,33 @@ async function getActiveWorkbenchTab(page) {
   })
 }
 
+function vertexSelector([x, y]) {
+  return `#goban > .shudan-content > .shudan-vertices > .shudan-vertex[data-x="${x}"][data-y="${y}"]`
+}
+
+async function dispatchMouseEvent(locator, type, init = {}) {
+  await locator.evaluate(
+    (element, {eventType, eventInit}) => {
+      element.dispatchEvent(
+        new MouseEvent(eventType, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          ...eventInit,
+        }),
+      )
+    },
+    {eventType: type, eventInit: init},
+  )
+}
+
+async function clickVertex(page, vertex, options = {}) {
+  const locator = page.locator(vertexSelector(vertex))
+  const button = options.button ?? 0
+  await dispatchMouseEvent(locator, 'mousedown', {button})
+  await dispatchMouseEvent(locator, 'mouseup', {button})
+}
+
 async function installLibraryCommandHarness(page) {
   await page.evaluate(() => {
     const ctx = window.__sabaki.getTrainingContext()
@@ -249,14 +276,14 @@ test.describe('Workbench command acceptance', () => {
     }).toPass({timeout: 5000})
   })
 
-  test('analysis edit-bar tool-selection smoke keeps source game tree unchanged', async ({
+  test('analysis edit-bar tool command mutates scratch/current and keeps source game tree unchanged', async ({
     page,
   }) => {
     await page.evaluate(() => window.__sabaki.setMode('play'))
     await page.waitForSelector('[data-testid="mode-bar"]')
     await page.locator('[data-testid="mode-action-analysis"]').click()
     await page.waitForSelector(
-      '.wb-bottom-action-bar--analysis [data-testid="annotation-tool-btn-line"]',
+      '.wb-bottom-action-bar--analysis [data-testid="annotation-tool-btn-stone_-1"]',
     )
 
     const before = await page.evaluate(() => {
@@ -271,21 +298,35 @@ test.describe('Workbench command acceptance', () => {
       return {
         treePosition: window.__sabaki.state.treePosition,
         nodeCount: count,
+        currentSignMap: JSON.stringify(
+          window.__sabaki.state.editWorkspace.currentSnapshot.signMap,
+        ),
       }
     })
 
-    await page
-      .locator(
-        '.wb-bottom-action-bar--analysis .wb-bottom-action-bar__visual [data-testid="annotation-tool-btn-line"]',
-      )
-      .click()
+    await dispatchMouseEvent(
+      page.locator(
+        '.wb-bottom-action-bar--analysis .wb-bottom-action-bar__visual [data-testid="annotation-tool-btn-stone_-1"]',
+      ),
+      'click',
+    )
 
     await expect(async () => {
       const selectedTool = await page.evaluate(
         () => window.__sabaki.state.selectedTool,
       )
-      expect(selectedTool).toBe('line')
+      expect(selectedTool).toBe('stone_-1')
     }).toPass({timeout: 3000})
+
+    await clickVertex(page, [4, 4], {button: 0})
+
+    await expect(async () => {
+      const sign = await page.evaluate(() => {
+        const ws = window.__sabaki.state.editWorkspace
+        return ws.currentSnapshot.signMap[4][4]
+      })
+      expect(sign).toBe(-1)
+    }).toPass({timeout: 5000})
 
     const after = await page.evaluate(() => {
       const tree =
@@ -299,9 +340,14 @@ test.describe('Workbench command acceptance', () => {
       return {
         treePosition: window.__sabaki.state.treePosition,
         nodeCount: count,
+        currentSignMap: JSON.stringify(
+          window.__sabaki.state.editWorkspace.currentSnapshot.signMap,
+        ),
       }
     })
 
-    expect(after).toEqual(before)
+    expect(after.treePosition).toBe(before.treePosition)
+    expect(after.nodeCount).toBe(before.nodeCount)
+    expect(after.currentSignMap).not.toBe(before.currentSignMap)
   })
 })

@@ -243,11 +243,13 @@ describe('BottomActionBar (T-4.3)', function () {
   it('T-4.3f: analysis annotation tools render all tool buttons', () => {
     const annotationTools = ANNOTATION_TOOL_DEFS.map(tool => tool.id)
 
-    const {queryAllByTestId} = renderToDom(
+    const {container} = renderToDom(
       h(BottomActionBar, noopProps({mode: 'analysis'}))
     )
 
-    const toolBtns = queryAllByTestId('annotation-tool-btn')
+    const toolBtns = Array.from(container.querySelectorAll(
+      '.wb-bottom-action-bar__visual [data-testid="annotation-tool-btn"]'
+    ))
     assert.strictEqual(
       toolBtns.length,
       annotationTools.length,
@@ -268,14 +270,16 @@ describe('BottomActionBar (T-4.3)', function () {
   // Production bug: active tool button not visually distinguished
   // Controlled dependencies: props are inline
   it('T-4.3g: active annotation tool is highlighted', () => {
-    const {queryAllByTestId} = renderToDom(
+    const {container} = renderToDom(
       h(BottomActionBar, noopProps({
         mode: 'analysis',
         activeAnnotationTool: 'triangle',
       }))
     )
 
-    const toolBtns = queryAllByTestId('annotation-tool-btn')
+    const toolBtns = Array.from(container.querySelectorAll(
+      '.wb-bottom-action-bar__visual [data-testid="annotation-tool-btn"]'
+    ))
     const triangleBtn = toolBtns.find(b => b.getAttribute('data-tool') === 'triangle')
     assert.ok(triangleBtn, 'Triangle annotation tool button not found')
 

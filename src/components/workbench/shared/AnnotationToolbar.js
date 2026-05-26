@@ -14,6 +14,20 @@ function Icon({children, size = 16}) {
 }
 
 const TOOLS = [
+  {id: 'stone_1', title: '黑子', icon: () => h(Icon, null,
+    h('circle', {cx: 8, cy: 8, r: 5, fill: 'currentColor'}),
+  )},
+  {id: 'stone_-1', title: '白子', icon: () => h(Icon, null,
+    h('circle', {cx: 8, cy: 8, r: 5}),
+  )},
+  {id: 'play', title: '落子', icon: () => h(Icon, null,
+    h('path', {d: 'M8 3v10M3 8h10'}),
+    h('circle', {cx: 8, cy: 8, r: 4}),
+  )},
+  {id: 'eraser', title: '删除', icon: () => h(Icon, null,
+    h('path', {d: 'M4 11l6-6 3 3-6 6H4z'}),
+    h('path', {d: 'M9 6l2 2'}),
+  )},
   {id: 'arrow', title: '箭头', icon: () => h(Icon, null,
     h('path', {d: 'M3 13L13 3m0 0v4m0-4H9'}),
   )},

@@ -173,6 +173,71 @@ class TrainingWorkbenchContainer extends Component {
       await flowService.snapshotFromCurrentContext(activeTab.id)
     }
 
+    function ensureAnalysisScratchWorkspace(selectedTool = null) {
+      if (!activeTab) return null
+
+      if (activeTab.mode !== 'analysis') {
+        flowService.enterAnalysis(activeTab.id, {
+          reason: 'edit-position',
+          selectedTool: selectedTool || 'stone_1',
+        })
+        return null
+      }
+
+      if (!sabaki.state) return null
+
+      if (sabaki.state.mode !== 'analysis' && sabaki.setMode) {
+        sabaki.setMode('analysis')
+      } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
+        sabaki.setState?.({
+          editWorkspace: sabaki.createAnalysisWorkspace(),
+        })
+        sabaki.scheduleEditWorkspaceAnalysis?.('current')
+      } else if (sabaki.state.editWorkspace) {
+        sabaki.scheduleEditWorkspaceAnalysis?.(
+          sabaki.state.editWorkspace.activeTab || 'current',
+        )
+      }
+
+      return sabaki.state.editWorkspace || null
+    }
+
+    function commitAnalysisToolSelection(tool) {
+      const ws = ensureAnalysisScratchWorkspace(tool)
+      if (!ws) return
+
+      sabaki.setState?.({selectedTool: tool})
+    }
+
+    function clearAnalysisCurrentPosition() {
+      const ws = ensureAnalysisScratchWorkspace()
+      const snapshot = ws?.currentSnapshot
+      if (!snapshot) return
+
+      const markerMap = Array.from({length: snapshot.height}, () =>
+        Array.from({length: snapshot.width}, () => null),
+      )
+
+      if (sabaki.commitEditResult) {
+        sabaki.commitEditResult({tab: 'current', markerMap})
+        sabaki.commitEditResult({
+          tab: 'current',
+          lines: [],
+          lineFirstVertex: null,
+        })
+        return
+      }
+
+      sabaki.setState?.({
+        editWorkspace: {
+          ...ws,
+          currentMarkerMap: markerMap,
+          currentLines: [],
+          lineFirstVertex: null,
+        },
+      })
+    }
+
     function handleSelectTab(index) {
       const tabId = ws.tabs[index]?.id
       if (tabId) tabService.switchTab(tabId)
@@ -239,6 +304,17 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleUndo() {
+      if (activeTab?.mode === 'analysis') {
+        const ws = ensureAnalysisScratchWorkspace()
+        if (ws?.lineFirstVertex != null) {
+          sabaki.commitEditResult?.({
+            tab: 'current',
+            lineFirstVertex: null,
+          })
+        }
+        return
+      }
+
       if (activeTab?.mode === 'problem') {
         await flowService.undoProblemMove(activeTab.id)
         return
@@ -248,6 +324,11 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleRedo() {
+      if (activeTab?.mode === 'analysis') {
+        ensureAnalysisScratchWorkspace()
+        return
+      }
+
       sabaki.redo()
     }
 
@@ -279,6 +360,11 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleClear() {
+      if (activeTab?.mode === 'analysis') {
+        clearAnalysisCurrentPosition()
+        return
+      }
+
       const ws = sabaki.state.editWorkspace
       if (ws) {
         const tab = ws.activeTab || 'current'
@@ -304,7 +390,12 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleEditPosition() {
-      if (!activeTab || activeTab.mode === 'analysis') return
+      if (!activeTab) return
+      if (activeTab.mode === 'analysis') {
+        commitAnalysisToolSelection('stone_1')
+        return
+      }
+
       flowService.enterAnalysis(activeTab.id, {
         reason: 'edit-position',
         selectedTool: 'stone_1',
@@ -370,7 +461,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleAnnotationToolChange(tool) {
-      sabaki.setState({selectedTool: tool})
+      commitAnalysisToolSelection(tool)
     }
 
     function handleFilterChange(tag) {
@@ -720,6 +811,7 @@ class TrainingWorkbenchContainer extends Component {
       ...shellHandlers,
       dashboardData: this.state.dashboardData,
       boardProps,
+      activeAnnotationTool: sabaki.state?.selectedTool || 'stone_1',
       libraryDrawerType: this.state.libraryDrawerType,
     })
   }
