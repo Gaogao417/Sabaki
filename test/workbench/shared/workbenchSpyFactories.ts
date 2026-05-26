@@ -28,6 +28,10 @@ export type SpyFlowServiceCalls = {
   completeRecall: Array<Call<{tabId: string}>>
   restartAttempt: Array<Call<{tabId: string}>>
   startAttempt: Array<Call<{tabId: string}>>
+  submitCheckpointCorrection: Array<Call<{tabId: string}>>
+  revealCheckpointAi: Array<Call<{tabId: string}>>
+  skipCheckpoint: Array<Call<{tabId: string}>>
+  saveCheckpointComment: Array<Call<{tabId: string; content: string}>>
   snapshotFromCurrentContext: Array<Call<{tabId: string}>>
   updatePlayerConfig: Array<Call<{tabId: string; patch: Partial<PlayerConfig>}>>
   loadDashboardData: Array<Call<{}>>
@@ -85,6 +89,10 @@ export function createSpyFlowService(
     completeRecall: [],
     restartAttempt: [],
     startAttempt: [],
+    submitCheckpointCorrection: [],
+    revealCheckpointAi: [],
+    skipCheckpoint: [],
+    saveCheckpointComment: [],
     snapshotFromCurrentContext: [],
     updatePlayerConfig: [],
     loadDashboardData: [],
@@ -109,6 +117,19 @@ export function createSpyFlowService(
     },
     async startAttempt(tabId: string) {
       calls.startAttempt.push({tabId})
+    },
+    async submitCheckpointCorrection(tabId: string) {
+      calls.submitCheckpointCorrection.push({tabId})
+    },
+    async revealCheckpointAi(tabId: string) {
+      calls.revealCheckpointAi.push({tabId})
+      return []
+    },
+    async skipCheckpoint(tabId: string) {
+      calls.skipCheckpoint.push({tabId})
+    },
+    async saveCheckpointComment(input: {tabId: string; content: string}) {
+      calls.saveCheckpointComment.push(input)
     },
     async snapshotFromCurrentContext(tabId: string) {
       calls.snapshotFromCurrentContext.push({tabId})

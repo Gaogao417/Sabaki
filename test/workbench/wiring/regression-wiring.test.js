@@ -34,7 +34,7 @@
  *   - Board click routing: R-T01, R-T02
  *   - Mode bar projection: R-T03
  *   - Container handler -> flowService: R-T04, R-T05, R-T06, R-T07, R-T08
- *   - Container handler -> recallCheckpointService: R-T11
+ *   - Container handler -> flowService checkpoint commands: R-T11
  *   - Container handler -> reviewService: R-T12
  *   - Container projection: R-T10
  *   - Container imports: R-T09
@@ -45,7 +45,7 @@
  *     - Real production modules: TrainingWorkbenchContainer, createWorkbenchStore,
  *       createTrainingRuntimeStore, real LoggerService with consoleWriter
  *     - Fake/spy modules: spy flowService, spy tabService, spy reviewService,
- *       spy recallCheckpointService, spy taskImportService, spy legacyController,
+ *       spy recallCheckpointService (negative direct-call guard), spy taskImportService, spy legacyController,
  *       mock sabaki with getTrainingContext
  *     - Valid for: CONTAINER_DELEGATION, PROJECTION_RETURN (via shellProps),
  *       CONTROLLER_STATE_TRANSITION (board click handler inspection),
@@ -751,14 +751,14 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
   // ===================================================
 
   describe('R-T11: Recall checkpoint handlers still work', function () {
-    // R-T11: Recall checkpoint handlers still route correctly.
+    // R-T11: Recall checkpoint handlers delegate to flowService command owner.
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container checkpoint handlers
     // Real Dependencies: Container render
-    // Mocked Dependencies: recallCheckpointService (spy)
-    // Primary Assertion: correct service calls for each checkpoint handler
+    // Mocked Dependencies: flowService (typed spy), recallCheckpointService (negative direct-call guard)
+    // Primary Assertion: correct flowService calls and no direct checkpoint service calls
 
-    it('onSubmitCorrection calls recallCheckpointService.submitUserCorrectionLine', async function () {
+    it('onSubmitCorrection delegates to flowService.submitCheckpointCorrection', async function () {
       const harness = createRegressionHarness({
         tabs: [makeRecallTab({id: 'tab_rt11_sub'})],
         runtimeState: {
@@ -774,13 +774,14 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
 
       await shellProps.onSubmitCorrection()
 
-      assert.strictEqual(harness.recallCheckpointService.calls.submitUserCorrectionLine.length, 1,
-        'recallCheckpointService.submitUserCorrectionLine must be called -- Regression R-T11')
-      assert.strictEqual(harness.recallCheckpointService.calls.submitUserCorrectionLine[0].checkpointId, 'cp_1')
-      assert.deepStrictEqual(harness.recallCheckpointService.calls.submitUserCorrectionLine[0].moves, [{x: 3, y: 3}])
+      assert.strictEqual(harness.flowService.calls.submitCheckpointCorrection.length, 1,
+        'flowService.submitCheckpointCorrection must be called -- Regression R-T11')
+      assert.strictEqual(harness.flowService.calls.submitCheckpointCorrection[0].tabId, 'tab_rt11_sub')
+      assert.strictEqual(harness.recallCheckpointService.calls.submitUserCorrectionLine.length, 0,
+        'Container must not call recallCheckpointService.submitUserCorrectionLine directly -- Regression R-T11')
     })
 
-    it('onRevealAI calls recallCheckpointService.revealAiCandidateLines', async function () {
+    it('onRevealAI delegates to flowService.revealCheckpointAi', async function () {
       const harness = createRegressionHarness({
         tabs: [makeRecallTab({id: 'tab_rt11_reveal'})],
         runtimeState: {activeCheckpointId: 'cp_2'},
@@ -790,12 +791,14 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
 
       await shellProps.onRevealAI()
 
-      assert.strictEqual(harness.recallCheckpointService.calls.revealAiCandidateLines.length, 1,
-        'recallCheckpointService.revealAiCandidateLines must be called -- Regression R-T11')
-      assert.strictEqual(harness.recallCheckpointService.calls.revealAiCandidateLines[0], 'cp_2')
+      assert.strictEqual(harness.flowService.calls.revealCheckpointAi.length, 1,
+        'flowService.revealCheckpointAi must be called -- Regression R-T11')
+      assert.strictEqual(harness.flowService.calls.revealCheckpointAi[0].tabId, 'tab_rt11_reveal')
+      assert.strictEqual(harness.recallCheckpointService.calls.revealAiCandidateLines.length, 0,
+        'Container must not call recallCheckpointService.revealAiCandidateLines directly -- Regression R-T11')
     })
 
-    it('onSkipCheckpoint calls recallCheckpointService.skipCheckpoint', async function () {
+    it('onSkipCheckpoint delegates to flowService.skipCheckpoint', async function () {
       const harness = createRegressionHarness({
         tabs: [makeRecallTab({id: 'tab_rt11_skip'})],
         runtimeState: {activeCheckpointId: 'cp_3'},
@@ -805,12 +808,14 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
 
       await shellProps.onSkipCheckpoint()
 
-      assert.strictEqual(harness.recallCheckpointService.calls.skipCheckpoint.length, 1,
-        'recallCheckpointService.skipCheckpoint must be called -- Regression R-T11')
-      assert.strictEqual(harness.recallCheckpointService.calls.skipCheckpoint[0], 'cp_3')
+      assert.strictEqual(harness.flowService.calls.skipCheckpoint.length, 1,
+        'flowService.skipCheckpoint must be called -- Regression R-T11')
+      assert.strictEqual(harness.flowService.calls.skipCheckpoint[0].tabId, 'tab_rt11_skip')
+      assert.strictEqual(harness.recallCheckpointService.calls.skipCheckpoint.length, 0,
+        'Container must not call recallCheckpointService.skipCheckpoint directly -- Regression R-T11')
     })
 
-    it('onSaveCheckpointComment calls recallCheckpointService.saveComment and resumeRecall', async function () {
+    it('onSaveCheckpointComment delegates to flowService.saveCheckpointComment', async function () {
       const harness = createRegressionHarness({
         tabs: [makeRecallTab({id: 'tab_rt11_comment'})],
         runtimeState: {activeCheckpointId: 'cp_4'},
@@ -820,14 +825,16 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
 
       await shellProps.onSaveCheckpointComment({content: 'Good variation'})
 
-      assert.strictEqual(harness.recallCheckpointService.calls.saveComment.length, 1,
-        'recallCheckpointService.saveComment must be called -- Regression R-T11')
-      assert.strictEqual(harness.recallCheckpointService.calls.saveComment[0].checkpointId, 'cp_4')
-      assert.strictEqual(harness.recallCheckpointService.calls.saveComment[0].comment.content, 'Good variation')
-
-      assert.strictEqual(harness.recallCheckpointService.calls.resumeRecall.length, 1,
-        'recallCheckpointService.resumeRecall must be called after saveComment -- Regression R-T11')
-      assert.strictEqual(harness.recallCheckpointService.calls.resumeRecall[0], 'cp_4')
+      assert.strictEqual(harness.flowService.calls.saveCheckpointComment.length, 1,
+        'flowService.saveCheckpointComment must be called -- Regression R-T11')
+      assert.deepStrictEqual(harness.flowService.calls.saveCheckpointComment[0], {
+        tabId: 'tab_rt11_comment',
+        content: 'Good variation',
+      })
+      assert.strictEqual(harness.recallCheckpointService.calls.saveComment.length, 0,
+        'Container must not call recallCheckpointService.saveComment directly -- Regression R-T11')
+      assert.strictEqual(harness.recallCheckpointService.calls.resumeRecall.length, 0,
+        'Container must not call recallCheckpointService.resumeRecall directly -- Regression R-T11')
     })
   })
 

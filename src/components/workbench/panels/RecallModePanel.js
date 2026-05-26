@@ -1,4 +1,5 @@
 import {h} from 'preact'
+import {useRef, useState} from 'preact/hooks'
 import ModeToggle from '../shared/ModeToggle.js'
 import ProgressRing from '../shared/ProgressRing.js'
 import RecallCheckpointPanel from './RecallCheckpointPanel.js'
@@ -26,6 +27,7 @@ import EmptyStatePanel from '../shared/EmptyStatePanel.js'
  * @param {Function} props.onSubmitCorrection - Called when user submits correction
  * @param {Function} props.onRevealAI - Called when user reveals AI
  * @param {Function} props.onSkipCheckpoint - Called when user skips checkpoint
+ * @param {Function} props.onSaveCheckpointComment - Called when user saves checkpoint comment
  * @param {'empty'|'active'|'success'|'error'|'loading'|'disabled'} [props.state='active'] - Panel state overlay
  */
 export default function RecallModePanel({
@@ -44,11 +46,33 @@ export default function RecallModePanel({
   onEndRecall = () => {},
   checkpoints = [],
   activeCheckpointId = null,
+  activeCheckpoint = null,
+  recallSubstate = 'normal',
+  canSubmitCorrection = true,
+  canRevealAi = false,
+  canEditCheckpointComment = false,
   onSubmitCorrection = () => {},
   onRevealAI = () => {},
   onSkipCheckpoint = () => {},
+  onSaveCheckpointComment = () => {},
   state = 'active',
 }) {
+  const [checkpointComment, setCheckpointComment] = useState('')
+  const checkpointCommentRef = useRef(null)
+  const isSavingComment = recallSubstate === 'checkpoint_commenting'
+  const currentCheckpoint = activeCheckpoint ||
+    checkpoints.find(cp => cp.id === activeCheckpointId) ||
+    null
+  const showCommentEditor = canEditCheckpointComment ||
+    recallSubstate === 'checkpoint_ai_revealed' ||
+    recallSubstate === 'checkpoint_commenting'
+
+  function handleSaveCheckpointComment() {
+    const content = (checkpointCommentRef.current?.value || checkpointComment).trim()
+    if (!content || isSavingComment) return
+    onSaveCheckpointComment({content})
+  }
+
   function renderOverlay() {
     if (state === 'loading') {
       return h('div', {class: 'wb-state-loading'},
@@ -155,13 +179,17 @@ export default function RecallModePanel({
         )
       )
     } else {
+      const checkpointList = currentCheckpoint
+        ? [currentCheckpoint, ...checkpoints.filter(cp => cp.id !== currentCheckpoint.id)]
+        : checkpoints
+
       cards.push(
         h('div', {class: 'wb-card', key: 'checkpoint-card'},
           h('div', {class: 'wb-panel-title'}, '检查点队列'),
           h('div', {class: 'wb-panel-body'},
             h('div', {class: 'wb-recall-mode-panel__checkpoint-list'},
-              checkpoints.length > 0
-                ? checkpoints.map(cp =>
+              checkpointList.length > 0
+                ? checkpointList.map(cp =>
                     h(RecallCheckpointPanel, {
                       key: cp.id,
                       checkpoint: cp,
@@ -175,16 +203,39 @@ export default function RecallModePanel({
               h('button', {
                 'data-testid': 'submit-correction-btn',
                 class: 'wb-btn wb-btn-secondary wb-btn--sm',
+                disabled: !canSubmitCorrection || isSavingComment,
                 onClick: onSubmitCorrection,
               }, '提交修正图'),
               h('button', {
+                'data-testid': 'reveal-ai-btn',
                 class: 'wb-btn wb-btn-ghost wb-btn--sm',
+                disabled: !canRevealAi || isSavingComment,
                 onClick: onRevealAI,
               }, '查看 AI'),
               h('button', {
                 class: 'wb-btn wb-btn-ghost wb-btn--sm',
+                disabled: isSavingComment,
                 onClick: onSkipCheckpoint,
               }, '跳过 checkpoint'),
+            ),
+            showCommentEditor && h('div', {class: 'wb-recall-mode-panel__comment'},
+              h('textarea', {
+                'data-testid': 'checkpoint-comment-input',
+                class: 'wb-recall-mode-panel__comment-input',
+                ref: checkpointCommentRef,
+                value: checkpointComment,
+                disabled: isSavingComment,
+                rows: 4,
+                onInput: evt => setCheckpointComment(evt.target.value),
+              }),
+              h('div', {class: 'wb-recall-mode-panel__actions'},
+                h('button', {
+                  'data-testid': 'save-checkpoint-comment-btn',
+                  class: 'wb-btn wb-btn-secondary wb-btn--sm',
+                  disabled: isSavingComment,
+                  onClick: handleSaveCheckpointComment,
+                }, isSavingComment ? '保存中' : '保存备注'),
+              ),
             ),
           ),
         )

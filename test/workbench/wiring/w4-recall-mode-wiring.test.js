@@ -240,6 +240,35 @@ function createHarness({
   const documentStore = createSpyDocumentStore()
   const attemptService = createSpyAttemptService()
 
+  flowService.submitCheckpointCorrection = async () => {
+    const checkpointId = runtimeStore.getState().activeCheckpointId
+    const draft = runtimeStore.getState().correctionDraft
+    if (!checkpointId) return
+    await checkpointService.submitUserCorrectionLine({
+      checkpointId,
+      moves: draft ? draft.moves : [],
+    })
+  }
+  flowService.revealCheckpointAi = async () => {
+    const checkpointId = runtimeStore.getState().activeCheckpointId
+    if (!checkpointId) return []
+    return checkpointService.revealAiCandidateLines(checkpointId)
+  }
+  flowService.skipCheckpoint = async () => {
+    const checkpointId = runtimeStore.getState().activeCheckpointId
+    if (!checkpointId) return
+    await checkpointService.skipCheckpoint(checkpointId)
+  }
+  flowService.saveCheckpointComment = async ({content}) => {
+    const checkpointId = runtimeStore.getState().activeCheckpointId
+    if (!checkpointId) return
+    await checkpointService.saveComment({
+      checkpointId,
+      comment: {target: {kind: 'checkpoint', checkpointId}, content},
+    })
+    await checkpointService.resumeRecall(checkpointId)
+  }
+
   const taskImportService = {
     async createManualTask(input) {
       return {id: `task_${Date.now()}`, ...input}

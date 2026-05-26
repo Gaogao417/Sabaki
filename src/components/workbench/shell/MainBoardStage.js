@@ -13,7 +13,7 @@ import Goban from '../../Goban.js'
  * @param {import('preact').ComponentChildren} [props.children] - Optional children
  */
 export default function MainBoardStage({mode = 'play', boardProps, children}) {
-  if (!boardProps) {
+  if (!boardProps || !boardProps.boardStateProps?.board) {
     return h('div', {
       'data-testid': 'main-board-stage',
       class: 'wb-main-board-stage',

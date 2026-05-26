@@ -23,6 +23,8 @@ function noopProps(overrides = {}) {
     hint: null,
     aiAnalysisHidden: true,
     referenceLines: [],
+    pendingEval: 0,
+    badMoveCount: 0,
     ...overrides,
   }
 }
@@ -106,5 +108,24 @@ describe('ProblemRightPanel (T-6.2)', function () {
       root.textContent.includes('变化1'),
       'Should contain reference line label "变化1"'
     )
+  })
+
+  it('P4-T04: renders pending evaluation and bad move status', () => {
+    const {queryByTestId} = renderToDom(
+      h(ProblemRightPanel, noopProps({
+        pendingEval: 2,
+        badMoveCount: 1,
+      }))
+    )
+
+    const root = queryByTestId('problem-right-panel')
+    assert.ok(root.textContent.includes('pending 评价'),
+      'Problem right panel must label pending MoveEvaluation status')
+    assert.ok(root.textContent.includes('坏棋记录'),
+      'Problem right panel must label BadMove status')
+    assert.ok(root.textContent.includes('2'),
+      'Problem right panel must render pendingEval count')
+    assert.ok(root.textContent.includes('1'),
+      'Problem right panel must render badMoveCount')
   })
 })

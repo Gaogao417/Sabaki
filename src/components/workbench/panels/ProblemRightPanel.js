@@ -10,6 +10,8 @@ import ReferenceLineSummary from '../shared/ReferenceLineSummary.js'
  * @param {string|null} props.hint - Hint text, or null if no hint
  * @param {boolean} props.aiAnalysisHidden - Whether AI analysis is hidden
  * @param {Array<{label: string, length: number}>} props.referenceLines - Reference lines
+ * @param {number} props.pendingEval - Pending evaluation count
+ * @param {number} props.badMoveCount - Number of bad moves detected
  */
 export default function ProblemRightPanel({
   currentVariation = 0,
@@ -17,6 +19,8 @@ export default function ProblemRightPanel({
   hint = null,
   aiAnalysisHidden = true,
   referenceLines = [],
+  pendingEval = 0,
+  badMoveCount = 0,
 }) {
   const totalRefCount = referenceLines.reduce((sum, line) => sum + line.length, 0)
 
@@ -37,6 +41,14 @@ export default function ProblemRightPanel({
           h('span', {class: 'wb-problem-right-panel__stat-value'},
             opponentMode === 'ai' ? 'AI' : opponentMode,
           ),
+        ),
+        h('div', {class: 'wb-problem-right-panel__stat'},
+          h('span', {class: 'wb-problem-right-panel__stat-label'}, 'pending 评价'),
+          h('span', {class: 'wb-problem-right-panel__stat-value'}, pendingEval),
+        ),
+        h('div', {class: 'wb-problem-right-panel__stat'},
+          h('span', {class: 'wb-problem-right-panel__stat-label'}, '坏棋记录'),
+          h('span', {class: 'wb-problem-right-panel__stat-value'}, badMoveCount),
         ),
       ),
     ),

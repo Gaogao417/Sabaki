@@ -24,6 +24,7 @@ function noopProps(overrides = {}) {
     userOriginalLine: null,
     userCorrection: null,
     aiCandidates: null,
+    badMoveCount: 0,
     ...overrides,
   }
 }
@@ -120,5 +121,21 @@ describe('AnalysisRightPanel (T-6.4)', function () {
       root.textContent.length > 0,
       'Root should have content including AI analysis section'
     )
+  })
+
+  it('P4-T05: renders BadMove summary card', () => {
+    const {queryByTestId} = renderToDom(
+      h(AnalysisRightPanel, noopProps({
+        badMoveCount: 3,
+      }))
+    )
+
+    const root = queryByTestId('analysis-right-panel')
+    assert.ok(root.textContent.includes('坏棋摘要'),
+      'Analysis right panel must render a BadMove summary section')
+    assert.ok(root.textContent.includes('坏棋记录'),
+      'Analysis right panel must label BadMove count')
+    assert.ok(root.textContent.includes('3'),
+      'Analysis right panel must render badMoveCount')
   })
 })

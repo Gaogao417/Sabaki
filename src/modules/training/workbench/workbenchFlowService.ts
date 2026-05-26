@@ -1,10 +1,11 @@
-import type { WorkbenchMode, WorkbenchTab, TrainingAttemptResult } from '../types/index'
+import type { WorkbenchMode, WorkbenchTab, TrainingAttemptResult, ReferenceLine, RecallSession } from '../types/index'
 import type { AnalysisContextSource } from '../types/analysis'
 import type { WorkbenchStore } from '../store/workbenchStore'
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { SnapshotService } from '../analysis/snapshotService'
 import type { WorkbenchTabService } from './workbenchTabService'
-import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
+import type { RecallView, TrainingRuntimeStore } from '../store/trainingRuntimeStore'
+import type { RecallCheckpointService } from '../recall/recallCheckpointService'
 import { resolveTransition } from './modeTransitions'
 
 export class InvalidModeTransitionError extends Error {
@@ -27,10 +28,11 @@ export type WorkbenchFlowServiceDeps = {
     finalizeAttemptResult(attemptId: string, result: TrainingAttemptResult): Promise<void>
   }
   recallService: {
-    createRecallFromAttempt?: (attemptId: string) => Promise<{ id: string }>
-    createRecallSession?: (input: Record<string, unknown>) => Promise<{ id: string }>
+    createRecallFromAttempt?: (attemptId: string) => Promise<RecallSession>
+    createRecallSession?: (input: Record<string, unknown>) => Promise<RecallSession>
     completeRecall(recallSessionId: string): Promise<void>
   }
+  recallCheckpointService?: RecallCheckpointService
   snapshotService: SnapshotService
   tabService: WorkbenchTabService
   evaluationRules?: {
@@ -59,13 +61,17 @@ export type WorkbenchFlowService = {
   completeRecall(tabId: string): void
   restartAttempt(tabId: string): void
   startAttempt(tabId: string): Promise<void>
+  submitCheckpointCorrection(tabId: string): Promise<void>
+  revealCheckpointAi(tabId: string): Promise<ReferenceLine[]>
+  skipCheckpoint(tabId: string): Promise<void>
+  saveCheckpointComment(input: {tabId: string; content: string}): Promise<void>
   snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab>
   updatePlayerConfig(tabId: string, patch: Partial<import('../types/tab').PlayerConfig>): void
   loadDashboardData(): Promise<DashboardData>
 }
 
 export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): WorkbenchFlowService {
-  const { workbenchStore, repository, attemptService, recallService, snapshotService, tabService, logger } = deps
+  const { workbenchStore, repository, attemptService, recallService, recallCheckpointService, snapshotService, tabService, logger } = deps
   const evaluationRules = deps.evaluationRules
   const runtimeStore = deps.runtimeStore
 
@@ -96,6 +102,11 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       return
     }
 
+    // Legacy/Free-play: enterAnalysis from play/problem without a task is allowed for free play.
+    if (method === 'enterAnalysis' && (tab.mode === 'play' || tab.mode === 'problem') && !tab.taskId) {
+      return
+    }
+
     const result = resolveTransition({
       from: tab.mode,
       event: method as 'submit' | 'enterAnalysis' | 'returnFromAnalysis' | 'restartAttempt' | 'snapshot',
@@ -120,7 +131,83 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     }
   }
 
-  async function createRecallForAttempt(tab: WorkbenchTab): Promise<{ id: string }> {
+  function getCheckpointCommandContext(tabId: string, method: string): {
+    tab: WorkbenchTab
+    checkpointId: string
+  } {
+    const tab = getTab(tabId)
+    if (tab.mode !== 'recall') {
+      throw new InvalidModeTransitionError(tab.id, tab.mode, method)
+    }
+    if (!runtimeStore) {
+      throw new Error(`workbenchFlowService.${method}: runtimeStore is required`)
+    }
+    if (!recallCheckpointService) {
+      throw new Error(`workbenchFlowService.${method}: recallCheckpointService is required`)
+    }
+
+    const checkpointId = runtimeStore.getState().activeCheckpointId
+    if (!checkpointId) {
+      throw new Error(`workbenchFlowService.${method}: no active checkpoint (tabId=${tabId})`)
+    }
+
+    return { tab, checkpointId }
+  }
+
+  function assertCheckpointTransition(input: {
+    tab: WorkbenchTab
+    event: 'revealAi' | 'commentCheckpoint' | 'resumeRecall'
+    method: string
+    hasCheckpoint?: boolean
+    isCorrectionSubmitted?: boolean
+    isCheckpointAiRevealed?: boolean
+    isCheckpointSavedOrSkipped?: boolean
+  }): void {
+    const result = resolveTransition({
+      from: input.tab.mode,
+      recallSubstate: input.tab.recallSubstate,
+      event: input.event,
+      hasActiveAttempt: !!input.tab.activeAttemptId,
+      isAttemptFrozen: false,
+      hasActiveRecallSession: !!input.tab.activeRecallSessionId,
+      hasTask: !!input.tab.taskId,
+      hasCheckpoint: input.hasCheckpoint ?? true,
+      isCorrectionSubmitted: input.isCorrectionSubmitted ?? false,
+      isCheckpointAiRevealed: input.isCheckpointAiRevealed ?? false,
+      isCheckpointSavedOrSkipped: input.isCheckpointSavedOrSkipped ?? false,
+      hasAnalysisReturnTarget: !!input.tab.analysisReturnTarget,
+    })
+
+    if (!result.allowed) {
+      logger?.info('flow.transition.rejected', 'Transition rejected', {
+        tabId: input.tab.id,
+        from: input.tab.mode,
+        method: input.method,
+        reason: result.reason,
+      })
+      throw new InvalidModeTransitionError(input.tab.id, input.tab.mode, input.method)
+    }
+  }
+
+  function mapRecallSessionToRecallView(session: RecallSession): RecallView {
+    const expectedMoves = session.expectedMoves ?? []
+
+    return {
+      recallSessionId: session.id,
+      taskId: session.taskId ?? '',
+      tabId: session.tabId,
+      moveIndex: session.currentMoveIndex ?? 0,
+      expectedMoves: expectedMoves.map((vertex, index) => ({
+        sign: index % 2 === 0 ? 1 : -1,
+        vertex: vertex || null,
+      })),
+      userAttempts: [],
+      showHint: false,
+      completed: session.completed,
+    }
+  }
+
+  async function createRecallForAttempt(tab: WorkbenchTab): Promise<RecallSession> {
     if (!tab.activeAttemptId) {
       throw new Error(`workbenchFlowService.submit: no active attempt (tabId=${tab.id})`)
     }
@@ -207,6 +294,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       // Step 7: Update runtime store
       runtimeStore?.setProblemView(null)
       runtimeStore?.setActiveRecallSession(session.id)
+      runtimeStore?.setRecallView(mapRecallSessionToRecallView(session))
 
       logger?.info('flow.submit', 'Submit completed', {
         tabId,
@@ -308,6 +396,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     })
 
     runtimeStore?.setActiveRecallSession(session.id)
+    runtimeStore?.setRecallView(mapRecallSessionToRecallView(session))
 
     logger?.info('flow.enterRecall', 'Recall mode entered', {
       tabId: input.tabId,
@@ -394,6 +483,99 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     logger?.info('flow.startAttempt', 'Attempt started', {
       tabId,
       attemptId: attempt.id,
+    })
+  }
+
+  async function submitCheckpointCorrection(tabId: string): Promise<void> {
+    const { tab, checkpointId } = getCheckpointCommandContext(tabId, 'submitCheckpointCorrection')
+    const draft = runtimeStore!.getState().correctionDraft
+    const moves = draft && draft.checkpointId === checkpointId ? draft.moves : []
+
+    await recallCheckpointService!.submitUserCorrectionLine({ checkpointId, moves })
+
+    workbenchStore.updateTab(tab.id, {
+      recallSubstate: 'checkpoint_correction',
+    })
+  }
+
+  async function revealCheckpointAi(tabId: string): Promise<ReferenceLine[]> {
+    const { tab, checkpointId } = getCheckpointCommandContext(tabId, 'revealCheckpointAi')
+    const checkpoint = await repository.loadRecallCheckpoint(checkpointId)
+    const isCorrectionSubmitted = !!checkpoint && checkpoint.userCorrectionLine.length > 0
+
+    assertCheckpointTransition({
+      tab,
+      event: 'revealAi',
+      method: 'revealCheckpointAi',
+      isCorrectionSubmitted,
+    })
+
+    const lines = await recallCheckpointService!.revealAiCandidateLines(checkpointId)
+
+    workbenchStore.updateTab(tab.id, {
+      recallSubstate: 'checkpoint_ai_revealed',
+    })
+
+    return lines
+  }
+
+  async function skipCheckpoint(tabId: string): Promise<void> {
+    const { tab, checkpointId } = getCheckpointCommandContext(tabId, 'skipCheckpoint')
+
+    await recallCheckpointService!.skipCheckpoint(checkpointId)
+
+    const updatedTab = getTab(tab.id)
+    assertCheckpointTransition({
+      tab: updatedTab,
+      event: 'resumeRecall',
+      method: 'skipCheckpoint',
+      isCheckpointSavedOrSkipped: true,
+    })
+
+    workbenchStore.updateTab(tab.id, {
+      recallSubstate: 'normal',
+    })
+  }
+
+  async function saveCheckpointComment(input: {tabId: string; content: string}): Promise<void> {
+    const { tab, checkpointId } = getCheckpointCommandContext(input.tabId, 'saveCheckpointComment')
+    const checkpoint = await repository.loadRecallCheckpoint(checkpointId)
+    const isCheckpointAiRevealed = checkpoint?.status === 'ai_revealed'
+
+    assertCheckpointTransition({
+      tab,
+      event: 'commentCheckpoint',
+      method: 'saveCheckpointComment',
+      isCheckpointAiRevealed,
+    })
+
+    workbenchStore.updateTab(tab.id, {
+      recallSubstate: 'checkpoint_commenting',
+    })
+
+    await recallCheckpointService!.saveComment({
+      checkpointId,
+      comment: {
+        id: '',
+        target: { kind: 'checkpoint', checkpointId },
+        content: input.content,
+        createdAt: '',
+        updatedAt: '',
+      },
+    })
+
+    const commentingTab = getTab(tab.id)
+    assertCheckpointTransition({
+      tab: commentingTab,
+      event: 'resumeRecall',
+      method: 'saveCheckpointComment',
+      isCheckpointSavedOrSkipped: true,
+    })
+
+    await recallCheckpointService!.resumeRecall(checkpointId)
+
+    workbenchStore.updateTab(tab.id, {
+      recallSubstate: 'normal',
     })
   }
 
@@ -487,6 +669,10 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     completeRecall,
     restartAttempt,
     startAttempt,
+    submitCheckpointCorrection,
+    revealCheckpointAi,
+    skipCheckpoint,
+    saveCheckpointComment,
     snapshotFromCurrentContext,
     updatePlayerConfig,
     loadDashboardData,

@@ -1,8 +1,16 @@
 import assert from 'assert'
 
+import {createAttemptService} from '../../src/modules/training/attempt/attemptService.ts'
+import {createRecallCheckpointService} from '../../src/modules/training/recall/recallCheckpointService.ts'
+import {createRecallService} from '../../src/modules/training/recall/recallService.ts'
+import {createTrainingRuntimeStore} from '../../src/modules/training/store/trainingRuntimeStore.ts'
 import {createWorkbenchStore} from '../../src/modules/training/store/workbenchStore.ts'
 import {createTestLogger} from '../helpers/createTestLogger.ts'
-import {createPhase3SubmitOrderDeps} from './phase3TypedFakes.ts'
+import {
+  createPhase3StrictRecallRepository,
+  createPhase3SubmitOrderDeps,
+  seedPhase3RecallAttempt,
+} from './phase3TypedFakes.ts'
 
 const {createWorkbenchFlowService} = require('../../src/modules/training/workbench/workbenchFlowService.ts')
 
@@ -138,6 +146,80 @@ describe('workbenchFlowService', () => {
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
       assert.ok(tab.activeRecallSessionId)
+    })
+  })
+
+  describe('submit — real recall surface hydration', () => {
+    it('hydrates an active recall projection from the created RecallSession without caller seeding', async () => {
+      const workbenchStore = createWorkbenchStore()
+      const runtimeStore = createTrainingRuntimeStore()
+      const repository = createPhase3StrictRecallRepository()
+      const attempt = seedPhase3RecallAttempt(repository, {
+        id: 'attempt_s2r_1',
+        taskId: 'task_s2r_1',
+        tabId: 'tab_s2r_1',
+        status: 'playing',
+        userLine: ['D4', 'Q16', 'C3'],
+      })
+
+      workbenchStore.addTab(makeTab({
+        id: 'tab_s2r_1',
+        taskId: attempt.taskId,
+        mode: 'problem',
+        activeAttemptId: attempt.id,
+      }))
+      workbenchStore.setActiveTab('tab_s2r_1')
+
+      const checkpointService = createRecallCheckpointService({
+        repository,
+        runtimeStore,
+      })
+      const service = createWorkbenchFlowService({
+        workbenchStore,
+        repository,
+        runtimeStore,
+        attemptService: createAttemptService({repository, runtimeStore}),
+        recallService: createRecallService({
+          repository,
+          runtimeStore,
+          checkpointService,
+        }),
+        recallCheckpointService: checkpointService,
+        snapshotService: {
+          async captureSnapshotInput() {
+            return {
+              sourceTaskId: attempt.taskId,
+              positionSgf: '(;SZ[19])',
+              sideToMove: 'black',
+            }
+          },
+          async createProblemFromCurrentAnalysisPosition() {
+            return {id: 'unused_snapshot_problem'}
+          },
+        },
+        tabService: {
+          async openTask() { throw new Error('not used') },
+          closeTab() {},
+          switchTab() {},
+        },
+      })
+
+      await service.submit('tab_s2r_1')
+
+      const tab = workbenchStore.getState().tabs.find(t => t.id === 'tab_s2r_1')
+      const runtime = runtimeStore.getState()
+      const sessions = Object.values(repository.store.sessions)
+
+      assert.strictEqual(sessions.length, 1)
+      assert.strictEqual(tab.mode, 'recall')
+      assert.strictEqual(tab.recallSubstate, 'normal')
+      assert.strictEqual(tab.activeRecallSessionId, sessions[0].id)
+      assert.strictEqual(runtime.activeRecallSessionId, sessions[0].id)
+      assert.ok(runtime.recallView, 'submit must hydrate a transient active recall projection')
+      assert.strictEqual(runtime.recallView.recallSessionId, sessions[0].id)
+      assert.strictEqual(runtime.recallView.moveIndex, 0)
+      assert.strictEqual(runtime.recallView.expectedMoves.length, attempt.userLine.length)
+      assert.strictEqual(runtime.recallView.completed, false)
     })
   })
 

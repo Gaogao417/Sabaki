@@ -1012,6 +1012,7 @@ class Sabaki extends EventEmitter {
         repository,
         attemptService,
         recallService,
+        recallCheckpointService: checkpointService,
         snapshotService,
         tabService,
         evaluationRules: { evaluateAttempt },

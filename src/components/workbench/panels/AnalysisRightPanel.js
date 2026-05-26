@@ -26,6 +26,7 @@ function ExpandableTitle({title, onExpand}) {
  * @param {Function} [props.onExpandAI] - Called when AI analysis expand is clicked
  * @param {Function} [props.onExpandVariation] - Called when variation tree expand is clicked
  * @param {Function} [props.onExpandSnapshot] - Called when snapshot comparison expand is clicked
+ * @param {number} props.badMoveCount - Number of visible bad moves
  */
 export default function AnalysisRightPanel({
   moveCount = 0,
@@ -34,6 +35,7 @@ export default function AnalysisRightPanel({
   userOriginalLine = null,
   userCorrection = null,
   aiCandidates = null,
+  badMoveCount = 0,
   onExpandAI,
   onExpandVariation,
   onExpandSnapshot,
@@ -67,6 +69,15 @@ export default function AnalysisRightPanel({
           ),
         ),
         evaluation != null && h('div', {class: 'wb-analysis-right-panel__eval-text'}, evaluation),
+      ),
+    ),
+
+    // Bad move summary card
+    h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, '坏棋摘要'),
+      h('div', {class: 'wb-analysis-right-panel__field'},
+        h('span', {class: 'wb-analysis-right-panel__field-label'}, '坏棋记录'),
+        h('span', {class: 'wb-analysis-right-panel__field-value'}, badMoveCount),
       ),
     ),
 

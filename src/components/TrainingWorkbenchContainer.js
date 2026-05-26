@@ -76,6 +76,7 @@ class TrainingWorkbenchContainer extends Component {
   }
 
   render() {
+    const container = this
     const { sabaki, ...shellProps } = this.props
     const {
       runtimeStore,
@@ -84,20 +85,24 @@ class TrainingWorkbenchContainer extends Component {
       flowService,
       tabService,
     } = sabaki.getTrainingContext()
-    const rt = runtimeStore.getState()
-    const ws = workbenchStore.getState()
-
-    // Project runtimeStore view models into legacy prop shapes
-    // that WorkbenchShell/RecallBar/ProblemBar expect.
-    const projected = projectFromRuntime(rt)
-
-    // Project workbench store state into UI props
-    const repository = sabaki.getTrainingContext().repository
-    const workbenchProjected = projectFromWorkbench(ws, repository, this)
+    const rt = typeof runtimeStore?.getState === 'function'
+      ? runtimeStore.getState()
+      : {}
+    const ws = typeof workbenchStore?.getState === 'function'
+      ? workbenchStore.getState()
+      : {tabs: [], activeTabId: null}
 
     // Derive the active tab ID and active tab for handler wiring
     const activeTabId = ws.activeTabId
     const activeTab = ws.tabs.find(t => t.id === activeTabId) || null
+
+    // Project runtimeStore view models into legacy prop shapes
+    // that WorkbenchShell/RecallBar/ProblemBar expect.
+    const projected = projectFromRuntime(rt, activeTab)
+
+    // Project workbench store state into UI props
+    const repository = sabaki.getTrainingContext().repository
+    const workbenchProjected = projectFromWorkbench(ws, repository, this)
 
     // --- Handler wiring: UI callback -> service method ---
 
@@ -215,8 +220,19 @@ class TrainingWorkbenchContainer extends Component {
       }
     }
 
-    function handleNewGame() {
-      sabaki.openDrawer('newgame')
+    async function handleNewGame() {
+      const { taskImportService } = sabaki.getTrainingContext()
+      if (
+        taskImportService &&
+        typeof taskImportService.createManualTask === 'function' &&
+        tabService &&
+        typeof tabService.openTask === 'function'
+      ) {
+        await handleAddTask()
+        return
+      }
+
+      sabaki.openDrawer?.('newgame')
     }
 
     function handleResign() {
@@ -421,40 +437,27 @@ class TrainingWorkbenchContainer extends Component {
     // --- W4 Recall checkpoint handlers ---
 
     async function handleSubmitCorrection() {
-      const checkpointId = rt.activeCheckpointId
-      if (!checkpointId) return
-      const draft = rt.correctionDraft
-      const moves = draft ? draft.moves : []
-      const { recallCheckpointService } = sabaki.getTrainingContext()
-      await recallCheckpointService.submitUserCorrectionLine({ checkpointId, moves })
+      if (!activeTab) return
+      await flowService.submitCheckpointCorrection(activeTab.id)
+      container._invalidateCheckpointProjection()
     }
 
     async function handleRevealAI() {
-      const checkpointId = rt.activeCheckpointId
-      if (!checkpointId) return
-      const { recallCheckpointService } = sabaki.getTrainingContext()
-      await recallCheckpointService.revealAiCandidateLines(checkpointId)
+      if (!activeTab) return
+      await flowService.revealCheckpointAi(activeTab.id)
+      container._invalidateCheckpointProjection()
     }
 
     async function handleSkipCheckpoint() {
-      const checkpointId = rt.activeCheckpointId
-      if (!checkpointId) return
-      const { recallCheckpointService } = sabaki.getTrainingContext()
-      await recallCheckpointService.skipCheckpoint(checkpointId)
+      if (!activeTab) return
+      await flowService.skipCheckpoint(activeTab.id)
+      container._invalidateCheckpointProjection()
     }
 
     async function handleSaveCheckpointComment({ content }) {
-      const checkpointId = rt.activeCheckpointId
-      if (!checkpointId) return
-      const { recallCheckpointService } = sabaki.getTrainingContext()
-      await recallCheckpointService.saveComment({
-        checkpointId,
-        comment: {
-          target: { kind: 'checkpoint', checkpointId },
-          content,
-        },
-      })
-      await recallCheckpointService.resumeRecall(checkpointId)
+      if (!activeTab) return
+      await flowService.saveCheckpointComment({ tabId: activeTab.id, content })
+      container._invalidateCheckpointProjection()
     }
 
     // --- W6 Review queue handlers ---
@@ -660,8 +663,8 @@ class TrainingWorkbenchContainer extends Component {
 
     // When the adapter is unavailable (null snapshot), Container does NOT
     // fabricate a 19x19 zero-filled board state. Instead, pass a minimal
-    // input with the current workbenchMode so projectGobanProps can compute
-    // mode-specific overlay settings (e.g. showMoveNumbers for recall).
+    // input with a null board so projectGobanProps can still expose the
+    // structured shell contract while MainBoardStage avoids rendering Goban.
     const minimalInput = {
       workbenchMode,
       task: null,
@@ -923,12 +926,35 @@ class TrainingWorkbenchContainer extends Component {
       // Controller creation failed — render() will use fallback handler
     }
   }
+
+  _invalidateCheckpointProjection() {
+    this._activeCheckpointProjection = null
+    this._activeCheckpointProjectionKey = null
+    this._checkpointProjectionLoading = false
+    this.forceUpdate()
+  }
 }
 
-function projectFromRuntime(rt) {
+function projectFromRuntime(rt, activeTab = null) {
   const result = {}
+  const activeAttemptId = activeTab?.activeAttemptId
 
-  if (rt.recallView) {
+  result.pendingEval = activeAttemptId
+    ? Object.values(rt.pendingMoveEvaluations || {}).filter(e =>
+        e.attemptId === activeAttemptId && e.status === 'pending'
+      ).length
+    : 0
+  result.badMoveCount = Array.isArray(rt.visibleBadMoveIds)
+    ? rt.visibleBadMoveIds.length
+    : 0
+
+  const recallViewMatchesActiveSession = rt.recallView &&
+    (!activeTab?.activeRecallSessionId ||
+      rt.recallView.recallSessionId === activeTab.activeRecallSessionId) &&
+    (!rt.activeRecallSessionId ||
+      rt.recallView.recallSessionId === rt.activeRecallSessionId)
+
+  if (recallViewMatchesActiveSession) {
     const v = rt.recallView
     // Internal state kept for debugging / non-panel consumers
     result.recallSession = { active: true }
@@ -948,6 +974,7 @@ function projectFromRuntime(rt) {
       : 0
     result.activeCheckpointId = rt.activeCheckpointId || null
     result.recallOriginalLine = !rt.activeCheckpointId
+    result.canSubmitCorrection = !!rt.correctionDraft?.moves?.length
 
     if (v.completed) {
       result.state = 'success'
@@ -1027,6 +1054,48 @@ function projectFromWorkbench(ws, repository, container) {
       activeAttemptId: activeTab.activeAttemptId,
       activeRecallSessionId: activeTab.activeRecallSessionId,
     })
+
+    result.recallSubstate = activeTab.recallSubstate || 'normal'
+
+    if (activeTab.mode === 'recall' && container) {
+      const checkpoint = container._activeCheckpointProjection || null
+      result.activeCheckpoint = checkpoint
+      result.checkpoints = checkpoint ? [checkpoint] : []
+      result.canRevealAi = !!checkpoint && checkpoint.userCorrectionLine.length > 0 &&
+        activeTab.recallSubstate !== 'checkpoint_ai_revealed' &&
+        activeTab.recallSubstate !== 'checkpoint_commenting'
+      result.canEditCheckpointComment = !!checkpoint &&
+        (activeTab.recallSubstate === 'checkpoint_ai_revealed' ||
+          activeTab.recallSubstate === 'checkpoint_commenting')
+    }
+
+    if (
+      activeTab.mode === 'recall' &&
+      repository &&
+      container &&
+      typeof repository.loadRecallCheckpoint === 'function' &&
+      !container._checkpointProjectionLoading
+    ) {
+      const runtimeStore = container.props?.sabaki?.getTrainingContext?.().runtimeStore
+      const activeCheckpointId = runtimeStore?.getState?.().activeCheckpointId
+      const projectionKey = activeCheckpointId
+        ? `${activeCheckpointId}:${activeTab.recallSubstate || 'normal'}`
+        : null
+      if (activeCheckpointId && container._activeCheckpointProjectionKey !== projectionKey) {
+        container._checkpointProjectionLoading = true
+        loadActiveCheckpointProjection(repository, activeCheckpointId, activeTab).then(function(projection) {
+          container._activeCheckpointProjection = projection
+          container._activeCheckpointProjectionKey = projectionKey
+          container._checkpointProjectionLoading = false
+          container.forceUpdate()
+        }).catch(function() {
+          container._checkpointProjectionLoading = false
+        })
+      } else if (!activeCheckpointId) {
+        container._activeCheckpointProjection = null
+        container._activeCheckpointProjectionKey = null
+      }
+    }
   }
 
   if (ws.tabs.length > 0) {
@@ -1039,6 +1108,63 @@ function projectFromWorkbench(ws, repository, container) {
   }
 
   return result
+}
+
+async function loadActiveCheckpointProjection(repository, activeCheckpointId, activeTab) {
+  const checkpoint = await repository.loadRecallCheckpoint(activeCheckpointId)
+  if (!checkpoint) return null
+
+  const badMove = checkpoint.badMoveId && typeof repository.loadBadMove === 'function'
+    ? await repository.loadBadMove(checkpoint.badMoveId)
+    : null
+  const evaluations = badMove?.attemptId && typeof repository.listMoveEvaluationsByAttempt === 'function'
+    ? await repository.listMoveEvaluationsByAttempt(badMove.attemptId)
+    : []
+  const evaluation = badMove
+    ? evaluations.find(item => item.id === badMove.moveEvaluationId) ||
+      evaluations.find(item => item.moveIndex === badMove.moveIndex) ||
+      null
+    : null
+  const comment = checkpoint.userCommentId && typeof repository.loadMoveComment === 'function'
+    ? await repository.loadMoveComment(checkpoint.userCommentId)
+    : null
+
+  return toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, comment})
+}
+
+function toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, comment}) {
+  const moveNumber = badMove?.moveIndex ?? checkpoint.moveNumber ?? ''
+  const severityLabel = checkpoint.severityLabel || badMove?.severity || ''
+  const source = checkpoint.source || (badMove ? 'system' : '')
+  const sourceLabel = checkpoint.sourceLabel || (
+    source === 'manual' ? '用户手动' : source === 'system' ? '系统' : ''
+  )
+  const aiCandidateLines = checkpoint.aiCandidateLines || []
+  const userCorrectionLine = checkpoint.userCorrectionLine || []
+  const originalLine = checkpoint.originalLine ||
+    (evaluation?.move ? [evaluation.move] : [])
+  const summary = checkpoint.summary || (
+    moveNumber !== '' ? `第 ${moveNumber} 手，先自己摆修正图` : '当前 checkpoint'
+  )
+
+  return {
+    id: checkpoint.id,
+    moveNumber,
+    source,
+    sourceLabel,
+    severityLabel,
+    summary,
+    status: checkpoint.status,
+    statusLabel: checkpoint.status === 'ai_revealed'
+      ? 'AI candidates 已显示，写下你的判断'
+      : activeTab.recallSubstate === 'checkpoint_commenting'
+        ? '保存中'
+        : '先自己摆修正图',
+    originalLine,
+    userCorrectionLine,
+    aiCandidateLines,
+    userCommentContent: comment?.content || '',
+  }
 }
 
 export default TrainingWorkbenchContainer

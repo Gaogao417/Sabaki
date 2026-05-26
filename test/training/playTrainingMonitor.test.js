@@ -30,6 +30,8 @@ function createMockRepository() {
     attempts: {},
     evaluations: [],
     evaluationUpdates: [],
+    attemptUpdates: [],
+    badMoves: [],
   }
 
   return {
@@ -41,6 +43,7 @@ function createMockRepository() {
       return state.attempts[id] || null
     },
     async updateAttempt(id, patch) {
+      state.attemptUpdates.push({ id, ...patch })
       if (state.attempts[id]) Object.assign(state.attempts[id], patch)
     },
     async createMoveEvaluation(eval_) {
@@ -50,6 +53,7 @@ function createMockRepository() {
       state.evaluationUpdates.push({ id, ...patch })
     },
     async createBadMove(badMove) {
+      state.badMoves.push({ ...badMove })
       return badMove
     },
     state,
@@ -86,6 +90,7 @@ describe('playTrainingMonitor', () => {
         moveIndex: 0,
         move: 'D4',
         positionBeforeHash: 'pos_before_0',
+        positionAfterHash: 'pos_after_0',
       })
 
       const pending = runtimeStore.getState().pendingMoveEvaluations
@@ -118,6 +123,7 @@ describe('playTrainingMonitor', () => {
         moveIndex: 0,
         move: 'D4',
         positionBeforeHash: 'pos_before_0',
+        positionAfterHash: 'pos_after_0',
       })
 
       assert.strictEqual(mockRepo.state.evaluations.length, 1)
@@ -144,6 +150,7 @@ describe('playTrainingMonitor', () => {
         moveIndex: 0,
         move: 'D4',
         positionBeforeHash: 'pos_before_0',
+        positionAfterHash: 'pos_after_0',
       })
 
       // Set after position analysis
@@ -182,6 +189,7 @@ describe('playTrainingMonitor', () => {
         moveIndex: 0,
         move: 'D4',
         positionBeforeHash: 'pos_before',
+        positionAfterHash: 'pos_after',
       })
 
       mockAdapter.setAnalysisForPosition('pos_after', {
@@ -212,6 +220,7 @@ describe('playTrainingMonitor', () => {
         moveIndex: 0,
         move: 'D4',
         positionBeforeHash: 'pos_before',
+        positionAfterHash: 'pos_after',
       })
 
       mockAdapter.setAnalysisForPosition('pos_after', {
@@ -243,6 +252,7 @@ describe('playTrainingMonitor', () => {
         moveIndex: 0,
         move: 'D4',
         positionBeforeHash: 'pos_before',
+        positionAfterHash: 'pos_after',
       })
 
       // scoreDrop = 3.0, which is in the minor range (2.0 - 4.9)
@@ -275,6 +285,7 @@ describe('playTrainingMonitor', () => {
         moveIndex: 0,
         move: 'D4',
         positionBeforeHash: 'pos_before',
+        positionAfterHash: 'pos_after',
       })
 
       // scoreDrop = exactly 2.0
@@ -289,6 +300,128 @@ describe('playTrainingMonitor', () => {
 
       const badMoveIds = runtimeStore.getState().visibleBadMoveIds
       assert.strictEqual(badMoveIds.length, 0)
+    })
+
+    it('only evaluates pending moves whose positionAfterHash matches the analysis update target', async () => {
+      monitor.startForAttempt({ attemptId: 'attempt_1', taskId: 'task_1' })
+
+      mockAdapter.setAnalysisForPosition('pos_before_0', {
+        positionKey: 'pos_before_0',
+        scoreLead: 10.0,
+        winrate: 0.7,
+        candidateMoves: [],
+      })
+      mockAdapter.setAnalysisForPosition('pos_before_1', {
+        positionKey: 'pos_before_1',
+        scoreLead: 4.0,
+        winrate: 0.55,
+        candidateMoves: [],
+      })
+
+      await monitor.onUserMove({
+        attemptId: 'attempt_1',
+        moveIndex: 0,
+        move: 'D4',
+        positionBeforeHash: 'pos_before_0',
+        positionAfterHash: 'pos_after_0',
+      })
+      await monitor.onUserMove({
+        attemptId: 'attempt_1',
+        moveIndex: 1,
+        move: 'Q16',
+        positionBeforeHash: 'pos_before_1',
+        positionAfterHash: 'pos_after_1',
+      })
+
+      mockAdapter.setAnalysisForPosition('pos_after_1', {
+        positionKey: 'pos_after_1',
+        scoreLead: 1.0,
+        winrate: 0.5,
+        candidateMoves: [],
+      })
+
+      await monitor.onAnalysisUpdated({ positionKey: 'pos_after_1' })
+
+      const pending = runtimeStore.getState().pendingMoveEvaluations
+      assert.strictEqual(Object.keys(pending).length, 1)
+      assert.strictEqual(Object.values(pending)[0].positionAfterHash, 'pos_after_0')
+      assert.strictEqual(mockRepo.state.evaluationUpdates.length, 1)
+      assert.notStrictEqual(mockRepo.state.evaluationUpdates[0].id, Object.keys(pending)[0])
+      assert.strictEqual(mockRepo.state.evaluationUpdates[0].scoreDrop, 3.0)
+    })
+
+    it('ignores non-target analysis updates so scratch or stale results cannot resolve game-tree pending evaluations', async () => {
+      monitor.startForAttempt({ attemptId: 'attempt_1', taskId: 'task_1' })
+
+      mockAdapter.setAnalysisForPosition('pos_before', {
+        positionKey: 'pos_before',
+        scoreLead: 10.0,
+        winrate: 0.7,
+        candidateMoves: [],
+      })
+      mockAdapter.setAnalysisForPosition('scratch_after', {
+        positionKey: 'scratch_after',
+        scoreLead: 0.0,
+        winrate: 0.4,
+        candidateMoves: [],
+      })
+
+      await monitor.onUserMove({
+        attemptId: 'attempt_1',
+        moveIndex: 0,
+        move: 'D4',
+        positionBeforeHash: 'pos_before',
+        positionAfterHash: 'game_after',
+      })
+
+      await monitor.onAnalysisUpdated({ positionKey: 'scratch_after' })
+
+      assert.strictEqual(mockRepo.state.evaluationUpdates.length, 0)
+      assert.strictEqual(runtimeStore.getState().visibleBadMoveIds.length, 0)
+      assert.strictEqual(Object.keys(runtimeStore.getState().pendingMoveEvaluations).length, 1)
+    })
+
+    it('can complete pending evaluation after Attempt is frozen without writing Attempt fields', async () => {
+      monitor.startForAttempt({ attemptId: 'attempt_1', taskId: 'task_1' })
+      await mockRepo.createAttempt({
+        id: 'attempt_1',
+        taskId: 'task_1',
+        startedAt: '2026-01-01T00:00:00.000Z',
+        rootPositionSgf: '(;SZ[9])',
+        userLine: ['D4'],
+        status: 'submitted',
+        result: 'pending',
+        hintLevelUsed: 0,
+        recallCompleted: false,
+        analysisOpened: false,
+      })
+
+      mockAdapter.setAnalysisForPosition('pos_before', {
+        positionKey: 'pos_before',
+        scoreLead: 10.0,
+        winrate: 0.7,
+        candidateMoves: [],
+      })
+      await monitor.onUserMove({
+        attemptId: 'attempt_1',
+        moveIndex: 0,
+        move: 'D4',
+        positionBeforeHash: 'pos_before',
+        positionAfterHash: 'pos_after',
+      })
+
+      mockAdapter.setAnalysisForPosition('pos_after', {
+        positionKey: 'pos_after',
+        scoreLead: 2.0,
+        winrate: 0.5,
+        candidateMoves: [],
+      })
+
+      await monitor.onAnalysisUpdated({ positionKey: 'pos_after' })
+
+      assert.strictEqual(mockRepo.state.evaluationUpdates.length, 1)
+      assert.strictEqual(mockRepo.state.badMoves.length, 1)
+      assert.deepStrictEqual(mockRepo.state.attemptUpdates, [])
     })
 
     // C47: Does nothing when no active monitor

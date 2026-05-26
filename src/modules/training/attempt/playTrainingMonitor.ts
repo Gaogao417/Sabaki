@@ -131,7 +131,10 @@ export function createPlayTrainingMonitor(
     // Find pending evaluations for this attempt
     const pending = runtimeStore.getState().pendingMoveEvaluations
     const pendingForAttempt = Object.values(pending).filter(
-      (e) => e.attemptId === attemptId && e.status === 'pending',
+      (e) =>
+        e.attemptId === attemptId &&
+        e.status === 'pending' &&
+        e.positionAfterHash === positionKey,
     )
 
     if (pendingForAttempt.length === 0) return

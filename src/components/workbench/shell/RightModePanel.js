@@ -42,6 +42,8 @@ export default function RightModePanel(props) {
         wrongCount: rest.wrongCount,
         progress: rest.progress,
         totalMoves: rest.totalMoves,
+        activeCheckpoint: rest.activeCheckpoint,
+        recallSubstate: rest.recallSubstate,
       })
       break
     case 'analysis':

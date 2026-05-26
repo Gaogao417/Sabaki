@@ -21,7 +21,13 @@ export default function RecallRightPanel({
   wrongCount = 0,
   progress = 0,
   totalMoves = 0,
+  activeCheckpoint = null,
+  recallSubstate = 'normal',
 }) {
+  const isAiRevealed = activeCheckpoint &&
+    (recallSubstate === 'checkpoint_ai_revealed' || recallSubstate === 'checkpoint_commenting')
+  const formatLine = line => Array.isArray(line) ? line.join(' ') : ''
+
   return h('div', {
     'data-testid': 'recall-right-panel',
     class: 'wb-recall-right-panel',
@@ -43,6 +49,28 @@ export default function RecallRightPanel({
         h('div', {class: 'wb-recall-right-panel__stat'},
           h('span', {class: 'wb-recall-right-panel__stat-label'}, '手动检查点'),
           h('span', {class: 'wb-recall-right-panel__stat-value'}, manualCheckpoints),
+        ),
+      ),
+    ),
+
+    isAiRevealed && h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-panel-title'}, 'Checkpoint 对比'),
+      h('div', {class: 'wb-recall-right-panel__field'},
+        h('span', {class: 'wb-recall-right-panel__stat-label'}, '原线'),
+        h('span', {class: 'wb-recall-right-panel__stat-value'}, formatLine(activeCheckpoint.originalLine)),
+      ),
+      h('div', {class: 'wb-recall-right-panel__field'},
+        h('span', {class: 'wb-recall-right-panel__stat-label'}, '用户修正'),
+        h('span', {class: 'wb-recall-right-panel__stat-value'}, formatLine(activeCheckpoint.userCorrectionLine)),
+      ),
+      h('div', {class: 'wb-recall-right-panel__field'},
+        h('span', {class: 'wb-recall-right-panel__stat-label'}, 'AI candidates'),
+        h('div', {class: 'wb-recall-right-panel__stat-value'},
+          (activeCheckpoint.aiCandidateLines || []).map((line, index) =>
+            h('div', {key: `${line.label || index}`},
+              line.label || `AI ${index + 1}`, ' ', formatLine(line.moves),
+            )
+          ),
         ),
       ),
     ),
