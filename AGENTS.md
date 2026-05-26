@@ -4,6 +4,13 @@
 
 Workflow skills 只在用户明确要求时使用；不要因为任务属于 Sabaki 就自动进入 workflow。
 
+## Agent / Skill 提交规则
+
+- 每个 Codex agent 或 skill 完成一次独立职责后，必须先创建一次 git commit，再进入下一个 agent、skill 或 workflow step。
+- 提交只包含该 agent/skill 本次实际负责的文件；不得把工作区中已有的无关改动一起提交。
+- 如果该 agent/skill 是只读审查、规划或没有产生文件改动，也必须使用空提交记录完成状态，例如 `git commit --allow-empty -m "<agent-or-skill>: <step summary>"`。
+- workflow 调度时，主会话负责在每个 agent/skill 返回后完成提交，并在 checklist 中记录该步骤已提交。
+
 ## 项目概要
 
 Sabaki 是一个围棋/SGF 编辑器，基于 Electron + React 架构。

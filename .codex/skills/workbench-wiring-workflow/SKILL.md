@@ -16,19 +16,33 @@ The planner writes a task-specific checklist at `docs/workflow-checklists/<YYYY-
 1. Read the current task's checklist file. If no path is already known, find the matching task checklist under `docs/workflow-checklists/` by task slug/title; only fall back to `docs/.workflow-checklist.md` when it is clearly a legacy pointer for the same task.
 2. Find the first `- [ ]` step.
 3. Dispatch the corresponding role for that step.
-4. After the subagent returns, check off the step: `- [x]`.
+4. After the agent/skill returns, update the checklist entry with the result and check off the completed step as `- [x]`.
 5. If a review step returns REQUEST_CHANGES or BLOCK:
    - Add a retry entry in `## Retries`.
    - Un-check the upstream step (set back to `- [ ]`).
-   - Re-dispatch the upstream step with review feedback appended.
+   - Re-dispatch the upstream step with review feedback appended after the commit for the current review step.
    - Maximum 3 retries per step. After 3 retries, mark FAILED and stop.
 6. Write the updated checklist back to the same task-specific checklist file.
-7. If there is a next unchecked step, immediately dispatch it in the same turn. Do not stop to report progress or wait for user confirmation between steps.
-8. When all steps are checked, report completion to the user.
+7. Create one git commit for that completed agent/skill before dispatching anything else.
+   - Stage only files produced by that agent/skill plus the task-specific checklist update.
+   - Do not include unrelated workspace changes.
+   - If the agent/skill produced no file changes, create an empty commit with `git commit --allow-empty`.
+   - Mark the checklist entry with `commit: pending` before committing; report the resulting commit hash in the workflow progress/output.
+8. If there is a next unchecked step, immediately dispatch it in the same turn. Do not stop to report progress or wait for user confirmation between steps.
+9. When all steps are checked, report completion to the user.
 
 The main agent MUST NOT stop between steps unless all steps are done or a step has FAILED after 3 retries.
 
 Never overwrite another task's checklist. `docs/.workflow-checklist.md` is legacy-only and must not be used as a global mutable queue for new Workbench wiring tasks.
+
+## 提交要求
+
+每个 workflow role、agent 或 skill 完成后都必须有一个对应 commit。提交边界按步骤划分，不按整轮 workflow 合并。
+
+- Contract sketch、contract audit、test-writer、test audit、implementation、architecture review 都各自提交。
+- 只读审查或 verification 没有文件改动时，使用空提交记录完成状态。
+- 提交信息使用 `<role-or-skill>: <step summary>` 格式。
+- 不得提交其他用户或其他步骤留下的改动。
 
 ## Source Of Truth
 

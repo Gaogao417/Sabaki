@@ -7,6 +7,15 @@ description: Sabaki frontend implementation skill. Use after a scoped frontend v
 
 Use this skill under `$frontend-visual-workflow` when the active planner step has a clear visual scope, tests, or verification notes.
 
+## 提交要求
+
+本 skill 完成后，workflow dispatcher 必须先创建一次 git commit，再进入下一个 agent、skill 或 workflow step。
+
+- 只提交本 frontend implementation 步骤修改的 UI/CSS/component 文件、相关测试快照或 checklist 更新。
+- 如果没有文件改动，使用 `git commit --allow-empty` 创建空提交。
+- 提交信息使用 `frontend-implementation-agent: <step summary>` 格式。
+- 不得提交其他步骤或用户已有的无关改动。
+
 Input:
 
 - Visual contract sketch or step plan.
