@@ -221,10 +221,10 @@ class TrainingWorkbenchContainer extends Component {
       }
     }
 
-    function handleAbandon() {
+    async function handleAbandon() {
       if (!activeTab) return
       if (activeTab.mode === 'problem') {
-        legacyTrainingFlowController.exitProblemMode()
+        await flowService.abandonProblem(activeTab.id)
         return
       }
 
@@ -238,9 +238,9 @@ class TrainingWorkbenchContainer extends Component {
       flowService.restartAttempt(activeTab.id)
     }
 
-    function handleUndo() {
-      if (activeTab?.mode === 'problem' && rt.problemView) {
-        legacyTrainingFlowController.undoProblemMove()
+    async function handleUndo() {
+      if (activeTab?.mode === 'problem') {
+        await flowService.undoProblemMove(activeTab.id)
         return
       }
 
@@ -512,14 +512,17 @@ class TrainingWorkbenchContainer extends Component {
       _container.setState({})
     }
 
-    // Legacy handlers preserved for existing recall/problem flows
+    // Legacy prop names are retained for older shells, but problem commands
+    // now route through the Workbench flow service.
     const legacyHandlers = {
       onShowRecallHint: () => legacyTrainingFlowController.showRecallHint(),
       onSkipRecallMove: () => legacyTrainingFlowController.skipRecallMove(),
-      onUndoProblemMove: () => legacyTrainingFlowController.undoProblemMove(),
+      onUndoProblemMove: () =>
+        activeTab ? flowService.undoProblemMove(activeTab.id) : undefined,
       onSubmitProblemAttempt: () =>
-        legacyTrainingFlowController.submitProblemAttempt(),
-      onExitProblemMode: () => legacyTrainingFlowController.exitProblemMode(),
+        activeTab ? flowService.submit(activeTab.id) : undefined,
+      onExitProblemMode: () =>
+        activeTab ? flowService.abandonProblem(activeTab.id) : undefined,
     }
 
     // W2 shell/tab handlers

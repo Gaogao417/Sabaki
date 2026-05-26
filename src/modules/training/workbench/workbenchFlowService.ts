@@ -16,6 +16,11 @@ import type {
   TrainingRuntimeStore,
 } from '../store/trainingRuntimeStore'
 import type {RecallCheckpointService} from '../recall/recallCheckpointService'
+import type {
+  ProblemFlowService,
+  SubmitProblemResult,
+  UndoMoveResult,
+} from '../problem/problemFlowService'
 import {resolveTransition} from './modeTransitions'
 
 export class InvalidModeTransitionError extends Error {
@@ -54,6 +59,7 @@ export type WorkbenchFlowServiceDeps = {
   recallCheckpointService?: RecallCheckpointService
   snapshotService: SnapshotService
   tabService: WorkbenchTabService
+  problemFlowService?: ProblemFlowService
   modeEffects?: WorkbenchModeEffects
   evaluationRules?: {
     evaluateAttempt(input: {
@@ -132,6 +138,8 @@ export type DashboardData = {
 
 export type WorkbenchFlowService = {
   submit(tabId: string): Promise<void>
+  undoProblemMove(tabId: string): Promise<UndoMoveResult | null>
+  abandonProblem(tabId: string): Promise<void>
   enterAnalysis(
     tabId: string,
     options?: {reason?: ModeEnterReason; selectedTool?: string},
@@ -209,6 +217,7 @@ export function createWorkbenchFlowService(
     recallCheckpointService,
     snapshotService,
     tabService,
+    problemFlowService,
     logger,
   } = deps
   let activeModeEffects = deps.modeEffects
@@ -414,6 +423,17 @@ export function createWorkbenchFlowService(
     return context
   }
 
+  function assertProblemCommand(tab: WorkbenchTab, method: string): void {
+    if (tab.mode !== 'problem') {
+      logger?.info('flow.transition.rejected', 'Transition rejected', {
+        tabId: tab.id,
+        from: tab.mode,
+        method,
+      })
+      throw new InvalidModeTransitionError(tab.id, tab.mode, method)
+    }
+  }
+
   async function createRecallForAttempt(
     tab: WorkbenchTab,
   ): Promise<RecallSession> {
@@ -476,6 +496,33 @@ export function createWorkbenchFlowService(
     assertTransition(tab, 'submit')
 
     return (async () => {
+      let problemSubmitResult: SubmitProblemResult | null = null
+      if (tab.mode === 'problem' && problemFlowService) {
+        problemSubmitResult = await problemFlowService.submitActiveProblem()
+      }
+
+      if (problemSubmitResult) {
+        const session = await createRecallForAttempt(tab)
+
+        workbenchStore.updateTab(tabId, {
+          mode: 'recall',
+          recallSubstate: 'normal',
+          activeRecallSessionId: session.id,
+        })
+
+        runtimeStore?.setProblemView(null)
+        runtimeStore?.setActiveRecallSession(session.id)
+        runtimeStore?.setRecallView(mapRecallSessionToRecallView(session))
+
+        logger?.info('flow.submit', 'Problem submit completed', {
+          tabId,
+          attemptId: tab.activeAttemptId,
+          result: problemSubmitResult.result,
+          sessionId: session.id,
+        })
+        return
+      }
+
       // Step 1 & 2: Load evaluations and bad moves, then evaluate while
       // the Attempt is still mutable. Repository guards reject result/status
       // patches once the Attempt has been frozen.
@@ -520,6 +567,50 @@ export function createWorkbenchFlowService(
         sessionId: session.id,
       })
     })()
+  }
+
+  async function undoProblemMove(
+    tabId: string,
+  ): Promise<UndoMoveResult | null> {
+    const tab = getTab(tabId)
+    assertProblemCommand(tab, 'undoProblemMove')
+
+    if (!problemFlowService) {
+      throw new Error(
+        'workbenchFlowService.undoProblemMove: problemFlowService is required',
+      )
+    }
+
+    logger?.info('flow.problemUndo', 'Undo problem move', {
+      tabId,
+      attemptId: tab.activeAttemptId ?? null,
+    })
+
+    return problemFlowService.undoProblemMove()
+  }
+
+  async function abandonProblem(tabId: string): Promise<void> {
+    const tab = getTab(tabId)
+    assertProblemCommand(tab, 'abandonProblem')
+
+    logger?.info('flow.problemAbandon', 'Abandon problem attempt', {
+      tabId,
+      attemptId: tab.activeAttemptId ?? null,
+    })
+
+    if (problemFlowService) {
+      await problemFlowService.abandonActiveProblem()
+    } else if (tab.activeAttemptId) {
+      await attemptService.finalizeAttemptResult(tab.activeAttemptId, 'abandoned')
+      runtimeStore?.setProblemView(null)
+    } else {
+      runtimeStore?.setProblemView(null)
+    }
+
+    workbenchStore.updateTab(tabId, {
+      mode: 'play',
+      activeAttemptId: undefined,
+    })
   }
 
   function enterAnalysis(
@@ -1035,6 +1126,8 @@ export function createWorkbenchFlowService(
 
   return {
     submit,
+    undoProblemMove,
+    abandonProblem,
     enterAnalysis,
     returnFromAnalysis,
     enterRecall,

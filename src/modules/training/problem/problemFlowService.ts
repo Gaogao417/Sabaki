@@ -56,10 +56,15 @@ export type UndoMoveResult = {
   userLine: string[]
 }
 
+export type AbandonProblemResult = {
+  attempt: TrainingAttempt
+}
+
 export type ProblemFlowService = {
   appendProblemMove(input: AppendMoveInput): Promise<AppendMoveResult | null>
   undoProblemMove(): Promise<UndoMoveResult | null>
   submitActiveProblem(): Promise<SubmitProblemResult | null>
+  abandonActiveProblem(): Promise<AbandonProblemResult | null>
 }
 
 export type ProblemFlowServiceDeps = {
@@ -402,9 +407,48 @@ export function createProblemFlowService(
     }
   }
 
+  async function abandonActiveProblem(): Promise<AbandonProblemResult | null> {
+    const view = runtimeStore.getState().problemView
+    if (!view || view.submitted) return null
+
+    const problemId = view.problemId ?? String(view.legacyProblemSession?.id ?? view.taskId ?? '')
+
+    logger?.info('problem.abandon', 'Problem attempt abandoned', {
+      problemId,
+      attemptId: view.attemptId,
+    })
+
+    await attemptService.finalizeAttemptResult(view.attemptId, 'abandoned')
+
+    if (problemId) {
+      await reviewService.updateScheduleAfterResult({
+        taskId: problemId,
+        result: 'abandoned',
+      })
+    }
+
+    const abandonedAttempt = await repository.loadAttempt(view.attemptId)
+    if (!abandonedAttempt) {
+      throw new Error(
+        `problemFlowService.abandonActiveProblem: attempt not found (id=${view.attemptId})`,
+      )
+    }
+
+    runtimeStore.setProblemView(null)
+
+    return {
+      attempt: {
+        ...abandonedAttempt,
+        result: 'abandoned',
+        status: 'abandoned',
+      },
+    }
+  }
+
   return {
     appendProblemMove,
     undoProblemMove,
     submitActiveProblem,
+    abandonActiveProblem,
   }
 }

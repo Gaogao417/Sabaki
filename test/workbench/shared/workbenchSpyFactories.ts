@@ -23,6 +23,8 @@ type Call<T = Record<string, unknown>> = T
 
 export type SpyFlowServiceCalls = {
   submit: Array<Call<{tabId: string}>>
+  undoProblemMove: Array<Call<{tabId: string}>>
+  abandonProblem: Array<Call<{tabId: string}>>
   enterAnalysis: Array<Call<{tabId: string}>>
   returnFromAnalysis: Array<Call<{tabId: string}>>
   completeRecall: Array<Call<{tabId: string}>>
@@ -84,6 +86,8 @@ export function createSpyFlowService(
 ): SpyWorkbenchFlowService {
   const calls: SpyFlowServiceCalls = {
     submit: [],
+    undoProblemMove: [],
+    abandonProblem: [],
     enterAnalysis: [],
     returnFromAnalysis: [],
     completeRecall: [],
@@ -102,6 +106,13 @@ export function createSpyFlowService(
     calls,
     async submit(tabId: string) {
       calls.submit.push({tabId})
+    },
+    async undoProblemMove(tabId: string) {
+      calls.undoProblemMove.push({tabId})
+      return null
+    },
+    async abandonProblem(tabId: string) {
+      calls.abandonProblem.push({tabId})
     },
     enterAnalysis(tabId: string) {
       calls.enterAnalysis.push({tabId})

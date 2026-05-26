@@ -68,4 +68,74 @@ describe('problemFlowService', () => {
       },
     ])
   })
+
+  it('abandons the active problem attempt without submitting or creating recall work', async () => {
+    const runtimeStore = createTrainingRuntimeStore()
+    const repository = createPhase3MutableAttemptRepository({
+      id: 'attempt_abandon',
+      taskId: 'task_abandon',
+      startedAt: '2026-01-01T00:00:00.000Z',
+      rootPositionSgf: '(;SZ[9])',
+      userLine: ['D4'],
+      status: 'playing',
+      result: 'pending',
+      hintLevelUsed: 0,
+      recallCompleted: false,
+      analysisOpened: false,
+    })
+    const reviewCalls = []
+
+    runtimeStore.setProblemView({
+      taskId: 'task_abandon',
+      tabId: 'tab_abandon',
+      attemptId: 'attempt_abandon',
+      problemId: 'problem_abandon',
+      legacyProblemSession: {id: 'legacy_problem', sideToMove: 'black'},
+      evalCache: [
+        { moveIndex: 0, move: 'D4', isBadMove: false, severity: 'none' },
+      ],
+      badMoves: [],
+      submitted: false,
+      result: null,
+    })
+
+    const service = createProblemFlowService({
+      runtimeStore,
+      repository,
+      attemptService: {
+        async finalizeAttemptResult(attemptId, result) {
+          await repository.updateAttempt(attemptId, {
+            result,
+            status: 'abandoned',
+          })
+        },
+      },
+      monitor: {},
+      problemService: {},
+      reviewService: {
+        async updateScheduleAfterResult(input) {
+          reviewCalls.push(input)
+        },
+      },
+    })
+
+    const result = await service.abandonActiveProblem()
+
+    assert.strictEqual(result.attempt.id, 'attempt_abandon')
+    assert.strictEqual(result.attempt.result, 'abandoned')
+    assert.strictEqual(result.attempt.status, 'abandoned')
+    assert.strictEqual(runtimeStore.getState().problemView, null)
+    assert.deepStrictEqual(reviewCalls, [
+      {taskId: 'problem_abandon', result: 'abandoned'},
+    ])
+    assert.deepStrictEqual(clone(repository.updates), [
+      {
+        id: 'attempt_abandon',
+        patch: {
+          result: 'abandoned',
+          status: 'abandoned',
+        },
+      },
+    ])
+  })
 })

@@ -34,7 +34,7 @@
  * Long-term vs migration:
  *   - T4-01..T4-10, T4-15..T4-20: Long-term -- protect core wiring contracts.
  *   - T4-11..T4-14: Long-term -- protect UI button rendering contracts.
- *   - T4-GAP: Resolved -- onAbandonAnswer is now wired in Container to handleAbandon (no-op stub).
+ *   - T4-GAP: Resolved -- onAbandonAnswer is now wired in Container to flowService.abandonProblem.
  *
  * Workbench wiring coverage:
  *   - UI command mapping: T4-11..T4-14 (button rendering + callback wiring)
@@ -76,11 +76,9 @@
  *      not a separate module. Tests verify render output (shellProps) which is the stable
  *      external contract. If Container projection changes, tests must track but the
  *      contract (shellProps.mode reflects activeTab.mode) is stable.
- *   2. T4-GAP: Tests for the absence of onAbandonAnswer in shellHandlers. This test
- *      verifies the GAP exists; once the GAP is fixed, this test should be replaced
- *      with a test asserting the handler is wired correctly.
- *   3. T4-17: handleResign/handleAbandon are no-op stubs that console.warn. Tests verify
- *      flowService is not called. If these are implemented later, tests must be updated.
+ *   2. T4-GAP: onAbandonAnswer is covered as a real flow-service command route.
+ *   3. T4-17: handleResign delegates to Sabaki, while problem abandon/undo route
+ *      through workbenchFlowService.
  */
 
 import assert from 'assert'
@@ -464,7 +462,7 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
       })
     })
 
-    // --- T4-17: handleResign/handleAbandon delegate to sabaki/legacyController ---
+    // --- T4-17: handleResign delegates to sabaki; problem actions delegate to flow service ---
 
     describe('T4-17: handleResign/handleAbandon delegation', function () {
       it('onResign delegates to sabaki.makeResign', function () {
@@ -487,7 +485,7 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
           'handleResign must not call flowService.enterAnalysis')
       })
 
-      it('onAbandon delegates to legacyController.exitProblemMode in problem mode', function () {
+      it('onAbandon delegates to flowService.abandonProblem in problem mode', async function () {
         const harness = createDelegationHarness({
           tabs: [makeProblemTab({id: 'tab_abandon'})],
         })
@@ -497,12 +495,34 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
         assert.strictEqual(typeof shellProps.onAbandon, 'function',
           'Container must expose onAbandon callback')
 
-        shellProps.onAbandon()
+        await shellProps.onAbandon()
 
-        assert.strictEqual(harness.legacyController.calls.exitProblemMode.length, 1,
-          'handleAbandon must call legacyController.exitProblemMode in problem mode')
+        assert.deepStrictEqual(harness.flowService.calls.abandonProblem, [
+          {tabId: 'tab_abandon'},
+        ], 'handleAbandon must call flowService.abandonProblem in problem mode')
+        assert.strictEqual(harness.legacyController.calls.exitProblemMode.length, 0,
+          'handleAbandon must not call legacyController.exitProblemMode in problem mode')
         assert.strictEqual(harness.flowService.calls.submit.length, 0,
           'handleAbandon must not call flowService.submit')
+      })
+
+      it('onUndo delegates to flowService.undoProblemMove in problem mode', async function () {
+        const harness = createDelegationHarness({
+          tabs: [makeProblemTab({id: 'tab_problem_undo'})],
+        })
+
+        const shellProps = harness.getShellProps()
+
+        assert.strictEqual(typeof shellProps.onUndo, 'function',
+          'Container must expose onUndo callback')
+
+        await shellProps.onUndo()
+
+        assert.deepStrictEqual(harness.flowService.calls.undoProblemMove, [
+          {tabId: 'tab_problem_undo'},
+        ], 'problem undo must route through flowService.undoProblemMove')
+        assert.strictEqual(harness.legacyController.calls.undoProblemMove.length, 0,
+          'problem undo must not call legacyController.undoProblemMove')
       })
     })
 
@@ -555,7 +575,7 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
     // --- T4-GAP: onAbandonAnswer is now wired (was previously a GAP) ---
 
     describe('T4-GAP: onAbandonAnswer is wired', function () {
-      it('shellHandlers contains onAbandonAnswer key that delegates to handleAbandon', function () {
+      it('shellHandlers contains onAbandonAnswer key that delegates to handleAbandon', async function () {
         const harness = createDelegationHarness({
           tabs: [makeProblemTab({id: 'tab_gap'})],
         })
@@ -566,11 +586,13 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
         assert.strictEqual(typeof shellProps.onAbandonAnswer, 'function',
           'shellHandlers must have onAbandonAnswer wired as a function')
 
-        // handleAbandon is a no-op stub that does not call flowService
-        shellProps.onAbandonAnswer()
+        await shellProps.onAbandonAnswer()
 
-        assert.strictEqual(harness.flowService.calls.submit.length, 0,
-          'onAbandonAnswer must not call flowService.submit -- GAP-02: handleAbandon is no-op')
+        assert.deepStrictEqual(harness.flowService.calls.abandonProblem, [
+          {tabId: 'tab_gap'},
+        ], 'onAbandonAnswer must route to flowService.abandonProblem')
+        assert.strictEqual(harness.legacyController.calls.exitProblemMode.length, 0,
+          'onAbandonAnswer must not call legacyController.exitProblemMode')
       })
     })
   })

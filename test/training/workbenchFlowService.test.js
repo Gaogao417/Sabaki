@@ -199,6 +199,95 @@ describe('workbenchFlowService', () => {
       assert.strictEqual(tab.mode, 'recall')
     })
 
+    it('routes active problem submit through problemFlowService before recall creation', async () => {
+      const workbenchStore = createWorkbenchStore()
+      const runtimeStore = createTrainingRuntimeStore()
+      const calls = []
+      const service = createWorkbenchFlowService({
+        workbenchStore,
+        runtimeStore,
+        repository: {
+          listMoveEvaluationsByAttempt: async () => {
+            throw new Error('generic evaluation path must not run for problem submit')
+          },
+          listBadMovesByAttempt: async () => {
+            throw new Error('generic bad-move path must not run for problem submit')
+          },
+        },
+        attemptService: {
+          createAttempt: async input => ({id: 'unused', ...input}),
+          freezeAttempt: async () => {
+            throw new Error('generic freeze path must not run for problem submit')
+          },
+          finalizeAttemptResult: async () => {
+            throw new Error('generic finalize path must not run for problem submit')
+          },
+        },
+        recallService: {
+          createRecallFromAttempt: async attemptId => {
+            calls.push(['createRecallFromAttempt', attemptId])
+            return {
+              id: 'recall_problem',
+              taskId: 'task_problem',
+              tabId: 'tab_problem',
+              expectedMoves: ['D4'],
+              currentMoveIndex: 0,
+              completed: false,
+            }
+          },
+          completeRecall: async () => {},
+        },
+        snapshotService: {},
+        tabService: {},
+        problemFlowService: {
+          appendProblemMove: async () => null,
+          undoProblemMove: async () => null,
+          submitActiveProblem: async () => {
+            calls.push(['submitActiveProblem'])
+            return {
+              attempt: {id: 'attempt_problem'},
+              result: 'pass',
+              generatedPunishmentProblemIds: [],
+            }
+          },
+          abandonActiveProblem: async () => null,
+        },
+      })
+      workbenchStore.addTab(makeTab({
+        id: 'tab_problem',
+        taskId: 'task_problem',
+        mode: 'problem',
+        activeAttemptId: 'attempt_problem',
+      }))
+      runtimeStore.setProblemView({
+        taskId: 'task_problem',
+        tabId: 'tab_problem',
+        attemptId: 'attempt_problem',
+        legacyProblemSession: null,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+
+      await service.submit('tab_problem')
+
+      assert.deepStrictEqual(calls, [
+        ['submitActiveProblem'],
+        ['createRecallFromAttempt', 'attempt_problem'],
+      ])
+      assert.strictEqual(getTab(workbenchStore, 'tab_problem').mode, 'recall')
+      assert.strictEqual(
+        getTab(workbenchStore, 'tab_problem').activeRecallSessionId,
+        'recall_problem',
+      )
+      assert.strictEqual(runtimeStore.getState().problemView, null)
+      assert.strictEqual(
+        runtimeStore.getState().activeRecallSessionId,
+        'recall_problem',
+      )
+    })
+
     it('freezes attempt before creating recall session', async () => {
       const order = []
       const deps = createMockDeps({
@@ -227,6 +316,109 @@ describe('workbenchFlowService', () => {
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
       assert.ok(tab.activeRecallSessionId)
+    })
+  })
+
+  describe('problem commands', () => {
+    it('routes problem undo through problemFlowService without changing tab mode', async () => {
+      const workbenchStore = createWorkbenchStore()
+      const service = createWorkbenchFlowService({
+        workbenchStore,
+        repository: {},
+        attemptService: {
+          createAttempt: async input => ({id: 'unused', ...input}),
+          freezeAttempt: async () => {},
+          finalizeAttemptResult: async () => {},
+        },
+        recallService: {completeRecall: async () => {}},
+        snapshotService: {},
+        tabService: {},
+        problemFlowService: {
+          appendProblemMove: async () => null,
+          submitActiveProblem: async () => null,
+          abandonActiveProblem: async () => null,
+          undoProblemMove: async () => ({
+            evalCache: [],
+            badMoves: [],
+            userLine: ['D4'],
+          }),
+        },
+      })
+      workbenchStore.addTab(makeTab({
+        id: 'tab_problem_undo',
+        mode: 'problem',
+        activeAttemptId: 'attempt_problem_undo',
+      }))
+
+      const result = await service.undoProblemMove('tab_problem_undo')
+
+      assert.deepStrictEqual(result.userLine, ['D4'])
+      assert.strictEqual(getTab(workbenchStore, 'tab_problem_undo').mode, 'problem')
+    })
+
+    it('abandons a problem through problemFlowService without creating recall', async () => {
+      const workbenchStore = createWorkbenchStore()
+      const runtimeStore = createTrainingRuntimeStore()
+      const calls = []
+      const service = createWorkbenchFlowService({
+        workbenchStore,
+        runtimeStore,
+        repository: {},
+        attemptService: {
+          createAttempt: async input => ({id: 'unused', ...input}),
+          freezeAttempt: async () => {
+            calls.push('freezeAttempt')
+          },
+          finalizeAttemptResult: async () => {
+            calls.push('finalizeAttemptResult')
+          },
+        },
+        recallService: {
+          createRecallFromAttempt: async () => {
+            calls.push('createRecallFromAttempt')
+            return {id: 'unexpected_recall'}
+          },
+          completeRecall: async () => {},
+        },
+        snapshotService: {},
+        tabService: {},
+        problemFlowService: {
+          appendProblemMove: async () => null,
+          undoProblemMove: async () => null,
+          submitActiveProblem: async () => null,
+          abandonActiveProblem: async () => {
+            calls.push('abandonActiveProblem')
+            runtimeStore.setProblemView(null)
+            return {attempt: {id: 'attempt_problem_abandon'}}
+          },
+        },
+      })
+      workbenchStore.addTab(makeTab({
+        id: 'tab_problem_abandon',
+        mode: 'problem',
+        activeAttemptId: 'attempt_problem_abandon',
+      }))
+      runtimeStore.setProblemView({
+        taskId: 'task_problem',
+        tabId: 'tab_problem_abandon',
+        attemptId: 'attempt_problem_abandon',
+        legacyProblemSession: null,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+
+      await service.abandonProblem('tab_problem_abandon')
+
+      assert.deepStrictEqual(calls, ['abandonActiveProblem'])
+      assert.strictEqual(getTab(workbenchStore, 'tab_problem_abandon').mode, 'play')
+      assert.strictEqual(
+        getTab(workbenchStore, 'tab_problem_abandon').activeAttemptId,
+        undefined,
+      )
+      assert.strictEqual(runtimeStore.getState().problemView, null)
+      assert.strictEqual(runtimeStore.getState().activeRecallSessionId, undefined)
     })
   })
 
