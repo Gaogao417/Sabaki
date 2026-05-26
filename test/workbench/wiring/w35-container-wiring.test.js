@@ -74,14 +74,30 @@ function createSpyFlowService() {
     snapshotFromCurrentContext: [],
     startAttempt: [],
   }
+  let modeEffects = null
   return {
     calls,
     async submit(tabId) { calls.submit.push({ tabId }) },
-    enterAnalysis(tabId) { calls.enterAnalysis.push({ tabId }) },
+    enterAnalysis(tabId) {
+      calls.enterAnalysis.push({ tabId })
+      modeEffects?.enterAnalysis?.({
+        tabId,
+        fromMode: 'play',
+        toMode: 'analysis',
+        beforeTab: {id: tabId, mode: 'play'},
+        afterTab: {id: tabId, mode: 'analysis'},
+        analysisReturnTarget: {mode: 'play'},
+        analysisContext: {source: 'play'},
+        reason: 'manual',
+      })
+    },
     returnFromAnalysis(input) { calls.returnFromAnalysis.push(input) },
     completeRecall(tabId) { calls.completeRecall.push({ tabId }) },
     async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({ tabId }) },
     async startAttempt(tabId) { calls.startAttempt.push({ tabId }) },
+    setModeEffects(nextModeEffects) {
+      modeEffects = nextModeEffects
+    },
   }
 }
 

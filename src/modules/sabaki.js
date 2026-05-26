@@ -966,6 +966,10 @@ class Sabaki extends EventEmitter {
       const runtimeStore = createTrainingRuntimeStore({ logger })
       const repository = createTrainingRepository(window.sabaki.db, logger)
       const legacyAdapter = createLegacySabakiAdapter(this)
+      const appSettingAdapter = {
+        get: (key) => window.sabaki.setting.get(key),
+        set: (key, value) => window.sabaki.setting.set(key, value),
+      }
 
       const analysisResultAdapter = createAnalysisResultAdapter(this)
       const positionSnapshotAdapter = createPositionSnapshotAdapter(this)
@@ -1037,6 +1041,7 @@ class Sabaki extends EventEmitter {
         runtimeStore,
         repository,
         legacyAdapter,
+        appSettingAdapter,
         analysisResultAdapter,
         tabService,
         flowService,

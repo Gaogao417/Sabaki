@@ -19,6 +19,7 @@ export type RecallService = {
     recallSessionId: string
     userMove: string
   }): Promise<RecallAttempt>
+  skipRecallMove(recallSessionId: string): Promise<RecallAttempt | null>
   completeRecall(recallSessionId: string): Promise<void>
 }
 
@@ -192,6 +193,44 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     return recallAttempt
   }
 
+  async function skipRecallMove(recallSessionId: string): Promise<RecallAttempt | null> {
+    const session = await repository.loadRecallSession(recallSessionId)
+    if (!session) {
+      throw new Error(`recallService.skipRecallMove: session not found (id=${recallSessionId})`)
+    }
+    if (session.completed) return null
+
+    const moveIndex = session.currentMoveIndex
+    if (moveIndex >= session.expectedMoves.length) return null
+
+    const expectedMove = session.expectedMoves[moveIndex] || ''
+    const now = new Date().toISOString()
+    const id = `ra_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const recallAttempt: RecallAttempt = {
+      id,
+      recallSessionId,
+      moveNumber: moveIndex,
+      expectedMove,
+      userMove: 'skip',
+      isCorrect: false,
+      hintLevelUsed: 0,
+      createdAt: now,
+    }
+
+    await repository.createRecallAttempt(recallAttempt)
+    await repository.updateRecallSession(recallSessionId, {
+      currentMoveIndex: moveIndex + 1,
+    })
+    await refreshRecallView(recallSessionId)
+
+    logger?.info('recall.skip', 'Recall move skipped', {
+      sessionId: recallSessionId,
+      moveIndex,
+    })
+
+    return recallAttempt
+  }
+
   async function completeRecall(recallSessionId: string): Promise<void> {
     const session = await repository.loadRecallSession(recallSessionId)
     if (!session) {
@@ -250,6 +289,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     createRecallFromAttempt,
     createRecallFromGame,
     submitRecallMove,
+    skipRecallMove,
     completeRecall,
   }
 }

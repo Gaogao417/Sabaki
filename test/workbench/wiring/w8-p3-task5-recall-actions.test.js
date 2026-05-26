@@ -35,10 +35,10 @@
  *
  * Long-term vs migration:
  *   - T5-01..T5-03, T5-04..T5-08, T5-09..T5-11, T5-15: Long-term contract tests.
- *   - T5-14 (onHint via legacy controller): Migration-period test. Can be removed
- *     when legacyTrainingFlowController is replaced by a flowService-backed handler.
- *   - T5-GAP (onVerifySkip now connected): Was a migration-period test. Updated to verify
- *     onVerifySkip delegates to legacyTrainingFlowController.skipRecallMove().
+ *   - T5-14 (onHint via flow service): legacy controller dependency removed in
+ *     step10.2 cleanup.
+ *   - T5-GAP (onVerifySkip now connected): verifies onVerifySkip delegates to
+ *     workbenchFlowService.skipRecallMove().
  *
  * Workbench wiring coverage:
  *   - UI command mapping: T5-12 (ModeActions recall buttons), T5-13 (BottomActionBar recall buttons)
@@ -78,7 +78,7 @@
  *   2. T5-12, T5-13: Rely on data-testid attributes. If ModeActions/BottomActionBar
  *      change testIds, tests break. But the button rendering contract is stable.
  *   3. T5-GAP: Was confirming a negative (no handler key). Now verifies that
- *      onVerifySkip is wired and delegates to legacyTrainingFlowController.skipRecallMove().
+ *      onVerifySkip is wired and delegates to workbenchFlowService.skipRecallMove().
  *   4. T5-19: Tests fire-and-forget behavior by stubbing recallService.completeRecall
  *      to return a rejected promise. This relies on flowService internals calling
  *      .catch() on the promise. If the implementation changes to await the promise,
@@ -100,13 +100,13 @@
  *   | T5-11      | completeRecall/enterAnalysis/snapshot notify   | T5-11   | covered | STORE_SUBSCRIPTION            |
  *   | T5-12      | ModeActions recall renders 3 buttons           | T5-12   | covered | UI_COMMAND_MAPPING            |
  *   | T5-13      | BottomActionBar recall renders 4 buttons       | T5-13   | covered | UI_COMMAND_MAPPING            |
- *   | T5-14      | onHint -> legacy controller showRecallHint     | T5-14   | covered | CONTAINER_DELEGATION          |
+ *   | T5-14      | onHint -> flow service showRecallHint          | T5-14   | covered | CONTAINER_DELEGATION          |
  *   | T5-15      | Container does not write workbenchStore        | T5-15   | covered | ARCHITECTURE_BOUNDARY         |
  *   | T5-16      | onMarkCheckpoint is no-op                      | T5-16   | covered | CONTAINER_DELEGATION          |
  *   | T5-17      | activeTab null -> no flowService calls         | T5-17   | covered | CONTAINER_DELEGATION          |
  *   | T5-18      | completeRecall -> recall progress not projected | T5-18  | covered | PROJECTION_RETURN             |
  *   | T5-19      | recallService failure does not block mode switch | T5-19 | covered | SIDE_EFFECT_BOUNDARY          |
- *   | T5-GAP     | onVerifySkip delegates to legacy controller     | T5-GAP  | covered | CONTAINER_DELEGATION (resolved) |
+ *   | T5-GAP     | onVerifySkip delegates to flow service         | T5-GAP  | covered | CONTAINER_DELEGATION (resolved) |
  */
 
 import assert from 'assert'
@@ -299,12 +299,31 @@ function createFlowHarness({
   if (activeTabId != null) workbenchStore.setActiveTab(activeTabId)
   if (recallView != null) runtimeStore.setRecallView(recallView)
 
+  const recallServiceCalls = {
+    completeRecall: [],
+    skipRecallMove: [],
+  }
   const recallService = {
     async createRecallSession(input) { return { id: 'rs_new' } },
     async completeRecall(recallSessionId) {
+      recallServiceCalls.completeRecall.push({recallSessionId})
       if (rejectRecallComplete) {
         return Promise.reject(new Error('simulated recallService failure'))
       }
+    },
+    async skipRecallMove(recallSessionId) {
+      recallServiceCalls.skipRecallMove.push({recallSessionId})
+      const view = runtimeStore.getState().recallView
+      if (!view) return null
+      const nextIndex = view.moveIndex + 1
+      runtimeStore.setRecallView({
+        ...view,
+        moveIndex: nextIndex,
+        userAttempts: [...view.userAttempts, {vertex: 'skip', isCorrect: false}],
+        showHint: false,
+        completed: nextIndex >= view.expectedMoves.length,
+      })
+      return {id: 'ra_skip_1'}
     },
   }
 
@@ -371,6 +390,7 @@ function createFlowHarness({
     workbenchStore,
     runtimeStore,
     flowService,
+    recallServiceCalls,
     getActiveTab() {
       const ws = workbenchStore.getState()
       return ws.tabs.find(t => t.id === ws.activeTabId) || null
@@ -596,6 +616,36 @@ describe('W8-P3 Task5: Controller State Transition (T5-04..T5-08)', function () 
     // After: recallView must be null
     assert.strictEqual(harness.runtimeStore.getState().recallView, null,
       'completeRecall must clear runtimeStore.recallView to null')
+  })
+
+  it('T5-20: showRecallHint sets recallView.showHint through workbenchFlowService', function () {
+    const harness = createFlowHarness({
+      tabs: [makeTab({ id: 'tab_r1', mode: 'recall', activeRecallSessionId: 'rs_1' })],
+      recallView: makeRecallView({showHint: false}),
+    })
+
+    harness.flowService.showRecallHint('tab_r1')
+
+    assert.strictEqual(harness.runtimeStore.getState().recallView.showHint, true,
+      'showRecallHint must update runtimeStore.recallView.showHint')
+  })
+
+  it('T5-21: skipRecallMove delegates to recallService and advances recall projection', async function () {
+    const harness = createFlowHarness({
+      tabs: [makeTab({ id: 'tab_r1', mode: 'recall', activeRecallSessionId: 'rs_1' })],
+      recallView: makeRecallView({moveIndex: 2}),
+    })
+
+    await harness.flowService.skipRecallMove('tab_r1')
+
+    assert.deepStrictEqual(harness.recallServiceCalls.skipRecallMove, [
+      {recallSessionId: 'rs_1'},
+    ], 'skipRecallMove must delegate to recallService by active recall session')
+    const view = harness.runtimeStore.getState().recallView
+    assert.strictEqual(view.moveIndex, 3,
+      'skipRecallMove must advance the projected recall move index')
+    assert.strictEqual(view.userAttempts.at(-1).vertex, 'skip',
+      'skipRecallMove must append a skip attempt to the projected recall view')
   })
 })
 
@@ -827,16 +877,14 @@ describe('W8-P3 Task5: UI Command Mapping (T5-12, T5-13)', function () {
 })
 
 // ===================================================================
-// T5-14: CONTAINER_DELEGATION (onHint -> legacy controller)
+// T5-14: CONTAINER_DELEGATION (onHint -> flow service)
 // ===================================================================
 
 describe('W8-P3 Task5: onHint Delegation (T5-14)', function () {
 
-  // T5-14: onHint calls legacyTrainingFlowController.showRecallHint()
+  // T5-14: onHint calls workbenchFlowService.showRecallHint()
   // Production subject: Container shellHandlers.onHint
-  // Migration-period: uses legacy controller, not flowService. Can be updated when
-  //   legacy controller is replaced.
-  it('T5-14: onHint calls legacyTrainingFlowController.showRecallHint', function () {
+  it('T5-14: onHint calls workbenchFlowService.showRecallHint', function () {
     const harness = createHarness({
       tabs: [makeTab({ mode: 'recall' })],
       recallView: makeRecallView(),
@@ -847,11 +895,13 @@ describe('W8-P3 Task5: onHint Delegation (T5-14)', function () {
     assert.strictEqual(typeof shellProps.onHint, 'function',
       'Container must expose onHint callback')
 
-    // Source: TrainingWorkbenchContainer.js:265 onHint -> legacyTrainingFlowController.showRecallHint()
     shellProps.onHint()
 
-    assert.strictEqual(harness.legacyController.calls.showRecallHint.length, 1,
-      'onHint must call legacyTrainingFlowController.showRecallHint once')
+    assert.deepStrictEqual(harness.flowService.calls.showRecallHint, [
+      { tabId: 'tab_recall_1' },
+    ], 'onHint must call workbenchFlowService.showRecallHint once with the active tab id')
+    assert.strictEqual(harness.legacyController.calls.showRecallHint.length, 0,
+      'onHint must not call legacyTrainingFlowController.showRecallHint')
   })
 })
 
@@ -911,7 +961,7 @@ describe('W8-P3 Task5: Architecture Boundary (T5-15)', function () {
     // Call all recall action handlers
     shellProps.onEnd()       // handleEndRecall -> flowService.completeRecall (spy, no store write)
     shellProps.onAnalysis()  // handleEnterAnalysis -> flowService.enterAnalysis (spy, no store write)
-    shellProps.onHint()      // legacy controller (spy, no store write)
+    shellProps.onHint()      // flow service (spy, no store write)
     shellProps.onMarkCheckpoint() // no-op stub
 
     // The spy flowService does NOT write to the store, so updateTab should not be called
@@ -995,16 +1045,16 @@ describe('W8-P3 Task5: activeTab Null Guard (T5-17)', function () {
 })
 
 // ===================================================================
-// T5-GAP: CONTAINER_DELEGATION (onVerifySkip not wired)
+// T5-GAP: CONTAINER_DELEGATION (onVerifySkip flow path)
 // ===================================================================
 
 describe('W8-P3 Task5: onVerifySkip GAP (T5-GAP)', function () {
 
   // T5-GAP: Previously, BottomActionBar recall used callback name 'onVerifySkip' but
   // shellHandlers only had 'onSkip'. Now onVerifySkip is wired to
-  // legacyTrainingFlowController.skipRecallMove().
+  // workbenchFlowService.skipRecallMove().
   // Production subject: Container shellHandlers
-  it('T5-GAP: shellHandlers contains onVerifySkip that delegates to legacyTrainingFlowController.skipRecallMove', function () {
+  it('T5-GAP: shellHandlers contains onVerifySkip that delegates to workbenchFlowService.skipRecallMove', function () {
     const harness = createHarness({
       tabs: [makeTab({ mode: 'recall' })],
       recallView: makeRecallView(),
@@ -1018,7 +1068,10 @@ describe('W8-P3 Task5: onVerifySkip GAP (T5-GAP)', function () {
 
     shellProps.onVerifySkip()
 
-    assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 1,
-      'onVerifySkip must delegate to legacyTrainingFlowController.skipRecallMove')
+    assert.deepStrictEqual(harness.flowService.calls.skipRecallMove, [
+      { tabId: 'tab_recall_1' },
+    ], 'onVerifySkip must delegate to workbenchFlowService.skipRecallMove')
+    assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 0,
+      'onVerifySkip must not call legacyTrainingFlowController.skipRecallMove')
   })
 })

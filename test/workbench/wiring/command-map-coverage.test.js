@@ -90,6 +90,24 @@ describe('Workbench command map coverage', () => {
     }
   })
 
+  it('training commands do not retain legacy controller ownership', () => {
+    const legacyOwned = WORKBENCH_COMMANDS
+      .filter(command => command.owner === 'legacyTrainingFlowController')
+      .map(command => command.id)
+
+    assert.deepStrictEqual(
+      legacyOwned,
+      [],
+      `Workbench commands must route through service/adapter owners, not legacyTrainingFlowController: ${legacyOwned.join(', ')}`,
+    )
+
+    assert.strictEqual(
+      findWorkbenchCommand('bottom.hint')?.owner,
+      'workbenchFlowService',
+      'Recall hint command must route through workbenchFlowService',
+    )
+  })
+
   it('container wires every handler prop declared by visible commands', () => {
     const container = read(SOURCE_FILES.container)
     const missing = WORKBENCH_COMMANDS
@@ -178,5 +196,26 @@ describe('Workbench command map coverage', () => {
         `${id} must open the imported/synced TrainingTask through tabService.openTask`,
       )
     }
+  })
+
+  it('recall hint and skip handlers use flow service instead of legacy controller', () => {
+    const container = read(SOURCE_FILES.container)
+    const hintBody = extractFunctionBody(container, 'handleRequestHint')
+
+    assert.match(
+      hintBody,
+      /flowService\.showRecallHint\s*\(/,
+      'handleRequestHint must delegate recall hints to workbenchFlowService',
+    )
+    assert.doesNotMatch(
+      container,
+      /legacyTrainingFlowController\.(showRecallHint|skipRecallMove)/,
+      'TrainingWorkbenchContainer must not call recall hint/skip through legacyTrainingFlowController',
+    )
+    assert.doesNotMatch(
+      container,
+      /window\?*\.sabaki|window\.sabaki/,
+      'TrainingWorkbenchContainer must not read window.sabaki directly',
+    )
   })
 })

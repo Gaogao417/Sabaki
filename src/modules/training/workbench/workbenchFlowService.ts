@@ -54,6 +54,7 @@ export type WorkbenchFlowServiceDeps = {
     createRecallSession?: (
       input: Record<string, unknown>,
     ) => Promise<RecallSession>
+    skipRecallMove?: (recallSessionId: string) => Promise<unknown>
     completeRecall(recallSessionId: string): Promise<void>
   }
   recallCheckpointService?: RecallCheckpointService
@@ -146,6 +147,8 @@ export type WorkbenchFlowService = {
   ): void
   returnFromAnalysis(input: {tabId: string; reason?: ModeExitReason}): void
   enterRecall(input: {tabId: string; attemptId: string}): Promise<{id: string}>
+  showRecallHint(tabId: string): void
+  skipRecallMove(tabId: string): Promise<void>
   completeRecall(tabId: string): void
   restartAttempt(tabId: string): void
   startAttempt(tabId: string): Promise<void>
@@ -808,6 +811,70 @@ export function createWorkbenchFlowService(
     )
   }
 
+  function showRecallHint(tabId: string): void {
+    const tab = getTab(tabId)
+    if (tab.mode !== 'recall') {
+      throw new InvalidModeTransitionError(tab.id, tab.mode, 'showRecallHint')
+    }
+    if (!runtimeStore) {
+      throw new Error('workbenchFlowService.showRecallHint: runtimeStore is required')
+    }
+
+    const recallView = runtimeStore.getState().recallView
+    if (!recallView || recallView.completed) return
+
+    runtimeStore.setRecallView({
+      ...recallView,
+      showHint: true,
+    })
+
+    logger?.info('flow.recallHint', 'Recall hint shown', {
+      tabId,
+      recallSessionId: recallView.recallSessionId,
+      moveIndex: recallView.moveIndex,
+    })
+  }
+
+  async function skipRecallMove(tabId: string): Promise<void> {
+    const tab = getTab(tabId)
+    if (tab.mode !== 'recall') {
+      throw new InvalidModeTransitionError(tab.id, tab.mode, 'skipRecallMove')
+    }
+    if (!runtimeStore) {
+      throw new Error('workbenchFlowService.skipRecallMove: runtimeStore is required')
+    }
+
+    const recallView = runtimeStore.getState().recallView
+    if (!recallView || recallView.completed) return
+
+    const recallSessionId = tab.activeRecallSessionId ?? recallView.recallSessionId
+    if (recallSessionId && recallService.skipRecallMove) {
+      await recallService.skipRecallMove(recallSessionId)
+      return
+    }
+
+    const expected = recallView.expectedMoves[recallView.moveIndex]
+    if (!expected) return
+
+    const nextIndex = recallView.moveIndex + 1
+    runtimeStore.setRecallView({
+      ...recallView,
+      moveIndex: nextIndex,
+      userAttempts: [
+        ...recallView.userAttempts,
+        {vertex: 'skip', isCorrect: false},
+      ],
+      showHint: false,
+      completed: nextIndex >= recallView.expectedMoves.length,
+    })
+
+    logger?.info('flow.recallSkip', 'Recall move skipped', {
+      tabId,
+      recallSessionId,
+      moveIndex: recallView.moveIndex,
+    })
+  }
+
   function restartAttempt(tabId: string): void {
     const tab = getTab(tabId)
     const targetMode =
@@ -1131,6 +1198,8 @@ export function createWorkbenchFlowService(
     enterAnalysis,
     returnFromAnalysis,
     enterRecall,
+    showRecallHint,
+    skipRecallMove,
     completeRecall,
     restartAttempt,
     startAttempt,

@@ -81,13 +81,13 @@ class TrainingWorkbenchContainer extends Component {
   render() {
     const container = this
     const { sabaki, ...shellProps } = this.props
+    const trainingContext = sabaki.getTrainingContext()
     const {
       runtimeStore,
       workbenchStore,
-      legacyTrainingFlowController,
       flowService,
       tabService,
-    } = sabaki.getTrainingContext()
+    } = trainingContext
     this._tryInstallModeEffects(sabaki)
     const rt = typeof runtimeStore?.getState === 'function'
       ? runtimeStore.getState()
@@ -105,7 +105,7 @@ class TrainingWorkbenchContainer extends Component {
     const projected = projectFromRuntime(rt, activeTab)
 
     // Project workbench store state into UI props
-    const repository = sabaki.getTrainingContext().repository
+    const repository = trainingContext.repository
     const workbenchProjected = projectFromWorkbench(ws, repository, this)
 
     // --- Handler wiring: UI callback -> service method ---
@@ -352,7 +352,7 @@ class TrainingWorkbenchContainer extends Component {
 
     function handleRequestHint() {
       if (activeTab?.mode === 'recall') {
-        legacyTrainingFlowController.showRecallHint()
+        flowService.showRecallHint(activeTab.id)
         return
       }
 
@@ -411,7 +411,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleZoom(step) {
-      const appSetting = window?.sabaki?.setting
+      const appSetting = trainingContext.appSettingAdapter
       if (!appSetting) return
       const current = appSetting.get('app.zoom_factor') || 1
       appSetting.set('app.zoom_factor', Math.max(0.2, current + step))
@@ -632,8 +632,10 @@ class TrainingWorkbenchContainer extends Component {
     // Legacy prop names are retained for older shells, but problem commands
     // now route through the Workbench flow service.
     const legacyHandlers = {
-      onShowRecallHint: () => legacyTrainingFlowController.showRecallHint(),
-      onSkipRecallMove: () => legacyTrainingFlowController.skipRecallMove(),
+      onShowRecallHint: () =>
+        activeTab ? flowService.showRecallHint(activeTab.id) : undefined,
+      onSkipRecallMove: () =>
+        activeTab ? flowService.skipRecallMove(activeTab.id) : undefined,
       onUndoProblemMove: () =>
         activeTab ? flowService.undoProblemMove(activeTab.id) : undefined,
       onSubmitProblemAttempt: () =>
@@ -709,8 +711,10 @@ class TrainingWorkbenchContainer extends Component {
       onSkipCheckpoint: handleSkipCheckpoint,
       onSaveCheckpointComment: handleSaveCheckpointComment,
       // W4 recall panel callback aliases (RecallModePanel prop names)
-      onHint: () => legacyTrainingFlowController.showRecallHint(),
-      onSkip: () => legacyTrainingFlowController.skipRecallMove(),
+      onHint: () =>
+        activeTab ? flowService.showRecallHint(activeTab.id) : undefined,
+      onSkip: () =>
+        activeTab ? flowService.skipRecallMove(activeTab.id) : undefined,
       onEndRecall: handleEndRecall,
       // W4 DEFERRED: onMarkCheckpoint, onVerify, onRecallToggle
       onMarkCheckpoint: () => {
@@ -719,7 +723,8 @@ class TrainingWorkbenchContainer extends Component {
       onMark: () => {
         sabaki.flashInfoOverlay('检查点标记尚未接入')
       },
-      onVerify: () => legacyTrainingFlowController.skipRecallMove(),
+      onVerify: () =>
+        activeTab ? flowService.skipRecallMove(activeTab.id) : undefined,
       onRecallToggle: () => { },
       // W5 Analysis: restart attempt
       onRestartAttempt: handleRestartAttempt,
@@ -734,7 +739,8 @@ class TrainingWorkbenchContainer extends Component {
       onProblemOpponentChange: handleProblemOpponentChange,
       // W8-P3 GAP fixes: onAbandonAnswer and onVerifySkip wiring
       onAbandonAnswer: handleAbandon,
-      onVerifySkip: () => legacyTrainingFlowController.skipRecallMove(),
+      onVerifySkip: () =>
+        activeTab ? flowService.skipRecallMove(activeTab.id) : undefined,
       // W8-P4 Dashboard handlers
       onOpenDueReviewItem: handleOpenDueReviewItem,
       onOpenInboxTask: handleOpenInboxTask,

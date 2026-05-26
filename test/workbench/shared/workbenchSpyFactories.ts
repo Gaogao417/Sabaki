@@ -28,6 +28,8 @@ export type SpyFlowServiceCalls = {
   enterAnalysis: Array<Call<{tabId: string}>>
   returnFromAnalysis: Array<Call<{tabId: string}>>
   completeRecall: Array<Call<{tabId: string}>>
+  showRecallHint: Array<Call<{tabId: string}>>
+  skipRecallMove: Array<Call<{tabId: string}>>
   restartAttempt: Array<Call<{tabId: string}>>
   startAttempt: Array<Call<{tabId: string}>>
   submitCheckpointCorrection: Array<Call<{tabId: string}>>
@@ -91,6 +93,8 @@ export function createSpyFlowService(
     enterAnalysis: [],
     returnFromAnalysis: [],
     completeRecall: [],
+    showRecallHint: [],
+    skipRecallMove: [],
     restartAttempt: [],
     startAttempt: [],
     submitCheckpointCorrection: [],
@@ -122,6 +126,12 @@ export function createSpyFlowService(
     },
     completeRecall(tabId: string) {
       calls.completeRecall.push({tabId})
+    },
+    showRecallHint(tabId: string) {
+      calls.showRecallHint.push({tabId})
+    },
+    async skipRecallMove(tabId: string) {
+      calls.skipRecallMove.push({tabId})
     },
     restartAttempt(tabId: string) {
       calls.restartAttempt.push({tabId})

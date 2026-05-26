@@ -113,6 +113,8 @@ function createSpyFlowService() {
     enterAnalysis: [],
     returnFromAnalysis: [],
     completeRecall: [],
+    showRecallHint: [],
+    skipRecallMove: [],
     snapshotFromCurrentContext: [],
   }
   return {
@@ -121,6 +123,14 @@ function createSpyFlowService() {
     enterAnalysis(tabId) { calls.enterAnalysis.push({tabId}) },
     returnFromAnalysis(input) { calls.returnFromAnalysis.push(input) },
     completeRecall(tabId) { calls.completeRecall.push({tabId}) },
+    showRecallHint(tabId) {
+      calls.showRecallHint.push({tabId})
+      return null
+    },
+    async skipRecallMove(tabId) {
+      calls.skipRecallMove.push({tabId})
+      return null
+    },
     async snapshotFromCurrentContext(tabId) { calls.snapshotFromCurrentContext.push({tabId}) },
   }
 }
@@ -337,7 +347,7 @@ describe('W4 Recall Mode Wiring', function () {
     // --- W4-T01: Hint sets showHint=true in recallView ---
 
     describe('W4-T01: Hint sets showHint=true', function () {
-      it('calls legacyTrainingFlowController.showRecallHint which sets showHint=true', function () {
+      it('calls workbenchFlowService.showRecallHint without using legacy controller', function () {
         const harness = createHarness({
           tabs: [makeTab({mode: 'recall'})],
           recallView: makeRecallView({showHint: false}),
@@ -353,16 +363,15 @@ describe('W4 Recall Mode Wiring', function () {
           'Container must expose onShowRecallHint callback')
         shellProps.onShowRecallHint()
 
-        // Verify legacy controller was called
-        assert.strictEqual(harness.legacyController.calls.showRecallHint.length, 1,
-          'legacyTrainingFlowController.showRecallHint must be called once')
+        assert.deepStrictEqual(harness.flowService.calls.showRecallHint, [
+          {tabId: 'tab_1'},
+        ], 'workbenchFlowService.showRecallHint must be called once')
+        assert.strictEqual(harness.legacyController.calls.showRecallHint.length, 0,
+          'legacyTrainingFlowController.showRecallHint must not be called')
 
-        // The legacy controller updates runtimeStore directly, but since we are
-        // using a spy (not the real legacy controller), we verify through the store
-        // that the state forward works: the handler pattern routes through the
-        // controller, and the controller sets showHint=true.
-        // To prove the full state forward, we simulate what the legacy controller
-        // would do (since it sets showHint directly on the store):
+        // The spy flow service only records delegation. Simulate the service
+        // state write so this older state-forward assertion remains scoped to
+        // the Container callback contract.
         harness.runtimeStore.setRecallView({
           ...harness.runtimeStore.getState().recallView,
           showHint: true,
@@ -376,7 +385,7 @@ describe('W4 Recall Mode Wiring', function () {
     // --- W4-T02: Skip advances moveIndex, adds wrong attempt ---
 
     describe('W4-T02: Skip advances moveIndex, adds wrong attempt', function () {
-      it('calls legacyTrainingFlowController.skipRecallMove which advances moveIndex', function () {
+      it('calls workbenchFlowService.skipRecallMove without using legacy controller', function () {
         const baseView = makeRecallView({
           moveIndex: 2,
           userAttempts: [
@@ -400,11 +409,13 @@ describe('W4 Recall Mode Wiring', function () {
           'Container must expose onSkipRecallMove callback')
         shellProps.onSkipRecallMove()
 
-        // Verify legacy controller was called
-        assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 1,
-          'legacyTrainingFlowController.skipRecallMove must be called once')
+        assert.deepStrictEqual(harness.flowService.calls.skipRecallMove, [
+          {tabId: 'tab_1'},
+        ], 'workbenchFlowService.skipRecallMove must be called once')
+        assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 0,
+          'legacyTrainingFlowController.skipRecallMove must not be called')
 
-        // Simulate what the real legacy controller does:
+        // Simulate what the real flow service does:
         // moveIndex += 1, userAttempts += skip attempt
         const view = harness.runtimeStore.getState().recallView
         harness.runtimeStore.setRecallView({
@@ -1100,19 +1111,23 @@ describe('W4 Recall Mode Wiring', function () {
 
         const shellProps = harness.getShellProps()
 
-        // onHint routes to legacy controller showRecallHint
+        // onHint routes to workbenchFlowService.showRecallHint
         assert.strictEqual(typeof shellProps.onHint, 'function',
           'onHint callback must exist')
         shellProps.onHint()
-        assert.strictEqual(harness.legacyController.calls.showRecallHint.length, 1,
-          'onHint must route to legacyTrainingFlowController.showRecallHint')
+        assert.strictEqual(harness.flowService.calls.showRecallHint.length, 1,
+          'onHint must route to workbenchFlowService.showRecallHint')
+        assert.strictEqual(harness.legacyController.calls.showRecallHint.length, 0,
+          'onHint must not route to legacyTrainingFlowController.showRecallHint')
 
-        // onSkip routes to legacy controller skipRecallMove
+        // onSkip routes to workbenchFlowService.skipRecallMove
         assert.strictEqual(typeof shellProps.onSkip, 'function',
           'onSkip callback must exist')
         shellProps.onSkip()
-        assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 1,
-          'onSkip must route to legacyTrainingFlowController.skipRecallMove')
+        assert.strictEqual(harness.flowService.calls.skipRecallMove.length, 1,
+          'onSkip must route to workbenchFlowService.skipRecallMove')
+        assert.strictEqual(harness.legacyController.calls.skipRecallMove.length, 0,
+          'onSkip must not route to legacyTrainingFlowController.skipRecallMove')
 
         // onEndRecall routes to flowService.completeRecall
         assert.strictEqual(typeof shellProps.onEndRecall, 'function',

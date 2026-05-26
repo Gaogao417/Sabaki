@@ -11,7 +11,6 @@ export type WorkbenchCommandSurface =
 export type WorkbenchCommandOwner =
   | 'workbenchFlowService'
   | 'workbenchTabService'
-  | 'legacyTrainingFlowController'
   | 'scratchEditInteractionExecutor'
   | 'taskImportService'
   | 'reviewService'
@@ -134,7 +133,7 @@ export const WORKBENCH_COMMANDS: WorkbenchCommand[] = [
     surface: 'bottombar',
     modes: ['problem', 'recall'],
     label: '提示',
-    owner: 'legacyTrainingFlowController',
+    owner: 'workbenchFlowService',
     handlerProp: 'onRequestHint',
     disabledReason: '当前没有可用提示',
   },
