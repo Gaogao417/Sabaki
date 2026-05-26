@@ -451,10 +451,10 @@ describe('W8-P3 Task5: Recall Action Container Delegation (T5-01..T5-03)', funct
     ], 'onAnalysis must call flowService.enterAnalysis once with the active tab id')
   })
 
-  // T5-03: handleSnapshot calls flowService.snapshotFromCurrentContext(activeTab.id)
+  // T5-03: handleSnapshot enters analysis before snapshot persistence
   // Production subject: Container shellHandlers.onSnapshot
-  // Production bug: onSnapshot does not call flowService.snapshotFromCurrentContext
-  it('T5-03: onSnapshot calls flowService.snapshotFromCurrentContext with activeTab.id', async function () {
+  // Production bug: onSnapshot bypasses enterAnalysis guard
+  it('T5-03: onSnapshot calls flowService.enterAnalysis with activeTab.id', async function () {
     const harness = createHarness({
       tabs: [makeTab({ id: 'tab_r1', mode: 'recall' })],
       recallView: makeRecallView(),
@@ -465,12 +465,13 @@ describe('W8-P3 Task5: Recall Action Container Delegation (T5-01..T5-03)', funct
     assert.strictEqual(typeof shellProps.onSnapshot, 'function',
       'Container must expose onSnapshot callback')
 
-    // Source: TrainingWorkbenchContainer.js:127 handleSnapshot -> flowService.snapshotFromCurrentContext
     await shellProps.onSnapshot()
 
-    assert.deepStrictEqual(harness.flowService.calls.snapshotFromCurrentContext, [
+    assert.deepStrictEqual(harness.flowService.calls.enterAnalysis, [
       { tabId: 'tab_r1' },
-    ], 'onSnapshot must call flowService.snapshotFromCurrentContext once with the active tab id')
+    ], 'onSnapshot must call flowService.enterAnalysis once with the active tab id')
+    assert.deepStrictEqual(harness.flowService.calls.snapshotFromCurrentContext, [],
+      'non-analysis Snapshot must not call persistence directly')
   })
 })
 

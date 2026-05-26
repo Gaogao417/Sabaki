@@ -71,12 +71,17 @@ function createHarness({tab = makeTab()} = {}) {
   workbenchStore.setActiveTab(tab.id)
 
   const flowService = {
-    enterAnalysis(tabId) {
-      calls.enterAnalysis.push({tabId})
+    enterAnalysis(tabId, options = {}) {
+      calls.enterAnalysis.push({tabId, options})
       const current = workbenchStore.getState().tabs.find(item => item.id === tabId)
       workbenchStore.updateTab(tabId, {
         mode: 'analysis',
         analysisReturnTarget: current ? {mode: current.mode} : undefined,
+      })
+      sabaki.setState({
+        mode: 'analysis',
+        editWorkspace: sabaki.createAnalysisWorkspace(),
+        analysisType: 'full',
       })
     },
     async snapshotFromCurrentContext(tabId) {
@@ -210,45 +215,47 @@ function createHarness({tab = makeTab()} = {}) {
 }
 
 describe('Snapshot null-task enter-analysis guard', function () {
-  it('routes non-analysis Snapshot on taskId:null through enterAnalysis without creating a snapshot task', async function () {
-    const harness = createHarness({
-      tab: makeTab({id: 'tab_default', taskId: null, mode: 'play'}),
+  for (const mode of ['play', 'problem', 'recall']) {
+    it(`routes ${mode} Snapshot through enterAnalysis without creating a snapshot task`, async function () {
+      const harness = createHarness({
+        tab: makeTab({id: `tab_${mode}`, taskId: null, mode}),
+      })
+
+      const shellProps = harness.container.render().props
+      await shellProps.onSnapshot()
+
+      assert.deepStrictEqual(
+        harness.calls.enterAnalysis,
+        [{tabId: `tab_${mode}`, options: {reason: 'snapshot'}}],
+        'global Snapshot from non-analysis must enter Analysis first',
+      )
+      assert.deepStrictEqual(
+        harness.calls.snapshotFromCurrentContext,
+        [],
+        'non-analysis Snapshot must not persist directly from a null-task tab',
+      )
+      assert.deepStrictEqual(
+        harness.calls.openTask,
+        [],
+        'non-analysis Snapshot must not open a snapshot child tab before Analysis',
+      )
+
+      const activeTab = harness.workbenchStore.getState().tabs.find(
+        item => item.id === `tab_${mode}`,
+      )
+      assert.strictEqual(activeTab.mode, 'analysis')
+      assert.strictEqual(activeTab.analysisReturnTarget.mode, mode)
+      assert.strictEqual(harness.sabaki.state.mode, 'analysis')
+      assert.ok(
+        harness.sabaki.state.editWorkspace,
+        'enter-analysis guard must initialize an analysis scratch workspace',
+      )
     })
-
-    const shellProps = harness.container.render().props
-    await shellProps.onSnapshot()
-
-    assert.deepStrictEqual(
-      harness.calls.enterAnalysis,
-      [{tabId: 'tab_default'}],
-      'global Snapshot from non-analysis must enter Analysis first',
-    )
-    assert.deepStrictEqual(
-      harness.calls.snapshotFromCurrentContext,
-      [],
-      'non-analysis Snapshot must not persist directly from a null-task tab',
-    )
-    assert.deepStrictEqual(
-      harness.calls.openTask,
-      [],
-      'non-analysis Snapshot must not open a snapshot child tab before Analysis',
-    )
-
-    const activeTab = harness.workbenchStore.getState().tabs.find(
-      item => item.id === 'tab_default',
-    )
-    assert.strictEqual(activeTab.mode, 'analysis')
-    assert.strictEqual(activeTab.analysisReturnTarget.mode, 'play')
-    assert.strictEqual(harness.sabaki.state.mode, 'analysis')
-    assert.ok(
-      harness.sabaki.state.editWorkspace,
-      'enter-analysis guard must initialize an analysis scratch workspace',
-    )
-  })
+  }
 
   it('keeps direct snapshot persistence scoped to already-analysis tabs', async function () {
     const harness = createHarness({
-      tab: makeTab({id: 'tab_analysis', taskId: null, mode: 'analysis'}),
+      tab: makeTab({id: 'tab_analysis', taskId: 'task_analysis', mode: 'analysis'}),
     })
 
     const shellProps = harness.container.render().props

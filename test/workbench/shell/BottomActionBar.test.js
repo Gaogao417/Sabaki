@@ -175,6 +175,7 @@ describe('BottomActionBar (T-4.3)', function () {
       'action-redo',
       'action-clear',
       'action-edit-position',
+      'action-snapshot',
       ...commonButtons,
     ]
 
@@ -217,6 +218,22 @@ describe('BottomActionBar (T-4.3)', function () {
 
     passBtn.click()
     assert.strictEqual(calls.pass, true, 'onPass should fire on pass click')
+  })
+
+  it('T-4.3e2: analysis snapshot button fires callback', () => {
+    let snapshotCalls = 0
+    const {queryByTestId} = renderToDom(
+      h(BottomActionBar, noopProps({
+        mode: 'analysis',
+        onSnapshot: () => { snapshotCalls += 1 },
+      }))
+    )
+
+    const snapshotBtn = queryByTestId('action-snapshot')
+    assert.ok(snapshotBtn, 'Analysis mode should expose data-testid="action-snapshot"')
+
+    snapshotBtn.click()
+    assert.strictEqual(snapshotCalls, 1, 'onSnapshot should fire on snapshot click')
   })
 
   // --- T-4.3f: analysis annotation tools render ---

@@ -441,10 +441,10 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
       })
     })
 
-    // --- T4-03: handleSnapshot calls flowService.snapshotFromCurrentContext(activeTab.id) ---
+    // --- T4-03: handleSnapshot enters analysis before snapshot persistence ---
 
-    describe('T4-03: handleSnapshot delegates to flowService.snapshotFromCurrentContext', function () {
-      it('onSnapshot calls flowService.snapshotFromCurrentContext with activeTab.id', async function () {
+    describe('T4-03: handleSnapshot delegates to flowService.enterAnalysis first', function () {
+      it('onSnapshot from play calls flowService.enterAnalysis with activeTab.id', async function () {
         const harness = createDelegationHarness({
           tabs: [makePlayTab({id: 'tab_snap'})],
         })
@@ -456,9 +456,11 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
 
         await shellProps.onSnapshot()
 
-        assert.deepStrictEqual(harness.flowService.calls.snapshotFromCurrentContext, [
+        assert.deepStrictEqual(harness.flowService.calls.enterAnalysis, [
           {tabId: 'tab_snap'},
-        ], 'flowService.snapshotFromCurrentContext must be called with active tab id -- Contract T4-03')
+        ], 'flowService.enterAnalysis must be called with active tab id -- Contract T4-03')
+        assert.deepStrictEqual(harness.flowService.calls.snapshotFromCurrentContext, [],
+          'non-analysis Snapshot must not call persistence directly -- Contract T4-03')
       })
     })
 
@@ -1154,7 +1156,11 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
     describe('T4-20: snapshotService does not call tabService.openTask', function () {
       it('snapshotService.captureSnapshotInput returns data without calling tabService', async function () {
         const workbenchStore = createWorkbenchStore({logger})
-        workbenchStore.addTab(makePlayTab({id: 'tab_se', taskId: 'task_se'}))
+        workbenchStore.addTab(makeProblemTab({
+          id: 'tab_se',
+          taskId: 'task_se',
+          mode: 'analysis',
+        }))
 
         const spyRepository = {
           async loadTask(taskId) {

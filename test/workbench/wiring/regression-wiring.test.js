@@ -464,15 +464,15 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
   // R-T06: handleSnapshot still works
   // ===================================================
 
-  describe('R-T06: handleSnapshot still calls flowService.snapshotFromCurrentContext', function () {
-    // R-T06: handleSnapshot still calls flowService.snapshotFromCurrentContext.
+  describe('R-T06: handleSnapshot still routes through flowService', function () {
+    // R-T06: handleSnapshot calls enterAnalysis before persistence outside analysis.
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container.handleSnapshot
     // Real Dependencies: Container render
     // Mocked Dependencies: flowService (spy)
-    // Primary Assertion: flowService.snapshotFromCurrentContext called
+    // Primary Assertion: flowService.enterAnalysis called
 
-    it('onSnapshot calls flowService.snapshotFromCurrentContext with activeTab.id', async function () {
+    it('onSnapshot calls flowService.enterAnalysis with activeTab.id outside analysis', async function () {
       const harness = createRegressionHarness({
         tabs: [makePlayTab({id: 'tab_rt6'})],
       })
@@ -484,8 +484,10 @@ describe('W8-P4 Regression: Existing Wiring Still Works', function () {
 
       await shellProps.onSnapshot()
 
-      assert.deepStrictEqual(harness.flowService.calls.snapshotFromCurrentContext, [{tabId: 'tab_rt6'}],
-        'flowService.snapshotFromCurrentContext must be called -- Regression R-T06')
+      assert.deepStrictEqual(harness.flowService.calls.enterAnalysis, [{tabId: 'tab_rt6'}],
+        'flowService.enterAnalysis must be called -- Regression R-T06')
+      assert.deepStrictEqual(harness.flowService.calls.snapshotFromCurrentContext, [],
+        'non-analysis Snapshot must not call persistence directly -- Regression R-T06')
     })
   })
 

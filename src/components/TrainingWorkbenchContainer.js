@@ -164,6 +164,12 @@ class TrainingWorkbenchContainer extends Component {
 
     async function handleSnapshot() {
       if (!activeTab) return
+
+      if (activeTab.mode !== 'analysis') {
+        flowService.enterAnalysis(activeTab.id, {reason: 'snapshot'})
+        return
+      }
+
       await flowService.snapshotFromCurrentContext(activeTab.id)
     }
 

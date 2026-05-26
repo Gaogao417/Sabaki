@@ -159,6 +159,7 @@ export default function BottomActionBar({
         options.primary ? 'wb-visual-action--primary' : '',
         options.disabled ? 'wb-visual-action--disabled' : '',
       ].filter(Boolean).join(' '),
+      'data-testid': options.testId,
       disabled: options.disabled,
       onClick: callback,
     }, label)
@@ -197,7 +198,9 @@ export default function BottomActionBar({
       return [
         visualButton('←  上一步', callbacks.onUndo),
         visualButton('下一手  →', callbacks.onRedo),
-        visualButton('⊕  添加参考变化', callbacks.onSnapshot),
+        visualButton('⊕  添加参考变化', callbacks.onSnapshot, {
+          testId: 'action-snapshot',
+        }),
         visualButton('▦  Edit Position', callbacks.onEditPosition),
         h('label', {class: 'wb-visual-toggle'}, '显示候选手', h('input', {type: 'checkbox', checked: true}), h('span', {})),
         visualButton('⚙', callbacks.onSettings),
