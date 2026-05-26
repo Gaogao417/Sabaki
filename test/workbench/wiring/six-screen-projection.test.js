@@ -515,6 +515,7 @@ function seedCheckpointRuntime(runtimeStore) {
   runtimeStore.setCorrectionDraft({
     checkpointId: 'chk_s6p_1',
     moves: ['Q16', 'R16', 'S16', 'T16'],
+    label: SENTINELS.checkpointCorrection,
   })
 }
 

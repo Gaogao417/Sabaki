@@ -24,6 +24,10 @@ function Divider() {
   return h('span', {class: 'wb-topbar-divider'})
 }
 
+function formatLine(line) {
+  return Array.isArray(line) ? line.filter(Boolean).join(' ') : ''
+}
+
 function ActionButton({children, primary = false, danger = false, onClick, testId}) {
   const cls = [
     'wb-topbar-action',
@@ -90,16 +94,20 @@ export default function ModeBar({
     (activeCheckpoint || activeCheckpointId || String(recallSubstate).startsWith('checkpoint'))
   const title = taskTitle ||
     (activeMode === 'problem' ? '攻击方向训练 #12' : '黑方 vs 白方 #1')
+  const checkpointMoveNumber = activeCheckpoint?.moveNumber
+  const checkpointOriginalMove = activeCheckpoint?.originalMoveLabel ||
+    formatLine(activeCheckpoint?.originalLine?.slice(0, 1))
+  const checkpointSeverity = activeCheckpoint?.severityLabel || activeCheckpoint?.severity || ''
 
   function renderMeta() {
     if (isCheckpoint) {
       return [
         h(Pill, {tone: 'warning'}, '⚠ Checkpoint'),
-        h('span', {class: 'wb-topbar-meta'}, '第 76 手'),
-        h('span', {class: 'wb-topbar-dot'}, '·'),
-        h('span', {class: 'wb-topbar-meta'}, '原手 R10'),
-        h('span', {class: 'wb-topbar-dot'}, '·'),
-        h('span', {class: 'wb-topbar-severity'}, 'severe'),
+        checkpointMoveNumber != null && h('span', {class: 'wb-topbar-meta'}, `第 ${checkpointMoveNumber} 手`),
+        checkpointOriginalMove && h('span', {class: 'wb-topbar-dot'}, '·'),
+        checkpointOriginalMove && h('span', {class: 'wb-topbar-meta'}, `原手 ${checkpointOriginalMove}`),
+        checkpointSeverity && h('span', {class: 'wb-topbar-dot'}, '·'),
+        checkpointSeverity && h('span', {class: 'wb-topbar-severity'}, checkpointSeverity),
       ]
     }
 

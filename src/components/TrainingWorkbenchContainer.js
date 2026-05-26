@@ -1194,9 +1194,20 @@ function projectFromRuntime(rt, activeTab = null) {
     result.progress = v.expectedMoves.length > 0
       ? Math.round((v.moveIndex / v.expectedMoves.length) * 100)
       : 0
+    result.errorRecords = v.userAttempts
+      .map((attempt, index) => ({
+        moveNumber: index + 1,
+        vertex: attempt.vertex,
+        isCorrect: attempt.isCorrect,
+        sideLabel: formatExpectedMoveSide(v.expectedMoves[index]?.sign),
+      }))
+      .filter(attempt => !attempt.isCorrect)
     result.activeCheckpointId = rt.activeCheckpointId || null
     result.recallOriginalLine = !rt.activeCheckpointId
     result.canSubmitCorrection = !!rt.correctionDraft?.moves?.length
+    result.recallProgress = v.moveIndex
+    result.recallTotal = v.expectedMoves.length
+    result.recallWaiting = !v.completed
 
     if (v.completed) {
       result.state = 'success'
@@ -1283,7 +1294,10 @@ function projectFromWorkbench(ws, repository, container) {
       (activeTab.mode === 'recall' && activeCheckpointId ? 'checkpoint_correction' : 'normal')
 
     if (activeTab.mode === 'recall' && container) {
-      const checkpoint = container._activeCheckpointProjection || null
+      const checkpoint = applyCheckpointRuntimeProjection(
+        container._activeCheckpointProjection || null,
+        runtimeStore?.getState?.(),
+      )
       result.activeCheckpoint = checkpoint
       result.checkpoints = checkpoint ? [checkpoint] : []
       result.canRevealAi = !!checkpoint && checkpoint.userCorrectionLine.length > 0 &&
@@ -1333,6 +1347,12 @@ function projectFromWorkbench(ws, repository, container) {
   return result
 }
 
+function formatExpectedMoveSide(sign) {
+  if (sign === 1) return '黑方'
+  if (sign === -1) return '白方'
+  return ''
+}
+
 async function loadActiveCheckpointProjection(repository, activeCheckpointId, activeTab) {
   const checkpoint = await repository.loadRecallCheckpoint(activeCheckpointId)
   if (!checkpoint) return null
@@ -1356,8 +1376,8 @@ async function loadActiveCheckpointProjection(repository, activeCheckpointId, ac
 }
 
 function toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, comment}) {
-  const moveNumber = badMove?.moveIndex ?? checkpoint.moveNumber ?? ''
-  const severityLabel = checkpoint.severityLabel || badMove?.severity || ''
+  const moveNumber = checkpoint.moveNumber ?? badMove?.moveIndex ?? ''
+  const severityLabel = checkpoint.severityLabel || checkpoint.severity || badMove?.severity || ''
   const source = checkpoint.source || (badMove ? 'system' : '')
   const sourceLabel = checkpoint.sourceLabel || (
     source === 'manual' ? '用户手动' : source === 'system' ? '系统' : ''
@@ -1376,6 +1396,7 @@ function toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, com
     source,
     sourceLabel,
     severityLabel,
+    severity: checkpoint.severity || severityLabel,
     summary,
     status: checkpoint.status,
     statusLabel: checkpoint.status === 'ai_revealed'
@@ -1384,10 +1405,32 @@ function toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, com
         ? '保存中'
         : '先自己摆修正图',
     originalLine,
+    originalMoveLabel: originalLine[0] || '',
     userCorrectionLine,
     aiCandidateLines,
+    scoreDrop: evaluation?.scoreDrop,
+    scoreDropLabel: evaluation?.scoreDropLabel || formatScoreDrop(evaluation?.scoreDrop),
     userCommentContent: comment?.content || '',
   }
+}
+
+function applyCheckpointRuntimeProjection(checkpoint, runtimeState) {
+  if (!checkpoint) return null
+
+  const draft = runtimeState?.correctionDraft
+  if (!draft || draft.checkpointId !== checkpoint.id) return checkpoint
+
+  const draftLabel = draft.label || (Array.isArray(draft.moves) ? draft.moves.join(' ') : '')
+  return {
+    ...checkpoint,
+    correctionDraftLine: Array.isArray(draft.moves) ? draft.moves : [],
+    correctionDraftLabel: draftLabel,
+  }
+}
+
+function formatScoreDrop(scoreDrop) {
+  if (scoreDrop == null || scoreDrop === '') return ''
+  return String(scoreDrop)
 }
 
 export default TrainingWorkbenchContainer

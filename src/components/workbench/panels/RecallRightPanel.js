@@ -19,10 +19,13 @@ export default function RecallRightPanel({
   hintMessage = '',
   systemCheckpoints = 0,
   manualCheckpoints = 0,
+  currentMove = 0,
   correctCount = 0,
   wrongCount = 0,
   progress = 0,
   totalMoves = 0,
+  status = '',
+  errorRecords = [],
   activeCheckpoint = null,
   activeCheckpointId = null,
   recallSubstate = 'normal',
@@ -40,7 +43,15 @@ export default function RecallRightPanel({
   const formatLine = line => Array.isArray(line) ? line.join(' ') : ''
   const originalLine = activeCheckpoint?.originalLine || []
   const correctionLine = activeCheckpoint?.userCorrectionLine || []
+  const draftLine = activeCheckpoint?.correctionDraftLine || correctionLine
+  const correctionLabel = activeCheckpoint?.correctionDraftLabel || formatLine(draftLine)
   const aiCandidateLines = activeCheckpoint?.aiCandidateLines || []
+  const scoreDropLabel = activeCheckpoint?.scoreDropLabel ||
+    (activeCheckpoint?.scoreDrop != null ? String(activeCheckpoint.scoreDrop) : '')
+  const severityLabel = activeCheckpoint?.severityLabel || activeCheckpoint?.severity || ''
+  const currentProgress = currentMove || correctCount + wrongCount
+  const currentStatus = status || '等待输入下一手'
+  const visibleErrorRecords = Array.isArray(errorRecords) ? errorRecords : []
 
   function handleSaveCheckpointComment() {
     const content = (checkpointCommentRef.current?.value || checkpointComment).trim()
@@ -56,9 +67,9 @@ export default function RecallRightPanel({
       h('div', {class: 'wb-card wb-checkpoint-card wb-checkpoint-card--bad'},
         h('div', {class: 'wb-panel-title wb-step-title'}, h('span', {}, '1'), '问题手'),
         h('div', {class: 'wb-checkpoint-metrics'},
-          h('div', {}, h('span', {}, '原手'), h('strong', {}, '● ', formatLine(originalLine.slice(0, 1)) || 'R10')),
-          h('div', {}, h('span', {}, '严重度'), h('strong', {class: 'danger'}, activeCheckpoint?.severity || 'severe')),
-          h('div', {}, h('span', {}, '目差变化'), h('strong', {class: 'danger'}, '-11.2 目 ↓')),
+          h('div', {}, h('span', {}, '原手'), h('strong', {}, '● ', formatLine(originalLine.slice(0, 1)))),
+          h('div', {}, h('span', {}, '严重度'), h('strong', {class: 'danger'}, severityLabel)),
+          h('div', {}, h('span', {}, '目差变化'), h('strong', {class: 'danger'}, scoreDropLabel ? `${scoreDropLabel} 目 ↓` : '未评估')),
         ),
         h('p', {class: 'wb-checkpoint-warning'}, '△ 此手导致局面急剧恶化，请先思考更好的修正方案。'),
       ),
@@ -67,8 +78,9 @@ export default function RecallRightPanel({
         h('div', {class: 'wb-panel-title wb-step-title wb-step-title--blue'}, h('span', {}, '2'), '修正图草稿',
           h('button', {class: 'wb-link-button'}, '↶ 重置草稿'),
         ),
-        h('div', {class: 'wb-checkpoint-draft-meta'}, '已摆 ', correctionLine.length || 3, ' 手'),
+        h('div', {class: 'wb-checkpoint-draft-meta'}, '已摆 ', draftLine.length, ' 手'),
         h('p', {class: 'wb-checkpoint-instruction'}, '请在棋盘上摆出你认为更好的修正走法。'),
+        correctionLabel && h('p', {class: 'wb-checkpoint-instruction'}, correctionLabel),
         h(MiniBoard, {
           labels: [
             {text: '1', x: 4, y: 4, tone: 'white'},
@@ -92,7 +104,7 @@ export default function RecallRightPanel({
             ),
             h('div', {class: 'wb-checkpoint-line'},
               h('span', {}, '用户修正'),
-              h('strong', {}, formatLine(correctionLine)),
+              h('strong', {}, correctionLabel),
             ),
             h('div', {class: 'wb-checkpoint-line wb-checkpoint-line--stack'},
               h('span', {}, 'AI candidates'),
@@ -110,6 +122,8 @@ export default function RecallRightPanel({
 
       h('div', {class: 'wb-card wb-checkpoint-card'},
         h('div', {class: 'wb-panel-title wb-step-title wb-step-title--orange'}, h('span', {}, '4'), '反思记录（可选）'),
+        activeCheckpoint?.userCommentContent &&
+          h('p', {class: 'wb-checkpoint-comment-content'}, activeCheckpoint.userCommentContent),
         showCommentEditor
           ? h('div', {class: 'wb-checkpoint-comment-editor'},
               h('textarea', {
@@ -142,23 +156,23 @@ export default function RecallRightPanel({
   },
     h('div', {class: 'wb-card wb-recall-progress-card'},
       h('div', {class: 'wb-panel-title'}, '回忆进度'),
-      h('div', {class: 'wb-recall-progress-card__count'}, '第 ', correctCount + wrongCount || 23, ' / ', totalMoves || 180, ' 手',
-        h('span', {}, Math.max(progress || 13, 13), '%'),
+      h('div', {class: 'wb-recall-progress-card__count'}, '第 ', currentProgress, ' / ', totalMoves, ' 手',
+        h('span', {}, progress, '%'),
       ),
-      h('div', {class: 'wb-progress-line'}, h('span', {style: `width:${Math.max(progress || 13, 13)}%`})),
+      h('div', {class: 'wb-progress-line'}, h('span', {style: `width:${progress}%`})),
       h('div', {class: 'wb-recall-progress-card__stats'},
-        h('div', {}, h('span', {}, '已正确'), h('strong', {}, correctCount || 22)),
-        h('div', {}, h('span', {}, '错误'), h('strong', {class: 'danger'}, wrongCount || 1)),
+        h('div', {}, h('span', {}, '已正确'), h('strong', {}, correctCount)),
+        h('div', {}, h('span', {}, '错误'), h('strong', {class: 'danger'}, wrongCount)),
         h('div', {}, h('span', {}, '跳过'), h('strong', {}, '0')),
       ),
     ),
 
     h('div', {class: 'wb-card wb-recall-status-card'},
       h('div', {class: 'wb-panel-title'}, '当前状态'),
-      h('div', {class: 'wb-recall-current-side'}, h('span', {class: 'wb-stone-indicator wb-stone-indicator--black wb-stone-indicator--inline'}), '黑方落子'),
+      h('div', {class: 'wb-recall-current-side'}, currentStatus),
       h('div', {class: 'wb-recall-status-card__row'},
         h('span', {}, '当前手数'),
-        h('strong', {}, '第 ', correctCount + wrongCount || 23, ' 手（黑方）'),
+        h('strong', {}, '第 ', currentProgress, ' 手'),
       ),
     ),
 
@@ -166,12 +180,16 @@ export default function RecallRightPanel({
       h('div', {class: 'wb-panel-title'}, '错误记录', h('span', {}, wrongCount || 1)),
       h('div', {class: 'wb-error-table'},
         h('div', {}, h('span', {}, '手数'), h('span', {}, '落子方'), h('span', {}, '结果')),
-        h('button', {},
-          h('span', {}, '第 18 手'),
-          h('span', {}, '○ 白方'),
-          h('span', {class: 'danger'}, '错误'),
-          h('span', {}, '›'),
-        ),
+        visibleErrorRecords.length > 0
+          ? visibleErrorRecords.map((record, index) =>
+              h('button', {key: `${record.moveNumber}-${index}`},
+                h('span', {}, '第 ', record.moveNumber, ' 手'),
+                h('span', {}, record.sideLabel || ''),
+                h('span', {class: 'danger'}, '错误'),
+                h('span', {}, '›'),
+              )
+            )
+          : h('div', {class: 'wb-panel-caption'}, '暂无错误'),
       ),
     ),
 

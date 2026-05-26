@@ -86,6 +86,7 @@ export default function WorkbenchShell({
   const isCheckpoint = mode === 'recall' &&
     (rest.activeCheckpoint || rest.activeCheckpointId ||
       String(rest.recallSubstate || '').startsWith('checkpoint'))
+  const checkpointLabel = getCheckpointLabel(rest.activeCheckpoint)
   const hasLeftPanel = mode === 'problem' || mode === 'analysis'
 
   /** Left panel content per mode */
@@ -151,7 +152,7 @@ export default function WorkbenchShell({
 
         // Center: board stage with children
         h('div', {class: 'workbench-shell__center'},
-          h(MainBoardStage, {mode, boardProps: rest.boardProps, checkpoint: isCheckpoint}, children),
+          h(MainBoardStage, {mode, boardProps: rest.boardProps, checkpoint: isCheckpoint, checkpointLabel}, children),
           mode === 'recall' && !isCheckpoint && h('div', {class: 'wb-recall-feedback wb-recall-feedback--success'},
             h('span', {class: 'wb-recall-feedback__icon'}, '✓'),
             h('span', {}, '正确，继续。'),
@@ -178,4 +179,13 @@ export default function WorkbenchShell({
       show: rest.openDrawer === 'training',
     }),
   )
+}
+
+function getCheckpointLabel(checkpoint) {
+  if (!checkpoint) return ''
+  if (checkpoint.originalMoveLabel) return `原手 ${checkpoint.originalMoveLabel}`
+  const originalLine = Array.isArray(checkpoint.originalLine)
+    ? checkpoint.originalLine.filter(Boolean)
+    : []
+  return originalLine.length > 0 ? `原手 ${originalLine[0]}` : ''
 }

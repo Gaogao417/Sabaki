@@ -2,7 +2,7 @@ import {h} from 'preact'
 
 import Goban from '../../Goban.js'
 
-function FallbackBoard({checkpoint = false}) {
+function FallbackBoard({checkpoint = false, checkpointLabel = ''}) {
   const stones = [
     ['white', 5, 1], ['black', 6, 1], ['black', 2, 2], ['black', 3, 2],
     ['white', 5, 2], ['white', 6, 2], ['black', 14, 1], ['white', 15, 1],
@@ -28,8 +28,8 @@ function FallbackBoard({checkpoint = false}) {
         style: `--x: ${x}; --y: ${y}`,
       }),
     ),
-    checkpoint && h('span', {class: 'wb-board-fallback__bad-move', style: '--x: 16; --y: 9'},
-      h('span', {}, '原手 R10'),
+    checkpoint && checkpointLabel && h('span', {class: 'wb-board-fallback__bad-move', style: '--x: 16; --y: 9'},
+      h('span', {}, checkpointLabel),
     ),
   )
 }
@@ -44,13 +44,13 @@ function FallbackBoard({checkpoint = false}) {
  * @param {Object} [props.boardProps] - Structured Goban props from projectGobanProps
  * @param {import('preact').ComponentChildren} [props.children] - Optional children
  */
-export default function MainBoardStage({mode = 'play', boardProps, children, checkpoint = false}) {
+export default function MainBoardStage({mode = 'play', boardProps, children, checkpoint = false, checkpointLabel = ''}) {
   if (!boardProps || !boardProps.boardStateProps?.board) {
     return h('div', {
       'data-testid': 'main-board-stage',
       class: 'wb-main-board-stage',
     },
-      h(FallbackBoard, {checkpoint}),
+      h(FallbackBoard, {checkpoint, checkpointLabel}),
       children,
     )
   }
@@ -69,7 +69,7 @@ export default function MainBoardStage({mode = 'play', boardProps, children, che
     class: 'wb-main-board-stage',
   },
     h(Goban, flatProps),
-    checkpoint && h('div', {class: 'wb-board-checkpoint-callout'}, '原手 R10'),
+    checkpoint && checkpointLabel && h('div', {class: 'wb-board-checkpoint-callout'}, checkpointLabel),
     children,
   )
 }
