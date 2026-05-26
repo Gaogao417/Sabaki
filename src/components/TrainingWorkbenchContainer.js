@@ -3,6 +3,7 @@ import { h, Component } from 'preact'
 import WorkbenchShell from './WorkbenchShell.js'
 import { computeModeBarPolicy, getModeTransitionAction } from '../modules/training/workbench/workbenchUiPolicy.ts'
 import { projectGobanProps } from '../modules/training/workbench/projectGobanProps.ts'
+import { createSabakiModeEffects } from '../modules/training/workbench/workbenchFlowService.ts'
 import { createScratchEditExecutionContext } from '../modules/workbench/contracts/index.ts'
 
 const DEFAULT_PLAY_PLAYER_CONFIG = Object.freeze({
@@ -42,6 +43,7 @@ class TrainingWorkbenchContainer extends Component {
     super(props)
     this._gobanAdapter = null
     this._clickController = null
+    this._modeEffectsFlowService = null
 
     // W8-P4: Dashboard data held in Container local state, not in stores.
     // Per Architecture v0.5 Section 4.1: MVP only needs workbenchStore +
@@ -62,6 +64,7 @@ class TrainingWorkbenchContainer extends Component {
     // reads sabaki objects and subscribes to stores.
     this._tryCreateGobanAdapter(props.sabaki)
     this._tryCreateClickController(props.sabaki)
+    this._tryInstallModeEffects(props.sabaki)
   }
 
   componentDidMount() {}
@@ -85,6 +88,7 @@ class TrainingWorkbenchContainer extends Component {
       flowService,
       tabService,
     } = sabaki.getTrainingContext()
+    this._tryInstallModeEffects(sabaki)
     const rt = typeof runtimeStore?.getState === 'function'
       ? runtimeStore.getState()
       : {}
@@ -106,35 +110,6 @@ class TrainingWorkbenchContainer extends Component {
 
     // --- Handler wiring: UI callback -> service method ---
 
-    function ensureAnalysisWorkspace(selectedTool = null) {
-      if (!sabaki.state || typeof sabaki.setState !== 'function') return
-
-      if (sabaki.state.mode !== 'analysis') {
-        sabaki.setMode?.('analysis')
-      } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
-        sabaki.setState({
-          editWorkspace: sabaki.createAnalysisWorkspace(),
-        })
-        sabaki.scheduleEditWorkspaceAnalysis?.()
-      } else if (sabaki.state.editWorkspace) {
-        sabaki.scheduleEditWorkspaceAnalysis?.(sabaki.state.editWorkspace.activeTab || 'current')
-      }
-
-      const statePatch = {
-        showAnalysis: true,
-        analysisType: sabaki.state.analysisType || 'winrate',
-      }
-      if (selectedTool != null) statePatch.selectedTool = selectedTool
-      sabaki.setState(statePatch)
-    }
-
-    function exitAnalysisWorkspace() {
-      if (!sabaki.state) return
-      if (sabaki.state.mode === 'analysis') {
-        sabaki.setMode?.('play')
-      }
-    }
-
     function handleModeChange(mode) {
       if (!activeTab) return
       const action = getModeTransitionAction(
@@ -148,11 +123,9 @@ class TrainingWorkbenchContainer extends Component {
       )
 
       if (action === 'enterAnalysis') {
-        flowService.enterAnalysis(activeTab.id)
-        ensureAnalysisWorkspace()
+        flowService.enterAnalysis(activeTab.id, {reason: 'manual'})
       } else if (action === 'returnFromAnalysis') {
-        flowService.returnFromAnalysis({tabId: activeTab.id})
-        exitAnalysisWorkspace()
+        flowService.returnFromAnalysis({tabId: activeTab.id, reason: 'return'})
       }
     }
 
@@ -176,20 +149,17 @@ class TrainingWorkbenchContainer extends Component {
 
     function handleEnterAnalysis() {
       if (!activeTab) return
-      flowService.enterAnalysis(activeTab.id)
-      ensureAnalysisWorkspace()
+      flowService.enterAnalysis(activeTab.id, {reason: 'manual'})
     }
 
     function handleReturnFromAnalysis() {
       if (!activeTab) return
-      flowService.returnFromAnalysis({tabId: activeTab.id})
-      exitAnalysisWorkspace()
+      flowService.returnFromAnalysis({tabId: activeTab.id, reason: 'return'})
     }
 
     function handleEndRecall() {
       if (!activeTab) return
       flowService.completeRecall(activeTab.id)
-      ensureAnalysisWorkspace()
     }
 
     async function handleSnapshot() {
@@ -253,15 +223,13 @@ class TrainingWorkbenchContainer extends Component {
       }
 
       if (activeTab.mode === 'analysis') {
-        flowService.returnFromAnalysis({tabId: activeTab.id})
-        exitAnalysisWorkspace()
+        flowService.returnFromAnalysis({tabId: activeTab.id, reason: 'return'})
       }
     }
 
     function handleRestartAttempt() {
       if (!activeTab) return
       flowService.restartAttempt(activeTab.id)
-      exitAnalysisWorkspace()
     }
 
     function handleUndo() {
@@ -330,10 +298,11 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     function handleEditPosition() {
-      if (activeTab && activeTab.mode !== 'analysis') {
-        flowService.enterAnalysis(activeTab.id)
-      }
-      ensureAnalysisWorkspace('stone_1')
+      if (!activeTab || activeTab.mode === 'analysis') return
+      flowService.enterAnalysis(activeTab.id, {
+        reason: 'edit-position',
+        selectedTool: 'stone_1',
+      })
     }
 
     function handleSelectTool() {
@@ -747,6 +716,22 @@ class TrainingWorkbenchContainer extends Component {
   }
 
   // --- W3.5 adapter/controller helpers ---
+
+  _tryInstallModeEffects(sabaki) {
+    try {
+      const ctx = sabaki.getTrainingContext?.()
+      const flowService = ctx?.flowService || ctx?.workbenchFlowService
+      if (!flowService || typeof flowService.setModeEffects !== 'function') {
+        return
+      }
+      if (this._modeEffectsFlowService === flowService) return
+
+      flowService.setModeEffects(createSabakiModeEffects(sabaki))
+      this._modeEffectsFlowService = flowService
+    } catch (_e) {
+      // Test harnesses may provide partial service surfaces.
+    }
+  }
 
   /**
    * Attempt to create the gobanDataAdapter.  Tolerates missing services

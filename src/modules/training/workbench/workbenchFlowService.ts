@@ -111,6 +111,18 @@ export type WorkbenchModeEffects = {
   exitAnalysis(input: ModeExitEffectInput): void | Promise<void>
 }
 
+type LegacySabakiAnalysisAdapter = {
+  state?: {
+    mode?: string
+    editWorkspace?: {activeTab?: string} | null
+    analysisType?: string
+  }
+  setMode?: (mode: string) => void
+  setState?: (patch: Record<string, unknown>) => void
+  createAnalysisWorkspace?: () => unknown
+  scheduleEditWorkspaceAnalysis?: (tab?: string) => void
+}
+
 export type DashboardData = {
   inboxTasks: unknown[]
   incompleteAttempts: unknown[]
@@ -139,6 +151,51 @@ export type WorkbenchFlowService = {
     patch: Partial<import('../types/tab').PlayerConfig>,
   ): void
   loadDashboardData(): Promise<DashboardData>
+  setModeEffects?(modeEffects?: WorkbenchModeEffects | null): void
+}
+
+export function createSabakiModeEffects(
+  sabaki: LegacySabakiAnalysisAdapter,
+): WorkbenchModeEffects {
+  function ensureAnalysisWorkspace(selectedTool?: string): void {
+    if (!sabaki.state || typeof sabaki.setState !== 'function') return
+
+    if (sabaki.state.mode !== 'analysis') {
+      sabaki.setMode?.('analysis')
+    } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
+      sabaki.setState({
+        editWorkspace: sabaki.createAnalysisWorkspace(),
+      })
+      sabaki.scheduleEditWorkspaceAnalysis?.()
+    } else if (sabaki.state.editWorkspace) {
+      sabaki.scheduleEditWorkspaceAnalysis?.(
+        sabaki.state.editWorkspace.activeTab || 'current',
+      )
+    }
+
+    const statePatch: Record<string, unknown> = {
+      showAnalysis: true,
+      analysisType: sabaki.state.analysisType || 'winrate',
+    }
+    if (selectedTool != null) statePatch.selectedTool = selectedTool
+    sabaki.setState(statePatch)
+  }
+
+  function exitAnalysisWorkspace(): void {
+    if (!sabaki.state) return
+    if (sabaki.state.mode === 'analysis') {
+      sabaki.setMode?.('play')
+    }
+  }
+
+  return {
+    enterAnalysis(input) {
+      ensureAnalysisWorkspace(input.selectedTool)
+    },
+    exitAnalysis() {
+      exitAnalysisWorkspace()
+    },
+  }
 }
 
 export function createWorkbenchFlowService(
@@ -152,9 +209,9 @@ export function createWorkbenchFlowService(
     recallCheckpointService,
     snapshotService,
     tabService,
-    modeEffects,
     logger,
   } = deps
+  let activeModeEffects = deps.modeEffects
   const evaluationRules = deps.evaluationRules
   const runtimeStore = deps.runtimeStore
 
@@ -489,7 +546,7 @@ export function createWorkbenchFlowService(
     })
     const afterTab = getTab(tabId)
 
-    modeEffects?.enterAnalysis({
+    activeModeEffects?.enterAnalysis({
       tabId,
       fromMode: tab.mode as 'play' | 'problem' | 'recall',
       toMode: 'analysis',
@@ -549,7 +606,7 @@ export function createWorkbenchFlowService(
     })
     const afterTab = getTab(input.tabId)
 
-    modeEffects?.exitAnalysis({
+    activeModeEffects?.exitAnalysis({
       tabId: input.tabId,
       fromMode: 'analysis',
       toMode: target.mode,
@@ -625,12 +682,30 @@ export function createWorkbenchFlowService(
       })
     }
 
+    const analysisReturnTarget = createAnalysisReturnTarget(tab)
+    const analysisContext = createAnalysisContext(tab)
+
     // Clear recall view model state
     runtimeStore?.setRecallView(null)
     runtimeStore?.setActiveCheckpoint(undefined)
 
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
+      previousMode: tab.mode,
+      analysisReturnTarget,
+      analysisContext: analysisContext as ModeEffectAnalysisContext,
+    })
+    const afterTab = getTab(tabId)
+
+    activeModeEffects?.enterAnalysis({
+      tabId,
+      fromMode: 'recall',
+      toMode: 'analysis',
+      beforeTab: tab,
+      afterTab,
+      analysisReturnTarget,
+      analysisContext,
+      reason: 'recall-complete',
     })
 
     logger?.info(
@@ -646,6 +721,12 @@ export function createWorkbenchFlowService(
     const tab = getTab(tabId)
     const targetMode =
       tab.analysisReturnTarget?.mode ?? tab.previousMode ?? 'play'
+    const shouldExitAnalysis = tab.mode === 'analysis' && targetMode !== 'analysis'
+    const analysisReturnTarget =
+      tab.analysisReturnTarget ??
+      (targetMode === 'play' || targetMode === 'problem' || targetMode === 'recall'
+        ? ({mode: targetMode} as AnalysisReturnTarget)
+        : undefined)
 
     logger?.info('flow.restartAttempt', 'Restart attempt', {
       tabId,
@@ -655,7 +736,22 @@ export function createWorkbenchFlowService(
 
     workbenchStore.updateTab(tabId, {
       mode: targetMode,
+      previousMode: undefined,
+      analysisReturnTarget: undefined,
     })
+    const afterTab = getTab(tabId)
+
+    if (shouldExitAnalysis && analysisReturnTarget) {
+      activeModeEffects?.exitAnalysis({
+        tabId,
+        fromMode: 'analysis',
+        toMode: targetMode as 'play' | 'problem' | 'recall',
+        beforeTab: tab,
+        afterTab,
+        analysisReturnTarget,
+        reason: 'restart-attempt',
+      })
+    }
 
     logger?.info('flow.restartAttempt', 'Attempt restarted', {
       tabId,
@@ -919,6 +1015,10 @@ export function createWorkbenchFlowService(
     }
   }
 
+  function setModeEffects(modeEffects?: WorkbenchModeEffects | null): void {
+    activeModeEffects = modeEffects ?? undefined
+  }
+
   return {
     submit,
     enterAnalysis,
@@ -934,5 +1034,6 @@ export function createWorkbenchFlowService(
     snapshotFromCurrentContext,
     updatePlayerConfig,
     loadDashboardData,
+    setModeEffects,
   }
 }
