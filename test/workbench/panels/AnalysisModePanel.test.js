@@ -133,6 +133,35 @@ describe('AnalysisModePanel (T-5.5)', function () {
       'Evaluation section should NOT be present when evaluation is null'
     )
   })
+
+  it('renders analysis projection from props without static sample rows', () => {
+    const {queryByTestId} = renderToDom(
+      h(AnalysisModePanel, noopProps({
+        analysisContext: {
+          source: 'analysis test context from props',
+          taskId: 'task_analysis_panel',
+          checkpointId: 'chk_analysis_panel',
+        },
+        analysisProjection: {
+          treeRows: [{label: 'analysis branch from projection', score: '+1.5'}],
+          issues: [{label: 'analysis issue from projection', delta: '-3.0', status: 'review'}],
+          referenceLine: 'reference line from projection',
+          correctionLine: 'correction line from projection',
+          engineStatus: 'engine status from projection',
+          evaluation: 'evaluation from projection',
+        },
+      }))
+    )
+
+    const root = queryByTestId('analysis-mode-panel')
+    assert.ok(root.textContent.includes('analysis test context from props'))
+    assert.ok(root.textContent.includes('analysis branch from projection'))
+    assert.ok(root.textContent.includes('analysis issue from projection'))
+    assert.ok(root.textContent.includes('reference line from projection'))
+    assert.ok(root.textContent.includes('correction line from projection'))
+    assert.ok(root.textContent.includes('engine status from projection'))
+    assert.ok(!root.textContent.includes('黑 R10'))
+  })
 })
 
 describe('AnalysisModePanel state overlay (T-7.2g)', function () {

@@ -699,6 +699,18 @@ describe('Workbench six-screen projection anti-fake-green', function () {
           evaluation: SENTINELS.analysisEvaluation,
         },
       },
+      containerProps: {
+        analysisProjection: {
+          contextLabel: SENTINELS.analysisContext,
+          treeRows: [{label: SENTINELS.analysisTree}],
+          issues: [{label: SENTINELS.analysisIssue}],
+          referenceLine: SENTINELS.analysisReference,
+          correctionLine: SENTINELS.analysisCorrection,
+          engineStatus: SENTINELS.analysisEngine,
+          candidates: [{label: SENTINELS.analysisEngine, moves: ['H17']}],
+          evaluation: SENTINELS.analysisEvaluation,
+        },
+      },
     })
 
     const text = await harness.renderText()

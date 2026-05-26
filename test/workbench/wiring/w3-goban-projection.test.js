@@ -255,6 +255,42 @@ describe('W3 Goban Projection: projectGobanProps', function () {
       const result = projectGobanProps(analysisInput())
       assert.strictEqual(typeof result.handlerProps.onPlayVariationMoves, 'function')
     })
+
+    it('projects analysis panel data from overlay/engine analysis without store reads', () => {
+      const result = projectGobanProps(analysisInput({
+        overlayState: {
+          paintMap: [],
+          markerMap: [],
+          dimmedStones: [],
+          analysis: {
+            engineStatus: 'projected engine ready',
+            evaluation: 'projected eval +2.4',
+            candidates: [{label: 'projected candidate Q16', moves: ['Q16', 'R16']}],
+          },
+        },
+        analysisData: {
+          activeAnalysis: {
+            engineStatus: 'projected engine ready',
+            evaluation: 'projected eval +2.4',
+            candidates: [{label: 'projected candidate Q16', moves: ['Q16', 'R16']}],
+          },
+          analysisType: 'ownership',
+        },
+        settings: {
+          ...baseInput().settings,
+          editWorkspaceActive: true,
+          showAnalysis: true,
+        },
+      }))
+
+      assert.deepStrictEqual(result.analysisPanelProps, {
+        engineStatus: 'projected engine ready',
+        evaluation: 'projected eval +2.4',
+        candidates: [{label: 'projected candidate Q16', moves: ['Q16', 'R16']}],
+        analysisType: 'ownership',
+        overlayVisible: true,
+      })
+    })
   })
 
   // --- W3-T04: analysis mode without editWorkspace ---

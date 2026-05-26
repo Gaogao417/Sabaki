@@ -122,4 +122,28 @@ describe('AnalysisRightPanel (T-6.4)', function () {
       'Root should have content including AI analysis section'
     )
   })
+
+  it('renders engine projection from props without static engine samples', () => {
+    const {queryByTestId} = renderToDom(
+      h(AnalysisRightPanel, noopProps({
+        analysisProjection: {
+          contextLabel: 'right panel context from projection',
+          engineStatus: 'right panel engine from projection',
+          evaluation: 'right panel eval from projection',
+          candidates: [{label: 'right panel candidate from projection', moves: ['Q16', 'R16']}],
+          referenceLine: 'right panel reference from projection',
+          correctionLine: 'right panel correction from projection',
+        },
+      }))
+    )
+
+    const root = queryByTestId('analysis-right-panel')
+    assert.ok(root.textContent.includes('right panel engine from projection'))
+    assert.ok(root.textContent.includes('right panel candidate from projection'))
+    assert.ok(root.textContent.includes('right panel eval from projection'))
+    assert.ok(root.textContent.includes('right panel reference from projection'))
+    assert.ok(root.textContent.includes('right panel correction from projection'))
+    assert.ok(!root.textContent.includes('Leela Zero (v0.19)'))
+    assert.ok(!root.textContent.includes('来自 Recall 修正'))
+  })
 })

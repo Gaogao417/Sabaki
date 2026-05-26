@@ -90,6 +90,13 @@ export type GobanPropsOutput = {
     onStoneDragEnd: Function | null
     onPlayVariationMoves: Function | null
   }
+  analysisPanelProps: {
+    engineStatus: string
+    evaluation: string
+    candidates: Array<{label: string; moves: string[]}>
+    analysisType: string
+    overlayVisible: boolean
+  } | null
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +168,7 @@ export function projectGobanProps(input: GobanPropsInput | null): GobanPropsOutp
         onStoneDragEnd: null,
         onPlayVariationMoves: null,
       },
+      analysisPanelProps: null,
     }
   }
 
@@ -175,6 +183,12 @@ export function projectGobanProps(input: GobanPropsInput | null): GobanPropsOutp
   const showNextMoves = computeShowNextMoves(workbenchMode, settings)
   const showSiblings = computeShowSiblings(workbenchMode, settings)
   const analysis = computeAnalysis(workbenchMode, overlayState, settings)
+  const analysisPanelProps = computeAnalysisPanelProps(
+    workbenchMode,
+    analysis,
+    overlayState,
+    analysisData,
+  )
 
   const isRecall = workbenchMode === 'recall'
 
@@ -235,6 +249,7 @@ export function projectGobanProps(input: GobanPropsInput | null): GobanPropsOutp
     overlayDisplayProps,
     interactionProps,
     handlerProps,
+    analysisPanelProps,
   }
 }
 
@@ -289,6 +304,85 @@ function computeDrawLineMode(selectedTool: string): string | null {
     return selectedTool
   }
   return null
+}
+
+function computeAnalysisPanelProps(
+  mode: WorkbenchMode,
+  visibleAnalysis: object | null,
+  overlayState: GobanPropsInput['overlayState'],
+  analysisData: GobanPropsInput['analysisData'],
+): GobanPropsOutput['analysisPanelProps'] {
+  if (mode !== 'analysis') return null
+
+  const rawAnalysis = asRecord(analysisData?.activeAnalysis) ??
+    asRecord(overlayState.analysis)
+  if (rawAnalysis == null) {
+    return {
+      engineStatus: '',
+      evaluation: '',
+      candidates: [],
+      analysisType: analysisData?.analysisType ?? '',
+      overlayVisible: visibleAnalysis != null,
+    }
+  }
+
+  return {
+    engineStatus: firstString(rawAnalysis, [
+      'engineStatus',
+      'status',
+      'statusLabel',
+      'engine',
+      'label',
+    ]),
+    evaluation: firstString(rawAnalysis, [
+      'evaluation',
+      'evaluationLabel',
+      'scoreLeadLabel',
+      'winrateLabel',
+      'scoreLabel',
+    ]),
+    candidates: normalizeCandidates(rawAnalysis),
+    analysisType: analysisData?.analysisType ?? '',
+    overlayVisible: visibleAnalysis != null,
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : null
+}
+
+function firstString(source: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string' && value.trim() !== '') return value
+    if (typeof value === 'number') return String(value)
+  }
+  return ''
+}
+
+function normalizeCandidates(
+  source: Record<string, unknown>,
+): Array<{label: string; moves: string[]}> {
+  const raw = Array.isArray(source.candidates)
+    ? source.candidates
+    : Array.isArray(source.variations)
+      ? source.variations
+      : []
+
+  return raw.map((item, index) => {
+    const record = asRecord(item) ?? {}
+    const movesValue = record.moves
+    const moves = Array.isArray(movesValue)
+      ? movesValue.map(move => String(move))
+      : typeof movesValue === 'string'
+        ? movesValue.split(/\s+/).filter(Boolean)
+        : []
+    const label = firstString(record, ['label', 'move', 'vertex']) ||
+      `candidate ${index + 1}`
+    return {label, moves}
+  })
 }
 
 // Default export so tryImport(mod.default || mod) resolves to the function itself.

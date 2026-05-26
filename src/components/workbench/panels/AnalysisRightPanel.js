@@ -23,6 +23,8 @@ function ExpandableTitle({title, onExpand}) {
  * @param {string|null} props.userOriginalLine - User's original line text
  * @param {string|null} props.userCorrection - User's correction text
  * @param {string|null} props.aiCandidates - AI candidates text
+ * @param {Object|null} props.analysisProjection - Analysis panel projection
+ * @param {Object|null} props.boardProps - Structured Goban props
  * @param {Function} [props.onExpandAI] - Called when AI analysis expand is clicked
  * @param {Function} [props.onExpandVariation] - Called when variation tree expand is clicked
  * @param {Function} [props.onExpandSnapshot] - Called when snapshot comparison expand is clicked
@@ -35,11 +37,22 @@ export default function AnalysisRightPanel({
   userOriginalLine = null,
   userCorrection = null,
   aiCandidates = null,
+  analysisProjection = null,
+  boardProps = null,
   badMoveCount = 0,
   onExpandAI,
   onExpandVariation,
   onExpandSnapshot,
 }) {
+  const projection = normalizeAnalysisProjection({
+    analysisProjection,
+    boardProjection: boardProps?.analysisPanelProps,
+    evaluation,
+    userOriginalLine,
+    userCorrection,
+    aiCandidates,
+  })
+
   return h('div', {
     'data-testid': 'analysis-right-panel',
     class: 'wb-analysis-right-panel',
@@ -51,29 +64,27 @@ export default function AnalysisRightPanel({
 
     h('div', {class: 'wb-card wb-ai-card'},
       h('div', {class: 'wb-panel-title'}, 'AI 分析',
-        h('span', {class: 'wb-ai-card__engine'}, 'Leela Zero (v0.19)'),
+        projection.engineStatus && h('span', {class: 'wb-ai-card__engine'}, projection.engineStatus),
       ),
       h('div', {class: 'wb-ai-table'},
         h('div', {}, h('span', {}, '#'), h('span', {}, '候选手'), h('span', {}, '胜率'), h('span', {}, '目差(当前)')),
-        [
-          ['1', '○ R10', '34.1%', '-5.5'],
-          ['2', '○ Q11', '38.7%', '-1.8'],
-          ['3', '○ R9', '36.2%', '-2.6'],
-          ['4', '○ S10', '33.0%', '-6.1'],
-          ['5', '○ Q10', '32.1%', '-6.9'],
-        ].map((row, index) =>
-          h('button', {key: row[0], class: index === 0 ? 'active' : ''},
-            row.map(cell => h('span', {key: cell}, cell)),
-          ),
-        ),
+        projection.candidates.length > 0
+          ? projection.candidates.map((candidate, index) =>
+              h('button', {key: `${candidate.label}-${index}`, class: index === 0 ? 'active' : ''},
+                h('span', {}, index + 1),
+                h('span', {}, candidate.label, candidate.moves.length > 0 ? ` ${candidate.moves.join(' ')}` : ''),
+                h('span', {}, candidate.winrate || ''),
+                h('span', {}, candidate.score || ''),
+              ),
+            )
+          : h('div', {class: 'wb-panel-caption'}, '暂无候选'),
       ),
     ),
 
     h('div', {class: 'wb-card wb-note-card'},
       h('div', {class: 'wb-panel-title'}, '局面笔记', h('button', {class: 'wb-icon-button'}, '✎')),
-      h('p', {}, evaluation || '右边白棋形状薄弱，黑棋有扩张机会。R10 被 AI 评为最优定式大头，较参考变化（R17）明显更好。'),
-      h('span', {class: 'wb-note-card__tag'}, '来自 Recall 修正'),
-      h('small', {}, '更新于 10-24'),
+      h('p', {}, projection.evaluation || '--'),
+      projection.contextLabel && h('span', {class: 'wb-note-card__tag'}, projection.contextLabel),
     ),
 
     h('div', {class: 'wb-card wb-card--compat'},
@@ -84,15 +95,15 @@ export default function AnalysisRightPanel({
       h('div', {class: 'wb-analysis-right-panel__comparison'},
         h('div', {class: 'wb-analysis-right-panel__field'},
           h('span', {class: 'wb-analysis-right-panel__field-label'}, '用户原线'),
-          h('span', {class: 'wb-analysis-right-panel__field-value'}, userOriginalLine || '--'),
+          h('span', {class: 'wb-analysis-right-panel__field-value'}, projection.userOriginalLine || '--'),
         ),
         h('div', {class: 'wb-analysis-right-panel__field'},
           h('span', {class: 'wb-analysis-right-panel__field-label'}, '用户修正'),
-          h('span', {class: 'wb-analysis-right-panel__field-value'}, userCorrection || '--'),
+          h('span', {class: 'wb-analysis-right-panel__field-value'}, projection.userCorrection || '--'),
         ),
         h('div', {class: 'wb-analysis-right-panel__field'},
           h('span', {class: 'wb-analysis-right-panel__field-label'}, 'AI candidates'),
-          h('span', {class: 'wb-analysis-right-panel__field-value'}, aiCandidates || '--'),
+          h('span', {class: 'wb-analysis-right-panel__field-value'}, projection.aiCandidates || '--'),
         ),
       ),
     ),
@@ -105,4 +116,55 @@ export default function AnalysisRightPanel({
       h('button', {'data-testid': 'add-snapshot-btn'}, '添加快照'),
     ),
   )
+}
+
+function normalizeAnalysisProjection({
+  analysisProjection,
+  boardProjection,
+  evaluation,
+  userOriginalLine,
+  userCorrection,
+  aiCandidates,
+}) {
+  const source = isObject(analysisProjection) ? analysisProjection : {}
+  const board = isObject(boardProjection) ? boardProjection : {}
+  return {
+    contextLabel: asText(source.contextLabel),
+    engineStatus: asText(source.engineStatus) || asText(source.status) || asText(board.engineStatus),
+    evaluation: asText(source.evaluation) || asText(board.evaluation) || asText(evaluation),
+    userOriginalLine: formatLine(source.referenceLine) || asText(userOriginalLine),
+    userCorrection: formatLine(source.correctionLine) || asText(userCorrection),
+    aiCandidates: formatLine(source.aiCandidates) || asText(aiCandidates),
+    candidates: normalizeCandidates(source.candidates || board.candidates || []),
+  }
+}
+
+function isObject(value) {
+  return value != null && typeof value === 'object'
+}
+
+function asText(value) {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return String(value)
+  return ''
+}
+
+function formatLine(value) {
+  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join(' ')
+  return asText(value)
+}
+
+function normalizeCandidates(value) {
+  if (!Array.isArray(value)) return []
+  return value.map(item => {
+    if (!isObject(item)) return {label: asText(item), moves: [], winrate: '', score: ''}
+    return {
+      label: asText(item.label) || asText(item.move) || '候选',
+      moves: Array.isArray(item.moves)
+        ? item.moves.map(asText).filter(Boolean)
+        : formatLine(item.moves).split(/\s+/).filter(Boolean),
+      winrate: asText(item.winrate) || asText(item.winrateLabel),
+      score: asText(item.score) || asText(item.delta) || asText(item.scoreLead),
+    }
+  }).filter(candidate => candidate.label)
 }
