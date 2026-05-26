@@ -82,6 +82,29 @@ describe('TrainingWorkbenchContainer new game wiring', () => {
     assert.ok(drawer.textContent.includes('棋谱库'))
   })
 
+  it('opens the library drawer from the topbar command button', async () => {
+    const sabaki = createSabakiStub()
+
+    const {container, fireEvent} = renderToDom(
+      h(TrainingWorkbenchContainer, {
+        sabaki,
+        mode: 'play',
+        gameTrees: [],
+        gameIndex: 0,
+      }),
+    )
+
+    const libraryButton = container.querySelector('button[aria-label="打开资料库"]')
+    assert.ok(libraryButton, 'Expected topbar library command button to render')
+
+    fireEvent.click(libraryButton)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const drawer = container.querySelector('[data-testid="library-side-drawer"]')
+    assert.ok(drawer, 'Expected topbar library command to render the library drawer')
+    assert.ok(drawer.textContent.includes('资料库'))
+  })
+
   it('opens the left wrong-problem drawer from the play mode left panel', async () => {
     const sabaki = createSabakiStub()
 

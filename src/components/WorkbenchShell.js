@@ -116,7 +116,7 @@ export default function WorkbenchShell({
       onStartReview,
       onStartProblem,
       libraryProjection: rest.libraryProjection,
-      librarySourceStates: rest.librarySourceStates || rest.libraryProjection,
+      librarySourceStates: rest.librarySourceStates || rest.libraryProjection || {},
     }),
     h('div', {class: 'workbench-shell__inner'},
 

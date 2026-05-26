@@ -181,6 +181,7 @@ export default class LibrarySideDrawer extends Component {
   }
 
   getExternalSourceState(source, projectedStates = {}) {
+    projectedStates = projectedStates || {}
     let projected =
       projectedStates[source] ||
       getProjectionSource(this.getLibraryProjection(), source)
