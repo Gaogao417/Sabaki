@@ -39,4 +39,40 @@ describe('trainingRuntimeStore', () => {
     assert.strictEqual(store.hasSupersededAiMoveRequest('ai_req_old'), true)
     assert.strictEqual(store.hasSupersededAiMoveRequest('ai_req_new'), false)
   })
+
+  it('appends checkpoint correction draft moves for the active checkpoint', () => {
+    const store = createTrainingRuntimeStore()
+    let notifications = 0
+    store.subscribe(() => notifications++)
+
+    store.setActiveCheckpoint('cp_1')
+    store.appendCorrectionDraftMove({
+      checkpointId: 'cp_1',
+      move: 'dd',
+      source: {kind: 'recall-checkpoint', recallSessionId: 'rs_1'},
+    })
+    store.appendCorrectionDraftMove({checkpointId: 'cp_1', move: 'pp'})
+
+    assert.deepStrictEqual(store.getState().correctionDraft, {
+      checkpointId: 'cp_1',
+      moves: ['dd', 'pp'],
+      source: {kind: 'recall-checkpoint', recallSessionId: 'rs_1'},
+    })
+    assert.strictEqual(notifications, 3)
+  })
+
+  it('clears stale correction draft when checkpoint lifecycle ends or changes', () => {
+    const store = createTrainingRuntimeStore()
+
+    store.setActiveCheckpoint('cp_1')
+    store.setCorrectionDraft({checkpointId: 'cp_1', moves: ['dd']})
+    store.setActiveCheckpoint(undefined)
+    assert.strictEqual(store.getState().correctionDraft, undefined)
+
+    store.setActiveCheckpoint('cp_1')
+    store.setCorrectionDraft({checkpointId: 'cp_1', moves: ['pp']})
+    store.setActiveCheckpoint('cp_2')
+    assert.strictEqual(store.getState().correctionDraft, undefined)
+    assert.strictEqual(store.getState().activeCheckpointId, 'cp_2')
+  })
 })

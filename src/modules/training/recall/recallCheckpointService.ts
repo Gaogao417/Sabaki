@@ -51,7 +51,9 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     const session = await repository.loadRecallSession(recallSessionId)
     if (!session) return
 
-    const attempts = await repository.listRecallAttempts(recallSessionId)
+    const attempts = typeof repository.listRecallAttempts === 'function'
+      ? await repository.listRecallAttempts(recallSessionId)
+      : []
     runtimeStore.setRecallView(mapRecallSessionToRecallView(session, attempts))
   }
 
@@ -111,6 +113,16 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     await repository.updateBadMove(input.badMoveId, { recallCheckpointId: id })
 
     runtimeStore.setActiveCheckpoint(id)
+    runtimeStore.setCorrectionDraft({
+      checkpointId: id,
+      moves: [],
+      source: {
+        kind: 'recall-checkpoint',
+        recallSessionId: input.recallSessionId,
+        badMoveId: input.badMoveId,
+        moveIndex: badMove.moveIndex,
+      },
+    })
     await refreshRecallView(input.recallSessionId)
 
     logger?.info('checkpoint.start', 'Checkpoint started', {
@@ -138,7 +150,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
       userCorrectionLine: input.moves,
     })
 
-    runtimeStore.setCorrectionDraft(undefined)
+    runtimeStore.clearCorrectionDraft(input.checkpointId)
 
     logger?.info('checkpoint.correction', 'User correction line submitted', {
       checkpointId: input.checkpointId,
@@ -250,7 +262,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     })
 
     runtimeStore.setActiveCheckpoint(undefined)
-    runtimeStore.setCorrectionDraft(undefined)
+    runtimeStore.clearCorrectionDraft(checkpointId)
     await refreshRecallView(session.id)
 
     logger?.info('checkpoint.skip', 'Checkpoint skipped', {
@@ -287,6 +299,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
     })
 
     runtimeStore.setActiveCheckpoint(undefined)
+    runtimeStore.clearCorrectionDraft(checkpointId)
     await refreshRecallView(session.id)
 
     logger?.info('checkpoint.resume', 'Resumed recall after checkpoint', {

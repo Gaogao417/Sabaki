@@ -780,7 +780,9 @@ class TrainingWorkbenchContainer extends Component {
       },
       analysisData: null,
     }
-    const boardProps = projectGobanProps(snapshot || minimalInput)
+    const boardProps = projectGobanProps(
+      withCorrectionDraftBoardSource(snapshot || minimalInput, rt),
+    )
 
     // Wire onVertexClick through the boardInteractionController when available,
     // or use a minimal fallback that does not throw.
@@ -995,8 +997,32 @@ class TrainingWorkbenchContainer extends Component {
 
           return {
             submitBoardClick: async (vertex) => {
+              const runtimeState = ctx.runtimeStore.getState()
+              const activeCheckpointId = runtimeState.activeCheckpointId
+              if (activeCheckpointId) {
+                const userMove = vertexToSgfMove(vertex)
+                if (typeof ctx.runtimeStore.appendCorrectionDraftMove === 'function') {
+                  ctx.runtimeStore.appendCorrectionDraftMove({
+                    checkpointId: activeCheckpointId,
+                    move: userMove,
+                    source: {
+                      kind: 'recall-checkpoint',
+                      recallSessionId: activeRecallSessionId,
+                    },
+                  })
+                }
+                return {
+                  handled: true,
+                  changed: true,
+                  isCorrect: false,
+                  completed: false,
+                  recallMoveIndex: runtimeState.recallView?.moveIndex || 0,
+                  attempt: null,
+                }
+              }
+
               const [x, y] = vertex
-              const userMove = String.fromCharCode(97 + x) + String.fromCharCode(97 + y)
+              const userMove = vertexToSgfMove([x, y])
               const attempt = await recallService.submitRecallMove({
                 recallSessionId: activeRecallSessionId,
                 userMove,
@@ -1047,6 +1073,89 @@ class TrainingWorkbenchContainer extends Component {
   }
 }
 
+function vertexToSgfMove(vertex) {
+  const [x, y] = vertex
+  if (x < 0 || y < 0) return ''
+  return String.fromCharCode(97 + x) + String.fromCharCode(97 + y)
+}
+
+function withCorrectionDraftBoardSource(input, runtimeState) {
+  const draft = runtimeState?.correctionDraft
+  const activeCheckpointId = runtimeState?.activeCheckpointId
+  if (
+    !input ||
+    input.workbenchMode !== 'recall' ||
+    !draft ||
+    !activeCheckpointId ||
+    draft.checkpointId !== activeCheckpointId ||
+    !Array.isArray(draft.moves) ||
+    draft.moves.length === 0
+  ) {
+    return input
+  }
+
+  const baseBoard = input.boardState?.board
+  if (!baseBoard || typeof baseBoard.get !== 'function') return input
+
+  const draftSigns = new Map()
+  const startSign = getCorrectionDraftStartSign(runtimeState)
+  for (let index = 0; index < draft.moves.length; index++) {
+    const vertex = moveToVertex(draft.moves[index])
+    if (!vertex) continue
+    draftSigns.set(`${vertex[0]},${vertex[1]}`, index % 2 === 0 ? startSign : -startSign)
+  }
+
+  if (draftSigns.size === 0) return input
+
+  const draftBoard = Object.create(baseBoard)
+  draftBoard.get = function(vertex) {
+    const sign = draftSigns.get(`${vertex[0]},${vertex[1]}`)
+    return sign ?? baseBoard.get(vertex)
+  }
+
+  return {
+    ...input,
+    runtimeState: {
+      ...(input.runtimeState || {}),
+      correctionDraft: draft,
+      activeCheckpointId,
+    },
+    boardState: {
+      ...input.boardState,
+      board: draftBoard,
+    },
+  }
+}
+
+function getCorrectionDraftStartSign(runtimeState) {
+  const view = runtimeState?.recallView
+  const moveIndex = typeof view?.moveIndex === 'number' ? view.moveIndex : 0
+  const expectedMove = Array.isArray(view?.expectedMoves)
+    ? view.expectedMoves[moveIndex]
+    : null
+  return expectedMove?.sign === -1 ? -1 : 1
+}
+
+function moveToVertex(move) {
+  if (!move) return null
+  const normalized = String(move).trim()
+  if (!normalized || normalized.toLowerCase() === 'pass') return null
+
+  const coordinate = normalized.match(/^([A-HJ-T])(\d+)$/i)
+  if (coordinate) {
+    const columns = 'ABCDEFGHJKLMNOPQRST'
+    const x = columns.indexOf(coordinate[1].toUpperCase())
+    const y = Number.parseInt(coordinate[2], 10) - 1
+    return x < 0 || y < 0 ? null : [x, y]
+  }
+
+  const lower = normalized.toLowerCase()
+  if (lower.length < 2) return null
+  const x = lower.charCodeAt(0) - 97
+  const y = lower.charCodeAt(1) - 97
+  return x < 0 || y < 0 ? null : [x, y]
+}
+
 function projectFromRuntime(rt, activeTab = null) {
   const result = {}
   const activeAttemptId = activeTab?.activeAttemptId
@@ -1081,6 +1190,7 @@ function projectFromRuntime(rt, activeTab = null) {
     result.totalMoves = v.expectedMoves.length
     result.correctCount = v.userAttempts.filter(a => a.isCorrect).length
     result.wrongCount = v.userAttempts.filter(a => !a.isCorrect).length
+    result.status = v.status || ''
     result.progress = v.expectedMoves.length > 0
       ? Math.round((v.moveIndex / v.expectedMoves.length) * 100)
       : 0
@@ -1167,7 +1277,10 @@ function projectFromWorkbench(ws, repository, container) {
       activeRecallSessionId: activeTab.activeRecallSessionId,
     })
 
-    result.recallSubstate = activeTab.recallSubstate || 'normal'
+    const runtimeStore = container?.props?.sabaki?.getTrainingContext?.().runtimeStore
+    const activeCheckpointId = runtimeStore?.getState?.().activeCheckpointId
+    result.recallSubstate = activeTab.recallSubstate ||
+      (activeTab.mode === 'recall' && activeCheckpointId ? 'checkpoint_correction' : 'normal')
 
     if (activeTab.mode === 'recall' && container) {
       const checkpoint = container._activeCheckpointProjection || null
@@ -1188,10 +1301,8 @@ function projectFromWorkbench(ws, repository, container) {
       typeof repository.loadRecallCheckpoint === 'function' &&
       !container._checkpointProjectionLoading
     ) {
-      const runtimeStore = container.props?.sabaki?.getTrainingContext?.().runtimeStore
-      const activeCheckpointId = runtimeStore?.getState?.().activeCheckpointId
       const projectionKey = activeCheckpointId
-        ? `${activeCheckpointId}:${activeTab.recallSubstate || 'normal'}`
+        ? `${activeCheckpointId}:${result.recallSubstate || 'normal'}`
         : null
       if (activeCheckpointId && container._activeCheckpointProjectionKey !== projectionKey) {
         container._checkpointProjectionLoading = true

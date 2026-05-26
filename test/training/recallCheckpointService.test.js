@@ -517,6 +517,27 @@ describe('recallCheckpointService — Phase 5 contracts', () => {
       assert.strictEqual(stateAfter.reviewQueueView, null, 'startCheckpoint must not set reviewQueueView')
       assert.strictEqual(stateAfter.activeAttemptId, undefined, 'startCheckpoint must not set activeAttemptId')
     })
+
+    it('initializes correctionDraft as the checkpoint board source', async () => {
+      seedSession(repo, {currentMoveIndex: 1})
+      seedBadMove(repo, {moveIndex: 1})
+
+      const cp = await service.startCheckpoint({
+        recallSessionId: 'session_1',
+        badMoveId: 'bm_1',
+      })
+
+      assert.deepStrictEqual(runtimeStore.getState().correctionDraft, {
+        checkpointId: cp.id,
+        moves: [],
+        source: {
+          kind: 'recall-checkpoint',
+          recallSessionId: 'session_1',
+          badMoveId: 'bm_1',
+          moveIndex: 1,
+        },
+      })
+    })
   })
 
   // ------------------------------------------------------------------
@@ -671,6 +692,25 @@ describe('recallCheckpointService — Phase 5 contracts', () => {
       const cp = repo.store.checkpoints['cp_1']
       assert.ok(cp.completedAt, 'completedAt should be set')
       assert.strictEqual(cp.userCommentId, undefined, 'skipped checkpoint should have no userCommentId')
+    })
+  })
+
+  describe('CP18 — resumeRecall clears correctionDraft', () => {
+    it('clears the active correctionDraft when checkpoint resumes recall', async () => {
+      seedCheckpoint(repo, {
+        status: 'commented',
+        userCorrectionLine: ['R17'],
+        userCommentId: 'comment_1',
+      })
+      seedSession(repo, {currentMoveIndex: 1})
+      runtimeStore.setActiveCheckpoint('cp_1')
+      runtimeStore.setCorrectionDraft({checkpointId: 'cp_1', moves: ['R17']})
+
+      await service.resumeRecall('cp_1')
+
+      assert.strictEqual(runtimeStore.getState().activeCheckpointId, undefined)
+      assert.strictEqual(runtimeStore.getState().correctionDraft, undefined)
+      assert.strictEqual(repo.store.sessions.session_1.currentMoveIndex, 2)
     })
   })
 })

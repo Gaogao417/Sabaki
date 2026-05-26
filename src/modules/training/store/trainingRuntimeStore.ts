@@ -56,6 +56,12 @@ export type TrainingRuntimeState = {
   correctionDraft?: {
     checkpointId: string
     moves: string[]
+    source?: {
+      kind: 'recall-checkpoint'
+      recallSessionId?: string
+      badMoveId?: string
+      moveIndex?: number
+    }
   }
 
   visibleBadMoveIds: string[]
@@ -86,7 +92,13 @@ export type TrainingRuntimeStore = {
   upsertPendingMoveEvaluation(evaluation: MoveEvaluation): void
   removePendingMoveEvaluation(evaluationId: string): void
 
-  setCorrectionDraft(draft?: { checkpointId: string; moves: string[] }): void
+  setCorrectionDraft(draft?: TrainingRuntimeState['correctionDraft']): void
+  appendCorrectionDraftMove(input: {
+    checkpointId: string
+    move: string
+    source?: NonNullable<TrainingRuntimeState['correctionDraft']>['source']
+  }): void
+  clearCorrectionDraft(checkpointId?: string): void
   setVisibleBadMoveIds(ids: string[]): void
 
   setRecallView(view: RecallView | null): void
@@ -137,7 +149,15 @@ export function createTrainingRuntimeStore(deps?: TrainingRuntimeStoreDeps): Tra
       if (id) {
         logger?.info('runtime.recall_session_activated', 'Active recall session changed', { sessionId: id })
       }
-      state = { ...state, activeRecallSessionId: id }
+      const clearingOrChangingSession =
+        id == null || (state.activeRecallSessionId != null && state.activeRecallSessionId !== id)
+      state = {
+        ...state,
+        activeRecallSessionId: id,
+        ...(clearingOrChangingSession
+          ? {activeCheckpointId: undefined, correctionDraft: undefined}
+          : {}),
+      }
       notify()
     },
 
@@ -145,7 +165,14 @@ export function createTrainingRuntimeStore(deps?: TrainingRuntimeStoreDeps): Tra
       if (id) {
         logger?.info('runtime.checkpoint_activated', 'Active checkpoint changed', { checkpointId: id })
       }
-      state = { ...state, activeCheckpointId: id }
+      const shouldClearDraft =
+        id == null ||
+        (state.correctionDraft != null && state.correctionDraft.checkpointId !== id)
+      state = {
+        ...state,
+        activeCheckpointId: id,
+        ...(shouldClearDraft ? {correctionDraft: undefined} : {}),
+      }
       notify()
     },
 
@@ -192,8 +219,45 @@ export function createTrainingRuntimeStore(deps?: TrainingRuntimeStoreDeps): Tra
       notify()
     },
 
-    setCorrectionDraft(draft?: { checkpointId: string; moves: string[] }) {
-      state = { ...state, correctionDraft: draft }
+    setCorrectionDraft(draft?: TrainingRuntimeState['correctionDraft']) {
+      state = {
+        ...state,
+        correctionDraft: draft == null
+          ? undefined
+          : {...draft, moves: [...draft.moves]},
+      }
+      notify()
+    },
+
+    appendCorrectionDraftMove(input: {
+      checkpointId: string
+      move: string
+      source?: NonNullable<TrainingRuntimeState['correctionDraft']>['source']
+    }) {
+      const current = state.correctionDraft?.checkpointId === input.checkpointId
+        ? state.correctionDraft
+        : undefined
+      state = {
+        ...state,
+        correctionDraft: {
+          checkpointId: input.checkpointId,
+          moves: [...(current?.moves ?? []), input.move],
+          source: input.source ?? current?.source,
+        },
+      }
+      notify()
+    },
+
+    clearCorrectionDraft(checkpointId?: string) {
+      if (
+        checkpointId != null &&
+        state.correctionDraft != null &&
+        state.correctionDraft.checkpointId !== checkpointId
+      ) {
+        return
+      }
+      if (state.correctionDraft == null) return
+      state = { ...state, correctionDraft: undefined }
       notify()
     },
 
