@@ -11,9 +11,9 @@ Do not use this workflow for pure UI/CSS/layout/design-token/screenshot fidelity
 
 ## Checklist-Driven Dispatch
 
-The planner writes `docs/.workflow-checklist.md`. The main agent MUST follow this loop on every turn:
+The planner writes a task-specific checklist at `docs/workflow-checklists/<YYYY-MM-DD>-<task-slug>.md`. The main agent MUST follow this loop on every turn:
 
-1. Read `docs/.workflow-checklist.md`.
+1. Read the current task's checklist file. If no path is already known, find the matching task checklist under `docs/workflow-checklists/` by task slug/title; only fall back to `docs/.workflow-checklist.md` when it is clearly a legacy pointer for the same task.
 2. Find the first `- [ ]` step.
 3. Dispatch the corresponding role for that step.
 4. After the subagent returns, check off the step: `- [x]`.
@@ -22,11 +22,13 @@ The planner writes `docs/.workflow-checklist.md`. The main agent MUST follow thi
    - Un-check the upstream step (set back to `- [ ]`).
    - Re-dispatch the upstream step with review feedback appended.
    - Maximum 3 retries per step. After 3 retries, mark FAILED and stop.
-6. Write the updated checklist back to `docs/.workflow-checklist.md`.
+6. Write the updated checklist back to the same task-specific checklist file.
 7. If there is a next unchecked step, immediately dispatch it in the same turn. Do not stop to report progress or wait for user confirmation between steps.
 8. When all steps are checked, report completion to the user.
 
 The main agent MUST NOT stop between steps unless all steps are done or a step has FAILED after 3 retries.
+
+Never overwrite another task's checklist. `docs/.workflow-checklist.md` is legacy-only and must not be used as a global mutable queue for new business/state tasks.
 
 ## Role Order
 

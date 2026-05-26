@@ -54,13 +54,17 @@ Downstream work receives one step payload per worker or main-session pass. The m
 
 ### 2. Task checklist artifact
 
-The planner MUST write a task checklist file to:
+The planner MUST write a task checklist file to a task-unique path:
 
 ```
-docs/.workflow-checklist.md
+docs/workflow-checklists/<YYYY-MM-DD>-<task-slug>.md
 ```
 
-This file is the single source of truth for workflow progress. The main agent reads it to know what to do next and updates it after each step completes.
+This file is the single source of truth for that task's workflow progress. The main agent reads that task-specific checklist to know what to do next and updates it after each step completes.
+
+Use a short, stable `<task-slug>` derived from the user goal, for example `phase5-checkpoint-ui-comment` or `submit-to-recall-projection`. If a matching checklist already exists for the same task, update that file instead of creating a duplicate.
+
+`docs/.workflow-checklist.md` is legacy-only. Do not store a full workflow checklist there for new tasks. If a repository still uses it, it may contain a pointer to the active task-specific checklist, but it must not be treated as a global mutable task queue.
 
 Format:
 
@@ -96,7 +100,8 @@ Rules for the checklist:
 - The main agent MUST check off a step immediately after it completes (success or retry-exhausted).
 - If a review step returns REQUEST_CHANGES, add a retry entry under `## Retries` and re-dispatch the upstream step. Do NOT stop or wait for user confirmation.
 - Maximum 3 retries per step. After 3 retries, mark the step `[x]` with a note `FAILED after 3 retries` and stop the workflow.
-- The main agent reads this file at the start of every turn to find the first unchecked step.
+- The main agent reads the task-specific checklist file at the start of every turn to find the first unchecked step.
+- Do not overwrite another task's checklist. If `docs/.workflow-checklist.md` or another checklist belongs to a different task, leave it untouched and create/use the current task's unique checklist path.
 
 ## Step Size
 
