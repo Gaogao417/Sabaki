@@ -1,17 +1,26 @@
 [
   {
+    "profile": "desktop",
     "scenario": "problem",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/problem.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": false,
       "visibleCards": 4,
-      "textLength": 324,
+      "textLength": 325,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
@@ -22,6 +31,16 @@
         "bottom": 132,
         "left": 20
       },
+      "stageBox": {
+        "x": 352,
+        "y": 144,
+        "width": 742,
+        "height": 818,
+        "top": 144,
+        "right": 1094,
+        "bottom": 962,
+        "left": 352
+      },
       "boardBox": {
         "x": 352,
         "y": 182,
@@ -31,22 +50,46 @@
         "right": 1094,
         "bottom": 924,
         "left": 352
-      }
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1408,
+        "height": 92,
+        "top": 974,
+        "right": 1428,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": null,
+      "drawerBox": null,
+      "drawerShellPosition": null,
+      "leftPanelDisplay": "block",
+      "rightPanelDisplay": "block"
     }
   },
   {
+    "profile": "desktop",
     "scenario": "recall",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/recall.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": false,
       "visibleCards": 5,
-      "textLength": 198,
+      "textLength": 185,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
@@ -56,6 +99,16 @@
         "right": 1428,
         "bottom": 132,
         "left": 20
+      },
+      "stageBox": {
+        "x": 98,
+        "y": 144,
+        "width": 918,
+        "height": 744,
+        "top": 144,
+        "right": 1016,
+        "bottom": 888,
+        "left": 98
       },
       "boardBox": {
         "x": 177,
@@ -66,127 +119,307 @@
         "right": 937,
         "bottom": 904,
         "left": 177
-      }
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1408,
+        "height": 92,
+        "top": 974,
+        "right": 1428,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": null,
+      "drawerBox": null,
+      "drawerShellPosition": null,
+      "leftPanelDisplay": "none",
+      "rightPanelDisplay": "block"
     }
   },
   {
+    "profile": "desktop",
     "scenario": "play-history",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/play-history.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": true,
       "visibleCards": 6,
-      "textLength": 452,
+      "textLength": 332,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
-        "width": 1408,
+        "width": 1439.015625,
         "height": 112,
         "top": 20,
-        "right": 1428,
+        "right": 1459.015625,
         "bottom": 132,
         "left": 20
       },
+      "stageBox": {
+        "x": 98,
+        "y": 144,
+        "width": 949.015625,
+        "height": 818,
+        "top": 144,
+        "right": 1047.015625,
+        "bottom": 962,
+        "left": 98
+      },
       "boardBox": {
-        "x": 177,
+        "x": 192.5078125,
         "y": 173,
         "width": 760,
         "height": 760,
         "top": 173,
-        "right": 937,
+        "right": 952.5078125,
         "bottom": 933,
-        "left": 177
-      }
+        "left": 192.5078125
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1439.015625,
+        "height": 92,
+        "top": 974,
+        "right": 1459.015625,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": {
+        "x": 0,
+        "y": 0,
+        "width": 1448,
+        "height": 1086,
+        "top": 0,
+        "right": 1448,
+        "bottom": 1086,
+        "left": 0
+      },
+      "drawerBox": {
+        "x": 14,
+        "y": 44,
+        "width": 324,
+        "height": 1018,
+        "top": 44,
+        "right": 338,
+        "bottom": 1062,
+        "left": 14
+      },
+      "drawerShellPosition": "fixed",
+      "leftPanelDisplay": "none",
+      "rightPanelDisplay": "block"
     }
   },
   {
+    "profile": "desktop",
     "scenario": "play-kifu",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/play-kifu.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": true,
       "visibleCards": 6,
-      "textLength": 358,
+      "textLength": 294,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
-        "width": 1408,
+        "width": 1439.015625,
         "height": 112,
         "top": 20,
-        "right": 1428,
+        "right": 1459.015625,
         "bottom": 132,
         "left": 20
       },
+      "stageBox": {
+        "x": 98,
+        "y": 144,
+        "width": 949.015625,
+        "height": 818,
+        "top": 144,
+        "right": 1047.015625,
+        "bottom": 962,
+        "left": 98
+      },
       "boardBox": {
-        "x": 177,
+        "x": 192.5078125,
         "y": 173,
         "width": 760,
         "height": 760,
         "top": 173,
-        "right": 937,
+        "right": 952.5078125,
         "bottom": 933,
-        "left": 177
-      }
+        "left": 192.5078125
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1439.015625,
+        "height": 92,
+        "top": 974,
+        "right": 1459.015625,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": {
+        "x": 0,
+        "y": 0,
+        "width": 1448,
+        "height": 1086,
+        "top": 0,
+        "right": 1448,
+        "bottom": 1086,
+        "left": 0
+      },
+      "drawerBox": {
+        "x": 14,
+        "y": 44,
+        "width": 324,
+        "height": 1018,
+        "top": 44,
+        "right": 338,
+        "bottom": 1062,
+        "left": 14
+      },
+      "drawerShellPosition": "fixed",
+      "leftPanelDisplay": "none",
+      "rightPanelDisplay": "block"
     }
   },
   {
+    "profile": "desktop",
     "scenario": "play-games",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/play-games.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": true,
       "visibleCards": 6,
-      "textLength": 346,
+      "textLength": 329,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
-        "width": 1408,
+        "width": 1439.015625,
         "height": 112,
         "top": 20,
-        "right": 1428,
+        "right": 1459.015625,
         "bottom": 132,
         "left": 20
       },
+      "stageBox": {
+        "x": 98,
+        "y": 144,
+        "width": 949.015625,
+        "height": 818,
+        "top": 144,
+        "right": 1047.015625,
+        "bottom": 962,
+        "left": 98
+      },
       "boardBox": {
-        "x": 177,
+        "x": 192.5078125,
         "y": 173,
         "width": 760,
         "height": 760,
         "top": 173,
-        "right": 937,
+        "right": 952.5078125,
         "bottom": 933,
-        "left": 177
-      }
+        "left": 192.5078125
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1439.015625,
+        "height": 92,
+        "top": 974,
+        "right": 1459.015625,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": {
+        "x": 0,
+        "y": 0,
+        "width": 1448,
+        "height": 1086,
+        "top": 0,
+        "right": 1448,
+        "bottom": 1086,
+        "left": 0
+      },
+      "drawerBox": {
+        "x": 14,
+        "y": 44,
+        "width": 324,
+        "height": 1018,
+        "top": 44,
+        "right": 338,
+        "bottom": 1062,
+        "left": 14
+      },
+      "drawerShellPosition": "fixed",
+      "leftPanelDisplay": "none",
+      "rightPanelDisplay": "block"
     }
   },
   {
+    "profile": "desktop",
     "scenario": "analysis",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/analysis.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": false,
-      "visibleCards": 5,
-      "textLength": 576,
+      "visibleCards": 6,
+      "textLength": 257,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
@@ -197,6 +430,16 @@
         "bottom": 132,
         "left": 20
       },
+      "stageBox": {
+        "x": 352,
+        "y": 144,
+        "width": 742,
+        "height": 818,
+        "top": 144,
+        "right": 1094,
+        "bottom": 962,
+        "left": 352
+      },
       "boardBox": {
         "x": 352,
         "y": 182,
@@ -206,22 +449,46 @@
         "right": 1094,
         "bottom": 924,
         "left": 352
-      }
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1408,
+        "height": 92,
+        "top": 974,
+        "right": 1428,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": null,
+      "drawerBox": null,
+      "drawerShellPosition": null,
+      "leftPanelDisplay": "block",
+      "rightPanelDisplay": "block"
     }
   },
   {
+    "profile": "desktop",
     "scenario": "analysis-library",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/analysis-library.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": true,
-      "visibleCards": 5,
-      "textLength": 821,
+      "visibleCards": 6,
+      "textLength": 376,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
@@ -232,6 +499,16 @@
         "bottom": 132,
         "left": 20
       },
+      "stageBox": {
+        "x": 352,
+        "y": 144,
+        "width": 742,
+        "height": 818,
+        "top": 144,
+        "right": 1094,
+        "bottom": 962,
+        "left": 352
+      },
       "boardBox": {
         "x": 352,
         "y": 182,
@@ -241,22 +518,64 @@
         "right": 1094,
         "bottom": 924,
         "left": 352
-      }
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1408,
+        "height": 92,
+        "top": 974,
+        "right": 1428,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": {
+        "x": 0,
+        "y": 0,
+        "width": 1448,
+        "height": 1086,
+        "top": 0,
+        "right": 1448,
+        "bottom": 1086,
+        "left": 0
+      },
+      "drawerBox": {
+        "x": 14,
+        "y": 44,
+        "width": 324,
+        "height": 1018,
+        "top": 44,
+        "right": 338,
+        "bottom": 1062,
+        "left": 14
+      },
+      "drawerShellPosition": "fixed",
+      "leftPanelDisplay": "block",
+      "rightPanelDisplay": "block"
     }
   },
   {
+    "profile": "desktop",
     "scenario": "checkpoint",
     "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/checkpoint.png",
     "metrics": {
       "shell": true,
       "modeBar": true,
+      "stage": true,
       "board": true,
+      "bottom": true,
       "drawer": false,
       "visibleCards": 6,
-      "textLength": 337,
+      "textLength": 336,
       "hasGlobalHeaderClass": false,
       "overflowCount": 0,
       "overflowDetails": [],
+      "viewport": {
+        "width": 1448,
+        "height": 1086
+      },
+      "documentWidth": 1448,
+      "bodyWidth": 1448,
       "topbar": {
         "x": 20,
         "y": 20,
@@ -266,6 +585,16 @@
         "right": 1428,
         "bottom": 132,
         "left": 20
+      },
+      "stageBox": {
+        "x": 98,
+        "y": 144,
+        "width": 800,
+        "height": 818,
+        "top": 144,
+        "right": 898,
+        "bottom": 962,
+        "left": 98
       },
       "boardBox": {
         "x": 98,
@@ -276,7 +605,178 @@
         "right": 898,
         "bottom": 953,
         "left": 98
-      }
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 974,
+        "width": 1408,
+        "height": 92,
+        "top": 974,
+        "right": 1428,
+        "bottom": 1066,
+        "left": 20
+      },
+      "drawerShellBox": null,
+      "drawerBox": null,
+      "drawerShellPosition": null,
+      "leftPanelDisplay": "none",
+      "rightPanelDisplay": "block"
+    }
+  },
+  {
+    "profile": "compact",
+    "scenario": "problem",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/compact-problem.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "stage": true,
+      "board": true,
+      "bottom": true,
+      "drawer": false,
+      "visibleCards": 4,
+      "textLength": 80,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "viewport": {
+        "width": 1279,
+        "height": 860
+      },
+      "documentWidth": 1279,
+      "bodyWidth": 1279,
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1239,
+        "height": 112,
+        "top": 20,
+        "right": 1259,
+        "bottom": 132,
+        "left": 20
+      },
+      "stageBox": {
+        "x": 40,
+        "y": 144,
+        "width": 1199,
+        "height": 592,
+        "top": 144,
+        "right": 1239,
+        "bottom": 736,
+        "left": 40
+      },
+      "boardBox": {
+        "x": 259.5,
+        "y": 144,
+        "width": 760,
+        "height": 760,
+        "top": 144,
+        "right": 1019.5,
+        "bottom": 904,
+        "left": 259.5
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 748,
+        "width": 1239,
+        "height": 92,
+        "top": 748,
+        "right": 1259,
+        "bottom": 840,
+        "left": 20
+      },
+      "drawerShellBox": null,
+      "drawerBox": null,
+      "drawerShellPosition": null,
+      "leftPanelDisplay": "none",
+      "rightPanelDisplay": "none"
+    }
+  },
+  {
+    "profile": "compact",
+    "scenario": "analysis-library",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/compact-analysis-library.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "stage": true,
+      "board": true,
+      "bottom": true,
+      "drawer": true,
+      "visibleCards": 6,
+      "textLength": 240,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "viewport": {
+        "width": 1279,
+        "height": 860
+      },
+      "documentWidth": 1279,
+      "bodyWidth": 1279,
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1239,
+        "height": 112,
+        "top": 20,
+        "right": 1259,
+        "bottom": 132,
+        "left": 20
+      },
+      "stageBox": {
+        "x": 40,
+        "y": 144,
+        "width": 1199,
+        "height": 592,
+        "top": 144,
+        "right": 1239,
+        "bottom": 736,
+        "left": 40
+      },
+      "boardBox": {
+        "x": 259.5,
+        "y": 144,
+        "width": 760,
+        "height": 760,
+        "top": 144,
+        "right": 1019.5,
+        "bottom": 904,
+        "left": 259.5
+      },
+      "bottomBox": {
+        "x": 20,
+        "y": 748,
+        "width": 1239,
+        "height": 92,
+        "top": 748,
+        "right": 1259,
+        "bottom": 840,
+        "left": 20
+      },
+      "drawerShellBox": {
+        "x": 0,
+        "y": 0,
+        "width": 1279,
+        "height": 860,
+        "top": 0,
+        "right": 1279,
+        "bottom": 860,
+        "left": 0
+      },
+      "drawerBox": {
+        "x": 14,
+        "y": 44,
+        "width": 324,
+        "height": 792,
+        "top": 44,
+        "right": 338,
+        "bottom": 836,
+        "left": 14
+      },
+      "drawerShellPosition": "fixed",
+      "leftPanelDisplay": "none",
+      "rightPanelDisplay": "none"
     }
   }
 ]
