@@ -2279,7 +2279,6 @@
   overflow: visible;
 }
 
-.wb-main-board-stage #goban,
 .wb-board-fallback {
   width: min(100%, 760px) !important;
   height: auto !important;
@@ -2295,7 +2294,6 @@
     0 18px 44px rgba(15, 23, 42, 0.1);
 }
 
-.workbench-shell__main--checkpoint .wb-main-board-stage #goban,
 .workbench-shell__main--checkpoint .wb-board-fallback {
   width: min(100%, 800px) !important;
 }
