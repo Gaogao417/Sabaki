@@ -1011,6 +1011,7 @@ class TrainingWorkbenchContainer extends Component {
       this._clickController = createBoardInteractionController({
         getPlayServices: () => ({
           ...(playServices || { documentStore: { playMove: async () => { } } }),
+          problemFlowService: ctx.problemFlowService,
           attemptService: ctx.attemptService,
           monitor: ctx.monitor,
           repository: ctx.repository,

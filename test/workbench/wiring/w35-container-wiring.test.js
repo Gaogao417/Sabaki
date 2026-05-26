@@ -164,6 +164,7 @@ function createHarness({
   tabs = [makeTab()],
   activeTabId = tabs[0]?.id ?? null,
   sabakiPatch = {},
+  trainingContextPatch = {},
 } = {}) {
   const workbenchStore = createWorkbenchStore()
   const runtimeStore = createTrainingRuntimeStore()
@@ -188,6 +189,7 @@ function createHarness({
     tabService,
     taskImportService,
     legacyTrainingFlowController: createNoopLegacyController(),
+    ...trainingContextPatch,
   }
 
   const sabaki = {
@@ -425,6 +427,111 @@ describe('W3.5 Container Wiring', function () {
       }
       assert.strictEqual(thrown, null,
         'onVertexClick must not throw for a valid empty-point click in play mode')
+    })
+
+    it('Problem board click reaches problemFlowService without writing the game tree', function () {
+      const playMoveCalls = []
+      const legacyClickCalls = []
+      const problemMoveCalls = []
+      const documentStore = {
+        getCurrent() {
+          return {tree: null, treePosition: 'problem_root'}
+        },
+        async playMove(vertex, options) {
+          playMoveCalls.push({vertex, options})
+          return {changed: true, treePosition: 'unexpected_game_tree_write'}
+        },
+      }
+      const {container, runtimeStore} = createHarness({
+        tabs: [
+          makeTab({
+            id: 'tab_problem',
+            mode: 'problem',
+            taskId: 'task_problem',
+            activeAttemptId: 'attempt_problem',
+            playerConfig: {currentSide: 'human', sideToMove: 'black'},
+          }),
+        ],
+        sabakiPatch: {
+          state: {treePosition: 'problem_root', selectedTool: 'stone_1'},
+          getPlayServices() {
+            return {documentStore}
+          },
+          clickVertex(vertex, options) {
+            legacyClickCalls.push({vertex, options})
+          },
+        },
+        trainingContextPatch: {
+          repository: {loadTask: async () => null},
+          problemFlowService: {
+            async appendProblemMove(input) {
+              problemMoveCalls.push(input)
+              const view = runtimeStore.getState().problemView
+              runtimeStore.setProblemView({
+                ...view,
+                evalCache: [
+                  ...view.evalCache,
+                  {
+                    move: input.move,
+                    moveIndex: view.evalCache.length,
+                    isBadMove: false,
+                    severity: 'ok',
+                  },
+                ],
+                badMoves: view.badMoves,
+              })
+              return {
+                moveIndex: view.evalCache.length,
+                evalCache: runtimeStore.getState().problemView.evalCache,
+                badMoves: runtimeStore.getState().problemView.badMoves,
+              }
+            },
+          },
+        },
+      })
+      runtimeStore.setProblemView({
+        taskId: 'task_problem',
+        tabId: 'tab_problem',
+        attemptId: 'attempt_problem',
+        problemId: 'problem_1',
+        legacyProblemSession: null,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+
+      const shellProps = container.render().props
+      shellProps.boardProps.handlerProps.onVertexClick({
+        vertex: [3, 3],
+        button: 0,
+        ctrlKey: false,
+        metaKey: false,
+      })
+
+      assert.strictEqual(problemMoveCalls.length, 1,
+        'Problem board click must call problemFlowService.appendProblemMove')
+      assert.deepStrictEqual(
+        problemMoveCalls[0],
+        {
+          move: 'dd',
+          vertex: [3, 3],
+          playerSign: 1,
+          positionBeforeHash: 'node_root',
+          preMoveAnalysis: null,
+        },
+      )
+      assert.deepStrictEqual(playMoveCalls, [],
+        'Problem board click must not write through documentStore.playMove')
+      assert.deepStrictEqual(legacyClickCalls, [],
+        'Problem board click must not fall back to the legacy game-tree click path')
+
+      const projectedAfterClick = container.render().props
+      assert.deepStrictEqual(
+        projectedAfterClick.problemAttempt.userLine,
+        ['dd'],
+        'Container must project the runtime problem attempt after the board click',
+      )
     })
   })
 
