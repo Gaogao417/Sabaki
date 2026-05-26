@@ -16,23 +16,26 @@
 
 import assert from 'assert'
 
-// Lazy-load the module; return null if not yet implemented.
+// Lazy-load the module so deleting or breaking the production export fails
+// this contract instead of silently skipping it.
 let _modeTransitions = null
 let _loadAttempted = false
+let _loadError = null
 
 function getModeTransitions() {
-  if (_loadAttempted) return _modeTransitions
-  _loadAttempted = true
-  try {
-    _modeTransitions = require('../../src/modules/training/workbench/modeTransitions.ts')
-  } catch {
-    // Module doesn't exist yet -- tests serve as spec, will be RED.
+  if (!_loadAttempted) {
+    _loadAttempted = true
+    try {
+      _modeTransitions = require('../../src/modules/training/workbench/modeTransitions.ts')
+    } catch (error) {
+      _loadError = error
+    }
   }
+  assert.ifError(_loadError)
   return _modeTransitions
 }
 
 const mod = getModeTransitions()
-const describeIf = mod ? describe : describe.skip
 const {resolveTransition, getAllowedEvents} = mod || {}
 
 /**
@@ -57,7 +60,7 @@ function baseInput(overrides = {}) {
   }
 }
 
-describeIf('modeTransitions', () => {
+describe('modeTransitions', () => {
 
   // ========================================================
   // P1G-T05: submit from play -> recall

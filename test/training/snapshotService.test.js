@@ -9,6 +9,7 @@ function makeTab(overrides = {}) {
   return {
     id: 'tab_1',
     taskId: 'task_1',
+    mode: 'analysis',
     phase: 'analysis',
     childTabIds: [],
     parentTabId: undefined,
@@ -146,9 +147,9 @@ describe('snapshotService', () => {
       )
     })
 
-    // Phase 6 removed the analysis-only restriction.
-    // The old test asserted that non-analysis modes throw.
-    // New behavior: all modes are allowed — tested in C03-C06 below.
+    // Workbench migration alignment: Snapshot may be discoverable globally,
+    // but direct persistence is analysis-only. Non-analysis callers must enter
+    // Analysis first and then capture from the scratch/current source.
 
     it('throws if sourceTaskId does not match tab.taskId', async () => {
       store.addTab(makeTab({ id: 'tab_1', taskId: 'task_1', phase: 'analysis' }))
@@ -356,13 +357,13 @@ describe('snapshotService', () => {
     })
   })
 
-  // --- Phase 6: multi-mode capture (C03-C17) ---
+  // --- Snapshot persistence source guard (C03-C17) ---
 
   function makeTabWithOrigin(overrides = {}) {
     return {
       id: 'tab_1',
       taskId: 'task_1',
-      mode: 'play',
+      mode: 'analysis',
       childTabIds: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -427,7 +428,7 @@ describe('snapshotService', () => {
     }
   }
 
-  describe('Phase 6: multi-mode capture (C03-C17)', () => {
+  describe('Snapshot persistence source guard (C03-C17)', () => {
     let multiStore, multiRepo, multiAdapter, multiService
 
     beforeEach(() => {
@@ -441,50 +442,49 @@ describe('snapshotService', () => {
       })
     })
 
-    describe('C03: captureSnapshotInput succeeds from play mode', () => {
-      it('returns valid snapshot input from play tab', async () => {
+    describe('C03: captureSnapshotInput rejects direct capture from play mode', () => {
+      it('requires callers to enter analysis before persistence', async () => {
         multiStore.addTab(makeTabWithOrigin({ id: 'tab_play', taskId: 'task_1', mode: 'play' }))
 
-        const input = await multiService.captureSnapshotInput({
-          tabId: 'tab_play',
-          sourceTaskId: 'task_1',
-        })
-
-        assert.strictEqual(input.sourceTaskId, 'task_1')
-        assert.strictEqual(input.positionSgf, '(;SZ[9]AB[dc]PL[B])')
-        assert.strictEqual(input.sideToMove, 'black')
+        await assert.rejects(
+          () => multiService.captureSnapshotInput({
+            tabId: 'tab_play',
+            sourceTaskId: 'task_1',
+          }),
+          /analysis/i,
+        )
       })
     })
 
-    describe('C04: captureSnapshotInput succeeds from problem mode', () => {
-      it('returns valid snapshot input from problem tab', async () => {
+    describe('C04: captureSnapshotInput rejects direct capture from problem mode', () => {
+      it('requires callers to enter analysis before persistence', async () => {
         multiStore.addTab(makeTabWithOrigin({ id: 'tab_prob', taskId: 'task_1', mode: 'problem' }))
 
-        const input = await multiService.captureSnapshotInput({
-          tabId: 'tab_prob',
-          sourceTaskId: 'task_1',
-        })
-
-        assert.strictEqual(input.sourceTaskId, 'task_1')
-        assert.strictEqual(input.positionSgf, '(;SZ[9]AB[dc]PL[B])')
+        await assert.rejects(
+          () => multiService.captureSnapshotInput({
+            tabId: 'tab_prob',
+            sourceTaskId: 'task_1',
+          }),
+          /analysis/i,
+        )
       })
     })
 
-    describe('C05: captureSnapshotInput succeeds from recall mode', () => {
-      it('returns valid snapshot input from recall tab', async () => {
+    describe('C05: captureSnapshotInput rejects direct capture from recall mode', () => {
+      it('requires callers to enter analysis before persistence', async () => {
         multiStore.addTab(makeTabWithOrigin({ id: 'tab_recall', taskId: 'task_1', mode: 'recall' }))
 
-        const input = await multiService.captureSnapshotInput({
-          tabId: 'tab_recall',
-          sourceTaskId: 'task_1',
-        })
-
-        assert.strictEqual(input.sourceTaskId, 'task_1')
-        assert.strictEqual(input.positionSgf, '(;SZ[9]AB[dc]PL[B])')
+        await assert.rejects(
+          () => multiService.captureSnapshotInput({
+            tabId: 'tab_recall',
+            sourceTaskId: 'task_1',
+          }),
+          /analysis/i,
+        )
       })
     })
 
-    describe('C06: captureSnapshotInput still works from analysis mode (regression)', () => {
+    describe('C06: captureSnapshotInput works from analysis mode', () => {
       it('returns valid snapshot input from analysis tab', async () => {
         multiStore.addTab(makeTabWithOrigin({ id: 'tab_analysis', taskId: 'task_1', mode: 'analysis' }))
 
@@ -517,7 +517,7 @@ describe('snapshotService', () => {
           positionSnapshotAdapter: customAdapter,
           workbenchStore: multiStore,
         })
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c7', taskId: 'task_1', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c7', taskId: 'task_1', mode: 'analysis' }))
 
         const input = await customService.captureSnapshotInput({
           tabId: 'tab_c7',
@@ -533,7 +533,7 @@ describe('snapshotService', () => {
     describe('C08: Source resolution uses task.origin (not deprecated task.source)', () => {
       it('reads from task.origin.provider for source resolution', async () => {
         // task_1 has origin.provider === '101'
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c8', taskId: 'task_1', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c8', taskId: 'task_1', mode: 'analysis' }))
 
         const input = await multiService.captureSnapshotInput({
           tabId: 'tab_c8',
@@ -547,7 +547,7 @@ describe('snapshotService', () => {
 
     describe('C09: sourceGameId set when origin.provider === fox', () => {
       it('sets sourceGameId from task.origin.externalId for fox provider', async () => {
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_fox', taskId: 'task_fox', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_fox', taskId: 'task_fox', mode: 'analysis' }))
 
         const input = await multiService.captureSnapshotInput({
           tabId: 'tab_fox',
@@ -561,7 +561,7 @@ describe('snapshotService', () => {
 
     describe('C10: sourceProblemId set when origin.provider === 101', () => {
       it('sets sourceProblemId from task.origin.externalId for 101 provider', async () => {
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_101', taskId: 'task_1', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_101', taskId: 'task_1', mode: 'analysis' }))
 
         const input = await multiService.captureSnapshotInput({
           tabId: 'tab_101',
@@ -575,7 +575,7 @@ describe('snapshotService', () => {
 
     describe('C11: No sourceGameId/sourceProblemId when origin absent or unrecognized', () => {
       it('omits both fields when task has no origin', async () => {
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_no', taskId: 'task_no_origin', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_no', taskId: 'task_no_origin', mode: 'analysis' }))
 
         const input = await multiService.captureSnapshotInput({
           tabId: 'tab_no',
@@ -587,7 +587,7 @@ describe('snapshotService', () => {
       })
 
       it('omits both fields when origin.provider is unrecognized', async () => {
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_un', taskId: 'task_unknown_provider', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_un', taskId: 'task_unknown_provider', mode: 'analysis' }))
 
         const input = await multiService.captureSnapshotInput({
           tabId: 'tab_un',
@@ -601,7 +601,7 @@ describe('snapshotService', () => {
 
     describe('C12: sourceAttemptId pass-through', () => {
       it('passes provided sourceAttemptId to output unchanged', async () => {
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c12', taskId: 'task_1', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c12', taskId: 'task_1', mode: 'analysis' }))
 
         const input = await multiService.captureSnapshotInput({
           tabId: 'tab_c12',
@@ -618,7 +618,7 @@ describe('snapshotService', () => {
         multiStore.addTab(makeTabWithOrigin({
           id: 'tab_c13',
           taskId: 'task_1',
-          mode: 'play',
+          mode: 'analysis',
           activeAttemptId: 'att_default',
         }))
 
@@ -642,7 +642,7 @@ describe('snapshotService', () => {
 
     describe('C15: captureSnapshotInput throws when sourceTaskId does not match tab.taskId', () => {
       it('throws when sourceTaskId differs from tab.taskId', async () => {
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c15', taskId: 'task_1', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c15', taskId: 'task_1', mode: 'analysis' }))
 
         await assert.rejects(
           () => multiService.captureSnapshotInput({ tabId: 'tab_c15', sourceTaskId: 'task_wrong' }),
@@ -661,7 +661,7 @@ describe('snapshotService', () => {
           positionSnapshotAdapter: multiAdapter,
           workbenchStore: multiStore,
         })
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_ghost', taskId: 'task_ghost', mode: 'play' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_ghost', taskId: 'task_ghost', mode: 'analysis' }))
 
         await assert.rejects(
           () => noTaskService.captureSnapshotInput({ tabId: 'tab_ghost', sourceTaskId: 'task_ghost' }),
@@ -683,7 +683,7 @@ describe('snapshotService', () => {
             },
           },
         })
-        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c17', taskId: 'task_1', mode: 'recall' }))
+        multiStore.addTab(makeTabWithOrigin({ id: 'tab_c17', taskId: 'task_1', mode: 'analysis' }))
 
         await loggedService.captureSnapshotInput({
           tabId: 'tab_c17',

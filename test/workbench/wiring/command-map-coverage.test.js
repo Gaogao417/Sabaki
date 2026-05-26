@@ -137,7 +137,7 @@ describe('Workbench command map coverage', () => {
       {
         id: 'library.101',
         handlerName: 'handleOpenOneOhOneWeiqi',
-        expectedImportPattern: /taskImportService\.(?:importOneOhOneProblem|syncOneOhOneProblem|openOneOhOneProblem|createTaskFromOneOhOneProblem)/,
+        expectedImportPattern: /taskImportService\.(?:import101Problem|importOneOhOneProblem|syncOneOhOneProblem|openOneOhOneProblem|createTaskFromOneOhOneProblem)/,
       },
     ]
 

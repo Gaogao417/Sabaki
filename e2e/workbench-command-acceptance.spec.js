@@ -61,6 +61,22 @@ async function installLibraryCommandHarness(page) {
       legacyThirdPartyCalls: [],
     }
 
+    if (typeof ctx.taskImportService.importFoxGame !== 'function') {
+      throw new Error('taskImportService.importFoxGame must exist for Fox library command wiring')
+    }
+    if (typeof ctx.taskImportService.import101Problem !== 'function') {
+      throw new Error('taskImportService.import101Problem must exist for 101 library command wiring')
+    }
+    if (typeof ctx.repository.findTaskBySource !== 'function') {
+      throw new Error('repository.findTaskBySource must exist for library command lookup wiring')
+    }
+    if (typeof ctx.repository.loadTask !== 'function') {
+      throw new Error('repository.loadTask must exist for opened library task projection')
+    }
+    if (typeof ctx.tabService.openTask !== 'function') {
+      throw new Error('tabService.openTask must exist for library command tab opening')
+    }
+
     const originalImportFoxGame = ctx.taskImportService.importFoxGame?.bind(
       ctx.taskImportService,
     )

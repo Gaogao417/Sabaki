@@ -1,386 +1,264 @@
 /**
- * Snapshot Null TaskId Wiring Tests (T-SNAPSHOT-FREEPLAY)
+ * Snapshot null-task enter-analysis guard.
  *
- * Proves that snapshot on a default tab with taskId:null does NOT crash.
- * This is the user-facing bug: App.js creates a default free-play tab with
- * taskId:null on startup, and clicking snapshot crashes because
- * snapshotService.captureSnapshotInput calls repository.loadTask(null).
- *
- * Remediation plan source: remediation_plan.md (BUG-2: Snapshot Null TaskId)
- *
- * v0.5 alignment:
- *   - PRD v0.5: default free-play tab is valid (taskId: null)
- *   - Arch v0.5: snapshotService should support parentless snapshots
- *   - Remediation plan BUG-2: make sourceTaskId optional, skip task load when null
- *
- * Test classification:
- *   - T-SNAPSHOT-NULL-1: CRASH_PREVENTION -- snapshotFromCurrentContext does not throw
- *   - T-SNAPSHOT-NULL-2: STATE_ASSERTION -- result includes snapshot task with no parent
- *   - T-SNAPSHOT-NULL-3: SERVICE_INTEGRATION -- tabService.openTask called with new ID
+ * Contract sources:
+ * - docs/product/sabaki-training-prd.md: Snapshot is globally discoverable,
+ *   but persistence must first project to WorkbenchMode.analysis scratch/current.
+ * - docs/ui_ux/workbench-six-screen-migration-wiring-plan.md: Global Snapshot
+ *   outside Analysis calls enterAnalysis first; Analysis Snapshot persists.
  *
  * Harness manifest:
- *   - Real production modules: createWorkbenchFlowService, createSnapshotService,
- *     createWorkbenchStore, createTrainingRuntimeStore, createLoggerService,
- *     createConsoleWriter, createSpyTabService (from shared spy factory)
- *   - In-memory repository fake (inline) -- only createTask/loadTask needed
- *   - Mock positionSnapshotAdapter -- returns fixed snapshot
- *   - Spy attemptService -- provides createAttempt/freezeAttempt/finalizeAttemptResult
- *   - Spy recallService -- provides createRecallSession/completeRecall
- *   - Spy factory source: workbenchSpyFactories.ts (createSpyTabService),
- *     inline stubs for attemptService and recallService
- *   - Valid for: CRASH_PREVENTION, STATE_ASSERTION, SERVICE_INTEGRATION
- *   - Not valid for: RENDERED_UI_RETURN, REPOSITORY_PERSISTENCE
- *
- * Long-term vs migration:
- *   - All tests are RED until BUG-2 is fixed.
- *   - T-SNAPSHOT-NULL-1 is the critical regression test -- it MUST pass for the fix.
- *   - T-SNAPSHOT-NULL-2 and T-SNAPSHOT-NULL-3 verify the snapshot behavior is correct.
- *
- * Fragile test warnings:
- *   1. The mock positionSnapshotAdapter must satisfy the PositionSnapshotAdapter interface.
- *   2. The in-memory repository must support createTask/loadTask/transaction.
- *   3. Tests rely on workbenchFlowService calling tabService.openTask -- if the flow
- *      changes, the assertion must change too.
+ * - Layer: Workbench wiring / container command routing.
+ * - Production subject: TrainingWorkbenchContainer snapshot handler and real
+ *   workbench/runtime stores.
+ * - Real dependencies: TrainingWorkbenchContainer, createWorkbenchStore,
+ *   createTrainingRuntimeStore.
+ * - Controlled fakes: flowService boundary spy that updates the real store on
+ *   enterAnalysis; snapshotFromCurrentContext records calls only.
+ * - Mocked dependencies: tiny Sabaki shell and tab/repository shells required
+ *   by Container.render().
+ * - Primary assertions: a non-analysis tab with taskId:null routes Snapshot to
+ *   enterAnalysis, changes the active tab to analysis, initializes analysis
+ *   workspace state, and does not call snapshot persistence/openTask.
+ * - Expected status before step5.2: RED if Container still sends global
+ *   Snapshot directly to snapshotFromCurrentContext.
  */
 
 import assert from 'assert'
 
-// --- Real production imports ---
-
-import {createWorkbenchFlowService} from '../../../src/modules/training/workbench/workbenchFlowService.ts'
-import {createSnapshotService} from '../../../src/modules/training/analysis/snapshotService.ts'
-import {createWorkbenchStore} from '../../../src/modules/training/store/workbenchStore.ts'
+import TrainingWorkbenchContainer from '../../../src/components/TrainingWorkbenchContainer.js'
 import {createTrainingRuntimeStore} from '../../../src/modules/training/store/trainingRuntimeStore.ts'
-import {createSpyTabService} from '../shared/workbenchSpyFactories.ts'
-import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
-import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {createWorkbenchStore} from '../../../src/modules/training/store/workbenchStore.ts'
 
-// --- Logger for test harness (real, not mocked) ---
+const now = '2026-05-26T00:00:00.000Z'
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
-
-// --- In-memory repository ---
-
-/**
- * Minimal in-memory repository for snapshot flow tests.
- * Only implements methods needed by workbenchFlowService.snapshotFromCurrentContext
- * and snapshotService.captureSnapshotInput.
- */
-function createInMemoryRepository() {
-  const tasks = new Map()
-  const sessions = new Map()
-  const attempts = new Map()
-  const recallSessions = new Map()
-
-  return {
-    // Task
-    createTask: async (task) => { tasks.set(task.id, {...task}); return task },
-    loadTask: async (taskId) => tasks.get(taskId) || null,
-    findTaskBySource: async () => null,
-    updateTask: async () => {},
-
-    // Attempt (needed by flowService.submit)
-    createAttempt: async (a) => { attempts.set(a.id, {...a}); return a },
-    loadAttempt: async (id) => attempts.get(id) || null,
-    listAttemptsByTask: async () => [],
-    updateAttempt: async () => {},
-    listIncompleteAttempts: async () => [],
-
-    // MoveEvaluation
-    listMoveEvaluationsByAttempt: async () => [],
-
-    // BadMove
-    listBadMovesByAttempt: async () => [],
-
-    // Recall
-    createRecallSession: async (s) => { recallSessions.set(s.id, {...s}); return s },
-    loadRecallSession: async () => null,
-    updateRecallSession: async () => {},
-    createRecallAttempt: async (a) => a,
-    listRecallAttempts: async () => [],
-    listIncompleteRecallSessions: async () => [],
-
-    // Transaction (passthrough for in-memory)
-    transaction: async (fn) => fn(),
-
-    // Review
-    listDueReviewItems: async () => [],
-    listTasksByStatus: async () => [],
-    listTasksByOriginProvider: async () => [],
-
-    // Legacy
-    saveGame: async () => ({}),
-    getGame: async () => null,
-    getRecentGames: async () => [],
-    saveRecallSession: async (s) => s,
-    saveRecallAttempts: async () => {},
-    saveProblem: async (p) => p,
-    getProblem: async () => null,
-    getProblemsByStatus: async () => [],
-    saveProblemAttempt: async (a) => a,
-    saveBadMove: async (b) => b,
-    updateBadMoveGeneratedProblem: async () => {},
-    getDueReviews: async () => [],
-    upsertReviewSchedule: async () => {},
-    getDashboardSummary: async () => ({}),
-    createReviewSchedule: async (s) => s,
-    findReviewScheduleByItem: async () => null,
-    findReviewScheduleByTask: async () => null,
-    updateReviewSchedule: async () => {},
-    createMoveEvaluation: async (e) => e,
-    updateMoveEvaluation: async () => {},
-    createBadMove: async (b) => b,
-    loadBadMove: async () => null,
-    listBadMovesByTask: async () => [],
-    markBadMoveAsNotBad: async () => {},
-    updateBadMove: async () => {},
-    createRecallCheckpoint: async (c) => c,
-    loadRecallCheckpoint: async () => null,
-    updateRecallCheckpoint: async () => {},
-    listCheckpointsByRecallSession: async () => [],
-    createProblem: async (p) => p,
-    loadProblem: async () => null,
-    updateProblem: async () => {},
-    archiveProblem: async () => {},
-    createMoveComment: async (c) => c,
-    loadMoveComment: async () => null,
-    updateMoveComment: async () => {},
-    listExpiredPendingMoveEvaluations: async () => [],
-  }
-}
-
-// --- Mock positionSnapshotAdapter ---
-
-/**
- * Fixed positionSnapshotAdapter that returns a predictable snapshot.
- * Satisfies the PositionSnapshotAdapter interface from production.
- */
-function createMockPositionSnapshotAdapter() {
-  return {
-    captureCurrentPosition() {
-      return {
-        positionSgf: '(;SZ[19]PL[B])',
-        sideToMove: 'black',
-        treePosition: 'node_root',
-        moveNumber: 0,
-        positionHash: 'test_hash_0',
-      }
-    },
-    captureBeforeMove(moveIndex) {
-      return this.captureCurrentPosition()
-    },
-    captureAfterMove(moveIndex) {
-      return this.captureCurrentPosition()
+function installWindowGlobal() {
+  if (!globalThis.window) globalThis.window = {}
+  globalThis.window.sabaki = {
+    setting: {
+      get() { return false },
+      set() {},
     },
   }
 }
 
-// --- Spy attemptService ---
-
-/**
- * Minimal spy for attemptService dependencies used by workbenchFlowService.
- * Records calls, returns plausible defaults.
- */
-function createSpyAttemptService() {
-  const calls = {
-    createAttempt: [],
-    freezeAttempt: [],
-    finalizeAttemptResult: [],
-  }
-
+function makeTab(overrides = {}) {
   return {
-    calls,
-    async createAttempt(input) {
-      calls.createAttempt.push(input)
-      return {id: `att_${Date.now()}`}
-    },
-    async freezeAttempt(attemptId) {
-      calls.freezeAttempt.push({attemptId})
-    },
-    async finalizeAttemptResult(attemptId, result) {
-      calls.finalizeAttemptResult.push({attemptId, result})
-    },
-  }
-}
-
-// --- Spy recallService for flow deps ---
-
-/**
- * Minimal spy for recallService dependencies used by workbenchFlowService.
- * Provides createRecallSession and completeRecall.
- */
-function createSpyRecallServiceForFlow() {
-  const calls = {
-    createRecallSession: [],
-    completeRecall: [],
-  }
-
-  return {
-    calls,
-    async createRecallSession(input) {
-      calls.createRecallSession.push(input)
-      return {id: `rs_${Date.now()}`}
-    },
-    async completeRecall(recallSessionId) {
-      calls.completeRecall.push({recallSessionId})
-    },
-  }
-}
-
-// --- Harness ---
-
-/**
- * Create test harness with real services and a tab that has taskId: null.
- */
-function createHarness(options = {}) {
-  const {
-    tabId = 'tab_default',
-    taskId = null,
-    mode = 'play',
-  } = options
-
-  const workbenchStore = createWorkbenchStore({logger})
-  const runtimeStore = createTrainingRuntimeStore({logger})
-  const repository = createInMemoryRepository()
-  const positionSnapshotAdapter = createMockPositionSnapshotAdapter()
-  const tabService = createSpyTabService()
-  const attemptService = createSpyAttemptService()
-  const spyRecallService = createSpyRecallServiceForFlow()
-
-  const snapshotService = createSnapshotService({
-    repository,
-    positionSnapshotAdapter,
-    workbenchStore,
-    logger,
-  })
-
-  const flowService = createWorkbenchFlowService({
-    workbenchStore,
-    repository,
-    attemptService,
-    recallService: spyRecallService,
-    snapshotService,
-    tabService,
-    runtimeStore,
-    logger,
-  })
-
-  // Add tab with taskId: null (default free-play tab)
-  const now = new Date().toISOString()
-  workbenchStore.addTab({
-    id: tabId,
-    taskId,
-    mode,
+    id: 'tab_default',
+    taskId: null,
+    mode: 'play',
     childTabIds: [],
+    parentTabId: null,
     createdAt: now,
     updatedAt: now,
-  })
-  workbenchStore.setActiveTab(tabId)
-
-  return {
-    flowService,
-    workbenchStore,
-    runtimeStore,
-    repository,
-    tabService,
-    attemptService,
-    spyRecallService,
-    snapshotService,
+    ...overrides,
   }
 }
 
-// ===========================================================================
-// Tests
-// ===========================================================================
+function createHarness({tab = makeTab()} = {}) {
+  installWindowGlobal()
 
-describe('Snapshot Null TaskId (T-SNAPSHOT-FREEPLAY)', function () {
+  const calls = {
+    enterAnalysis: [],
+    snapshotFromCurrentContext: [],
+    openTask: [],
+    createAnalysisWorkspace: 0,
+    scheduleEditWorkspaceAnalysis: [],
+  }
+  const workbenchStore = createWorkbenchStore()
+  const runtimeStore = createTrainingRuntimeStore()
+  workbenchStore.addTab(tab)
+  workbenchStore.setActiveTab(tab.id)
 
-  // T-SNAPSHOT-NULL-1: snapshotFromCurrentContext on tab with taskId:null does NOT throw.
-  //
-  // User runtime log confirms crash:
-  //   {tabId: 'tab_default_1779373945264', mode: 'recall', taskId: null, attemptId: null}
-  //   Error: snapshotService.captureSnapshotInput: task not found (id=null)
-  //
-  // BUG-2: snapshotService.captureSnapshotInput calls repository.loadTask(null)
-  // which throws "task not found (id=null)".
-  //
-  // RED until BUG-2 is fixed: snapshotService must skip task load when sourceTaskId is null/undefined.
-  it('T-SNAPSHOT-NULL-1: snapshotFromCurrentContext on tab with taskId:null does NOT throw', async function () {
+  const flowService = {
+    enterAnalysis(tabId) {
+      calls.enterAnalysis.push({tabId})
+      const current = workbenchStore.getState().tabs.find(item => item.id === tabId)
+      workbenchStore.updateTab(tabId, {
+        mode: 'analysis',
+        analysisReturnTarget: current ? {mode: current.mode} : undefined,
+      })
+    },
+    async snapshotFromCurrentContext(tabId) {
+      calls.snapshotFromCurrentContext.push({tabId})
+      return makeTab({
+        id: 'tab_snapshot_child',
+        taskId: 'task_snapshot_child',
+        mode: 'problem',
+        parentTabId: tabId,
+      })
+    },
+    async submit() {},
+    returnFromAnalysis() {},
+    completeRecall() {},
+    restartAttempt() {},
+    async startAttempt() {},
+    updatePlayerConfig() {},
+    async submitCheckpointCorrection() {},
+    async revealCheckpointAi() { return [] },
+    async skipCheckpoint() {},
+    async saveCheckpointComment() {},
+    async loadDashboardData() {
+      return {
+        inboxTasks: [],
+        incompleteAttempts: [],
+        incompleteRecallSessions: [],
+        recentBadMoveTasks: [],
+      }
+    },
+  }
+
+  const tabService = {
+    async openTask(input) {
+      calls.openTask.push(input)
+      return makeTab({id: 'tab_opened', taskId: input.taskId, mode: input.mode || 'play'})
+    },
+    switchTab() {},
+    closeTab() {},
+  }
+
+  const context = {
+    runtimeStore,
+    workbenchStore,
+    flowService,
+    workbenchFlowService: flowService,
+    tabService,
+    workbenchTabService: tabService,
+    repository: {},
+    taskImportService: {
+      async createManualTask() { return {id: 'task_manual'} },
+    },
+    legacyTrainingFlowController: {
+      showRecallHint() {},
+      skipRecallMove() {},
+      undoProblemMove() {},
+      submitProblemAttempt() {},
+      exitProblemMode() {},
+    },
+    reviewService: {
+      async getDueItems() { return [] },
+      async startSession() {},
+      async updateScheduleAfterResult() {},
+      async openDueItem() {},
+    },
+  }
+
+  const sabaki = {
+    state: {
+      mode: tab.mode,
+      treePosition: '',
+      gameTrees: [],
+      gameIndex: 0,
+      editWorkspace: null,
+      analysisType: null,
+      selectedTool: 'play',
+      boardTransformation: [1, 0, 0, 1, 0, 0],
+    },
+    getTrainingContext() {
+      return context
+    },
+    getPlayServices() {
+      return {documentStore: null}
+    },
+    getOverlayStore() {
+      return {getState: () => ({territoryEnabled: false, territoryCompareEnabled: false})}
+    },
+    getTrainingServices() {
+      return {}
+    },
+    setMode(mode) {
+      this.state.mode = mode
+    },
+    setState(patch) {
+      Object.assign(this.state, typeof patch === 'function' ? patch(this.state) : patch)
+    },
+    createAnalysisWorkspace() {
+      calls.createAnalysisWorkspace += 1
+      return {
+        activeTab: 'current',
+        currentSnapshot: {id: 'snap_current_null_task', role: 'current'},
+        referenceSnapshot: null,
+      }
+    },
+    scheduleEditWorkspaceAnalysis(...args) {
+      calls.scheduleEditWorkspaceAnalysis.push(args)
+    },
+    openDrawer() {},
+    flashInfoOverlay() {},
+    makeResign() {},
+    makeMove() {},
+    undo() {},
+    redo() {},
+    setComment() {},
+    clearAnalysisArea() {},
+    commitEditResult() {},
+    toggleThirdPartyPanel() {},
+    setCurrentTreePosition() {},
+    startProblem: async () => {},
+    stopEngineGameTraining: async () => {},
+  }
+
+  const container = new TrainingWorkbenchContainer({sabaki})
+
+  return {
+    calls,
+    container,
+    runtimeStore,
+    sabaki,
+    workbenchStore,
+  }
+}
+
+describe('Snapshot null-task enter-analysis guard', function () {
+  it('routes non-analysis Snapshot on taskId:null through enterAnalysis without creating a snapshot task', async function () {
     const harness = createHarness({
-      tabId: 'tab_default',
-      taskId: null,
-      mode: 'analysis',
+      tab: makeTab({id: 'tab_default', taskId: null, mode: 'play'}),
     })
 
-    // This must NOT throw. Use try/catch because assert.doesNotThrow does not
-    // catch async rejections properly.
-    let result
-    let thrown = null
-    try {
-      result = await harness.flowService.snapshotFromCurrentContext('tab_default')
-    } catch (err) {
-      thrown = err
-    }
+    const shellProps = harness.container.render().props
+    await shellProps.onSnapshot()
 
-    assert.strictEqual(thrown, null,
-      `snapshotFromCurrentContext must not throw when tab.taskId is null. Got: ${thrown?.message}`)
-    assert.ok(result, 'snapshotFromCurrentContext must return a WorkbenchTab')
+    assert.deepStrictEqual(
+      harness.calls.enterAnalysis,
+      [{tabId: 'tab_default'}],
+      'global Snapshot from non-analysis must enter Analysis first',
+    )
+    assert.deepStrictEqual(
+      harness.calls.snapshotFromCurrentContext,
+      [],
+      'non-analysis Snapshot must not persist directly from a null-task tab',
+    )
+    assert.deepStrictEqual(
+      harness.calls.openTask,
+      [],
+      'non-analysis Snapshot must not open a snapshot child tab before Analysis',
+    )
+
+    const activeTab = harness.workbenchStore.getState().tabs.find(
+      item => item.id === 'tab_default',
+    )
+    assert.strictEqual(activeTab.mode, 'analysis')
+    assert.strictEqual(activeTab.analysisReturnTarget.mode, 'play')
+    assert.strictEqual(harness.sabaki.state.mode, 'analysis')
+    assert.ok(
+      harness.sabaki.state.editWorkspace,
+      'enter-analysis guard must initialize an analysis scratch workspace',
+    )
   })
 
-  // T-SNAPSHOT-NULL-2: Snapshot task created with origin.parentTaskId undefined.
-  //
-  // When the source tab has taskId: null, the snapshot task should NOT have
-  // a parentTaskId pointing to null. It should be a parentless snapshot.
-  //
-  // RED until BUG-2 is fixed: workbenchFlowService must pass
-  // sourceTaskId: tab.taskId ?? undefined and origin.parentTaskId: tab.taskId ?? undefined.
-  it('T-SNAPSHOT-NULL-2: snapshot task has origin.parentTaskId undefined when source tab has taskId null', async function () {
+  it('keeps direct snapshot persistence scoped to already-analysis tabs', async function () {
     const harness = createHarness({
-      tabId: 'tab_default',
-      taskId: null,
-      mode: 'analysis',
+      tab: makeTab({id: 'tab_analysis', taskId: null, mode: 'analysis'}),
     })
 
-    const result = await harness.flowService.snapshotFromCurrentContext('tab_default')
+    const shellProps = harness.container.render().props
+    await shellProps.onSnapshot()
 
-    // The new tab should have a taskId that points to the snapshot task
-    assert.ok(result.taskId, 'New tab must have a taskId')
-
-    // Verify the snapshot task was created in the repository
-    const snapshotTask = await harness.repository.loadTask(result.taskId)
-    assert.ok(snapshotTask, 'Snapshot task must exist in repository')
-
-    // The snapshot task's origin must NOT have parentTaskId set to null
-    assert.ok(snapshotTask.origin, 'Snapshot task must have an origin')
-    assert.strictEqual(snapshotTask.origin.provider, 'snapshot',
-      'Origin provider must be "snapshot"')
-
-    // parentTaskId must be undefined (not null) for parentless snapshots
-    assert.strictEqual(snapshotTask.origin.parentTaskId, undefined,
-      'Snapshot task from null-taskId tab must have origin.parentTaskId undefined')
-  })
-
-  // T-SNAPSHOT-NULL-3: tabService.openTask was called with the new snapshot task ID.
-  //
-  // Verifies the flow service correctly opens a new tab for the snapshot task.
-  it('T-SNAPSHOT-NULL-3: tabService.openTask called with new snapshot task ID', async function () {
-    const harness = createHarness({
-      tabId: 'tab_default',
-      taskId: null,
-      mode: 'analysis',
-    })
-
-    await harness.flowService.snapshotFromCurrentContext('tab_default')
-
-    // tabService.openTask must have been called once
-    assert.strictEqual(harness.tabService.calls.openTask.length, 1,
-      'tabService.openTask must be called exactly once')
-
-    const openTaskCall = harness.tabService.calls.openTask[0]
-    assert.ok(openTaskCall.taskId, 'openTask must receive a taskId')
-    assert.strictEqual(openTaskCall.mode, 'problem',
-      'Snapshot tab should open in problem mode')
-    assert.strictEqual(openTaskCall.parentTabId, 'tab_default',
-      'Snapshot tab must reference the source tab as parent')
+    assert.deepStrictEqual(harness.calls.enterAnalysis, [])
+    assert.deepStrictEqual(
+      harness.calls.snapshotFromCurrentContext,
+      [{tabId: 'tab_analysis'}],
+      'already-analysis Snapshot may call the persistence flow',
+    )
   })
 })
