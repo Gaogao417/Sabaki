@@ -13,6 +13,7 @@ export type SgfParser = {
 
 export type OpenProblemTabOptions = {
   parentTabId?: string
+  /** Legacy Sabaki board setup is opt-in for compatibility callers only. */
   legacyCompatibility?: boolean
 }
 
@@ -147,7 +148,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
         }
       }
 
-      if (options?.legacyCompatibility !== false) {
+      if (options?.legacyCompatibility === true) {
         await setupLegacyCompatibility(problem, problemId)
       }
 
@@ -211,7 +212,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
 
     // Legacy setup can still fail on bad SGF. Keep it before DB writes so
     // opening a legacy problem remains all-or-nothing during migration.
-    if (options?.legacyCompatibility !== false) {
+    if (options?.legacyCompatibility === true) {
       await setupLegacyCompatibility(problem, problemId)
     }
 

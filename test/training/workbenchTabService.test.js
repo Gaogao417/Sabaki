@@ -189,6 +189,47 @@ describe('workbenchTabService', () => {
       assert.strictEqual(store.getState().activeTabId, tab.id)
       assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
     })
+
+    it('does not run legacy compatibility by default', async () => {
+      const {tabService, legacyAdapter} = createTestServices()
+
+      await tabService.openProblemTab('prob_1')
+
+      assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
+      assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 0)
+      assert.strictEqual(legacyAdapter.calls.setCurrentTreePosition.length, 0)
+    })
+
+    it('uses taskImportService and openTask without legacy setup when no flag is provided', async () => {
+      const importedTask = {
+        id: 'task_default_open_problem',
+        rootPositionSgf: '(;GM[1]FF[4]SZ[19])',
+        sideToMove: 'black',
+        prompt: 'Solve',
+        origin: {provider: 'local', externalId: 'prob_1'},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      const importCalls = []
+      const {store, tabService, legacyAdapter} = createTestServices({
+        tasks: {[importedTask.id]: importedTask},
+        taskImportService: {
+          async createTaskFromLegacyProblem(input) {
+            importCalls.push(input)
+            return importedTask
+          },
+        },
+      })
+
+      const tab = await tabService.openProblemTab('prob_1')
+
+      assert.deepStrictEqual(importCalls, [{problemId: 'prob_1'}])
+      assert.strictEqual(tab.taskId, importedTask.id)
+      assert.strictEqual(tab.mode, 'problem')
+      assert.strictEqual(store.getState().activeTabId, tab.id)
+      assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
+      assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 0)
+    })
   })
 
   describe('openProblemTab — legacy compatibility mode', () => {
@@ -208,9 +249,10 @@ describe('workbenchTabService', () => {
       assert.strictEqual(legacyAdapter.calls.setCurrentTreePosition.length, 1)
     })
 
-    it('runs legacy by default when flag not specified', async () => {
+    it('does not run legacy by default when flag not specified', async () => {
       await tabService.openProblemTab('prob_1')
-      assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 1)
+      assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
+      assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 0)
     })
   })
 
