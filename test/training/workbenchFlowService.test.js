@@ -38,6 +38,33 @@ function makeTask(overrides = {}) {
   }
 }
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function getTab(store, tabId) {
+  return store.getState().tabs.find(t => t.id === tabId)
+}
+
+function createModeEffectsSpy() {
+  const calls = {
+    enterAnalysis: [],
+    exitAnalysis: [],
+  }
+
+  return {
+    calls,
+    modeEffects: {
+      enterAnalysis(input) {
+        calls.enterAnalysis.push(clone(input))
+      },
+      exitAnalysis(input) {
+        calls.exitAnalysis.push(clone(input))
+      },
+    },
+  }
+}
+
 /**
  * @param {Partial<ReturnType<typeof import('../../src/modules/training/workbench/workbenchFlowService').createWorkbenchFlowService>['deps']>} [overrides]
  */
@@ -88,7 +115,61 @@ function createMockDeps(overrides = {}) {
       }),
       ...overrides.tabService,
     },
+    modeEffects: overrides.modeEffects,
     logger,
+  }
+}
+
+function createSnapshotGuardDeps(overrides = {}) {
+  const modeEffects = createModeEffectsSpy()
+  const persistenceCalls = {
+    loadTask: [],
+    captureSnapshotInput: [],
+    transaction: [],
+    createTask: [],
+    openTask: [],
+  }
+  const deps = createMockDeps({
+    modeEffects: modeEffects.modeEffects,
+    repository: {
+      async loadTask(id) {
+        persistenceCalls.loadTask.push(id)
+        if (id == null) {
+          throw new Error('repository.loadTask(null/undefined) must not run for snapshot guard')
+        }
+        return makeTask({id})
+      },
+      async createTask(task) {
+        persistenceCalls.createTask.push(clone(task))
+        throw new Error('snapshot guard must not create a task before Analysis')
+      },
+      async transaction(fn) {
+        persistenceCalls.transaction.push('transaction')
+        return fn()
+      },
+      ...overrides.repository,
+    },
+    snapshotService: {
+      async captureSnapshotInput(input) {
+        persistenceCalls.captureSnapshotInput.push(clone(input))
+        throw new Error('snapshot guard must not capture non-analysis context directly')
+      },
+      ...overrides.snapshotService,
+    },
+    tabService: {
+      async openTask(opts) {
+        persistenceCalls.openTask.push(clone(opts))
+        throw new Error('snapshot guard must not open a child tab before Analysis')
+      },
+      ...overrides.tabService,
+    },
+    ...overrides,
+  })
+
+  return {
+    deps,
+    effectCalls: modeEffects.calls,
+    persistenceCalls,
   }
 }
 
@@ -539,6 +620,279 @@ describe('workbenchFlowService', () => {
     })
   })
 
+  // ================================================================
+  // step3.2.tests: ModeEnterEffect / ModeExitEffect orchestration
+  // Contract:
+  // docs/archive/daily-design/2026-05-26/workbench-mode-effects/test-contract-v0.1.md
+  //
+  // Harness manifest:
+  // - Production subject: createWorkbenchFlowService + real workbenchStore.
+  // - Injected ports: modeEffects enterAnalysis/exitAnalysis spies only record
+  //   immutable input snapshots; they do not mutate asserted store state.
+  // - Guarded ports: snapshotService/repository/tabService throw if non-analysis
+  //   Snapshot tries to persist directly.
+  // - Not mocked: resolver/store transition behavior.
+  // - Rejected fake greens: callback-only assertions, UI-layer mocks,
+  //   reverse-contract tests, or hand-mutating the final asserted tab state.
+  // ================================================================
+
+  describe('step3.2 ModeEnterEffect / ModeExitEffect orchestration', () => {
+    it('enterAnalysis triggers injected ModeEnterEffect with before/after tabs and return target', () => {
+      const modeEffects = createModeEffectsSpy()
+      const deps = createMockDeps({modeEffects: modeEffects.modeEffects})
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_enter_effect',
+        taskId: 'task_effect',
+        mode: 'problem',
+        activeAttemptId: 'attempt_effect',
+        currentTreePosition: 'node_problem_12',
+      }))
+
+      service.enterAnalysis('tab_enter_effect', {reason: 'manual'})
+
+      const afterTab = getTab(deps.store, 'tab_enter_effect')
+      assert.strictEqual(afterTab.mode, 'analysis')
+      assert.strictEqual(modeEffects.calls.enterAnalysis.length, 1,
+        'flow service must call the injected ModeEnterEffect exactly once')
+
+      const effectInput = modeEffects.calls.enterAnalysis[0]
+      assert.strictEqual(effectInput.tabId, 'tab_enter_effect')
+      assert.strictEqual(effectInput.fromMode, 'problem')
+      assert.strictEqual(effectInput.toMode, 'analysis')
+      assert.strictEqual(effectInput.reason, 'manual')
+      assert.strictEqual(effectInput.beforeTab.mode, 'problem')
+      assert.strictEqual(effectInput.beforeTab.currentTreePosition, 'node_problem_12')
+      assert.strictEqual(effectInput.afterTab.mode, 'analysis')
+      assert.deepStrictEqual(effectInput.afterTab, clone(afterTab),
+        'effect afterTab must reflect the real stored tab after transition')
+      assert.deepStrictEqual(effectInput.analysisReturnTarget, {
+        mode: 'problem',
+        treePosition: 'node_problem_12',
+      })
+      assert.strictEqual(effectInput.analysisContext.taskId, 'task_effect')
+      assert.strictEqual(effectInput.analysisContext.source, 'problem')
+      assert.strictEqual(effectInput.analysisContext.attemptId, 'attempt_effect')
+      assert.deepStrictEqual(modeEffects.calls.exitAnalysis, [])
+    })
+
+    it('returnFromAnalysis triggers injected ModeExitEffect with restored target state', () => {
+      const modeEffects = createModeEffectsSpy()
+      const deps = createMockDeps({modeEffects: modeEffects.modeEffects})
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_exit_effect',
+        taskId: 'task_effect',
+        mode: 'analysis',
+        previousMode: 'recall',
+        recallSubstate: 'checkpoint_ai_revealed',
+        currentTreePosition: 'analysis_node',
+        activeAttemptId: 'attempt_effect',
+        activeRecallSessionId: 'recall_effect',
+        analysisReturnTarget: {
+          mode: 'recall',
+          recallSubstate: 'normal',
+          treePosition: 'recall_node_7',
+          moveIndex: 7,
+        },
+        analysisContext: {
+          taskId: 'task_effect',
+          source: 'recall',
+          attemptId: 'attempt_effect',
+        },
+      }))
+
+      service.returnFromAnalysis({tabId: 'tab_exit_effect', reason: 'return'})
+
+      const afterTab = getTab(deps.store, 'tab_exit_effect')
+      assert.strictEqual(afterTab.mode, 'recall')
+      assert.strictEqual(afterTab.recallSubstate, 'normal')
+      assert.strictEqual(afterTab.currentTreePosition, 'recall_node_7')
+      assert.strictEqual(afterTab.analysisReturnTarget, undefined)
+      assert.strictEqual(modeEffects.calls.exitAnalysis.length, 1,
+        'flow service must call the injected ModeExitEffect exactly once')
+
+      const effectInput = modeEffects.calls.exitAnalysis[0]
+      assert.strictEqual(effectInput.tabId, 'tab_exit_effect')
+      assert.strictEqual(effectInput.fromMode, 'analysis')
+      assert.strictEqual(effectInput.toMode, 'recall')
+      assert.strictEqual(effectInput.reason, 'return')
+      assert.strictEqual(effectInput.beforeTab.mode, 'analysis')
+      assert.strictEqual(effectInput.beforeTab.analysisReturnTarget.moveIndex, 7)
+      assert.deepStrictEqual(effectInput.afterTab, clone(afterTab),
+        'effect afterTab must reflect the real restored tab')
+      assert.deepStrictEqual(effectInput.analysisReturnTarget, {
+        mode: 'recall',
+        recallSubstate: 'normal',
+        treePosition: 'recall_node_7',
+        moveIndex: 7,
+      })
+      assert.deepStrictEqual(modeEffects.calls.enterAnalysis, [])
+    })
+
+    for (const mode of ['play', 'problem', 'recall']) {
+      it(`non-analysis Snapshot from ${mode} enters Analysis first and does not persist directly`, async () => {
+        const {deps, effectCalls, persistenceCalls} = createSnapshotGuardDeps()
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({
+          id: `tab_snapshot_guard_${mode}`,
+          taskId: `task_snapshot_guard_${mode}`,
+          mode,
+          activeAttemptId: mode === 'play' || mode === 'problem' ? 'attempt_guard' : undefined,
+          activeRecallSessionId: mode === 'recall' ? 'recall_guard' : undefined,
+          recallSubstate: mode === 'recall' ? 'normal' : undefined,
+          currentTreePosition: `${mode}_node_5`,
+        }))
+
+        await service.snapshotFromCurrentContext(`tab_snapshot_guard_${mode}`)
+
+        const tab = getTab(deps.store, `tab_snapshot_guard_${mode}`)
+        assert.strictEqual(tab.mode, 'analysis',
+          'non-analysis Snapshot must first enter Analysis scratch/current')
+        assert.strictEqual(effectCalls.enterAnalysis.length, 1,
+          'snapshot guard must route through ModeEnterEffect')
+        assert.strictEqual(effectCalls.enterAnalysis[0].reason, 'snapshot')
+        assert.strictEqual(effectCalls.enterAnalysis[0].fromMode, mode)
+        assert.deepStrictEqual(persistenceCalls.captureSnapshotInput, [],
+          'non-analysis Snapshot must not call snapshotService directly')
+        assert.deepStrictEqual(persistenceCalls.createTask, [],
+          'non-analysis Snapshot must not create a task before Analysis')
+        assert.deepStrictEqual(persistenceCalls.openTask, [],
+          'non-analysis Snapshot must not open a child tab before Analysis')
+      })
+    }
+
+    it('null task/free-play Snapshot guard does not loadTask(null) or persist a direct snapshot', async () => {
+      const {deps, effectCalls, persistenceCalls} = createSnapshotGuardDeps()
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_free_play_snapshot_guard',
+        taskId: null,
+        mode: 'play',
+        currentTreePosition: 'free_play_node',
+      }))
+
+      await service.snapshotFromCurrentContext('tab_free_play_snapshot_guard')
+
+      const tab = getTab(deps.store, 'tab_free_play_snapshot_guard')
+      assert.strictEqual(tab.mode, 'analysis')
+      assert.strictEqual(tab.analysisContext.taskId, null,
+        'free-play analysis context must preserve the absent source task without loading it')
+      assert.strictEqual(effectCalls.enterAnalysis.length, 1)
+      assert.strictEqual(effectCalls.enterAnalysis[0].reason, 'snapshot')
+      assert.deepStrictEqual(persistenceCalls.loadTask, [],
+        'snapshot guard must not call repository.loadTask(null/undefined)')
+      assert.deepStrictEqual(persistenceCalls.captureSnapshotInput, [])
+      assert.deepStrictEqual(persistenceCalls.transaction, [])
+      assert.deepStrictEqual(persistenceCalls.createTask, [])
+      assert.deepStrictEqual(persistenceCalls.openTask, [])
+    })
+
+    it('enterAnalysis/returnFromAnalysis do not pollute attempt, recall, or source tree state', () => {
+      const modeEffects = createModeEffectsSpy()
+      const runtimeStore = createTrainingRuntimeStore()
+      runtimeStore.setActiveAttempt('attempt_readonly')
+      runtimeStore.setActiveRecallSession('recall_readonly')
+      runtimeStore.setActiveCheckpoint('checkpoint_readonly')
+      runtimeStore.setProblemView({
+        taskId: 'task_readonly',
+        tabId: 'tab_readonly',
+        attemptId: 'attempt_readonly',
+        legacyProblemSession: null,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+      runtimeStore.setRecallView({
+        recallSessionId: 'recall_readonly',
+        taskId: 'task_readonly',
+        tabId: 'tab_readonly',
+        moveIndex: 4,
+        expectedMoves: [{sign: 1, vertex: 'D4'}],
+        userAttempts: [{vertex: 'Q16', isCorrect: false}],
+        showHint: true,
+        completed: false,
+      })
+      runtimeStore.setCorrectionDraft({
+        checkpointId: 'checkpoint_readonly',
+        moves: ['C3', 'D16'],
+      })
+      const runtimeBefore = clone(runtimeStore.getState())
+      const forbiddenCalls = []
+      const deps = createMockDeps({
+        runtimeStore,
+        modeEffects: modeEffects.modeEffects,
+        attemptService: {
+          createAttempt: async input => {
+            forbiddenCalls.push(['createAttempt', input])
+            throw new Error('mode effects must not create attempts')
+          },
+          freezeAttempt: async id => {
+            forbiddenCalls.push(['freezeAttempt', id])
+            throw new Error('mode effects must not freeze attempts')
+          },
+          finalizeAttemptResult: async (id, result) => {
+            forbiddenCalls.push(['finalizeAttemptResult', id, result])
+            throw new Error('mode effects must not finalize attempts')
+          },
+        },
+        recallService: {
+          createRecallFromAttempt: async id => {
+            forbiddenCalls.push(['createRecallFromAttempt', id])
+            throw new Error('mode effects must not create recall')
+          },
+          createRecallSession: async input => {
+            forbiddenCalls.push(['createRecallSession', input])
+            throw new Error('mode effects must not create recall')
+          },
+          completeRecall: async id => {
+            forbiddenCalls.push(['completeRecall', id])
+            throw new Error('mode effects must not complete recall')
+          },
+        },
+        repository: {
+          async loadTask(id) { return makeTask({id}) },
+          async createTask(task) {
+            forbiddenCalls.push(['createTask', task])
+            throw new Error('mode effects must not create tasks')
+          },
+          async updateAttempt(id, patch) {
+            forbiddenCalls.push(['updateAttempt', id, patch])
+            throw new Error('mode effects must not update attempts')
+          },
+          async transaction(fn) { return fn() },
+        },
+      })
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_readonly',
+        taskId: 'task_readonly',
+        mode: 'recall',
+        recallSubstate: 'checkpoint_correction',
+        activeAttemptId: 'attempt_readonly',
+        activeRecallSessionId: 'recall_readonly',
+        currentTreePosition: 'recall_source_node',
+      }))
+
+      service.enterAnalysis('tab_readonly', {reason: 'manual'})
+      service.returnFromAnalysis({tabId: 'tab_readonly', reason: 'return'})
+
+      const tab = getTab(deps.store, 'tab_readonly')
+      assert.strictEqual(tab.mode, 'recall')
+      assert.strictEqual(tab.recallSubstate, 'checkpoint_correction')
+      assert.strictEqual(tab.activeAttemptId, 'attempt_readonly')
+      assert.strictEqual(tab.activeRecallSessionId, 'recall_readonly')
+      assert.strictEqual(tab.currentTreePosition, 'recall_source_node')
+      assert.deepStrictEqual(runtimeStore.getState(), runtimeBefore,
+        'mode enter/exit must not mutate problem, recall, checkpoint, or attempt runtime facts')
+      assert.deepStrictEqual(forbiddenCalls, [],
+        'mode enter/exit must not call attempt/recall/source persistence services')
+      assert.strictEqual(modeEffects.calls.enterAnalysis.length, 1)
+      assert.strictEqual(modeEffects.calls.exitAnalysis.length, 1)
+    })
+  })
+
   describe('returnFromAnalysis — analysis → previous mode', () => {
     it('restores mode from analysisReturnTarget', () => {
       const deps = createMockDeps()
@@ -613,18 +967,24 @@ describe('workbenchFlowService', () => {
     })
 
     for (const mode of ['play', 'problem', 'recall']) {
-      it(`rejects snapshot from ${mode} mode and preserves original tab`, async () => {
-        const deps = createMockDeps()
+      it(`enters analysis first from ${mode} mode and does not persist directly`, async () => {
+        const {deps, effectCalls, persistenceCalls} = createSnapshotGuardDeps()
         const service = createWorkbenchFlowService(deps)
-        deps.store.addTab(makeTab({id: 'tab_1', mode}))
+        deps.store.addTab(makeTab({
+          id: 'tab_1',
+          mode,
+          activeRecallSessionId: mode === 'recall' ? 'recall_snapshot' : undefined,
+        }))
 
-        await assert.rejects(
-          () => service.snapshotFromCurrentContext('tab_1'),
-          /Invalid mode transition/,
-        )
+        await service.snapshotFromCurrentContext('tab_1')
 
         const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
-        assert.strictEqual(tab.mode, mode)
+        assert.strictEqual(tab.mode, 'analysis')
+        assert.strictEqual(effectCalls.enterAnalysis.length, 1)
+        assert.strictEqual(effectCalls.enterAnalysis[0].reason, 'snapshot')
+        assert.deepStrictEqual(persistenceCalls.captureSnapshotInput, [])
+        assert.deepStrictEqual(persistenceCalls.createTask, [])
+        assert.deepStrictEqual(persistenceCalls.openTask, [])
       })
     }
 
@@ -814,7 +1174,7 @@ describe('workbenchFlowService', () => {
       }
     }
 
-    describe('C21-C24: snapshotFromCurrentContext is analysis-only', () => {
+    describe('C21-C24: snapshotFromCurrentContext uses Analysis scratch/current guard', () => {
       it('C24: creates TrainingTask and new tab from analysis mode, original tab unchanged', async () => {
         const deps = createE2EMockDeps()
         const service = createWorkbenchFlowService(deps)
@@ -839,21 +1199,30 @@ describe('workbenchFlowService', () => {
         {mode: 'problem', label: 'C22'},
         {mode: 'recall', label: 'C23'},
       ]) {
-        it(`${label}: rejects snapshot from ${mode} mode without creating a task`, async () => {
-          const deps = createE2EMockDeps()
+        it(`${label}: enters Analysis first from ${mode} mode without creating a task`, async () => {
+          const {deps, effectCalls, persistenceCalls} = createSnapshotGuardDeps()
           const service = createWorkbenchFlowService(deps)
-          deps.store.addTab(makeTab({id: 'tab_orig', mode, taskId: 'task_1'}))
+          deps.store.addTab(makeTab({
+            id: 'tab_orig',
+            mode,
+            taskId: 'task_1',
+            activeRecallSessionId: mode === 'recall' ? 'recall_snapshot' : undefined,
+          }))
 
-          await assert.rejects(
-            () => service.snapshotFromCurrentContext('tab_orig'),
-            /Invalid mode transition/,
-          )
+          await service.snapshotFromCurrentContext('tab_orig')
 
-          assert.strictEqual(deps.createdTasks.length, 0, 'should not create a task')
+          assert.strictEqual(effectCalls.enterAnalysis.length, 1,
+            'non-analysis Snapshot must call the injected ModeEnterEffect')
+          assert.strictEqual(effectCalls.enterAnalysis[0].reason, 'snapshot')
+          assert.deepStrictEqual(persistenceCalls.captureSnapshotInput, [],
+            'should not capture snapshot input before Analysis')
+          assert.deepStrictEqual(persistenceCalls.createTask, [],
+            'should not create a task before Analysis')
+          assert.deepStrictEqual(persistenceCalls.openTask, [],
+            'should not open a child tab before Analysis')
 
-          // Original tab mode preserved
           const origTab = deps.store.getState().tabs.find(t => t.id === 'tab_orig')
-          assert.strictEqual(origTab.mode, mode, `original tab should remain in ${mode} mode`)
+          assert.strictEqual(origTab.mode, 'analysis', `original tab should enter analysis from ${mode} mode`)
         })
       }
     })
