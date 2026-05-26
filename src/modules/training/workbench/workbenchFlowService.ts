@@ -1,12 +1,22 @@
-import type { WorkbenchMode, WorkbenchTab, TrainingAttemptResult, ReferenceLine, RecallSession } from '../types/index'
-import type { AnalysisContextSource } from '../types/analysis'
-import type { WorkbenchStore } from '../store/workbenchStore'
-import type { TrainingRepository } from '../repository/trainingRepository'
-import type { SnapshotService } from '../analysis/snapshotService'
-import type { WorkbenchTabService } from './workbenchTabService'
-import type { RecallView, TrainingRuntimeStore } from '../store/trainingRuntimeStore'
-import type { RecallCheckpointService } from '../recall/recallCheckpointService'
-import { resolveTransition } from './modeTransitions'
+import type {
+  WorkbenchMode,
+  WorkbenchTab,
+  TrainingAttemptResult,
+  ReferenceLine,
+  RecallSession,
+  AnalysisReturnTarget,
+} from '../types/index'
+import type {AnalysisContextSource} from '../types/analysis'
+import type {WorkbenchStore} from '../store/workbenchStore'
+import type {TrainingRepository} from '../repository/trainingRepository'
+import type {SnapshotService} from '../analysis/snapshotService'
+import type {WorkbenchTabService} from './workbenchTabService'
+import type {
+  RecallView,
+  TrainingRuntimeStore,
+} from '../store/trainingRuntimeStore'
+import type {RecallCheckpointService} from '../recall/recallCheckpointService'
+import {resolveTransition} from './modeTransitions'
 
 export class InvalidModeTransitionError extends Error {
   constructor(
@@ -23,18 +33,28 @@ export type WorkbenchFlowServiceDeps = {
   workbenchStore: WorkbenchStore
   repository: TrainingRepository
   attemptService: {
-    createAttempt(input: { taskId: string; tabId: string; rootPositionSgf: string }): Promise<{ id: string }>
+    createAttempt(input: {
+      taskId: string
+      tabId: string
+      rootPositionSgf: string
+    }): Promise<{id: string}>
     freezeAttempt(attemptId: string): Promise<void>
-    finalizeAttemptResult(attemptId: string, result: TrainingAttemptResult): Promise<void>
+    finalizeAttemptResult(
+      attemptId: string,
+      result: TrainingAttemptResult,
+    ): Promise<void>
   }
   recallService: {
     createRecallFromAttempt?: (attemptId: string) => Promise<RecallSession>
-    createRecallSession?: (input: Record<string, unknown>) => Promise<RecallSession>
+    createRecallSession?: (
+      input: Record<string, unknown>,
+    ) => Promise<RecallSession>
     completeRecall(recallSessionId: string): Promise<void>
   }
   recallCheckpointService?: RecallCheckpointService
   snapshotService: SnapshotService
   tabService: WorkbenchTabService
+  modeEffects?: WorkbenchModeEffects
   evaluationRules?: {
     evaluateAttempt(input: {
       attempt: Record<string, unknown>
@@ -43,7 +63,52 @@ export type WorkbenchFlowServiceDeps = {
     }): TrainingAttemptResult
   }
   runtimeStore?: TrainingRuntimeStore
-  logger?: { info(channel: string, message: string, data?: Record<string, unknown>): void }
+  logger?: {
+    info(channel: string, message: string, data?: Record<string, unknown>): void
+  }
+}
+
+export type ModeEnterReason =
+  | 'manual'
+  | 'snapshot'
+  | 'edit-position'
+  | 'recall-complete'
+export type ModeExitReason = 'return' | 'restart-attempt'
+
+export type ModeEffectAnalysisContext = {
+  taskId?: string | null
+  source: AnalysisContextSource
+  attemptId?: string
+  checkpointId?: string
+  positionHash?: string
+  positionSgf?: string
+}
+
+export type ModeEnterEffectInput = {
+  tabId: string
+  fromMode: 'play' | 'problem' | 'recall'
+  toMode: 'analysis'
+  beforeTab: WorkbenchTab
+  afterTab: WorkbenchTab
+  analysisReturnTarget: AnalysisReturnTarget
+  analysisContext: ModeEffectAnalysisContext
+  reason?: ModeEnterReason
+  selectedTool?: string
+}
+
+export type ModeExitEffectInput = {
+  tabId: string
+  fromMode: 'analysis'
+  toMode: 'play' | 'problem' | 'recall'
+  beforeTab: WorkbenchTab
+  afterTab: WorkbenchTab
+  analysisReturnTarget: AnalysisReturnTarget
+  reason?: ModeExitReason
+}
+
+export type WorkbenchModeEffects = {
+  enterAnalysis(input: ModeEnterEffectInput): void | Promise<void>
+  exitAnalysis(input: ModeExitEffectInput): void | Promise<void>
 }
 
 export type DashboardData = {
@@ -55,8 +120,11 @@ export type DashboardData = {
 
 export type WorkbenchFlowService = {
   submit(tabId: string): Promise<void>
-  enterAnalysis(tabId: string): void
-  returnFromAnalysis(input: {tabId: string}): void
+  enterAnalysis(
+    tabId: string,
+    options?: {reason?: ModeEnterReason; selectedTool?: string},
+  ): void
+  returnFromAnalysis(input: {tabId: string; reason?: ModeExitReason}): void
   enterRecall(input: {tabId: string; attemptId: string}): Promise<{id: string}>
   completeRecall(tabId: string): void
   restartAttempt(tabId: string): void
@@ -66,18 +134,34 @@ export type WorkbenchFlowService = {
   skipCheckpoint(tabId: string): Promise<void>
   saveCheckpointComment(input: {tabId: string; content: string}): Promise<void>
   snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab>
-  updatePlayerConfig(tabId: string, patch: Partial<import('../types/tab').PlayerConfig>): void
+  updatePlayerConfig(
+    tabId: string,
+    patch: Partial<import('../types/tab').PlayerConfig>,
+  ): void
   loadDashboardData(): Promise<DashboardData>
 }
 
-export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): WorkbenchFlowService {
-  const { workbenchStore, repository, attemptService, recallService, recallCheckpointService, snapshotService, tabService, logger } = deps
+export function createWorkbenchFlowService(
+  deps: WorkbenchFlowServiceDeps,
+): WorkbenchFlowService {
+  const {
+    workbenchStore,
+    repository,
+    attemptService,
+    recallService,
+    recallCheckpointService,
+    snapshotService,
+    tabService,
+    modeEffects,
+    logger,
+  } = deps
   const evaluationRules = deps.evaluationRules
   const runtimeStore = deps.runtimeStore
 
   function getTab(tabId: string): WorkbenchTab {
-    const tab = workbenchStore.getState().tabs.find(t => t.id === tabId)
-    if (!tab) throw new Error(`workbenchFlowService: tab not found (id=${tabId})`)
+    const tab = workbenchStore.getState().tabs.find((t) => t.id === tabId)
+    if (!tab)
+      throw new Error(`workbenchFlowService: tab not found (id=${tabId})`)
     return tab
   }
 
@@ -98,18 +182,31 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     // Legacy: enterAnalysis from recall without active session was allowed by old code.
     // The pure state machine requires hasActiveRecallSession, but the service preserves
     // backward compatibility for recall tabs without a session.
-    if (method === 'enterAnalysis' && tab.mode === 'recall' && !tab.activeRecallSessionId) {
+    if (
+      method === 'enterAnalysis' &&
+      tab.mode === 'recall' &&
+      !tab.activeRecallSessionId
+    ) {
       return
     }
 
     // Legacy/Free-play: enterAnalysis from play/problem without a task is allowed for free play.
-    if (method === 'enterAnalysis' && (tab.mode === 'play' || tab.mode === 'problem') && !tab.taskId) {
+    if (
+      method === 'enterAnalysis' &&
+      (tab.mode === 'play' || tab.mode === 'problem') &&
+      !tab.taskId
+    ) {
       return
     }
 
     const result = resolveTransition({
       from: tab.mode,
-      event: method as 'submit' | 'enterAnalysis' | 'returnFromAnalysis' | 'restartAttempt' | 'snapshot',
+      event: method as
+        | 'submit'
+        | 'enterAnalysis'
+        | 'returnFromAnalysis'
+        | 'restartAttempt'
+        | 'snapshot',
       hasActiveAttempt: !!tab.activeAttemptId,
       isAttemptFrozen: false,
       hasActiveRecallSession: !!tab.activeRecallSessionId,
@@ -131,7 +228,10 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     }
   }
 
-  function getCheckpointCommandContext(tabId: string, method: string): {
+  function getCheckpointCommandContext(
+    tabId: string,
+    method: string,
+  ): {
     tab: WorkbenchTab
     checkpointId: string
   } {
@@ -140,18 +240,24 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       throw new InvalidModeTransitionError(tab.id, tab.mode, method)
     }
     if (!runtimeStore) {
-      throw new Error(`workbenchFlowService.${method}: runtimeStore is required`)
+      throw new Error(
+        `workbenchFlowService.${method}: runtimeStore is required`,
+      )
     }
     if (!recallCheckpointService) {
-      throw new Error(`workbenchFlowService.${method}: recallCheckpointService is required`)
+      throw new Error(
+        `workbenchFlowService.${method}: recallCheckpointService is required`,
+      )
     }
 
     const checkpointId = runtimeStore.getState().activeCheckpointId
     if (!checkpointId) {
-      throw new Error(`workbenchFlowService.${method}: no active checkpoint (tabId=${tabId})`)
+      throw new Error(
+        `workbenchFlowService.${method}: no active checkpoint (tabId=${tabId})`,
+      )
     }
 
-    return { tab, checkpointId }
+    return {tab, checkpointId}
   }
 
   function assertCheckpointTransition(input: {
@@ -185,7 +291,11 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
         method: input.method,
         reason: result.reason,
       })
-      throw new InvalidModeTransitionError(input.tab.id, input.tab.mode, input.method)
+      throw new InvalidModeTransitionError(
+        input.tab.id,
+        input.tab.mode,
+        input.method,
+      )
     }
   }
 
@@ -207,9 +317,53 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     }
   }
 
-  async function createRecallForAttempt(tab: WorkbenchTab): Promise<RecallSession> {
+  function createAnalysisReturnTarget(tab: WorkbenchTab): AnalysisReturnTarget {
+    const target: AnalysisReturnTarget = {
+      mode: tab.mode as 'play' | 'problem' | 'recall',
+    }
+
+    if (tab.recallSubstate !== undefined) {
+      target.recallSubstate = tab.recallSubstate
+    }
+    if (tab.currentTreePosition !== undefined) {
+      target.treePosition = tab.currentTreePosition
+    }
+
+    const recallMoveIndex = runtimeStore?.getState().recallView?.moveIndex
+    if (tab.mode === 'recall' && recallMoveIndex !== undefined) {
+      target.moveIndex = recallMoveIndex
+    }
+
+    return target
+  }
+
+  function createAnalysisContext(
+    tab: WorkbenchTab,
+  ): NonNullable<WorkbenchTab['analysisContext']> {
+    const context: NonNullable<WorkbenchTab['analysisContext']> = {
+      taskId: tab.taskId,
+      source: tab.mode,
+    }
+
+    if (tab.activeAttemptId !== undefined) {
+      context.attemptId = tab.activeAttemptId
+    }
+
+    const checkpointId = runtimeStore?.getState().activeCheckpointId
+    if (checkpointId !== undefined) {
+      context.checkpointId = checkpointId
+    }
+
+    return context
+  }
+
+  async function createRecallForAttempt(
+    tab: WorkbenchTab,
+  ): Promise<RecallSession> {
     if (!tab.activeAttemptId) {
-      throw new Error(`workbenchFlowService.submit: no active attempt (tabId=${tab.id})`)
+      throw new Error(
+        `workbenchFlowService.submit: no active attempt (tabId=${tab.id})`,
+      )
     }
 
     if (recallService.createRecallFromAttempt) {
@@ -224,7 +378,9 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       })
     }
 
-    throw new Error('workbenchFlowService.submit: recall service cannot create recall from attempt')
+    throw new Error(
+      'workbenchFlowService.submit: recall service cannot create recall from attempt',
+    )
   }
 
   function submit(tabId: string): Promise<void> {
@@ -248,10 +404,14 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
         })
         throw new InvalidModeTransitionError(tab.id, tab.mode, 'submit')
       }
-      workbenchStore.updateTab(tabId, { mode: 'recall' })
-      logger?.info('flow.submit', 'Submit completed (no active attempt, direct recall)', {
-        tabId,
-      })
+      workbenchStore.updateTab(tabId, {mode: 'recall'})
+      logger?.info(
+        'flow.submit',
+        'Submit completed (no active attempt, direct recall)',
+        {
+          tabId,
+        },
+      )
       return Promise.resolve()
     }
     const activeAttemptId = tab.activeAttemptId
@@ -269,7 +429,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
           repository.listBadMovesByAttempt(activeAttemptId),
         ])
         result = evaluationRules.evaluateAttempt({
-          attempt: { id: activeAttemptId },
+          attempt: {id: activeAttemptId},
           evaluations,
           badMoves,
         })
@@ -305,7 +465,10 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     })()
   }
 
-  function enterAnalysis(tabId: string): void {
+  function enterAnalysis(
+    tabId: string,
+    options?: {reason?: ModeEnterReason; selectedTool?: string},
+  ): void {
     const tab = getTab(tabId)
     assertTransition(tab, 'enterAnalysis')
 
@@ -315,21 +478,27 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       attemptId: tab.activeAttemptId ?? null,
     })
 
-    const analysisReturnTarget = {
-      mode: tab.mode as 'play' | 'problem' | 'recall',
-      recallSubstate: tab.recallSubstate,
-      treePosition: tab.currentTreePosition,
-    }
+    const analysisReturnTarget = createAnalysisReturnTarget(tab)
+    const analysisContext = createAnalysisContext(tab)
 
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
       previousMode: tab.mode,
       analysisReturnTarget,
-      analysisContext: {
-        taskId: tab.taskId,
-        source: tab.mode as AnalysisContextSource,
-        attemptId: tab.activeAttemptId,
-      },
+      analysisContext: analysisContext as ModeEffectAnalysisContext,
+    })
+    const afterTab = getTab(tabId)
+
+    modeEffects?.enterAnalysis({
+      tabId,
+      fromMode: tab.mode as 'play' | 'problem' | 'recall',
+      toMode: 'analysis',
+      beforeTab: tab,
+      afterTab,
+      analysisReturnTarget,
+      analysisContext,
+      reason: options?.reason,
+      selectedTool: options?.selectedTool,
     })
 
     logger?.info('flow.enterAnalysis', 'Analysis mode entered', {
@@ -339,14 +508,25 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     })
   }
 
-  function returnFromAnalysis(input: {tabId: string}): void {
+  function returnFromAnalysis(input: {
+    tabId: string
+    reason?: ModeExitReason
+  }): void {
     const tab = getTab(input.tabId)
 
     if (!tab.analysisReturnTarget) {
-      logger?.info('flow.returnFromAnalysis', 'Return rejected: no analysisReturnTarget', {
-        tabId: input.tabId,
-      })
-      throw new InvalidModeTransitionError(input.tabId, tab.mode, 'returnFromAnalysis')
+      logger?.info(
+        'flow.returnFromAnalysis',
+        'Return rejected: no analysisReturnTarget',
+        {
+          tabId: input.tabId,
+        },
+      )
+      throw new InvalidModeTransitionError(
+        input.tabId,
+        tab.mode,
+        'returnFromAnalysis',
+      )
     }
 
     assertTransition(tab, 'returnFromAnalysis')
@@ -367,6 +547,17 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       previousMode: undefined,
       analysisReturnTarget: undefined,
     })
+    const afterTab = getTab(input.tabId)
+
+    modeEffects?.exitAnalysis({
+      tabId: input.tabId,
+      fromMode: 'analysis',
+      toMode: target.mode,
+      beforeTab: tab,
+      afterTab,
+      analysisReturnTarget: target,
+      reason: input.reason,
+    })
 
     logger?.info('flow.returnFromAnalysis', 'Returned from analysis', {
       tabId: input.tabId,
@@ -374,7 +565,10 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     })
   }
 
-  async function enterRecall(input: {tabId: string; attemptId: string}): Promise<{id: string}> {
+  async function enterRecall(input: {
+    tabId: string
+    attemptId: string
+  }): Promise<{id: string}> {
     const tab = getTab(input.tabId)
 
     logger?.info('flow.enterRecall', 'Enter recall mode', {
@@ -419,11 +613,15 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     const recallSessionId = tab.activeRecallSessionId
     if (recallSessionId) {
       deps.recallService.completeRecall(recallSessionId).catch((err) => {
-        logger?.info('flow.completeRecall', 'Recall session completion failed', {
-          tabId,
-          recallSessionId,
-          error: String(err),
-        })
+        logger?.info(
+          'flow.completeRecall',
+          'Recall session completion failed',
+          {
+            tabId,
+            recallSessionId,
+            error: String(err),
+          },
+        )
       })
     }
 
@@ -435,14 +633,19 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       mode: 'analysis',
     })
 
-    logger?.info('flow.completeRecall', 'Recall completed, transitioned to analysis', {
-      tabId,
-    })
+    logger?.info(
+      'flow.completeRecall',
+      'Recall completed, transitioned to analysis',
+      {
+        tabId,
+      },
+    )
   }
 
   function restartAttempt(tabId: string): void {
     const tab = getTab(tabId)
-    const targetMode = tab.analysisReturnTarget?.mode ?? tab.previousMode ?? 'play'
+    const targetMode =
+      tab.analysisReturnTarget?.mode ?? tab.previousMode ?? 'play'
 
     logger?.info('flow.restartAttempt', 'Restart attempt', {
       tabId,
@@ -487,11 +690,18 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
   }
 
   async function submitCheckpointCorrection(tabId: string): Promise<void> {
-    const { tab, checkpointId } = getCheckpointCommandContext(tabId, 'submitCheckpointCorrection')
+    const {tab, checkpointId} = getCheckpointCommandContext(
+      tabId,
+      'submitCheckpointCorrection',
+    )
     const draft = runtimeStore!.getState().correctionDraft
-    const moves = draft && draft.checkpointId === checkpointId ? draft.moves : []
+    const moves =
+      draft && draft.checkpointId === checkpointId ? draft.moves : []
 
-    await recallCheckpointService!.submitUserCorrectionLine({ checkpointId, moves })
+    await recallCheckpointService!.submitUserCorrectionLine({
+      checkpointId,
+      moves,
+    })
 
     workbenchStore.updateTab(tab.id, {
       recallSubstate: 'checkpoint_correction',
@@ -499,9 +709,13 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
   }
 
   async function revealCheckpointAi(tabId: string): Promise<ReferenceLine[]> {
-    const { tab, checkpointId } = getCheckpointCommandContext(tabId, 'revealCheckpointAi')
+    const {tab, checkpointId} = getCheckpointCommandContext(
+      tabId,
+      'revealCheckpointAi',
+    )
     const checkpoint = await repository.loadRecallCheckpoint(checkpointId)
-    const isCorrectionSubmitted = !!checkpoint && checkpoint.userCorrectionLine.length > 0
+    const isCorrectionSubmitted =
+      !!checkpoint && checkpoint.userCorrectionLine.length > 0
 
     assertCheckpointTransition({
       tab,
@@ -510,7 +724,8 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       isCorrectionSubmitted,
     })
 
-    const lines = await recallCheckpointService!.revealAiCandidateLines(checkpointId)
+    const lines =
+      await recallCheckpointService!.revealAiCandidateLines(checkpointId)
 
     workbenchStore.updateTab(tab.id, {
       recallSubstate: 'checkpoint_ai_revealed',
@@ -520,7 +735,10 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
   }
 
   async function skipCheckpoint(tabId: string): Promise<void> {
-    const { tab, checkpointId } = getCheckpointCommandContext(tabId, 'skipCheckpoint')
+    const {tab, checkpointId} = getCheckpointCommandContext(
+      tabId,
+      'skipCheckpoint',
+    )
 
     await recallCheckpointService!.skipCheckpoint(checkpointId)
 
@@ -537,8 +755,14 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     })
   }
 
-  async function saveCheckpointComment(input: {tabId: string; content: string}): Promise<void> {
-    const { tab, checkpointId } = getCheckpointCommandContext(input.tabId, 'saveCheckpointComment')
+  async function saveCheckpointComment(input: {
+    tabId: string
+    content: string
+  }): Promise<void> {
+    const {tab, checkpointId} = getCheckpointCommandContext(
+      input.tabId,
+      'saveCheckpointComment',
+    )
     const checkpoint = await repository.loadRecallCheckpoint(checkpointId)
     const isCheckpointAiRevealed = checkpoint?.status === 'ai_revealed'
 
@@ -557,7 +781,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       checkpointId,
       comment: {
         id: '',
-        target: { kind: 'checkpoint', checkpointId },
+        target: {kind: 'checkpoint', checkpointId},
         content: input.content,
         createdAt: '',
         updatedAt: '',
@@ -579,16 +803,37 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
     })
   }
 
-  async function snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab> {
+  async function snapshotFromCurrentContext(
+    tabId: string,
+  ): Promise<WorkbenchTab> {
     const tab = getTab(tabId)
+
+    if (tab.mode !== 'analysis') {
+      logger?.info(
+        'flow.snapshotFromCurrentContext',
+        'Snapshot guard entered analysis first',
+        {
+          tabId,
+          mode: tab.mode,
+          taskId: tab.taskId ?? null,
+        },
+      )
+      enterAnalysis(tabId, {reason: 'snapshot'})
+      return getTab(tabId)
+    }
+
     assertTransition(tab, 'snapshot')
 
-    logger?.info('flow.snapshotFromCurrentContext', 'Snapshot from current context', {
-      tabId,
-      mode: tab.mode,
-      taskId: tab.taskId,
-      attemptId: tab.activeAttemptId ?? null,
-    })
+    logger?.info(
+      'flow.snapshotFromCurrentContext',
+      'Snapshot from current context',
+      {
+        tabId,
+        mode: tab.mode,
+        taskId: tab.taskId,
+        attemptId: tab.activeAttemptId ?? null,
+      },
+    )
 
     const snapshotInput = await snapshotService.captureSnapshotInput({
       tabId,
@@ -621,16 +866,23 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       parentTabId: tabId,
     })
 
-    logger?.info('flow.snapshotFromCurrentContext', 'Snapshot created, new tab opened', {
-      tabId,
-      snapshotTaskId: snapshotTask.id,
-      newTabId: newTab.id,
-    })
+    logger?.info(
+      'flow.snapshotFromCurrentContext',
+      'Snapshot created, new tab opened',
+      {
+        tabId,
+        snapshotTaskId: snapshotTask.id,
+        newTabId: newTab.id,
+      },
+    )
 
     return newTab
   }
 
-  function updatePlayerConfig(tabId: string, patch: Partial<import('../types/tab').PlayerConfig>): void {
+  function updatePlayerConfig(
+    tabId: string,
+    patch: Partial<import('../types/tab').PlayerConfig>,
+  ): void {
     const tab = getTab(tabId)
     const merged: import('../types/tab').PlayerConfig = {
       black: tab.playerConfig?.black ?? 'human',
@@ -639,7 +891,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
       ai: tab.playerConfig?.ai,
       ...patch,
     }
-    workbenchStore.updateTab(tabId, { playerConfig: merged })
+    workbenchStore.updateTab(tabId, {playerConfig: merged})
   }
 
   async function loadDashboardData(): Promise<DashboardData> {
@@ -659,7 +911,12 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
         : Promise.resolve([]),
     ])
 
-    return { inboxTasks, incompleteAttempts, incompleteRecallSessions, recentBadMoveTasks }
+    return {
+      inboxTasks,
+      incompleteAttempts,
+      incompleteRecallSessions,
+      recentBadMoveTasks,
+    }
   }
 
   return {
