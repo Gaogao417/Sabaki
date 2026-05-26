@@ -31,7 +31,7 @@ import OpponentControl from '../shared/OpponentControl.js'
  * @param {string} props.opponentType - Current opponent selection: 'self' or 'ai'
  * @param {onMarkDoubtfulCallback} props.onMarkDoubtful - Called when user marks position as doubtful
  * @param {onEnterAnalysisCallback} props.onEnterAnalysis - Called when user wants to enter analysis
- * @param {Function} props.onOpenGameLibrary - Called when user opens 棋谱库
+ * @param {Function} props.onOpenGameLibrary - Called when user opens 资料库
  * @param {Function} props.onOpenWrongProblems - Called when user opens 错题库
  * @param {onOpponentChangeCallback} props.onOpponentChange - Called when user changes opponent type
  * @param {'empty'|'active'|'success'|'error'|'loading'|'disabled'} [props.state='active'] - Panel state overlay
@@ -163,7 +163,7 @@ export default function PlayModePanel({
               'data-testid': 'open-game-library-btn',
               class: 'wb-btn wb-btn-secondary wb-btn--sm',
               onClick: onOpenGameLibrary,
-            }, '棋谱库'),
+            }, '资料库'),
             h('button', {
               'data-testid': 'open-wrong-problems-btn',
               class: 'wb-btn wb-btn-secondary wb-btn--sm',

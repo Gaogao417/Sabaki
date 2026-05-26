@@ -1,0 +1,282 @@
+[
+  {
+    "scenario": "problem",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/problem.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": false,
+      "visibleCards": 4,
+      "textLength": 324,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 352,
+        "y": 182,
+        "width": 742,
+        "height": 742,
+        "top": 182,
+        "right": 1094,
+        "bottom": 924,
+        "left": 352
+      }
+    }
+  },
+  {
+    "scenario": "recall",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/recall.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": false,
+      "visibleCards": 5,
+      "textLength": 198,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 177,
+        "y": 144,
+        "width": 760,
+        "height": 760,
+        "top": 144,
+        "right": 937,
+        "bottom": 904,
+        "left": 177
+      }
+    }
+  },
+  {
+    "scenario": "play-history",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/play-history.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": true,
+      "visibleCards": 6,
+      "textLength": 452,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 177,
+        "y": 173,
+        "width": 760,
+        "height": 760,
+        "top": 173,
+        "right": 937,
+        "bottom": 933,
+        "left": 177
+      }
+    }
+  },
+  {
+    "scenario": "play-kifu",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/play-kifu.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": true,
+      "visibleCards": 6,
+      "textLength": 358,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 177,
+        "y": 173,
+        "width": 760,
+        "height": 760,
+        "top": 173,
+        "right": 937,
+        "bottom": 933,
+        "left": 177
+      }
+    }
+  },
+  {
+    "scenario": "play-games",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/play-games.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": true,
+      "visibleCards": 6,
+      "textLength": 346,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 177,
+        "y": 173,
+        "width": 760,
+        "height": 760,
+        "top": 173,
+        "right": 937,
+        "bottom": 933,
+        "left": 177
+      }
+    }
+  },
+  {
+    "scenario": "analysis",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/analysis.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": false,
+      "visibleCards": 5,
+      "textLength": 576,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 352,
+        "y": 182,
+        "width": 742,
+        "height": 742,
+        "top": 182,
+        "right": 1094,
+        "bottom": 924,
+        "left": 352
+      }
+    }
+  },
+  {
+    "scenario": "analysis-library",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/analysis-library.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": true,
+      "visibleCards": 5,
+      "textLength": 821,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 352,
+        "y": 182,
+        "width": 742,
+        "height": 742,
+        "top": 182,
+        "right": 1094,
+        "bottom": 924,
+        "left": 352
+      }
+    }
+  },
+  {
+    "scenario": "checkpoint",
+    "screenshotPath": "/Users/gaochong/develop/Sabaki/docs/archive/daily-design/2026-05-26/workbench-visual-acceptance/screenshots/checkpoint.png",
+    "metrics": {
+      "shell": true,
+      "modeBar": true,
+      "board": true,
+      "drawer": false,
+      "visibleCards": 6,
+      "textLength": 337,
+      "hasGlobalHeaderClass": false,
+      "overflowCount": 0,
+      "overflowDetails": [],
+      "topbar": {
+        "x": 20,
+        "y": 20,
+        "width": 1408,
+        "height": 112,
+        "top": 20,
+        "right": 1428,
+        "bottom": 132,
+        "left": 20
+      },
+      "boardBox": {
+        "x": 98,
+        "y": 153,
+        "width": 800,
+        "height": 800,
+        "top": 153,
+        "right": 898,
+        "bottom": 953,
+        "left": 98
+      }
+    }
+  }
+]

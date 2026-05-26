@@ -18,6 +18,7 @@ import RightDrawer from './shared/RightDrawer.js'
 import AnnotationToolbar from './shared/AnnotationToolbar.js'
 import MaterialLibraryDialog from './shared/MaterialLibraryDialog.js'
 import LibrarySideDrawer from './shared/LibrarySideDrawer.js'
+import MiniBoard from './shared/MiniBoard.js'
 
 import PlayModePanel from './panels/PlayModePanel.js'
 import ProblemModePanel from './panels/ProblemModePanel.js'
@@ -50,6 +51,7 @@ export {
   AnnotationToolbar,
   MaterialLibraryDialog,
   LibrarySideDrawer,
+  MiniBoard,
   PlayModePanel,
   ProblemModePanel,
   RecallModePanel,

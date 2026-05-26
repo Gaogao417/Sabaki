@@ -1,6 +1,4 @@
 import {h} from 'preact'
-import ReferenceLineSummary from '../shared/ReferenceLineSummary.js'
-
 /**
  * ProblemRightPanel renders the right panel content for Problem mode.
  *
@@ -14,76 +12,64 @@ import ReferenceLineSummary from '../shared/ReferenceLineSummary.js'
  * @param {number} props.badMoveCount - Number of bad moves detected
  */
 export default function ProblemRightPanel({
-  currentVariation = 0,
-  opponentMode = 'ai',
   hint = null,
-  aiAnalysisHidden = true,
-  referenceLines = [],
   pendingEval = 0,
   badMoveCount = 0,
 }) {
-  const totalRefCount = referenceLines.reduce((sum, line) => sum + line.length, 0)
-
   return h('div', {
     'data-testid': 'problem-right-panel',
     class: 'wb-problem-right-panel',
   },
-    // Answer draft card
-    h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '答案草稿'),
-      h('div', {class: 'wb-problem-right-panel__answer-draft'},
-        h('div', {class: 'wb-problem-right-panel__stat'},
-          h('span', {class: 'wb-problem-right-panel__stat-label'}, '当前变化'),
-          h('span', {class: 'wb-problem-right-panel__stat-value'}, currentVariation, ' 手'),
-        ),
-        h('div', {class: 'wb-problem-right-panel__stat'},
-          h('span', {class: 'wb-problem-right-panel__stat-label'}, '对方'),
-          h('span', {class: 'wb-problem-right-panel__stat-value'},
-            opponentMode === 'ai' ? 'AI' : opponentMode,
-          ),
-        ),
-        h('div', {class: 'wb-problem-right-panel__stat'},
-          h('span', {class: 'wb-problem-right-panel__stat-label'}, 'pending 评价'),
-          h('span', {class: 'wb-problem-right-panel__stat-value'}, pendingEval),
-        ),
-        h('div', {class: 'wb-problem-right-panel__stat'},
-          h('span', {class: 'wb-problem-right-panel__stat-label'}, '坏棋记录'),
-          h('span', {class: 'wb-problem-right-panel__stat-value'}, badMoveCount),
+    h('div', {class: 'wb-card wb-eval-card'},
+      h('div', {class: 'wb-panel-title'}, '评估监控'),
+      h('button', {class: 'wb-card-expand', 'aria-label': '展开评估监控'}, '↗'),
+      h('div', {class: 'wb-eval-card__lead'},
+        h('span', {}, '领先（黑）'),
+        h('strong', {}, '3.6', h('small', {}, ' 目')),
+      ),
+      h('div', {class: 'wb-eval-card__row'},
+        h('span', {}, pendingEval > 0 ? '评估中' : '最近下降'),
+        h('b', {}, '0.0 目'),
+      ),
+      h('div', {class: 'wb-sparkline', 'aria-hidden': 'true'},
+        [8, 8, 13, 9, 8, 7, 6].map((height, index) =>
+          h('span', {key: index, style: `--y:${height}`}),
         ),
       ),
+      h('div', {class: 'wb-sparkline__ticks'}, h('span', {}, '2'), h('span', {}, '4'), h('span', {}, '6'), h('span', {}, '8'), h('span', {}, '10')),
     ),
 
-    // Hint card — always shown, with empty state when no hint
     h('div', {
       'data-testid': 'hint-card',
-      class: 'wb-card',
+      class: 'wb-card wb-hint-card',
     },
       h('div', {class: 'wb-panel-title'}, '提示'),
-      hint != null
-        ? h('div', {class: 'wb-problem-right-panel__hint-content'}, hint)
-        : h('div', {style: 'font-size: 13px; color: var(--ui-text-tertiary)'},
-            '暂无提示',
-            h('div', {style: 'margin-top: 4px; font-size: 12px'}, '请求提示后显示方向性信息，不直接显示完整答案。'),
+      h('div', {class: 'wb-hint-card__used'},
+        h('span', {}, '已使用'),
+        h('strong', {}, '1', h('small', {}, '/5')),
+      ),
+      h('p', {}, hint || '需要提示时可获取帮助'),
+      h('button', {class: 'wb-btn wb-btn-secondary'}, '请求提示'),
+    ),
+
+    h('div', {class: 'wb-card wb-path-card'},
+      h('div', {class: 'wb-panel-title'}, '当前尝试路径'),
+      h('ol', {class: 'wb-path-card__steps'},
+        [
+          ['开始', '00:00', false],
+          ['思考中', '00:27', true],
+          ['...', '', false],
+          ['...', '', false],
+          ['...', '', false],
+        ].map(([label, time, active], index) =>
+          h('li', {key: index, class: active ? 'active' : ''},
+            h('span', {class: 'wb-path-card__index'}, index + 1),
+            h('span', {class: 'wb-path-card__label'}, label),
+            h('span', {class: 'wb-path-card__time'}, time),
           ),
-    ),
-
-    // AI analysis card
-    h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, 'AI 分析'),
-      aiAnalysisHidden
-        ? h('div', {class: 'wb-problem-right-panel__ai-hidden'}, 'AI 答案默认隐藏')
-        : h('div', {class: 'wb-problem-right-panel__ai-visible'}, 'AI 分析可见'),
-    ),
-
-    // Reference line summary card
-    h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '参考变化摘要'),
-      referenceLines.length > 0
-        ? h(ReferenceLineSummary, {
-            lines: referenceLines,
-            totalCount: totalRefCount,
-          })
-        : h('div', {class: 'wb-panel-caption'}, '暂无参考线'),
+        ),
+      ),
+      badMoveCount > 0 && h('span', {class: 'wb-path-card__badge'}, badMoveCount),
     ),
   )
 }

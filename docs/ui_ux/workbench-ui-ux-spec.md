@@ -1,30 +1,34 @@
 # Gabaki / Sabaki 工作台 UI/UX 与前端实现规格
 
-> 目标：在现有 `ui-ux-spec-0.5` 的视觉骨架上，修正信息架构、模式定义、关键交互和验收标准，使 Workbench UI 严格对齐当前 PRD 与 v0.5 模块架构。本文定义前端可实现、可截图验收的工作台规格，但不替代 PRD 或 Architecture 的产品与架构真源。
+> 目标：在当前六屏参考图的视觉骨架上，修正信息架构、模式定义、关键交互和验收标准，使 Workbench UI 严格对齐当前 PRD v0.7 与 v0.5 模块架构。本文定义前端可实现、可截图验收的工作台规格，但不替代 PRD 或 Architecture 的产品与架构真源。
 
 ## 0. 真源与视觉参考关系
 
 产品与架构判断的优先级如下：
 
-1. 产品真源：`docs/product/sabaki-training-prd.md`
+1. 产品真源：`docs/product/sabaki-training-prd.md`（v0.7：Attempt 中心 + RecallCheckpoint 主动纠错）
 2. 架构真源：`docs/architecture/gabaki-sabaki-training-architecture-v0.5.md`
 3. 迁移执行真源：`docs/architecture/gabaki-sabaki-training-implementation-plan.md`
-4. UI 基础稿：当前 `workbench-ui-ux-spec.md` / `ui-ux-spec-0.5`
+4. UI 基础稿：当前 `workbench-ui-ux-spec.md`
+5. 当前六屏视觉真源：`docs/ui_ux/workbench-ref-pics/2026-05-26-six-screen/`
 
 `docs/archive/architecture-versions/gabaki-sabaki-training-architecture.md` 是 v0.4 legacy reference，
 只能用于理解迁移前状态。新 UI 不得继续把 `Phase`、`TrainingTaskKind`、
 `source_kind`、`openProblemTab` 或 `openSnapshotProblemTab` 当作主路径。
 
-`docs/ui_ux/workbench-ref-pics/` 是历史视觉参考，不能作为 UI/UX 产品真源。历史图片最多作为非约束视觉参考，用于保持浅色桌面应用、三栏工作台、棋盘居中、左右卡片面板和底部工具栏的整体气质。若历史图片与当前 PRD 或 Architecture v0.5 冲突，一律以当前 PRD 与 Architecture v0.5 为准。
+`docs/ui_ux/workbench-ref-pics/2026-05-26-six-screen/` 是当前前端页面复刻的视觉真源，覆盖 Problem、Recall、Play+资料库、Analysis+资料库、Analysis、RecallCheckpoint 六种屏幕状态。更早的 `docs/ui_ux/workbench-ref-pics/` 图片只作为历史参考。
+
+若六屏图片与当前 PRD 或 Architecture v0.5 在业务行为上冲突，一律以当前 PRD 与 Architecture v0.5 为准；若只涉及布局、密度、卡片层级、按钮呈现和视觉语气，则以六屏图片为准。
 
 核心原则：
 
 1. Workbench 的产品模式固定为四个：Play / 对局、Problem / 做题、Recall / 回忆、Analysis / 复盘。
 2. 棋盘始终是视觉中心，占据页面最大、最稳定的区域。
 3. 顶部展示黑白状态、四段 mode segmented control、当前模式动作。
-4. Workbench 左侧栏只展示当前 mode 的任务和局部操作；全局材料库不进入左侧栏。
+4. Workbench 左侧栏只展示当前 mode 的任务和局部操作；全局材料库以左侧 overlay drawer 进入，不常驻在工作台左栏。
 5. 整体保持浅色、干净、桌面应用感，不做成 SaaS 大屏或营销页。
 6. 四个模式共享布局和组件语言，通过主色、文案、卡片内容和底部工具差异区分。
+7. Recall 普通回忆和 RecallCheckpoint 是同一 mode 的两种表面：普通回忆强调进度/错误记录，Checkpoint 强调“原手 → correction line → reveal AI → comment”的四步训练。
 
 ## 1. 全局布局与尺寸
 

@@ -1,5 +1,5 @@
 import {h} from 'preact'
-import EmptyStatePanel from '../shared/EmptyStatePanel.js'
+import MiniBoard from '../shared/MiniBoard.js'
 
 function ExpandableTitle({title, onExpand}) {
   return h('div', {style: 'display: flex; align-items: center; justify-content: space-between'},
@@ -44,55 +44,42 @@ export default function AnalysisRightPanel({
     'data-testid': 'analysis-right-panel',
     class: 'wb-analysis-right-panel',
   },
-    // AI analysis card
-    h('div', {class: 'wb-card'},
-      h(ExpandableTitle, {title: 'AI 分析', onExpand: onExpandAI}),
-      h(EmptyStatePanel, {
-        icon: 'search',
-        title: '暂无分析数据',
-        description: '选择关键局面后，AI 将在此提供形势判断、推荐手段与变化建议',
-      }),
+    h('div', {class: 'wb-card wb-reference-board-card'},
+      h(ExpandableTitle, {title: '参考变化 / Reference Board', onExpand: onExpandSnapshot}),
+      h(MiniBoard, {size: 9}),
     ),
 
-    // Board evaluation card
-    h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '局面点评'),
-      h('div', {class: 'wb-analysis-right-panel__evaluation'},
-        h('div', {class: 'wb-analysis-right-panel__stat'},
-          h('span', {class: 'wb-analysis-right-panel__stat-label'}, '手数'),
-          h('span', {class: 'wb-analysis-right-panel__stat-value'}, moveCount),
-        ),
-        h('div', {class: 'wb-analysis-right-panel__stat'},
-          h('span', {class: 'wb-analysis-right-panel__stat-label'}, '提子'),
-          h('span', {class: 'wb-analysis-right-panel__stat-value'},
-            '黑 ', captures.black, ' / 白 ', captures.white,
+    h('div', {class: 'wb-card wb-ai-card'},
+      h('div', {class: 'wb-panel-title'}, 'AI 分析',
+        h('span', {class: 'wb-ai-card__engine'}, 'Leela Zero (v0.19)'),
+      ),
+      h('div', {class: 'wb-ai-table'},
+        h('div', {}, h('span', {}, '#'), h('span', {}, '候选手'), h('span', {}, '胜率'), h('span', {}, '目差(当前)')),
+        [
+          ['1', '○ R10', '34.1%', '-5.5'],
+          ['2', '○ Q11', '38.7%', '-1.8'],
+          ['3', '○ R9', '36.2%', '-2.6'],
+          ['4', '○ S10', '33.0%', '-6.1'],
+          ['5', '○ Q10', '32.1%', '-6.9'],
+        ].map((row, index) =>
+          h('button', {key: row[0], class: index === 0 ? 'active' : ''},
+            row.map(cell => h('span', {key: cell}, cell)),
           ),
         ),
-        evaluation != null && h('div', {class: 'wb-analysis-right-panel__eval-text'}, evaluation),
       ),
     ),
 
-    // Bad move summary card
-    h('div', {class: 'wb-card'},
-      h('div', {class: 'wb-panel-title'}, '坏棋摘要'),
-      h('div', {class: 'wb-analysis-right-panel__field'},
-        h('span', {class: 'wb-analysis-right-panel__field-label'}, '坏棋记录'),
-        h('span', {class: 'wb-analysis-right-panel__field-value'}, badMoveCount),
-      ),
+    h('div', {class: 'wb-card wb-note-card'},
+      h('div', {class: 'wb-panel-title'}, '局面笔记', h('button', {class: 'wb-icon-button'}, '✎')),
+      h('p', {}, evaluation || '右边白棋形状薄弱，黑棋有扩张机会。R10 被 AI 评为最优定式大头，较参考变化（R17）明显更好。'),
+      h('span', {class: 'wb-note-card__tag'}, '来自 Recall 修正'),
+      h('small', {}, '更新于 10-24'),
     ),
 
-    // Variation tree card
-    h('div', {class: 'wb-card'},
-      h(ExpandableTitle, {title: '变化树', onExpand: onExpandVariation}),
-      h(EmptyStatePanel, {
-        icon: 'tree',
-        title: '暂无变化',
-        description: '自由摆棋或进入分支后将记录变化',
-      }),
+    h('div', {class: 'wb-card wb-card--compat'},
+      h(ExpandableTitle, {title: 'AI 分析', onExpand: onExpandAI}),
     ),
-
-    // Comparison card
-    h('div', {class: 'wb-card'},
+    h('div', {class: 'wb-card wb-card--compat'},
       h('div', {class: 'wb-panel-title'}, '对比'),
       h('div', {class: 'wb-analysis-right-panel__comparison'},
         h('div', {class: 'wb-analysis-right-panel__field'},
@@ -109,17 +96,13 @@ export default function AnalysisRightPanel({
         ),
       ),
     ),
-
-    // Snapshot comparison card
-    h('div', {class: 'wb-card'},
+    h('div', {class: 'wb-card wb-card--compat'},
+      h(ExpandableTitle, {title: '变化树', onExpand: onExpandVariation}),
+      h('span', {}, moveCount, captures.black, captures.white, badMoveCount),
+    ),
+    h('div', {class: 'wb-card wb-card--compat'},
       h(ExpandableTitle, {title: '快照对比', onExpand: onExpandSnapshot}),
-      h('div', {style: 'font-size: 13px; color: var(--ui-text-tertiary); margin-bottom: 10px'},
-        '捕捉参考局面后可进行快照对比。',
-      ),
-      h('button', {
-        'data-testid': 'add-snapshot-btn',
-        class: 'wb-analysis-right-panel__snapshot-btn',
-      }, '添加快照'),
+      h('button', {'data-testid': 'add-snapshot-btn'}, '添加快照'),
     ),
   )
 }

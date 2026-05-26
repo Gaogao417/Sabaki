@@ -1,6 +1,5 @@
 import {h} from 'preact'
 import OpponentControl from '../shared/OpponentControl.js'
-import ReferenceLineSummary from '../shared/ReferenceLineSummary.js'
 import EmptyStatePanel from '../shared/EmptyStatePanel.js'
 
 /**
@@ -69,75 +68,40 @@ export default function ProblemModePanel({
       })
     }
 
-    const totalCount = referenceLines.reduce((sum, line) => sum + line.length, 0)
-
     return [
-      // Card 1: Current mode
-      h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-card wb-problem-brief-card'},
+        h('div', {class: 'wb-panel-title'}, '题目说明 / 题面与目标'),
+        h('section', {class: 'wb-brief-section'},
+          h('h3', {}, '局面说明'),
+          h('p', {}, prompt || '局部战斗中的局面。黑棋需要选择合适的攻击方向，继续施压并争取更大的实地。'),
+        ),
+        h('section', {class: 'wb-brief-section'},
+          h('h3', {}, '训练目标'),
+          h('p', {}, goal || '选择最有利的攻击方向，扩大战果，迫使白棋受损或退让。'),
+        ),
+        h('section', {class: 'wb-brief-section wb-brief-section--rules'},
+          h('h3', {}, '规则简述'),
+          h('ul', {},
+            ['黑先落子', '轮流落子', '贴目 7.5', '数字法计算胜负', '终局需两次确认'].map(item =>
+              h('li', {key: item}, item),
+            ),
+          ),
+          passRuleSummary && h('p', {class: 'wb-panel-caption'}, passRuleSummary),
+        ),
+      ),
+
+      h('div', {class: 'wb-card wb-card--compat'},
         h('div', {class: 'wb-panel-title'}, '做题模式'),
-        h('div', {class: 'wb-panel-body'},
-          h('div', {style: 'font-weight: 500; margin-bottom: 4px'}, '做题模式'),
-          h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'}, '阅读题面，完成有目标和提交标准的作答'),
-        ),
       ),
-      // Card 2: Prompt & Goal
-      h('div', {class: 'wb-card'},
-        h('div', {class: 'wb-panel-title'}, '题面与目标'),
-        h('div', {class: 'wb-panel-body'},
-          h('div', {class: 'wb-problem-mode-panel__prompt'}, prompt),
-          h('div', {class: 'wb-problem-mode-panel__goal'}, goal),
-          h('div', {class: 'wb-problem-mode-panel__rules'}, passRuleSummary),
-          h('div', {class: 'wb-problem-mode-panel__reference-lines'},
-            h(ReferenceLineSummary, {lines: referenceLines, totalCount}),
-          ),
-        ),
-      ),
-      // Card 3: Opponent control
-      h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-card wb-card--compat'},
         h('div', {class: 'wb-panel-title'}, '对方控制'),
-        h('div', {class: 'wb-panel-body'},
-          h(OpponentControl, {value: problemOpponent, onChange: onOpponentChange}),
-          h('div', {style: 'margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--ui-border)'},
-            h('div', {style: 'display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px'},
-              h('span', {style: 'color: var(--ui-text-secondary)'}, '题目范围'),
-              h('span', {style: 'font-weight: 500; color: var(--mode-accent)'}, '已设置'),
-            ),
-            h('div', {style: 'font-size: 12px; color: var(--ui-text-tertiary)'},
-              'AI 应手仅在题目范围内自动应手',
-            ),
-          ),
-        ),
+        h(OpponentControl, {value: problemOpponent, onChange: onOpponentChange}),
       ),
-      // Card 4: Answer actions
-      h('div', {class: 'wb-card'},
+      h('div', {class: 'wb-card wb-card--compat'},
         h('div', {class: 'wb-panel-title'}, '作答操作'),
-        h('div', {class: 'wb-panel-body'},
-          h('div', {style: 'display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px'},
-            h('span', {style: 'color: var(--ui-text-secondary)'}, '当前手数'),
-            h('span', {style: 'font-weight: 600'}, '0'),
-          ),
-          h('div', {style: 'display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px'},
-            h('span', {style: 'color: var(--ui-text-secondary)'}, '答案状态'),
-            h('span', {style: 'font-weight: 600'}, '作答中'),
-          ),
-          h('div', {style: 'display: flex; gap: 6px; flex-wrap: wrap'},
-            h('button', {
-              'data-testid': 'submit-answer-btn',
-              class: 'wb-btn wb-btn-primary wb-btn--sm',
-              onClick: onSubmitAnswer,
-            }, '提交答案'),
-            h('button', {
-              'data-testid': 'abandon-answer-btn',
-              class: 'wb-btn wb-btn-danger wb-btn--sm',
-              onClick: onAbandonAnswer,
-            }, '放弃作答'),
-            h('button', {
-              'data-testid': 'request-hint-btn',
-              class: 'wb-btn wb-btn-secondary wb-btn--sm',
-              onClick: onRequestHint,
-            }, '请求提示'),
-          ),
-        ),
+        h('button', {'data-testid': 'submit-answer-btn', onClick: onSubmitAnswer}, '提交答案'),
+        h('button', {'data-testid': 'abandon-answer-btn', onClick: onAbandonAnswer}, '放弃作答'),
+        h('button', {'data-testid': 'request-hint-btn', onClick: onRequestHint}, '请求提示'),
       ),
     ]
   }

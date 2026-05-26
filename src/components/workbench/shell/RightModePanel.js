@@ -31,6 +31,8 @@ export default function RightModePanel(props) {
         hint: rest.hint,
         aiAnalysisHidden: rest.aiAnalysisHidden,
         referenceLines: rest.referenceLines,
+        pendingEval: rest.pendingEval,
+        badMoveCount: rest.badMoveCount,
       })
       break
     case 'recall':
@@ -43,7 +45,10 @@ export default function RightModePanel(props) {
         progress: rest.progress,
         totalMoves: rest.totalMoves,
         activeCheckpoint: rest.activeCheckpoint,
+        activeCheckpointId: rest.activeCheckpointId,
         recallSubstate: rest.recallSubstate,
+        canEditCheckpointComment: rest.canEditCheckpointComment,
+        onSaveCheckpointComment: rest.onSaveCheckpointComment,
       })
       break
     case 'analysis':

@@ -55,6 +55,7 @@ export default function RecallModePanel({
   onRevealAI = () => {},
   onSkipCheckpoint = () => {},
   onSaveCheckpointComment = () => {},
+  showCheckpointCommentEditor = true,
   state = 'active',
 }) {
   const [checkpointComment, setCheckpointComment] = useState('')
@@ -63,9 +64,10 @@ export default function RecallModePanel({
   const currentCheckpoint = activeCheckpoint ||
     checkpoints.find(cp => cp.id === activeCheckpointId) ||
     null
-  const showCommentEditor = canEditCheckpointComment ||
-    recallSubstate === 'checkpoint_ai_revealed' ||
-    recallSubstate === 'checkpoint_commenting'
+  const showCommentEditor = showCheckpointCommentEditor &&
+    (canEditCheckpointComment ||
+      recallSubstate === 'checkpoint_ai_revealed' ||
+      recallSubstate === 'checkpoint_commenting')
 
   function handleSaveCheckpointComment() {
     const content = (checkpointCommentRef.current?.value || checkpointComment).trim()

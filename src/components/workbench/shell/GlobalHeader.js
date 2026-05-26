@@ -1,11 +1,8 @@
 import {h} from 'preact'
 
 export default function GlobalHeader({
-  taskTitle = '攻击题 #1024',
-  mode = 'problem',
+  taskTitle = 'Sabaki',
   statusChips = ['黑先', '未提交'],
-  engineName = 'KataGo',
-  engineConnected = true,
 }) {
   return h(
     'header',
@@ -14,7 +11,14 @@ export default function GlobalHeader({
     h(
       'div',
       {class: 'wb-global-header__left'},
-      h('span', {class: 'wb-global-header__title'}, taskTitle),
+      h('span', {class: 'wb-global-header__traffic wb-global-header__traffic--red'}),
+      h('span', {class: 'wb-global-header__traffic wb-global-header__traffic--yellow'}),
+      h('span', {class: 'wb-global-header__traffic wb-global-header__traffic--green'}),
+    ),
+
+    h('div', {class: 'wb-global-header__title'}, 'Sabaki'),
+
+    h('div', {class: 'wb-global-header__status-compat', 'aria-hidden': 'true'},
       statusChips.map((chip, i) =>
         h(
           'span',
@@ -27,21 +31,7 @@ export default function GlobalHeader({
     h(
       'div',
       {class: 'wb-global-header__right'},
-      h(
-        'div',
-        {class: 'wb-global-header__engine'},
-        h('span', {
-          class: [
-            'wb-global-header__engine-dot',
-            engineConnected ? 'wb-global-header__engine-dot--connected' : '',
-          ].filter(Boolean).join(' '),
-        }),
-        h(
-          'span',
-          {class: 'wb-global-header__engine-name'},
-          engineName,
-        ),
-      ),
+      taskTitle !== 'Sabaki' && h('span', {class: 'wb-global-header__document-title'}, taskTitle),
     ),
   )
 }

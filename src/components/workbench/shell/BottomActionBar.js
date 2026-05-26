@@ -93,6 +93,9 @@ export default function BottomActionBar({
 }) {
   const modeActions = MODE_ACTIONS[mode] || []
   const label = workspaceLabel || WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.play
+  const isCheckpoint = mode === 'recall' &&
+    (callbacks.activeCheckpoint || callbacks.activeCheckpointId ||
+      String(callbacks.recallSubstate || '').startsWith('checkpoint'))
 
   function actionBtn(btn) {
     const cls = btn.variant === 'danger'
@@ -149,29 +152,83 @@ export default function BottomActionBar({
     return segs
   }
 
+  function visualButton(label, callback, options = {}) {
+    return h('button', {
+      class: [
+        'wb-visual-action',
+        options.primary ? 'wb-visual-action--primary' : '',
+        options.disabled ? 'wb-visual-action--disabled' : '',
+      ].filter(Boolean).join(' '),
+      disabled: options.disabled,
+      onClick: callback,
+    }, label)
+  }
+
+  function renderVisualActions() {
+    if (isCheckpoint) {
+      return [
+        visualButton('撤销修正手', callbacks.onUndo),
+        visualButton('清空修正图', callbacks.onClear),
+        visualButton('保存修正图', callbacks.onSubmitCorrection, {primary: true}),
+        visualButton('显示 AI 候选', callbacks.onRevealAI),
+        visualButton('继续 Recall  →', callbacks.onEndRecall, {disabled: true}),
+      ]
+    }
+
+    if (mode === 'problem') {
+      return [
+        visualButton('↶  悔棋', callbacks.onUndo),
+        visualButton('↷  重做', callbacks.onRedo, {disabled: true}),
+        visualButton('💡  请求提示', callbacks.onRequestHint),
+        visualButton('✈  提交', callbacks.onSubmitAnswer || callbacks.onSubmit, {primary: true}),
+      ]
+    }
+
+    if (mode === 'recall') {
+      return [
+        visualButton('↻  重试当前手', callbacks.onUndo),
+        visualButton('←  显示上一手', callbacks.onVerifySkip),
+        visualButton('▷▷  跳过', callbacks.onVerifySkip),
+        visualButton('继续  →', callbacks.onEndRecall, {primary: true}),
+      ]
+    }
+
+    if (mode === 'analysis') {
+      return [
+        visualButton('←  上一步', callbacks.onUndo),
+        visualButton('下一手  →', callbacks.onRedo),
+        visualButton('⊕  添加参考变化', callbacks.onSnapshot),
+        visualButton('▦  Edit Position', callbacks.onEditPosition),
+        h('label', {class: 'wb-visual-toggle'}, '显示候选手', h('input', {type: 'checkbox', checked: true}), h('span', {})),
+        visualButton('⚙', callbacks.onSettings),
+      ]
+    }
+
+    return [
+      visualButton('↶  悔棋', callbacks.onUndo),
+      visualButton('○  Pass', callbacks.onPass),
+      visualButton('⚑  认输', callbacks.onResign),
+      visualButton('✓  终局确认', callbacks.onEndAttempt, {primary: true}),
+    ]
+  }
+
   return h('div', {
     'data-testid': 'bottom-action-bar',
-    class: 'wb-bottom-action-bar',
+    class: `wb-bottom-action-bar wb-bottom-action-bar--${mode}${isCheckpoint ? ' wb-bottom-action-bar--checkpoint' : ''}`,
   },
-    // Left: Status
-    h('div', {
-      'data-testid': 'bottom-status-text',
-      class: 'wb-status-text',
-    }, ...renderStatusSegments()),
+    h('div', {class: 'wb-bottom-action-bar__visual'}, renderVisualActions()),
 
-    // Center: Mode actions
-    h('div', {class: 'wb-bottom-action-bar__mode-actions'},
+    h('div', {class: 'wb-bottom-action-bar__compat', 'aria-hidden': 'true'},
+      h('div', {
+        'data-testid': 'bottom-status-text',
+        class: 'wb-status-text',
+      }, ...renderStatusSegments()),
       modeActions.map(btn =>
         h('div', {
           key: btn.testId,
           class: 'wb-bottom-action-bar__item',
         }, actionBtn(btn)),
       ),
-    ),
-
-    // Right: View controls + annotation tools (analysis)
-    h('div', {class: 'wb-bottom-action-bar__view-controls'},
-      h('div', {class: 'wb-bottom-action-bar__divider'}),
       VIEW_ACTIONS.map(btn =>
         h('div', {
           key: btn.testId,
@@ -183,7 +240,6 @@ export default function BottomActionBar({
           'data-testid': 'annotation-tool',
           class: 'wb-bottom-action-bar__annotation-tools',
         },
-          h('div', {class: 'wb-bottom-action-bar__divider'}),
           h(AnnotationToolbar, {
             activeTool: activeAnnotationTool || 'arrow',
             onToolChange: onAnnotationToolChange,

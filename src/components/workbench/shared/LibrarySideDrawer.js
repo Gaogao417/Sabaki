@@ -1,4 +1,5 @@
 import {h, Component} from 'preact'
+import MiniBoard from './MiniBoard.js'
 
 function getRootData(gameTree) {
   if (gameTree == null) return {}
@@ -37,18 +38,43 @@ export default class LibrarySideDrawer extends Component {
       loading: false,
       summary: null,
       inboxProblems: [],
+      savedGames: [],
       query: '',
     }
   }
 
   componentWillReceiveProps(nextProps) {
+    let nextType = this.normalizeType(nextProps.type)
+    let currentType = this.normalizeType(this.props.type)
+
     if (
       nextProps.open &&
-      nextProps.type === 'problems' &&
-      (!this.props.open || this.props.type !== 'problems')
+      nextType === 'problems' &&
+      (!this.props.open || currentType !== 'problems')
     ) {
       this.loadProblemLibrary()
     }
+
+    if (
+      nextProps.open &&
+      ['kifu', 'game-records'].includes(nextType) &&
+      (!this.props.open || currentType !== nextType)
+    ) {
+      this.loadSavedGames()
+    }
+  }
+
+  componentDidMount() {
+    if (!this.props.open) return
+
+    let type = this.normalizeType(this.props.type)
+    if (type === 'problems') this.loadProblemLibrary()
+    if (['kifu', 'game-records'].includes(type)) this.loadSavedGames()
+  }
+
+  normalizeType(type = 'history') {
+    if (type === 'games') return 'history'
+    return type || 'history'
   }
 
   async loadProblemLibrary() {
@@ -76,7 +102,21 @@ export default class LibrarySideDrawer extends Component {
     }
   }
 
-  renderGameLibrary() {
+  async loadSavedGames() {
+    if (window.sabaki?.db?.getRecentGames == null) {
+      this.setState({savedGames: []})
+      return
+    }
+
+    try {
+      let savedGames = await window.sabaki.db.getRecentGames(30)
+      this.setState({savedGames})
+    } catch (_) {
+      this.setState({savedGames: []})
+    }
+  }
+
+  renderHistory() {
     let {
       gameTrees = [],
       gameIndex = 0,
@@ -113,19 +153,70 @@ export default class LibrarySideDrawer extends Component {
         h('input', {
           type: 'search',
           value: query,
-          placeholder: '搜索棋谱',
+          placeholder: '搜索历史或标签',
           onInput: (evt) => this.setState({query: evt.currentTarget.value}),
         }),
+        h('button', {type: 'button', class: 'wb-library-drawer__filter'}, '≡'),
+      ),
+      h('button', {
+        type: 'button',
+        class: 'wb-library-drawer__primary',
+        onClick: onNewGame,
+      }, '⊕ 新对局'),
+      h('div', {class: 'wb-library-section-title'}, '最近历史'),
+      h('ol', {class: 'wb-library-drawer__list wb-library-drawer__list--visual'},
+        [
+          ['黑方 vs 白方 #1', '第 42 手 · 今日', '对局中', true],
+          ['白方 vs AI #2', '第 136 手 · 昨天', '已保存', false],
+          ['攻击方向训练 #12', '第 42 手 · 昨天', '对局中', true],
+          ['定式活用 #07', '第 89 手 · 05-20', '已保存', false],
+          ['收官计算练习 #15', '第 211 手 · 05-19', '已保存', false],
+        ].map(([title, meta, badge, active], index) =>
+          h('li', {
+            key: title,
+            class: 'wb-library-drawer__item' + (active && index === 0 ? ' wb-library-drawer__item--active' : ''),
+          },
+            h('button', {type: 'button', onClick: () => onOpenGame(games[index]?.index || 0)},
+              h(MiniBoard, {size: 5}),
+              h('span', {class: 'wb-library-drawer__item-main'},
+                h('strong', {}, title),
+                h('small', {}, meta),
+              ),
+              h('em', {class: active ? 'active' : ''}, badge),
+            ),
+          ),
+        ),
+      ),
+      h('div', {class: 'wb-library-section-title'}, '更早历史'),
+      h('ol', {class: 'wb-library-drawer__list wb-library-drawer__list--visual wb-library-drawer__list--compact'},
+        [
+          ['攻防转换训练 #10', '第 57 手 · 05-18'],
+          ['布局方向研究 #03', '第 33 手 · 06-17'],
+        ].map(([title, meta]) =>
+          h('li', {key: title, class: 'wb-library-drawer__item'},
+            h('button', {type: 'button'},
+              h(MiniBoard, {size: 5}),
+              h('span', {class: 'wb-library-drawer__item-main'},
+                h('strong', {}, title),
+                h('small', {}, meta),
+              ),
+            ),
+          ),
+        ),
+      ),
+      h('button', {class: 'wb-library-drawer__open-file'}, '▣ 打开文件...  ⌘O'),
+      h('div', {class: 'wb-card--compat'},
         h('button', {
           type: 'button',
           class: 'wb-library-drawer__primary',
           onClick: onNewGame,
         }, '新对局'),
       ),
+      h('div', {class: 'wb-card--compat'},
       games.length === 0
         ? h('div', {class: 'wb-library-drawer__empty'},
-          h('strong', {}, '暂无匹配棋谱'),
-          h('span', {}, '开始一盘新棋后会出现在这里。'),
+          h('strong', {}, '暂无匹配历史'),
+          h('span', {}, '打开棋谱、做题或开始对局后会出现在这里。'),
         )
         : h('ol', {class: 'wb-library-drawer__list'},
           games.map((game) =>
@@ -142,6 +233,144 @@ export default class LibrarySideDrawer extends Component {
                 h('strong', {}, game.title),
                 h('span', {}, `${game.black} / ${game.white}`),
                 h('small', {}, `${dateText(game.date)} · ${game.moveCount} 手`),
+              ),
+            ),
+          ),
+        ),
+      ),
+      )
+	  }
+
+  renderSavedGameList(items, emptyTitle, emptyBody) {
+    return items.length === 0
+      ? h('div', {class: 'wb-library-drawer__empty'},
+        h('strong', {}, emptyTitle),
+        h('span', {}, emptyBody),
+      )
+      : h('ol', {class: 'wb-library-drawer__list wb-library-drawer__list--visual'},
+        items.map((game) =>
+          h('li', {key: game.id || game.title, class: 'wb-library-drawer__item'},
+            h('button', {type: 'button'},
+              h(MiniBoard, {size: 5}),
+              h('span', {class: 'wb-library-drawer__item-main'},
+                h('strong', {}, game.title || '未命名棋谱'),
+                h('small', {}, [
+                  game.source || 'local',
+                  dateText(game.updatedAt || game.createdAt),
+                  game.result,
+                ].filter(Boolean).join(' · ')),
+              ),
+              game.tags?.length > 0 && h('em', {}, game.tags[0]),
+            ),
+          ),
+        ),
+      )
+  }
+
+  renderKifuLibrary() {
+    let {query, savedGames} = this.state
+    let normalizedQuery = query.trim().toLowerCase()
+    let kifuItems = savedGames
+      .filter((game) => game.source !== 'play')
+      .filter((game) => {
+        if (!normalizedQuery) return true
+        return [
+          game.title,
+          game.source,
+          ...(game.tags || []),
+        ].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
+      })
+
+    return h('div', {class: 'wb-library-drawer__body'},
+      h('div', {class: 'wb-library-drawer__toolbar'},
+        h('input', {
+          type: 'search',
+          value: query,
+          placeholder: '搜索棋谱名、来源或标签',
+          onInput: (evt) => this.setState({query: evt.currentTarget.value}),
+        }),
+        h('button', {type: 'button', class: 'wb-library-drawer__filter'}, '≡'),
+      ),
+      h('button', {class: 'wb-library-drawer__open-file'}, '▣ 打开棋谱文件...  ⌘O'),
+      h('div', {class: 'wb-library-section-title'}, '本地棋谱'),
+      this.renderSavedGameList(
+        kifuItems,
+        '暂无棋谱',
+        '导入 SGF 或保存复盘棋谱后会进入棋谱库。',
+      ),
+    )
+  }
+
+  renderGameRecordLibrary() {
+    let {
+      gameTrees = [],
+      gameIndex = 0,
+      onNewGame = () => {},
+      onOpenGame = () => {},
+    } = this.props
+    let {query, savedGames} = this.state
+    let normalizedQuery = query.trim().toLowerCase()
+    let currentGames = gameTrees.map((gameTree, index) => {
+      let data = getRootData(gameTree)
+      return {
+        id: `current-${index}`,
+        index,
+        title: gameTitle(gameTree, index),
+        source: index === gameIndex ? '当前打开' : '已打开',
+        updatedAt: getProperty(data, 'DT'),
+        result: getProperty(data, 'RE'),
+      }
+    })
+    let storedGames = savedGames.filter((game) => game.source === 'play')
+    let gameItems = [...currentGames, ...storedGames]
+      .filter((game) => {
+        if (!normalizedQuery) return true
+        return [game.title, game.source, game.result]
+          .filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
+      })
+
+    return h('div', {class: 'wb-library-drawer__body'},
+      h('div', {class: 'wb-library-drawer__toolbar'},
+        h('input', {
+          type: 'search',
+          value: query,
+          placeholder: '搜索对局、棋手或结果',
+          onInput: (evt) => this.setState({query: evt.currentTarget.value}),
+        }),
+        h('button', {type: 'button', class: 'wb-library-drawer__filter'}, '≡'),
+      ),
+      h('button', {
+        type: 'button',
+        class: 'wb-library-drawer__primary',
+        onClick: onNewGame,
+      }, '⊕ 新对局'),
+      h('div', {class: 'wb-library-section-title'}, '对局记录'),
+      gameItems.length === 0
+        ? h('div', {class: 'wb-library-drawer__empty'},
+          h('strong', {}, '暂无对局'),
+          h('span', {}, '开始或保存一盘对局后会进入对局库。'),
+        )
+        : h('ol', {class: 'wb-library-drawer__list wb-library-drawer__list--visual'},
+          gameItems.map((game) =>
+            h('li', {
+              key: game.id || game.title,
+              class: 'wb-library-drawer__item' +
+                (game.index === gameIndex ? ' wb-library-drawer__item--active' : ''),
+            },
+              h('button', {
+                type: 'button',
+                onClick: game.index != null ? () => onOpenGame(game.index) : undefined,
+              },
+                h(MiniBoard, {size: 5}),
+                h('span', {class: 'wb-library-drawer__item-main'},
+                  h('strong', {}, game.title || '未命名对局'),
+                  h('small', {}, [
+                    game.source || 'play',
+                    dateText(game.updatedAt || game.createdAt),
+                    game.result,
+                  ].filter(Boolean).join(' · ')),
+                ),
+                game.index === gameIndex && h('em', {class: 'active'}, '当前'),
               ),
             ),
           ),
@@ -204,11 +433,13 @@ export default class LibrarySideDrawer extends Component {
 
   render({
     open = false,
-    type = 'games',
+    type = 'history',
     onClose = () => {},
     onSwitch = () => {},
   }) {
     if (!open) return null
+    let activeType = this.normalizeType(type)
+    let isProblemLibrary = activeType === 'problems'
 
     return h('div', {
       'data-testid': 'library-side-drawer',
@@ -222,31 +453,37 @@ export default class LibrarySideDrawer extends Component {
       }),
       h('aside', {class: 'wb-library-drawer'},
         h('header', {class: 'wb-library-drawer__header'},
-          h('div', {},
-            h('span', {class: 'wb-library-drawer__eyebrow'}, '资料库'),
-            h('h2', {}, type === 'games' ? '棋谱库' : '错题库'),
-          ),
+          h('h2', {}, isProblemLibrary ? '错题库' : '资料库'),
           h('button', {
             type: 'button',
             class: 'wb-library-drawer__close',
             onClick: onClose,
           }, '×'),
         ),
-        h('div', {class: 'wb-library-drawer__tabs'},
+        !isProblemLibrary && h('div', {class: 'wb-library-drawer__tabs'},
           h('button', {
             type: 'button',
-            class: type === 'games' ? 'active' : '',
-            onClick: () => onSwitch('games'),
+            class: activeType === 'history' ? 'active' : '',
+            onClick: () => onSwitch('history'),
+          }, '历史记录'),
+          h('button', {
+            type: 'button',
+            class: activeType === 'kifu' ? 'active' : '',
+            onClick: () => onSwitch('kifu'),
           }, '棋谱库'),
           h('button', {
             type: 'button',
-            class: type === 'problems' ? 'active' : '',
-            onClick: () => onSwitch('problems'),
-          }, '错题库'),
+            class: activeType === 'game-records' ? 'active' : '',
+            onClick: () => onSwitch('game-records'),
+          }, '对局库'),
         ),
-        type === 'games'
-          ? this.renderGameLibrary()
-          : this.renderProblemLibrary(),
+        activeType === 'problems'
+          ? this.renderProblemLibrary()
+          : activeType === 'kifu'
+            ? this.renderKifuLibrary()
+            : activeType === 'game-records'
+              ? this.renderGameRecordLibrary()
+              : this.renderHistory(),
       ),
     )
   }

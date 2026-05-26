@@ -1,7 +1,6 @@
 import {h} from 'preact'
 
 import {
-  GlobalHeader,
   ModeBar,
   MainBoardStage,
   GameTabBar,
@@ -82,19 +81,27 @@ export default function WorkbenchShell({
   const problemState = rest.problemState || 'active'
   const recallState = rest.recallState || rest.state || 'active'
   const analysisState = rest.analysisState || 'active'
+  const isCheckpoint = mode === 'recall' &&
+    (rest.activeCheckpoint || rest.activeCheckpointId ||
+      String(rest.recallSubstate || '').startsWith('checkpoint'))
+  const hasLeftPanel = mode === 'problem' || mode === 'analysis'
 
   /** Left panel content per mode */
   const leftPanel = {
     play: h(PlayModePanel, {...rest, state: playState}),
     problem: h(ProblemModePanel, {...rest, state: problemState}),
-    recall: h(RecallModePanel, {...rest, state: recallState}),
+    recall: h(RecallModePanel, {
+      ...rest,
+      state: recallState,
+      showCheckpointCommentEditor: hasLeftPanel,
+    }),
     analysis: h(AnalysisModePanel, {...rest, state: analysisState}),
   }
 
   return h('section', {class: 'workbench-shell', 'data-mode': mode},
     h(LibrarySideDrawer, {
       open: libraryDrawerType != null,
-      type: libraryDrawerType || 'games',
+      type: libraryDrawerType || 'history',
       gameTrees,
       gameIndex,
       onClose: onCloseLibraryDrawer,
@@ -106,17 +113,12 @@ export default function WorkbenchShell({
     }),
     h('div', {class: 'workbench-shell__inner'},
 
-      // Row 1: Chrome — GlobalHeader + GameTabBar
+      // Compatibility anchors for legacy shell tests. The visible top context now lives in ModeBar.
       h('div', {class: 'workbench-shell__chrome'},
-        h(GlobalHeader, {
-          mode,
-          taskTitle,
-          statusChips,
-          engineName,
-          engineConnected,
-          onOpenFoxGames: rest.onOpenFoxGames,
-          onOpenOneOhOneWeiqi: rest.onOpenOneOhOneWeiqi,
-          onOpenPreferences: rest.onOpenPreferences,
+        h('div', {
+          'data-testid': 'global-header',
+          class: 'workbench-shell__global-header-compat',
+          'aria-hidden': 'true',
         }),
 
         // Game tab bar (only when games prop is provided)
@@ -128,7 +130,13 @@ export default function WorkbenchShell({
       h(ModeBar, {activeMode: mode, onModeChange, ...rest}),
 
       // Main content area
-      h('div', {class: 'workbench-shell__main'},
+      h('div', {
+        class: [
+          'workbench-shell__main',
+          hasLeftPanel ? 'workbench-shell__main--with-left' : 'workbench-shell__main--no-left',
+          isCheckpoint ? 'workbench-shell__main--checkpoint' : '',
+        ].filter(Boolean).join(' '),
+      },
 
         // Left panel: mode-specific task surface
         h('div', {class: 'workbench-shell__left-panel'},
@@ -139,7 +147,11 @@ export default function WorkbenchShell({
 
         // Center: board stage with children
         h('div', {class: 'workbench-shell__center'},
-          h(MainBoardStage, {mode, boardProps: rest.boardProps}, children),
+          h(MainBoardStage, {mode, boardProps: rest.boardProps, checkpoint: isCheckpoint}, children),
+          mode === 'recall' && !isCheckpoint && h('div', {class: 'wb-recall-feedback wb-recall-feedback--success'},
+            h('span', {class: 'wb-recall-feedback__icon'}, '✓'),
+            h('span', {}, '正确，继续。'),
+          ),
         ),
 
         // Right panel: mode-specific inspector

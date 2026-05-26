@@ -567,7 +567,7 @@ class TrainingWorkbenchContainer extends Component {
       onOpenFoxGames: handleOpenFoxGames,
       onOpenOneOhOneWeiqi: handleOpenOneOhOneWeiqi,
       onOpenPreferences: handleOpenPreferences,
-      onOpenGameLibrary: () => this.setState({libraryDrawerType: 'games'}),
+      onOpenGameLibrary: () => this.setState({libraryDrawerType: 'history'}),
       onOpenWrongProblems: () => this.setState({libraryDrawerType: 'problems'}),
       onCloseLibraryDrawer: () => this.setState({libraryDrawerType: null}),
       onSwitchLibraryDrawer: (libraryDrawerType) =>
