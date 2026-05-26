@@ -9,6 +9,25 @@ Use this workflow when Workbench UI already exists visually and the task is to c
 
 This workflow proves that user actions change backend state and backend state projects back into UI. It is not for pure visual fidelity; use `$frontend-visual-workflow` for that.
 
+## Checklist-Driven Dispatch
+
+The planner writes `docs/.workflow-checklist.md`. The main agent MUST follow this loop on every turn:
+
+1. Read `docs/.workflow-checklist.md`.
+2. Find the first `- [ ]` step.
+3. Dispatch the corresponding role for that step.
+4. After the subagent returns, check off the step: `- [x]`.
+5. If a review step returns REQUEST_CHANGES or BLOCK:
+   - Add a retry entry in `## Retries`.
+   - Un-check the upstream step (set back to `- [ ]`).
+   - Re-dispatch the upstream step with review feedback appended.
+   - Maximum 3 retries per step. After 3 retries, mark FAILED and stop.
+6. Write the updated checklist back to `docs/.workflow-checklist.md`.
+7. If there is a next unchecked step, immediately dispatch it in the same turn. Do not stop to report progress or wait for user confirmation between steps.
+8. When all steps are checked, report completion to the user.
+
+The main agent MUST NOT stop between steps unless all steps are done or a step has FAILED after 3 retries.
+
 ## Source Of Truth
 
 Use current documents in this priority order:

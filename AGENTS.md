@@ -37,9 +37,21 @@ Phase Intake / Slice Planner 的产物必须是 step 计划，而不是一个总
 Step | Do | Mode | Depends on | Can run with | Locks / owner | Next role
 ```
 
-主代理必须按 step 计划调度后续 workflow：同一 dotted step 组（如 `step2.1..2.N`）且写入/测试范围不冲突的步骤可以并行；共享写入文件必须指定一个 serial integrator step。除非 planner 明确标记步骤不可拆，否则不得把多个 ready steps 合并成一个 umbrella step。
+### Checklist Artifact（不可跳过）
 
-开始编辑前，主代理只需要说明当前 `workflow`、`step`、写入范围和验证命令。归档、draft、pending-confirmation 或 superseded contract 只能作为背景资料，不能覆盖当前 product / architecture 真源。
+Planner 必须同时写 `docs/.workflow-checklist.md` 作为持久化任务表。主代理在每个 turn 执行以下循环：
+
+1. 读 `docs/.workflow-checklist.md`
+2. 找到第一个 `- [ ]` 步骤
+3. 调度对应角色执行该步骤
+4. 步骤完成后立即勾选 `- [x]`，写回文件
+5. 审查步骤返回 REQUEST_CHANGES 时：在 `## Retries` 加重试记录，回退上游步骤为 `- [ ]`，附审查反馈重新调度（最多 3 次）
+6. 继续下一个未勾选步骤，**不得在步骤之间停下来汇报或等待确认**
+7. 全部勾选后向用户报告完成
+
+主代理**只做编排和勾选**：读 checklist → 调度 sub-agent → 勾选 → 写回 → 读 checklist → 下一步。循环到全部完成或某步骤 3 次重试耗尽为止。
+
+除非 planner 明确标记步骤不可拆，否则不得把多个 ready steps 合并成一个 umbrella step。
 
 `AGENTS.md` 只保留仓库级路由、角色类型、模型档位和硬边界。需要调整具体步骤、上下游字段、切片规则、审查规则或视觉/Workbench 流程细节时，修改对应 workflow skill。
 
