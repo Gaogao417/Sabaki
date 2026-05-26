@@ -61,7 +61,7 @@ UI control event
 
 5. Test review
    - Rejects callback-only fake green tests, wrong-layer mocks, reverse-contract tests, and tests that manually mutate asserted state.
-   - This is a normal review step, not an independent approval role.
+   - This is a normal review step inside the workflow.
 
 6. `$implementation-agent`
    - Implements minimal wiring against the step plan and tests.

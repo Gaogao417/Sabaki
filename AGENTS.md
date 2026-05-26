@@ -19,7 +19,7 @@ Workflow 选择：
 Workflow skill 负责 step 调度、上下游字段和并行条件。角色全部作为主代理或明确分派的 worker skill 执行；不要要求不存在的独立审查代理。
 
 - **Workflow / planning skills**：`business-contract-workflow`、`workbench-wiring-workflow`、`frontend-visual-workflow`、`phase-intake-slice-planner`。
-- **Execution / review skills**：`test-writer`、`implementation-agent`、`frontend-design-source-reader`、`visual-test-writer`、`frontend-implementation-agent`。必要的 contract、audit、review 作为当前 workflow 下的普通步骤完成，不作为强制门禁。
+- **Execution / review skills**：`test-writer`、`implementation-agent`、`frontend-design-source-reader`、`visual-test-writer`、`frontend-implementation-agent`。必要的 contract、audit、review 作为当前 workflow 下的普通步骤完成。
 
 模型策略只允许 `gpt-5.5`，reasoning 只允许 `medium` / `high` / `xhigh`：
 
