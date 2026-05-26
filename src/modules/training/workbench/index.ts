@@ -19,6 +19,7 @@ export {
 
 export {
   createWorkbenchFlowService,
+  createSabakiModeEffects,
   type WorkbenchFlowService,
   type WorkbenchFlowServiceDeps,
   InvalidModeTransitionError,

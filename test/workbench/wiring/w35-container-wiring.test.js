@@ -126,6 +126,37 @@ function createNoopLegacyController() {
   }
 }
 
+function createSabakiModeEffects(sabaki) {
+  return {
+    enterAnalysis(input = {}) {
+      if (!sabaki.state || typeof sabaki.setState !== 'function') return
+
+      if (sabaki.state.mode !== 'analysis') {
+        sabaki.setMode?.('analysis')
+      } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
+        sabaki.setState({
+          editWorkspace: sabaki.createAnalysisWorkspace(),
+        })
+        sabaki.scheduleEditWorkspaceAnalysis?.()
+      } else if (sabaki.state.editWorkspace) {
+        sabaki.scheduleEditWorkspaceAnalysis?.(
+          sabaki.state.editWorkspace.activeTab || 'current',
+        )
+      }
+
+      const statePatch = {
+        showAnalysis: true,
+        analysisType: sabaki.state.analysisType || 'winrate',
+      }
+      if (input.selectedTool != null) statePatch.selectedTool = input.selectedTool
+      sabaki.setState(statePatch)
+    },
+    exitAnalysis() {
+      if (sabaki.state?.mode === 'analysis') sabaki.setMode?.('play')
+    },
+  }
+}
+
 /**
  * Create a test harness with real Container + real stores + spy services.
  */
@@ -166,6 +197,7 @@ function createHarness({
     },
     ...sabakiPatch,
   }
+  trainingContext.createModeEffects = () => createSabakiModeEffects(sabaki)
 
   const container = new TrainingWorkbenchContainer({ sabaki })
   container.props = { sabaki }

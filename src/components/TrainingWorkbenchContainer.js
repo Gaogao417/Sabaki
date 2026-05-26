@@ -3,7 +3,6 @@ import { h, Component } from 'preact'
 import WorkbenchShell from './WorkbenchShell.js'
 import { computeModeBarPolicy, getModeTransitionAction } from '../modules/training/workbench/workbenchUiPolicy.ts'
 import { projectGobanProps } from '../modules/training/workbench/projectGobanProps.ts'
-import { createSabakiModeEffects } from '../modules/training/workbench/workbenchFlowService.ts'
 import { createScratchEditExecutionContext } from '../modules/workbench/contracts/index.ts'
 
 const DEFAULT_PLAY_PLAYER_CONFIG = Object.freeze({
@@ -866,7 +865,12 @@ class TrainingWorkbenchContainer extends Component {
       }
       if (this._modeEffectsFlowService === flowService) return
 
-      flowService.setModeEffects(createSabakiModeEffects(sabaki))
+      const modeEffects = typeof ctx.createModeEffects === 'function'
+        ? ctx.createModeEffects()
+        : ctx.modeEffects
+      if (!modeEffects) return
+
+      flowService.setModeEffects(modeEffects)
       this._modeEffectsFlowService = flowService
     } catch (_e) {
       // Test harnesses may provide partial service surfaces.

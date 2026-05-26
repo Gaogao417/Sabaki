@@ -8,6 +8,7 @@ export {
   createWorkbenchTabService,
   createWorkbenchPhaseService,
   createWorkbenchFlowService,
+  createSabakiModeEffects,
   VALID_PHASE_TRANSITIONS,
   PHASE_TRANSITION_RESULT,
   InvalidPhaseTransitionError,
