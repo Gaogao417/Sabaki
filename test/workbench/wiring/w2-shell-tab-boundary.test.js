@@ -330,7 +330,7 @@ describeFlow('W2-T33: snapshot creates task with origin.provider=snapshot', () =
       },
     })
     const service = createWorkbenchFlowService(deps)
-    deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_parent'}))
+    deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_parent'}))
 
     await service.snapshotFromCurrentContext('tab_1')
 
@@ -352,7 +352,7 @@ describeFlow('W2-T33: snapshot creates task with origin.provider=snapshot', () =
       },
     })
     const service = createWorkbenchFlowService(deps)
-    deps.store.addTab(makeTab({id: 'tab_1', mode: 'problem', taskId: 'task_original'}))
+    deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_original'}))
 
     await service.snapshotFromCurrentContext('tab_1')
 
@@ -374,7 +374,7 @@ describeFlow('W2-T33: snapshot creates task with origin.provider=snapshot', () =
     const service = createWorkbenchFlowService(deps)
     deps.store.addTab(makeTab({
       id: 'tab_1',
-      mode: 'recall',
+      mode: 'analysis',
       taskId: 'task_1',
       activeAttemptId: 'att_42',
     }))
@@ -397,7 +397,7 @@ describeFlow('W2-T33: snapshot creates task with origin.provider=snapshot', () =
       },
     })
     const service = createWorkbenchFlowService(deps)
-    deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'}))
+    deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
     await service.snapshotFromCurrentContext('tab_1')
 

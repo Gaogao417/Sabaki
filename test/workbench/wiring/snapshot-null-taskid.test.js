@@ -309,7 +309,7 @@ describe('Snapshot Null TaskId (T-SNAPSHOT-FREEPLAY)', function () {
     const harness = createHarness({
       tabId: 'tab_default',
       taskId: null,
-      mode: 'play',
+      mode: 'analysis',
     })
 
     // This must NOT throw. Use try/catch because assert.doesNotThrow does not
@@ -338,7 +338,7 @@ describe('Snapshot Null TaskId (T-SNAPSHOT-FREEPLAY)', function () {
     const harness = createHarness({
       tabId: 'tab_default',
       taskId: null,
-      mode: 'play',
+      mode: 'analysis',
     })
 
     const result = await harness.flowService.snapshotFromCurrentContext('tab_default')
@@ -367,7 +367,7 @@ describe('Snapshot Null TaskId (T-SNAPSHOT-FREEPLAY)', function () {
     const harness = createHarness({
       tabId: 'tab_default',
       taskId: null,
-      mode: 'play',
+      mode: 'analysis',
     })
 
     await harness.flowService.snapshotFromCurrentContext('tab_default')

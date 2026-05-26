@@ -600,16 +600,28 @@ describe('workbenchFlowService', () => {
     })
   })
 
-  describe('snapshotFromCurrentContext — any mode → new tab', () => {
-    const allModes = ['play', 'problem', 'recall', 'analysis']
+  describe('snapshotFromCurrentContext — analysis → new tab', () => {
+    it('works from analysis mode, original tab unchanged', async () => {
+      const deps = createMockDeps()
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis'}))
 
-    for (const mode of allModes) {
-      it(`works from ${mode} mode, original tab unchanged`, async () => {
+      await service.snapshotFromCurrentContext('tab_1')
+
+      const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
+      assert.strictEqual(tab.mode, 'analysis')
+    })
+
+    for (const mode of ['play', 'problem', 'recall']) {
+      it(`rejects snapshot from ${mode} mode and preserves original tab`, async () => {
         const deps = createMockDeps()
         const service = createWorkbenchFlowService(deps)
         deps.store.addTab(makeTab({id: 'tab_1', mode}))
 
-        await service.snapshotFromCurrentContext('tab_1')
+        await assert.rejects(
+          () => service.snapshotFromCurrentContext('tab_1'),
+          /Invalid mode transition/,
+        )
 
         const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
         assert.strictEqual(tab.mode, mode)
@@ -619,7 +631,7 @@ describe('workbenchFlowService', () => {
     it('creates a new child tab', async () => {
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis'}))
 
       const newTab = await service.snapshotFromCurrentContext('tab_1')
 
@@ -802,28 +814,42 @@ describe('workbenchFlowService', () => {
       }
     }
 
-    describe('C21-C24: snapshotFromCurrentContext works from each mode', () => {
-      const modes = [
+    describe('C21-C24: snapshotFromCurrentContext is analysis-only', () => {
+      it('C24: creates TrainingTask and new tab from analysis mode, original tab unchanged', async () => {
+        const deps = createE2EMockDeps()
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({id: 'tab_orig', mode: 'analysis', taskId: 'task_1'}))
+
+        const newTab = await service.snapshotFromCurrentContext('tab_orig')
+
+        // New tab created
+        assert.ok(newTab, 'should return a new tab')
+        assert.strictEqual(newTab.parentTabId, 'tab_orig')
+
+        // A task was created
+        assert.ok(deps.createdTasks.length >= 1, 'should create at least one task')
+
+        // Original tab mode preserved
+        const origTab = deps.store.getState().tabs.find(t => t.id === 'tab_orig')
+        assert.strictEqual(origTab.mode, 'analysis', 'original tab should remain in analysis mode')
+      })
+
+      for (const {mode, label} of [
         {mode: 'play', label: 'C21'},
         {mode: 'problem', label: 'C22'},
         {mode: 'recall', label: 'C23'},
-        {mode: 'analysis', label: 'C24'},
-      ]
-
-      for (const {mode, label} of modes) {
-        it(`${label}: creates TrainingTask and new tab from ${mode} mode, original tab unchanged`, async () => {
+      ]) {
+        it(`${label}: rejects snapshot from ${mode} mode without creating a task`, async () => {
           const deps = createE2EMockDeps()
           const service = createWorkbenchFlowService(deps)
           deps.store.addTab(makeTab({id: 'tab_orig', mode, taskId: 'task_1'}))
 
-          const newTab = await service.snapshotFromCurrentContext('tab_orig')
+          await assert.rejects(
+            () => service.snapshotFromCurrentContext('tab_orig'),
+            /Invalid mode transition/,
+          )
 
-          // New tab created
-          assert.ok(newTab, 'should return a new tab')
-          assert.strictEqual(newTab.parentTabId, 'tab_orig')
-
-          // A task was created
-          assert.ok(deps.createdTasks.length >= 1, 'should create at least one task')
+          assert.strictEqual(deps.createdTasks.length, 0, 'should not create a task')
 
           // Original tab mode preserved
           const origTab = deps.store.getState().tabs.find(t => t.id === 'tab_orig')
@@ -836,7 +862,7 @@ describe('workbenchFlowService', () => {
       it('created task origin.provider is "snapshot"', async () => {
         const deps = createE2EMockDeps()
         const service = createWorkbenchFlowService(deps)
-        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'}))
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
         await service.snapshotFromCurrentContext('tab_1')
 
@@ -851,7 +877,7 @@ describe('workbenchFlowService', () => {
       it('created task origin.parentTaskId matches original tab taskId', async () => {
         const deps = createE2EMockDeps()
         const service = createWorkbenchFlowService(deps)
-        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_parent'}))
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_parent'}))
 
         await service.snapshotFromCurrentContext('tab_1')
 
@@ -867,7 +893,7 @@ describe('workbenchFlowService', () => {
         const service = createWorkbenchFlowService(deps)
         deps.store.addTab(makeTab({
           id: 'tab_1',
-          mode: 'play',
+          mode: 'analysis',
           taskId: 'task_1',
           activeAttemptId: 'att_42',
         }))
@@ -881,7 +907,7 @@ describe('workbenchFlowService', () => {
       it('omits parentAttemptId when tab has no activeAttemptId', async () => {
         const deps = createE2EMockDeps()
         const service = createWorkbenchFlowService(deps)
-        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'}))
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
         await service.snapshotFromCurrentContext('tab_1')
 
@@ -895,7 +921,7 @@ describe('workbenchFlowService', () => {
       it('returned tab has parentTabId set to original tab id', async () => {
         const deps = createE2EMockDeps()
         const service = createWorkbenchFlowService(deps)
-        deps.store.addTab(makeTab({id: 'tab_original', mode: 'problem', taskId: 'task_1'}))
+        deps.store.addTab(makeTab({id: 'tab_original', mode: 'analysis', taskId: 'task_1'}))
 
         const newTab = await service.snapshotFromCurrentContext('tab_original')
 
@@ -907,7 +933,7 @@ describe('workbenchFlowService', () => {
       it('returned tab has mode set to "problem"', async () => {
         const deps = createE2EMockDeps()
         const service = createWorkbenchFlowService(deps)
-        deps.store.addTab(makeTab({id: 'tab_1', mode: 'recall', taskId: 'task_1'}))
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
         const newTab = await service.snapshotFromCurrentContext('tab_1')
 
@@ -919,7 +945,7 @@ describe('workbenchFlowService', () => {
       it('task creation is wrapped in a transaction', async () => {
         const deps = createE2EMockDeps()
         const service = createWorkbenchFlowService(deps)
-        deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'}))
+        deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
         await service.snapshotFromCurrentContext('tab_1')
 

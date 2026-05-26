@@ -11,6 +11,7 @@ function createSabakiStub(overrides = {}) {
   }
 
   const workbenchStore = {
+    getState: () => ({tabs: [], activeTabId: null}),
     subscribe: () => () => {},
   }
 

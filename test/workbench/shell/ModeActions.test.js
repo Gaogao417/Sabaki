@@ -59,7 +59,7 @@ describe('ModeActions (T-3)', () => {
   })
 
   // --- T-3c: mode='recall' renders quiet top actions ---
-  it('T-3c: mode=recall renders 3 buttons (analysis, end, snapshot)', () => {
+  it('T-3c: mode=recall renders 2 buttons (analysis, end)', () => {
     const {queryAllByTestId} = renderToDom(
       h(ModeActions, {
         mode: 'recall',
@@ -70,7 +70,7 @@ describe('ModeActions (T-3)', () => {
     )
 
     const buttons = queryAllByTestId('mode-action-btn')
-    assert.strictEqual(buttons.length, 3, `Expected 3 buttons for recall mode, got ${buttons.length}`)
+    assert.strictEqual(buttons.length, 2, `Expected 2 buttons for recall mode, got ${buttons.length}`)
   })
 
   // --- T-3d: mode='analysis' renders 3 buttons ---
@@ -183,24 +183,36 @@ describe('ModeActions (T-3)', () => {
 })
 
 describe('ModeBar integration (T-3g)', () => {
-  // --- T-3g: ModeBar integrates ModeActions with mode and callback props ---
-  // WIRING: ModeBar passes correct props to ModeActions
+  // --- T-3g: ModeBar exposes mode-scoped action commands ---
+  // WIRING: ModeBar owns the six-screen topbar actions and keeps Snapshot analysis-only.
   // Production subject: ModeBar component (existing)
-  // Production bug: ModeBar does not integrate ModeActions
-  it('T-3g: ModeBar integrates ModeActions with mode and callback props', () => {
-    const {queryAllByTestId} = renderToDom(
+  it('T-3g: ModeBar exposes Snapshot only for analysis mode', () => {
+    const recallResult = renderToDom(
       h(ModeBar, {
-        activeMode: 'play',
+        activeMode: 'recall',
         onModeChange: () => {},
         onSnapshot: () => {},
       })
     )
+    assert.strictEqual(
+      recallResult.queryByTestId('mode-action-snapshot'),
+      null,
+      'Recall ModeBar must not expose Snapshot; snapshot is analysis-only',
+    )
 
-    // ModeBar should render mode action buttons from ModeActions integration.
-    // When ModeActions is integrated, these buttons will appear.
-    const actionBtns = queryAllByTestId('mode-action-btn')
-    assert.ok(actionBtns.length >= 1,
-      'ModeBar should render ModeActions buttons with data-testid="mode-action-btn"')
+    let snapshotCalls = 0
+    const analysisResult = renderToDom(
+      h(ModeBar, {
+        activeMode: 'analysis',
+        onModeChange: () => {},
+        onSnapshot: () => { snapshotCalls += 1 },
+      })
+    )
+    const snapshotButton = analysisResult.queryByTestId('mode-action-snapshot')
+    assert.ok(snapshotButton, 'Analysis ModeBar must expose Snapshot')
+
+    snapshotButton.click()
+    assert.strictEqual(snapshotCalls, 1, 'Analysis Snapshot button must call onSnapshot')
   })
 })
 
@@ -261,7 +273,7 @@ describe('ModeActions Chinese labels (T-U2-4)', () => {
   // Production subject: ModeActions component
   // Production import path: src/components/workbench/shell/ModeActions.js
   // Production bug: Recall buttons still use English labels
-  //   instead of Chinese (进入复盘/结束回忆/Snapshot)
+  //   instead of Chinese (进入复盘/结束回忆)
   // Controlled dependencies: props are inline
   it('T-U2-4c: Recall mode uses Chinese labels', () => {
     const {container} = renderToDom(
@@ -276,7 +288,7 @@ describe('ModeActions Chinese labels (T-U2-4)', () => {
     const text = container.textContent
     assert.ok(text.includes('进入复盘'), 'Expected Recall label "进入复盘"')
     assert.ok(text.includes('结束回忆'), 'Expected Recall label "结束回忆"')
-    assert.ok(text.includes('Snapshot'), 'Expected Recall label "Snapshot"')
+    assert.ok(!text.includes('Snapshot'), 'Recall mode must not expose Snapshot; snapshot is analysis-only')
   })
 
   // --- T-U2-4d: Analysis labels ---

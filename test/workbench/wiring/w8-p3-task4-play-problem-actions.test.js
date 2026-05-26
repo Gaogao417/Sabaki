@@ -663,7 +663,7 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
     describe('T4-06: snapshot creates new tab (mode=problem, parentTabId set)', function () {
       it('real flowService.snapshotFromCurrentContext creates new tab', async function () {
         const harness = createTransitionHarness({
-          tabs: [makePlayTab({id: 'tab_snap_src', taskId: 'task_snap'})],
+          tabs: [makePlayTab({id: 'tab_snap_src', taskId: 'task_snap', mode: 'analysis'})],
         })
 
         // Before: only one tab
@@ -693,16 +693,16 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
     describe('T4-07: snapshot preserves current tab mode', function () {
       it('after snapshot, original tab mode is unchanged', async function () {
         const harness = createTransitionHarness({
-          tabs: [makeProblemTab({id: 'tab_snap_orig', taskId: 'task_snap_orig'})],
+          tabs: [makeProblemTab({id: 'tab_snap_orig', taskId: 'task_snap_orig', mode: 'analysis'})],
         })
 
-        assert.strictEqual(harness.workbenchStore.getState().tabs[0].mode, 'problem')
+        assert.strictEqual(harness.workbenchStore.getState().tabs[0].mode, 'analysis')
 
         await harness.flowService.snapshotFromCurrentContext('tab_snap_orig')
 
         const originalTab = harness.workbenchStore.getState().tabs.find(t => t.id === 'tab_snap_orig')
-        assert.strictEqual(originalTab.mode, 'problem',
-          'After snapshot, original tab mode must still be problem -- Contract T4-07')
+        assert.strictEqual(originalTab.mode, 'analysis',
+          'After snapshot, original tab mode must still be analysis -- Contract T4-07')
       })
     })
 
@@ -833,7 +833,7 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
         const workbenchStore = createWorkbenchStore({logger})
         const runtimeStore = createTrainingRuntimeStore({logger})
 
-        workbenchStore.addTab(makePlayTab({id: 'tab_sub_3', taskId: 'task_sub_3'}))
+        workbenchStore.addTab(makePlayTab({id: 'tab_sub_3', taskId: 'task_sub_3', mode: 'analysis'}))
         workbenchStore.setActiveTab('tab_sub_3')
 
         const snapshotService = createSpySnapshotService()

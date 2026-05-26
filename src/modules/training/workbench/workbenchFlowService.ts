@@ -581,6 +581,7 @@ export function createWorkbenchFlowService(deps: WorkbenchFlowServiceDeps): Work
 
   async function snapshotFromCurrentContext(tabId: string): Promise<WorkbenchTab> {
     const tab = getTab(tabId)
+    assertTransition(tab, 'snapshot')
 
     logger?.info('flow.snapshotFromCurrentContext', 'Snapshot from current context', {
       tabId,

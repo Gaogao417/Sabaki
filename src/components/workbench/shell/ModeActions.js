@@ -20,7 +20,6 @@ const MODE_BUTTONS = {
   recall: [
     {testId: 'mode-action-analysis', label: '进入复盘', callback: 'onAnalysis'},
     {testId: 'mode-action-end', label: '结束回忆', callback: 'onEnd'},
-    {testId: 'mode-action-snapshot', label: 'Snapshot', callback: 'onSnapshot'},
   ],
   analysis: [
     {testId: 'mode-action-snapshot', label: 'Snapshot / 派生新 Task', callback: 'onSnapshot'},

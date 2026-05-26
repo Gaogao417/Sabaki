@@ -297,24 +297,25 @@ describeIf('modeTransitions', () => {
   })
 
   // ========================================================
-  // P1G-T15: snapshot from any mode -> targetMode unchanged
-  // Contract Section 6, state machine row 11
+  // P1G-T15: snapshot is analysis-only -> targetMode unchanged
+  // Contract source: docs/design/workbench-mode-orchestration-contract.md
+  // "analysis -> snapshot problem child tab"
   // ========================================================
-  describe('P1G-T15: resolveTransition(any, snapshot)', () => {
-    const modes = ['play', 'problem', 'recall', 'analysis']
+  describe('P1G-T15: resolveTransition(snapshot)', () => {
+    it('allows snapshot from analysis and leaves current mode unchanged', () => {
+      const result = resolveTransition(baseInput({from: 'analysis', event: 'snapshot'}))
+      assert.strictEqual(result.allowed, true)
+      assert.strictEqual(result.targetMode, 'analysis')
+      assert.ok(result.effects.includes('createNewTaskAndTab'),
+        `effects should include 'createNewTaskAndTab', got: ${JSON.stringify(result.effects)}`)
+    })
 
-    for (const mode of modes) {
-      it(`snapshot from ${mode}: allowed, targetMode unchanged`, () => {
+    for (const mode of ['play', 'problem', 'recall']) {
+      it(`rejects snapshot from ${mode}`, () => {
         const result = resolveTransition(baseInput({from: mode, event: 'snapshot'}))
-        assert.strictEqual(result.allowed, true)
-        assert.strictEqual(result.targetMode, mode,
-          `snapshot from ${mode} should keep targetMode as ${mode}`)
-      })
-
-      it(`snapshot from ${mode}: includes createNewTaskAndTab effect`, () => {
-        const result = resolveTransition(baseInput({from: mode, event: 'snapshot'}))
-        assert.ok(result.effects.includes('createNewTaskAndTab'),
-          `effects should include 'createNewTaskAndTab' for snapshot from ${mode}`)
+        assert.strictEqual(result.allowed, false)
+        assert.ok(typeof result.reason === 'string' && result.reason.length > 0,
+          'disallowed snapshot must provide a reason string')
       })
     }
   })
@@ -383,6 +384,12 @@ describeIf('modeTransitions', () => {
       assert.ok(events.includes('enterAnalysis'),
         `getAllowedEvents('play') should include 'enterAnalysis', got: ${JSON.stringify(events)}`)
     })
+
+    it('does not include snapshot', () => {
+      const events = getAllowedEvents('play')
+      assert.ok(!events.includes('snapshot'),
+        `getAllowedEvents('play') should not include 'snapshot', got: ${JSON.stringify(events)}`)
+    })
   })
 
   // ========================================================
@@ -406,6 +413,20 @@ describeIf('modeTransitions', () => {
         assert.ok(events.includes(ce),
           `getAllowedEvents('recall') should include '${ce}', got: ${JSON.stringify(events)}`)
       }
+    })
+
+    it('does not include snapshot', () => {
+      const events = getAllowedEvents('recall')
+      assert.ok(!events.includes('snapshot'),
+        `getAllowedEvents('recall') should not include 'snapshot', got: ${JSON.stringify(events)}`)
+    })
+  })
+
+  describe('P1G-T20b: getAllowedEvents(analysis)', () => {
+    it('includes snapshot', () => {
+      const events = getAllowedEvents('analysis')
+      assert.ok(events.includes('snapshot'),
+        `getAllowedEvents('analysis') should include 'snapshot', got: ${JSON.stringify(events)}`)
     })
   })
 

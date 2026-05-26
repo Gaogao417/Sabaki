@@ -383,7 +383,7 @@ describeFlow('W2 State Transitions: workbenchFlowService', () => {
     it('creates a new task', async () => {
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
       await service.snapshotFromCurrentContext('tab_1')
 
@@ -409,7 +409,7 @@ describeFlow('W2 State Transitions: workbenchFlowService', () => {
         },
       })
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
       await service.snapshotFromCurrentContext('tab_1')
 
@@ -420,12 +420,12 @@ describeFlow('W2 State Transitions: workbenchFlowService', () => {
     it('original tab mode remains unchanged', async () => {
       const deps = createMockDeps()
       const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play', taskId: 'task_1'}))
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'analysis', taskId: 'task_1'}))
 
       await service.snapshotFromCurrentContext('tab_1')
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
-      assert.strictEqual(tab.mode, 'play', 'original tab mode must not change')
+      assert.strictEqual(tab.mode, 'analysis', 'original tab mode must not change')
     })
   })
 

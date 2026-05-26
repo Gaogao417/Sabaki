@@ -67,8 +67,12 @@ export function resolveTransition(input: TransitionInput): TransitionResult {
     hasActiveRecallSession, hasTask, hasCheckpoint, isCorrectionSubmitted,
     isCheckpointAiRevealed, isCheckpointSavedOrSkipped, hasAnalysisReturnTarget } = input
 
-  // --- snapshot: allowed from any mode, targetMode unchanged ---
+  // --- snapshot: analysis-only, targetMode unchanged ---
   if (event === 'snapshot') {
+    if (from !== 'analysis') {
+      return { allowed: false, reason: `snapshot is only allowed from analysis, got ${from}` }
+    }
+
     return {
       allowed: true,
       targetMode: from,
@@ -235,9 +239,9 @@ export function getAllowedEvents(mode: WorkbenchMode, _recallSubstate?: RecallSu
   switch (mode) {
     case 'play':
     case 'problem':
-      return ['submit', 'enterAnalysis', 'snapshot']
+      return ['submit', 'enterAnalysis']
     case 'recall':
-      return ['enterAnalysis', 'snapshot', 'startCheckpoint', 'revealAi', 'commentCheckpoint', 'resumeRecall']
+      return ['enterAnalysis', 'startCheckpoint', 'revealAi', 'commentCheckpoint', 'resumeRecall']
     case 'analysis':
       return ['returnFromAnalysis', 'restartAttempt', 'snapshot']
     default:

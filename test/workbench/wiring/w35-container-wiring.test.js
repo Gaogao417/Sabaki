@@ -144,6 +144,7 @@ function createHarness({
   }
 
   const sabaki = {
+    openDrawer() {},
     getTrainingContext() {
       return trainingContext
     },
@@ -448,7 +449,7 @@ describe('W3.5 Container Wiring', function () {
         tabs: [makeTab({id: 'tab_1', mode: 'play'})],
       })
 
-      await shellProps.onNewGame()
+      await shellProps.onAddGame()
 
       assert.strictEqual(
         tabService.calls.openTask.length,

@@ -535,9 +535,9 @@ describe('W8-P3 Task5: Controller State Transition (T5-04..T5-08)', function () 
   // Production subject: workbenchFlowService.snapshotFromCurrentContext
   // Real: workbenchStore, flowService
   // Mocked: snapshotService, repository, tabService
-  it('T5-06: snapshot creates new tab with mode=problem and parentTabId', async function () {
+  it('T5-06: snapshot creates new tab with mode=problem and parentTabId from analysis', async function () {
     const harness = createFlowHarness({
-      tabs: [makeTab({ id: 'tab_r1', mode: 'recall' })],
+      tabs: [makeTab({ id: 'tab_r1', mode: 'analysis' })],
     })
 
     const wsBefore = harness.workbenchStore.getState()
@@ -561,19 +561,19 @@ describe('W8-P3 Task5: Controller State Transition (T5-04..T5-08)', function () 
     assert.strictEqual(storedNewTab.parentTabId, 'tab_r1')
   })
 
-  // T5-07: snapshot -> original tab mode stays 'recall'
+  // T5-07: snapshot -> original tab mode stays 'analysis'
   // Production subject: workbenchFlowService.snapshotFromCurrentContext
   // Real: workbenchStore
-  it('T5-07: snapshot preserves original tab mode as recall', async function () {
+  it('T5-07: snapshot preserves original tab mode as analysis', async function () {
     const harness = createFlowHarness({
-      tabs: [makeTab({ id: 'tab_r1', mode: 'recall' })],
+      tabs: [makeTab({ id: 'tab_r1', mode: 'analysis' })],
     })
 
     await harness.flowService.snapshotFromCurrentContext('tab_r1')
 
     const originalTab = harness.getTabById('tab_r1')
-    assert.strictEqual(originalTab.mode, 'recall',
-      'Original tab mode must remain "recall" after snapshot')
+    assert.strictEqual(originalTab.mode, 'analysis',
+      'Original tab mode must remain "analysis" after snapshot')
   })
 
   // T5-08: completeRecall -> runtimeStore.recallView === null
@@ -751,8 +751,8 @@ describe('W8-P3 Task5: Store Subscription (T5-11)', function () {
     assert.ok(notifyCount > beforeEnter,
       'workbenchStore subscriber must be notified after enterAnalysis')
 
-    // Reset for next: change mode back to recall for snapshot test
-    harness.workbenchStore.updateTab('tab_r1', { mode: 'recall' })
+    // Reset for next: change mode to analysis for snapshot test
+    harness.workbenchStore.updateTab('tab_r1', { mode: 'analysis' })
 
     // snapshot
     const beforeSnapshot = notifyCount
@@ -769,11 +769,12 @@ describe('W8-P3 Task5: Store Subscription (T5-11)', function () {
 
 describe('W8-P3 Task5: UI Command Mapping (T5-12, T5-13)', function () {
 
-  // T5-12: ModeActions recall renders onAnalysis + onEnd + onSnapshot buttons
+  // T5-12: ModeActions recall renders onAnalysis + onEnd buttons.
+  // Snapshot is analysis-only per workbench-mode-orchestration-contract.
   // Production subject: ModeActions (mode='recall')
   // Real: ModeActions, preact render
   // No mocks needed
-  it('T5-12: ModeActions recall renders analysis, end, and snapshot buttons', function () {
+  it('T5-12: ModeActions recall renders analysis and end buttons only', function () {
     const { queryByTestId, queryAllByTestId } = renderToDom(
       h(ModeActions, {
         mode: 'recall',
@@ -784,15 +785,15 @@ describe('W8-P3 Task5: UI Command Mapping (T5-12, T5-13)', function () {
     )
 
     const buttons = queryAllByTestId('mode-action-btn')
-    assert.strictEqual(buttons.length, 3,
-      'ModeActions recall must render 3 quiet top actions')
+    assert.strictEqual(buttons.length, 2,
+      'ModeActions recall must render 2 quiet top actions')
 
     const analysisBtn = queryByTestId('mode-action-analysis')
     assert.ok(analysisBtn, 'ModeActions recall must have button[data-testid="mode-action-analysis"]')
     assert.ok(queryByTestId('mode-action-end'),
       'ModeActions recall must have button[data-testid="mode-action-end"]')
-    assert.ok(queryByTestId('mode-action-snapshot'),
-      'ModeActions recall must have button[data-testid="mode-action-snapshot"]')
+    assert.strictEqual(queryByTestId('mode-action-snapshot'), null,
+      'ModeActions recall must not render snapshot; snapshot is analysis-only')
   })
 
   // T5-13: BottomActionBar recall renders only local recall controls
