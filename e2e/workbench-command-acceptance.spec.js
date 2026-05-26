@@ -306,6 +306,15 @@ async function installLibraryCommandHarness(page) {
         createdAt: now,
         updatedAt: now,
       },
+      visibleProblem: {
+        id: 'e2e_task_visible_problem_row',
+        rootPositionSgf: '(;SZ[19];B[dd])',
+        sideToMove: 'black',
+        prompt: 'E2E visible problem row prompt',
+        origin: {provider: 'local', externalId: 'e2e-visible-problem-row'},
+        createdAt: now,
+        updatedAt: now,
+      },
     }
     const taskById = new Map(
       Object.values(tasks).map((task) => [task.id, task]),
@@ -317,6 +326,8 @@ async function installLibraryCommandHarness(page) {
       loadTask: [],
       openTask: [],
       legacyThirdPartyCalls: [],
+      legacyStartProblemCalls: [],
+      legacySetModeCalls: [],
     }
 
     if (typeof ctx.taskImportService.importFoxGame !== 'function') {
@@ -345,6 +356,8 @@ async function installLibraryCommandHarness(page) {
     )
     const originalLoadTask = ctx.repository.loadTask?.bind(ctx.repository)
     const originalOpenTask = ctx.tabService.openTask.bind(ctx.tabService)
+    const originalStartProblem = window.__sabaki.startProblem?.bind(window.__sabaki)
+    const originalSetMode = window.__sabaki.setMode?.bind(window.__sabaki)
 
     ctx.taskImportService.importFoxGame = async (input) => {
       window.__sabaki.__e2eLibraryCommandHarness.imports.push({
@@ -384,15 +397,17 @@ async function installLibraryCommandHarness(page) {
     }
 
     ctx.tabService.openTask = async (opts) => {
-      const tab = await originalOpenTask(opts)
-      window.__sabaki.__e2eLibraryCommandHarness.openTask.push({
+      const record = {
         opts,
-        result: {
-          id: tab.id,
-          taskId: tab.taskId,
-          mode: tab.mode,
-        },
-      })
+        result: null,
+      }
+      window.__sabaki.__e2eLibraryCommandHarness.openTask.push(record)
+      const tab = await originalOpenTask(opts)
+      record.result = {
+        id: tab.id,
+        taskId: tab.taskId,
+        mode: tab.mode,
+      }
       return tab
     }
 
@@ -400,6 +415,20 @@ async function installLibraryCommandHarness(page) {
       window.__sabaki.__e2eLibraryCommandHarness.legacyThirdPartyCalls.push(
         panel,
       )
+    }
+
+    window.__sabaki.startProblem = async (problemId) => {
+      window.__sabaki.__e2eLibraryCommandHarness.legacyStartProblemCalls.push(
+        problemId,
+      )
+      if (originalStartProblem) return originalStartProblem(problemId)
+      return null
+    }
+
+    window.__sabaki.setMode = (mode, ...args) => {
+      window.__sabaki.__e2eLibraryCommandHarness.legacySetModeCalls.push(mode)
+      if (originalSetMode) return originalSetMode(mode, ...args)
+      return null
     }
 
     window.__sabaki.__e2eLibraryCommandHarness.restore = () => {
@@ -414,6 +443,8 @@ async function installLibraryCommandHarness(page) {
       }
       if (originalLoadTask) ctx.repository.loadTask = originalLoadTask
       ctx.tabService.openTask = originalOpenTask
+      if (originalStartProblem) window.__sabaki.startProblem = originalStartProblem
+      if (originalSetMode) window.__sabaki.setMode = originalSetMode
     }
   })
 }
@@ -427,6 +458,8 @@ async function getLibraryCommandHarness(page) {
       loadTask: calls.loadTask,
       openTask: calls.openTask,
       legacyThirdPartyCalls: calls.legacyThirdPartyCalls,
+      legacyStartProblemCalls: calls.legacyStartProblemCalls,
+      legacySetModeCalls: calls.legacySetModeCalls,
     }
   })
 }
@@ -698,6 +731,46 @@ test.describe('Workbench command acceptance', () => {
       expect(openedTaskIds).toEqual(
         expect.arrayContaining(['e2e_task_fox_synced', 'e2e_task_101_synced']),
       )
+    }).toPass({timeout: 5000})
+  })
+
+  test('visible library problem row opens a Workbench problem task without legacy startProblem', async ({
+    page,
+  }) => {
+    await installLibraryCommandHarness(page)
+    await setActiveWorkbenchTab(page, 'play')
+    await setLibraryProjection(page, {
+      problems: [{
+        id: 'e2e_task_visible_problem_row',
+        taskId: 'e2e_task_visible_problem_row',
+        title: 'E2E visible problem row',
+        type: 'best_move',
+      }],
+    })
+
+    await page.locator('[data-testid="open-wrong-problems-btn"]').evaluate(
+      (button) => button.click(),
+    )
+    await expect(
+      page.locator('[data-testid="library-side-drawer"]'),
+    ).toBeVisible()
+
+    const problemRow = page
+      .locator('[data-testid="library-side-drawer"] .wb-library-drawer__item button')
+      .filter({hasText: 'E2E visible problem row'})
+    await expect(problemRow).toBeVisible()
+    await problemRow.evaluate((button) => button.click())
+
+    await expect(async () => {
+      const calls = await getLibraryCommandHarness(page)
+      expect(calls.openTask.map((call) => call.opts)).toEqual(
+        expect.arrayContaining([{
+          taskId: 'e2e_task_visible_problem_row',
+          mode: 'problem',
+        }]),
+      )
+      expect(calls.legacyStartProblemCalls).toEqual([])
+      expect(calls.legacySetModeCalls.filter((mode) => mode === 'play')).toEqual([])
     }).toPass({timeout: 5000})
   })
 

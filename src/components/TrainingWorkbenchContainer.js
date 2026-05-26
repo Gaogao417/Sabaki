@@ -501,6 +501,44 @@ class TrainingWorkbenchContainer extends Component {
       await tabService.openTask({taskId: task.id})
     }
 
+    async function handleOpenLibraryProblem(problemId, problemRow = null) {
+      const {taskImportService, repository} = sabaki.getTrainingContext()
+      const row = problemRow && typeof problemRow === 'object'
+        ? problemRow
+        : null
+      const id = row?.problemId || row?.legacyProblemId || problemId
+      let taskId = row?.taskId || row?.trainingTaskId || null
+      const candidateTaskId = row?.id || (!row ? problemId : null)
+
+      if (!taskId && candidateTaskId && typeof repository?.loadTask === 'function') {
+        const existingTask = await repository.loadTask(candidateTaskId)
+        taskId = existingTask?.id || null
+      }
+
+      if (!taskId && row?.id && row.rootPositionSgf != null) {
+        taskId = row.id
+      }
+
+      if (!taskId) {
+        if (!id) {
+          throw new Error('Library problem row is missing an id')
+        }
+        if (typeof taskImportService?.createTaskFromLegacyProblem !== 'function') {
+          throw new Error('Library problem row requires taskImportService.createTaskFromLegacyProblem')
+        }
+
+        const task = await taskImportService.createTaskFromLegacyProblem({
+          problemId: id,
+        })
+        if (!task?.id) {
+          throw new Error('Legacy problem import did not return a TrainingTask')
+        }
+        taskId = task.id
+      }
+
+      await tabService.openTask({taskId, mode: 'problem'})
+    }
+
     function handleOpenPreferences(tab = 'general') {
       sabaki.setState({preferencesTab: tab})
       sabaki.openDrawer('preferences')
@@ -680,9 +718,9 @@ class TrainingWorkbenchContainer extends Component {
         this.setState({libraryDrawerType: null})
         await handleStartReviewSession()
       },
-      onStartProblem: async (id) => {
+      onStartProblem: async (id, problemRow) => {
         this.setState({libraryDrawerType: null})
-        await sabaki.startProblem(id)
+        await handleOpenLibraryProblem(id, problemRow)
       },
       // BottomActionBar shared handlers
       onUndo: handleUndo,

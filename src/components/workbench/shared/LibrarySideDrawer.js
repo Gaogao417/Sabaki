@@ -575,7 +575,7 @@ export default class LibrarySideDrawer extends Component {
             h('li', {key: problem.id || problem.title || index, class: 'wb-library-drawer__item'},
               h('button', {
                 type: 'button',
-                onClick: () => onStartProblem(problem.id),
+                onClick: () => onStartProblem(problem.id, problem),
               },
                 h('strong', {}, problem.title || `错题 ${String(problem.id || index).slice(0, 8)}`),
                 h('span', {}, problem.type || 'best_move'),

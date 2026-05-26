@@ -14,6 +14,20 @@ function createSabakiStub(overrides = {}) {
     getState: () => ({tabs: [], activeTabId: null}),
     subscribe: () => () => {},
   }
+  const trainingContext = {
+    runtimeStore,
+    workbenchStore,
+    legacyTrainingFlowController: {
+      showRecallHint: () => {},
+      skipRecallMove: () => {},
+      endRecallSession: () => {},
+      undoProblemMove: () => {},
+      submitProblemAttempt: () => {},
+      exitProblemMode: () => {},
+      advanceReview: () => {},
+    },
+    ...(overrides.trainingContext || {}),
+  }
 
   return {
     openDrawer: () => {},
@@ -21,19 +35,7 @@ function createSabakiStub(overrides = {}) {
     makeResign: () => {},
     undo: () => {},
     makeMove: () => {},
-    getTrainingContext: () => ({
-      runtimeStore,
-      workbenchStore,
-      legacyTrainingFlowController: {
-        showRecallHint: () => {},
-        skipRecallMove: () => {},
-        endRecallSession: () => {},
-        undoProblemMove: () => {},
-        submitProblemAttempt: () => {},
-        exitProblemMode: () => {},
-        advanceReview: () => {},
-      },
-    }),
+    getTrainingContext: () => trainingContext,
     ...overrides,
   }
 }
@@ -126,5 +128,85 @@ describe('TrainingWorkbenchContainer new game wiring', () => {
     const drawer = queryByTestId('library-side-drawer')
     assert.ok(drawer, 'Expected left library drawer to render')
     assert.ok(drawer.textContent.includes('错题库'))
+  })
+
+  it('opens visible problem rows through Workbench task tabs, not legacy startProblem', async () => {
+    const calls = {
+      createTaskFromLegacyProblem: [],
+      openTask: [],
+      openProblemTab: [],
+      startProblem: [],
+      setMode: [],
+    }
+    const sabaki = createSabakiStub({
+      trainingContext: {
+        taskImportService: {
+          async createTaskFromLegacyProblem(input) {
+            calls.createTaskFromLegacyProblem.push(input)
+            return {id: 'task_from_visible_problem_row'}
+          },
+        },
+        tabService: {
+          async openTask(input) {
+            calls.openTask.push(input)
+            return {id: 'tab_from_visible_problem_row', taskId: input.taskId, mode: input.mode}
+          },
+          async openProblemTab(problemId, options) {
+            calls.openProblemTab.push({problemId, options})
+            throw new Error('openProblemTab should not be called for visible Workbench problem rows')
+          },
+        },
+        repository: {
+          async loadTask() { return null },
+        },
+      },
+      async startProblem(id) {
+        calls.startProblem.push(id)
+        throw new Error('sabaki.startProblem should not be called for visible Workbench problem rows')
+      },
+      setMode(mode) {
+        calls.setMode.push(mode)
+      },
+    })
+
+    const {container, queryByTestId, fireEvent} = renderToDom(
+      h(TrainingWorkbenchContainer, {
+        sabaki,
+        mode: 'play',
+        gameTrees: [],
+        gameIndex: 0,
+        libraryProjection: {
+          problems: [{
+            id: 'legacy_problem_visible_row',
+            title: 'Visible problem row',
+            type: 'best_move',
+          }],
+        },
+      }),
+    )
+
+    fireEvent.click(queryByTestId('open-wrong-problems-btn'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const problemButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent.includes('Visible problem row'))
+    assert.ok(problemButton, 'Expected projected problem row button to render')
+
+    fireEvent.click(problemButton)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    assert.deepStrictEqual(calls.startProblem, [],
+      'visible Workbench problem rows must not call sabaki.startProblem')
+    assert.deepStrictEqual(calls.openProblemTab, [],
+      'visible Workbench problem rows must not call openProblemTab')
+    assert.deepStrictEqual(calls.setMode.filter(mode => mode === 'play'), [],
+      'visible Workbench problem rows must not enter legacy play mode')
+    assert.deepStrictEqual(calls.createTaskFromLegacyProblem, [{
+      problemId: 'legacy_problem_visible_row',
+    }])
+    assert.deepStrictEqual(calls.openTask, [{
+      taskId: 'task_from_visible_problem_row',
+      mode: 'problem',
+    }])
   })
 })

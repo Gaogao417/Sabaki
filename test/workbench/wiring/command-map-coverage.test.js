@@ -198,6 +198,37 @@ describe('Workbench command map coverage', () => {
     }
   })
 
+  it('visible library problem rows route through Workbench task opening, not legacy startProblem', () => {
+    const container = read(SOURCE_FILES.container)
+    const drawer = read(SOURCE_FILES.librarySideDrawer)
+    const body = extractFunctionBody(container, 'handleOpenLibraryProblem')
+
+    assert.ok(
+      drawer.includes('onStartProblem(problem.id, problem)'),
+      'LibrarySideDrawer must pass the visible problem row payload to the container',
+    )
+    assert.doesNotMatch(
+      container,
+      /sabaki\.startProblem\s*\(/,
+      'TrainingWorkbenchContainer must not route visible problem rows through sabaki.startProblem',
+    )
+    assert.doesNotMatch(
+      body,
+      /legacyCompatibility\s*:\s*true|setMode\s*\(\s*['"]play['"]\s*\)/,
+      'Visible problem row handler must not enable legacy compatibility or set legacy play mode',
+    )
+    assert.match(
+      body,
+      /createTaskFromLegacyProblem\s*\(/,
+      'Legacy problem rows must first be converted to a TrainingTask',
+    )
+    assert.match(
+      body,
+      /tabService\.openTask\s*\(\s*{taskId,\s*mode:\s*['"]problem['"]/,
+      'Visible problem rows must open a Workbench problem task tab',
+    )
+  })
+
   it('recall hint and skip handlers use flow service instead of legacy controller', () => {
     const container = read(SOURCE_FILES.container)
     const hintBody = extractFunctionBody(container, 'handleRequestHint')
