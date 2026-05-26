@@ -14,7 +14,7 @@
 ## Steps
 
 - [x] step1.1: Snapshot contract alignment tests and current regression verification — role: test-writer — mode: parallel-ready — scope: test/training/modeTransitions.test.js, test/training/workbenchFlowService.test.js, test/training/snapshotService.test.js
-- [ ] step1.4: Workbench command map coverage and visible command wiring guard — role: visual-test-writer — mode: parallel-ready — scope: src/modules/training/workbench/workbenchCommandMap.ts, test/workbench/wiring/command-map-coverage.test.js — retry: fix owner-dispatch fake green for library.fox/library.101
+- [x] step1.4: Workbench command map coverage and visible command wiring guard — role: visual-test-writer — mode: parallel-ready — scope: src/modules/training/workbench/workbenchCommandMap.ts, test/workbench/wiring/command-map-coverage.test.js — retry result: owner-dispatch fake green removed; focused run RED as expected on legacy `toggleThirdPartyPanel` path (4 passing, 1 failing) — commit: 51367f07
 - [ ] step1.5: Playwright command E2E scaffold for mode/library/edit-bar paths — role: visual-test-writer — mode: parallel-ready — scope: playwright.config.js, e2e/workbench-command-acceptance.spec.js — retry: replace legacy toggleThirdPartyPanel library acceptance and clarify edit-bar scratch mutation coverage
 - [x] step1.2.contract: Contract sketch for read-only ModeState / companion state resolver — role: contract-designer — mode: parallel — scope: docs/archive/daily-design/2026-05-26/workbench-mode-state-resolver/
 - [x] step1.3.contract: Contract sketch for six-screen projection anti-fake-green tests — role: frontend-contract-designer — mode: parallel — scope: docs/archive/daily-design/2026-05-26/workbench-six-screen-projection/
