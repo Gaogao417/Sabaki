@@ -14,8 +14,8 @@
 ## Steps
 
 - [x] step1.1: Snapshot contract alignment tests and current regression verification — role: test-writer — mode: parallel-ready — scope: test/training/modeTransitions.test.js, test/training/workbenchFlowService.test.js, test/training/snapshotService.test.js
-- [x] step1.4: Workbench command map coverage and visible command wiring guard — role: visual-test-writer — mode: parallel-ready — scope: src/modules/training/workbench/workbenchCommandMap.ts, test/workbench/wiring/command-map-coverage.test.js
-- [x] step1.5: Playwright command E2E scaffold for mode/library/edit-bar paths — role: visual-test-writer — mode: parallel-ready — scope: playwright.config.js, e2e/workbench-command-acceptance.spec.js
+- [ ] step1.4: Workbench command map coverage and visible command wiring guard — role: visual-test-writer — mode: parallel-ready — scope: src/modules/training/workbench/workbenchCommandMap.ts, test/workbench/wiring/command-map-coverage.test.js — retry: fix owner-dispatch fake green for library.fox/library.101
+- [ ] step1.5: Playwright command E2E scaffold for mode/library/edit-bar paths — role: visual-test-writer — mode: parallel-ready — scope: playwright.config.js, e2e/workbench-command-acceptance.spec.js — retry: replace legacy toggleThirdPartyPanel library acceptance and clarify edit-bar scratch mutation coverage
 - [x] step1.2.contract: Contract sketch for read-only ModeState / companion state resolver — role: contract-designer — mode: parallel — scope: docs/archive/daily-design/2026-05-26/workbench-mode-state-resolver/
 - [x] step1.3.contract: Contract sketch for six-screen projection anti-fake-green tests — role: frontend-contract-designer — mode: parallel — scope: docs/archive/daily-design/2026-05-26/workbench-six-screen-projection/
 - [x] step1.2.tests: Write focused ModeState / companion state resolver tests — role: test-writer — mode: parallel — depends_on: step1.2.contract — scope: test/training/modeStateResolver.test.js — result: focused resolver tests added; focused run RED as expected because production resolver is absent (0 passing, 16 failing) — commit: 2bed1ef1
@@ -45,3 +45,5 @@
 - [ ] step11: Final verification and evidence ledger update — role: architecture-reviewer — mode: serial — depends_on: step10.1, step10.2
 
 ## Retries
+
+- retry1 step1.4 / step1.5 after `step1.review` BLOCK (`docs/archive/daily-design/2026-05-26/workbench-step1-test-review/test-audit-v0.1.md`): command-map and Playwright tests were fake green because 101/Fox library commands could still pass through legacy `toggleThirdPartyPanel` instead of `taskImportService -> tabService.openTask`; edit-bar E2E was only a tool-selection smoke and must either be scoped as such or assert scratch/current mutation.
