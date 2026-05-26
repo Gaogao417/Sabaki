@@ -49,6 +49,40 @@ function buildPassRuleFromSnapshot(_input: ProblemSnapshotInput): PassRule {
   }
 }
 
+function assertAnalysisCaptureSource(
+  tab: { id: string; taskId?: string | null; mode?: string },
+  input: { sourceTaskId?: string },
+): void {
+  if (tab.mode !== 'analysis') {
+    throw new Error(
+      `snapshotService.captureSnapshotInput: persistence requires analysis scratch/current source (tabId=${tab.id}, mode=${tab.mode})`,
+    )
+  }
+
+  if (tab.taskId == null && input.sourceTaskId == null) {
+    throw new Error(
+      `snapshotService.captureSnapshotInput: cannot persist snapshot directly from null task (tabId=${tab.id})`,
+    )
+  }
+}
+
+function resolveOriginTrace(task: {
+  origin?: { provider?: string; externalId?: string }
+}): {
+  sourceGameId?: string
+  sourceProblemId?: string
+} {
+  if (task.origin?.provider === 'fox') {
+    return { sourceGameId: task.origin.externalId }
+  }
+
+  if (task.origin?.provider === '101') {
+    return { sourceProblemId: task.origin.externalId }
+  }
+
+  return {}
+}
+
 export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotService {
   const { repository, positionSnapshotAdapter, workbenchStore, logger } = deps
 
@@ -61,6 +95,8 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
     if (!tab) {
       throw new Error(`snapshotService.captureSnapshotInput: tab not found (id=${input.tabId})`)
     }
+
+    assertAnalysisCaptureSource(tab, input)
 
     let sourceGameId: string | undefined
     let sourceProblemId: string | undefined
@@ -77,14 +113,17 @@ export function createSnapshotService(deps: SnapshotServiceDeps): SnapshotServic
         throw new Error(`snapshotService.captureSnapshotInput: task not found (id=${input.sourceTaskId})`)
       }
 
-      if (task.origin?.provider === 'fox') {
-        sourceGameId = task.origin.externalId
-      } else if (task.origin?.provider === '101') {
-        sourceProblemId = task.origin.externalId
-      }
+      const originTrace = resolveOriginTrace(task)
+      sourceGameId = originTrace.sourceGameId
+      sourceProblemId = originTrace.sourceProblemId
     }
 
     const snapshot: PositionSnapshot = positionSnapshotAdapter.captureCurrentPosition()
+    if (!snapshot.positionSgf) {
+      throw new Error(
+        `snapshotService.captureSnapshotInput: analysis scratch/current source is empty (tabId=${input.tabId})`,
+      )
+    }
 
     logger?.info('snapshot.capture', 'Snapshot input captured', {
       tabId: input.tabId,

@@ -920,6 +920,20 @@ export function createWorkbenchFlowService(
 
     assertTransition(tab, 'snapshot')
 
+    if (tab.taskId == null) {
+      logger?.info(
+        'flow.snapshotFromCurrentContext',
+        'Snapshot rejected: null-task analysis cannot persist directly',
+        {
+          tabId,
+          mode: tab.mode,
+        },
+      )
+      throw new Error(
+        `workbenchFlowService.snapshotFromCurrentContext: cannot persist snapshot directly from null task (tabId=${tabId})`,
+      )
+    }
+
     logger?.info(
       'flow.snapshotFromCurrentContext',
       'Snapshot from current context',
@@ -946,7 +960,7 @@ export function createWorkbenchFlowService(
         provider: 'snapshot' as const,
         parentTaskId: tab.taskId ?? undefined,
         parentAttemptId: tab.activeAttemptId,
-        parentMoveIndex: undefined,
+        parentMoveIndex: snapshotInput.sourceMoveIndex,
       },
       createdAt: now,
       updatedAt: now,
