@@ -777,7 +777,7 @@ Analysis BadMove summary card smoke tests。
 
 # 7. Phase 5：Recall Checkpoint / Comment
 
-状态：`Partial`
+状态：`Partial / checkpoint command + visible comment UI + submit-to-recall projection landed`
 
 目标：Recall 遇到 major / severe BadMove 时进入主动纠错子流程。
 
@@ -834,6 +834,68 @@ Recall → Checkpoint → Correction → Reveal → Comment → Resume integrati
 skipped checkpoint review candidate tests；
 existing recall compatibility tests；
 RecallCheckpointPanel command-path smoke tests。
+```
+
+2026-05-26 完成证据：
+
+```text
+已完成：
+- recallCheckpointService trigger/start/correction/reveal/comment/skip/resume service path。
+- Workbench UI command path：
+  Recall UI -> TrainingWorkbenchContainer -> workbenchFlowService ->
+  recallCheckpointService/repository -> runtimeStore/workbenchStore -> UI projection。
+- RecallCheckpointPanel / RecallModePanel / RecallRightPanel 显示
+  correction / reveal / comment / saving / resume 后 normal 状态。
+- visible comment editor 通过真实 flowService.saveCheckpointComment 路径保存独立 MoveComment。
+- checkpoint projection 从 activeCheckpointId 读取 RecallCheckpoint + BadMove +
+  MoveEvaluation + optional MoveComment，不伪造 moveNumber/source/originalLine。
+- submit correction 后同 substate projection cache 会失效，`查看 AI` 能按 read model 回流启用。
+- Submit -> Recall projection repair：
+  Problem/Play submit 通过真实 visible command / Container delegation 进入
+  workbenchFlowService.submit(tabId)，service 创建真实 RecallSession 后 hydrate
+  runtimeStore.recallView，并由 Container subscription/projectFromRuntime 回流到
+  RecallModePanel active progress；测试禁止手动 setRecallView、手动 mode='recall'
+  或 props.mode='recall' 假绿。
+- projectFromRuntime 只在 recallView.recallSessionId 同时匹配
+  WorkbenchTab.activeRecallSessionId 与 runtimeStore.activeRecallSessionId 时投影
+  active Recall surface，stale view 被忽略。
+- Independent gates：
+  submit-to-recall contract v0.2 approved；test audit v0.3 approved；
+  architecture review v0.1 APPROVE_WITH_NOTES。
+
+验证：
+- test/workbench/wiring/phase5-checkpoint-command-path.test.js
+- test/workbench/wiring/phase5-checkpoint-ui-comment.test.js
+- test/training/recallCheckpointService.test.js
+- test/training/recallService.test.js
+- test/training/modeTransitions.test.js
+- test/workbench/wiring/w4-recall-mode-wiring.test.js
+- test/workbench/wiring/regression-wiring.test.js
+- test/training/workbenchFlowService.test.js
+- test/workbench/wiring/submit-to-recall-projection.test.js
+
+最近 targeted run：
+`npx mocha --require tsx test/workbench/wiring/w4-recall-mode-wiring.test.js test/training/recallCheckpointService.test.js test/training/recallService.test.js test/training/modeTransitions.test.js test/workbench/wiring/regression-wiring.test.js test/workbench/wiring/phase5-checkpoint-command-path.test.js test/workbench/wiring/phase5-checkpoint-ui-comment.test.js`
+=> 193 passing。
+
+Submit -> Recall targeted run：
+`npx mocha --require tsx test/training/workbenchFlowService.test.js test/workbench/wiring/submit-to-recall-projection.test.js`
+=> 86 passing。
+
+Full run：
+`npm test`
+=> 1833 passing。
+```
+
+仍未完成 / 后续 step：
+
+```text
+- Analysis Return 回到 checkpoint substate 的完整 Workbench wiring 证据仍需独立 gate。
+- skipped checkpoint 进入 Review 候选 / enrollment path 仍需独立 gate。
+- recall move progress / completion 更新仍需独立 gate，证明 submitRecallMove 后
+  runtimeStore.recallView.moveIndex/userAttempts/completed 继续从 active RecallSession
+  回流，并保持同样 session-id guard。
+- projection cache 是迁移接缝；长期应由 repository/read-model subscription 或 cache 层收敛。
 ```
 
 ---
@@ -1242,7 +1304,7 @@ Phase 1  Workbench Mode + openTask      Landed / mode-effect gaps remaining
 Phase 2  taskImportService              Landed / wrapper cleanup remaining
 Phase 3  Attempt + AI Move + Recall     Partial
 Phase 4  MoveEvaluation + BadMove       Partial
-Phase 5  Recall Checkpoint              Partial
+Phase 5  Recall Checkpoint              Partial / command + visible comment UI landed
 Phase 6  Analysis + Snapshot Child      Partial / contract realignment required
 Phase 7  Review + BadMove 派生 Task     Partial
 Phase 8  UI Hardening / 工作台体验验收  Partial
