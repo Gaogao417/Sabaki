@@ -41,7 +41,7 @@
 - [x] step9.1: Integrate six-screen projection mapper and compact breakpoint screenshot guard — role: visual-fidelity-reviewer — mode: serial — depends_on: step8.1, step8.2, step8.3, step8.4, step8.5 — result: retry approved six-screen projection, workbench-command Playwright, compact visual harness, screenshots, and bundle — review commits: 6aa27a0d, 90c4b8e7
 - [x] step9.2: Expand Playwright command acceptance for canonical states, disabled reasons, shortcuts, 101/Fox sync states — role: visual-fidelity-reviewer — mode: serial — depends_on: step9.1 — result: retry APPROVE; workbench-command acceptance expanded and passes (7 passed), evidence doc added — review commits: 5f72c03d, d5a62924
 - [x] step10.1: Legacy cleanup A for openProblemTab / review open-due main path — role: implementation-agent — mode: parallel — depends_on: step9.1, step9.2 — result: openProblemTab legacy board setup is explicit opt-in; default task/import/openTask path and focused/Playwright suites pass — commit: e4399896
-- [ ] step10.2: Legacy cleanup B for training-domain legacy controller and window.sabaki lookup thinning — role: implementation-agent — mode: parallel — depends_on: step9.1, step9.2
+- [x] step10.2: Legacy cleanup B for training-domain legacy controller and window.sabaki lookup thinning — role: implementation-agent — mode: parallel — depends_on: step9.1, step9.2 — result: training legacy globals thinned behind container/service/adapters; focused wiring/flow suites and Playwright pass — commit: 72558270
 - [ ] step11: Final verification and evidence ledger update — role: architecture-reviewer — mode: serial — depends_on: step10.1, step10.2
 
 ## Retries
