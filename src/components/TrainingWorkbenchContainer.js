@@ -468,12 +468,38 @@ class TrainingWorkbenchContainer extends Component {
       sabaki.flashInfoOverlay(`已切换筛选：${tag}`)
     }
 
-    function handleOpenFoxGames() {
-      sabaki.toggleThirdPartyPanel('fox')
+    async function handleOpenFoxGames() {
+      const {taskImportService, repository} = sabaki.getTrainingContext()
+      let task = null
+
+      if (typeof repository?.findTaskBySource === 'function') {
+        task = await repository.findTaskBySource({provider: 'fox', kind: 'game'})
+      }
+      if (!task) {
+        task = await taskImportService.importFoxGame({gameId: 'latest'})
+      }
+
+      if (!task?.id) {
+        throw new Error('Fox sync did not return a TrainingTask')
+      }
+      await tabService.openTask({taskId: task.id})
     }
 
-    function handleOpenOneOhOneWeiqi() {
-      sabaki.toggleThirdPartyPanel('101')
+    async function handleOpenOneOhOneWeiqi() {
+      const {taskImportService, repository} = sabaki.getTrainingContext()
+      let task = null
+
+      if (typeof repository?.findTaskBySource === 'function') {
+        task = await repository.findTaskBySource({provider: '101', kind: 'problem'})
+      }
+      if (!task) {
+        task = await taskImportService.import101Problem({problemId: 'latest'})
+      }
+
+      if (!task?.id) {
+        throw new Error('101 sync did not return a TrainingTask')
+      }
+      await tabService.openTask({taskId: task.id})
     }
 
     function handleOpenPreferences(tab = 'general') {
