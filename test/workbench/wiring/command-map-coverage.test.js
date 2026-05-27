@@ -192,8 +192,10 @@ describe('Workbench command map coverage', () => {
       )
       assert.match(
         body,
-        id === 'library.fox' ? /openPlayTask\s*\(/ : /openProblemTask\s*\(/,
-        `${id} must open the imported/synced TrainingTask through the explicit Workbench task entrypoint`,
+        id === 'library.fox'
+          ? /openTask\s*\(\s*{[^}]*mode\s*:\s*['"]play['"]/
+          : /openTask\s*\(\s*{[^}]*mode\s*:\s*['"]problem['"]/,
+        `${id} must open the imported/synced TrainingTask through openTask with an explicit Workbench mode`,
       )
     }
   })
@@ -224,8 +226,8 @@ describe('Workbench command map coverage', () => {
     )
     assert.match(
       body,
-      /openProblemTask\s*\(\s*{taskId}/,
-      'Visible problem rows must open a Workbench problem task tab',
+      /openTask\s*\(\s*{[^}]*taskId[^}]*mode\s*:\s*['"]problem['"]/,
+      'Visible problem rows must open a Workbench task tab with problem mode',
     )
   })
 

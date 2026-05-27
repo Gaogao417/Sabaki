@@ -12,7 +12,7 @@ const SHORTCUT_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
  *   service methods are wrapped as instrumentation while still delegating to production;
  *   toggleThirdPartyPanel is wrapped only as a forbidden legacy-call guard
  * primary assertions: command clicks reach taskImportService or synced task lookup, then
- *   workbenchTabService.openTask; mode commands update active tab; edit-bar commands mutate
+ *   workbenchTabService.openTask with explicit mode; mode commands update active tab; edit-bar commands mutate
  *   scratch/current without mutating the source tree; disabled commands expose reasons and
  *   no-op on click/keyboard; declared-but-unwired keyboard shortcuts are guarded as gaps.
  */
@@ -325,8 +325,6 @@ async function installLibraryCommandHarness(page) {
       sourceLookups: [],
       loadTask: [],
       openTask: [],
-      openPlayTab: [],
-      openProblemTask: [],
       legacyThirdPartyCalls: [],
       legacyStartProblemCalls: [],
       legacySetModeCalls: [],
@@ -344,13 +342,6 @@ async function installLibraryCommandHarness(page) {
     if (typeof ctx.repository.loadTask !== 'function') {
       throw new Error('repository.loadTask must exist for opened library task projection')
     }
-    if (typeof ctx.tabService.openPlayTab !== 'function') {
-      throw new Error('tabService.openPlayTab must exist for play library command tab opening')
-    }
-    if (typeof ctx.tabService.openProblemTask !== 'function') {
-      throw new Error('tabService.openProblemTask must exist for problem library command tab opening')
-    }
-
     const originalImportFoxGame = ctx.taskImportService.importFoxGame?.bind(
       ctx.taskImportService,
     )
@@ -361,8 +352,6 @@ async function installLibraryCommandHarness(page) {
     )
     const originalLoadTask = ctx.repository.loadTask?.bind(ctx.repository)
     const originalOpenTask = ctx.tabService.openTask.bind(ctx.tabService)
-    const originalOpenPlayTab = ctx.tabService.openPlayTab.bind(ctx.tabService)
-    const originalOpenProblemTask = ctx.tabService.openProblemTask.bind(ctx.tabService)
     const originalStartProblem = window.__sabaki.startProblem?.bind(window.__sabaki)
     const originalSetMode = window.__sabaki.setMode?.bind(window.__sabaki)
 
@@ -418,22 +407,6 @@ async function installLibraryCommandHarness(page) {
       return tab
     }
 
-    ctx.tabService.openPlayTab = async (opts) => {
-      const record = {opts, result: null}
-      window.__sabaki.__e2eLibraryCommandHarness.openPlayTab.push(record)
-      const tab = await originalOpenPlayTab(opts)
-      record.result = {id: tab.id, taskId: tab.taskId, mode: tab.mode}
-      return tab
-    }
-
-    ctx.tabService.openProblemTask = async (opts) => {
-      const record = {opts, result: null}
-      window.__sabaki.__e2eLibraryCommandHarness.openProblemTask.push(record)
-      const tab = await originalOpenProblemTask(opts)
-      record.result = {id: tab.id, taskId: tab.taskId, mode: tab.mode}
-      return tab
-    }
-
     window.__sabaki.toggleThirdPartyPanel = (panel) => {
       window.__sabaki.__e2eLibraryCommandHarness.legacyThirdPartyCalls.push(
         panel,
@@ -466,8 +439,6 @@ async function installLibraryCommandHarness(page) {
       }
       if (originalLoadTask) ctx.repository.loadTask = originalLoadTask
       ctx.tabService.openTask = originalOpenTask
-      ctx.tabService.openPlayTab = originalOpenPlayTab
-      ctx.tabService.openProblemTask = originalOpenProblemTask
       if (originalStartProblem) window.__sabaki.startProblem = originalStartProblem
       if (originalSetMode) window.__sabaki.setMode = originalSetMode
     }
@@ -482,8 +453,6 @@ async function getLibraryCommandHarness(page) {
       sourceLookups: calls.sourceLookups,
       loadTask: calls.loadTask,
       openTask: calls.openTask,
-      openPlayTab: calls.openPlayTab,
-      openProblemTask: calls.openProblemTask,
       legacyThirdPartyCalls: calls.legacyThirdPartyCalls,
       legacyStartProblemCalls: calls.legacyStartProblemCalls,
       legacySetModeCalls: calls.legacySetModeCalls,
@@ -736,8 +705,12 @@ test.describe('Workbench command acceptance', () => {
         ...calls.imports.map((call) => call.provider),
         ...calls.sourceLookups.map((call) => call.provider),
       ])
-      const openedPlayTaskIds = calls.openPlayTab.map((call) => call.opts.taskId)
-      const openedProblemTaskIds = calls.openProblemTask.map((call) => call.opts.taskId)
+      const openedPlayTaskIds = calls.openTask
+        .filter((call) => call.opts.mode === 'play')
+        .map((call) => call.opts.taskId)
+      const openedProblemTaskIds = calls.openTask
+        .filter((call) => call.opts.mode === 'problem')
+        .map((call) => call.opts.taskId)
 
       expect(calls.legacyThirdPartyCalls).toEqual([])
       expect(touchedProviders.has('fox')).toBe(true)
@@ -780,9 +753,10 @@ test.describe('Workbench command acceptance', () => {
 
     await expect(async () => {
       const calls = await getLibraryCommandHarness(page)
-      expect(calls.openProblemTask.map((call) => call.opts)).toEqual(
+      expect(calls.openTask.map((call) => call.opts)).toEqual(
         expect.arrayContaining([{
           taskId: 'e2e_task_visible_problem_row',
+          mode: 'problem',
         }]),
       )
       expect(calls.legacyStartProblemCalls).toEqual([])
@@ -867,8 +841,6 @@ test.describe('Workbench command acceptance', () => {
     expect(after.imports).toEqual(before.imports)
     expect(after.sourceLookups).toEqual(before.sourceLookups)
     expect(after.openTask).toEqual(before.openTask)
-    expect(after.openPlayTab).toEqual(before.openPlayTab)
-    expect(after.openProblemTask).toEqual(before.openProblemTask)
     expect(after.legacyThirdPartyCalls).toEqual([])
   })
 

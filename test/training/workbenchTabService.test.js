@@ -541,59 +541,26 @@ const hasOpenTask = () => {
       /parent tab not found/,
     )
   })
-})
 
-;(hasOpenTask() ? describe : describe.skip)('explicit play/problem task entrypoints', () => {
-  let store, tabService
-
-  beforeEach(() => {
-    const ctx = createTestServices({
-      tasks: {
-        task_free: {
-          id: 'task_free',
-          rootPositionSgf: '(;SZ[19])',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        task_problem: {
-          id: 'task_problem',
-          rootPositionSgf: '(;SZ[19])',
-          prompt: 'Find the best move',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      },
-    })
-    store = ctx.store
-    tabService = ctx.tabService
+  it('does not expose temporary mode-specific task wrappers', () => {
+    assert.strictEqual(tabService.openPlayTab, undefined)
+    assert.strictEqual(tabService.openProblemTask, undefined)
   })
 
-  it('openPlayTab always opens a play tab even for problem-shaped tasks', async () => {
-    const tab = await tabService.openPlayTab({taskId: 'task_problem'})
-
-    assert.strictEqual(tab.mode, 'play')
-    assert.strictEqual(store.getState().activeTabId, tab.id)
-  })
-
-  it('openProblemTask always opens a problem tab', async () => {
-    const tab = await tabService.openProblemTask({taskId: 'task_free'})
-
-    assert.strictEqual(tab.mode, 'problem')
-    assert.strictEqual(store.getState().activeTabId, tab.id)
-  })
-
-  it('openPlayTab preserves configured black human / white AI playerConfig', async () => {
+  it('preserves configured black human / white AI playerConfig through openTask', async () => {
     const playerConfig = {
       black: 'human',
       white: 'ai',
       ai: {engineId: 'engine_white', autoPlay: true},
     }
 
-    const tab = await tabService.openPlayTab({
+    const tab = await tabService.openTask({
       taskId: 'task_free',
+      mode: 'play',
       playerConfig,
     })
 
+    assert.strictEqual(tab.mode, 'play')
     assert.deepStrictEqual(tab.playerConfig, playerConfig)
   })
 })

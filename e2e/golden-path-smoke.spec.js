@@ -60,13 +60,9 @@ async function installGoldenPathHarness(page) {
       ctx.taskImportService,
     )
     const originalOpenTask = ctx.tabService.openTask.bind(ctx.tabService)
-    const originalOpenPlayTab = ctx.tabService.openPlayTab.bind(ctx.tabService)
-    const originalOpenProblemTask = ctx.tabService.openProblemTask.bind(ctx.tabService)
 
     window.__sabaki.__goldenPathHarness = {
       openTask: [],
-      openPlayTab: [],
-      openProblemTask: [],
       openCalls: [],
       sourceLookups: [],
       imports: [],
@@ -95,16 +91,6 @@ async function installGoldenPathHarness(page) {
       window.__sabaki.__goldenPathHarness.openTask.push(opts)
       window.__sabaki.__goldenPathHarness.openCalls.push({kind: 'openTask', opts})
       return originalOpenTask(opts)
-    }
-    ctx.tabService.openPlayTab = async (opts) => {
-      window.__sabaki.__goldenPathHarness.openPlayTab.push(opts)
-      window.__sabaki.__goldenPathHarness.openCalls.push({kind: 'openPlayTab', opts})
-      return originalOpenPlayTab(opts)
-    }
-    ctx.tabService.openProblemTask = async (opts) => {
-      window.__sabaki.__goldenPathHarness.openProblemTask.push(opts)
-      window.__sabaki.__goldenPathHarness.openCalls.push({kind: 'openProblemTask', opts})
-      return originalOpenProblemTask(opts)
     }
 
     ctx.libraryProjection = {
@@ -240,8 +226,8 @@ test.describe('Workbench golden path smoke', () => {
     await page.locator('[data-testid="library-tab-kifu"]').click()
     await clickLibraryRow(page, 'Golden kifu fixture')
     expect(await latestOpen(page)).toMatchObject({
-      kind: 'openPlayTab',
-      opts: {taskId: 'task_kifu_fixture'},
+      kind: 'openTask',
+      opts: {taskId: 'task_kifu_fixture', mode: 'play'},
     })
     expect(await activeTab(page)).toMatchObject({
       taskId: 'task_kifu_fixture',
@@ -252,16 +238,16 @@ test.describe('Workbench golden path smoke', () => {
     await page.locator('[data-testid="library-tab-game-records"]').click()
     await clickLibraryRow(page, 'Golden saved game fixture')
     expect(await latestOpen(page)).toMatchObject({
-      kind: 'openPlayTab',
-      opts: {taskId: 'task_saved_game_fixture'},
+      kind: 'openTask',
+      opts: {taskId: 'task_saved_game_fixture', mode: 'play'},
     })
 
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-tab-problems"]').click()
     await clickLibraryRow(page, 'Golden problem fixture')
     expect(await latestOpen(page)).toMatchObject({
-      kind: 'openProblemTask',
-      opts: {taskId: 'task_problem_fixture'},
+      kind: 'openTask',
+      opts: {taskId: 'task_problem_fixture', mode: 'problem'},
     })
     expect(await activeTab(page)).toMatchObject({
       taskId: 'task_problem_fixture',
@@ -272,16 +258,16 @@ test.describe('Workbench golden path smoke', () => {
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-source-fox"]').click()
     expect(await latestOpen(page)).toMatchObject({
-      kind: 'openPlayTab',
-      opts: {taskId: 'task_fox_yiwoo_fixture'},
+      kind: 'openTask',
+      opts: {taskId: 'task_fox_yiwoo_fixture', mode: 'play'},
     })
 
     await closeLibraryIfOpen(page)
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-source-101"]').click()
     expect(await latestOpen(page)).toMatchObject({
-      kind: 'openProblemTask',
-      opts: {taskId: 'task_101_fixture'},
+      kind: 'openTask',
+      opts: {taskId: 'task_101_fixture', mode: 'problem'},
     })
   })
 })

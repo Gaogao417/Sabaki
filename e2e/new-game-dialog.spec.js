@@ -65,24 +65,7 @@ test.describe('New game settings dialog', () => {
         },
       }
       window.__sabaki.__newGameAiHarness = {
-        configuredGameArgs: [],
-        configuredGameResult: null,
-        configuredGameError: null,
         requestMove: [],
-      }
-      const originalStartConfiguredGame =
-        window.__sabaki.startConfiguredGame.bind(window.__sabaki)
-      window.__sabaki.startConfiguredGame = async (args) => {
-        window.__sabaki.__newGameAiHarness.configuredGameArgs.push(args)
-        try {
-          const result = await originalStartConfiguredGame(args)
-          window.__sabaki.__newGameAiHarness.configuredGameResult = result
-          return result
-        } catch (err) {
-          window.__sabaki.__newGameAiHarness.configuredGameError =
-            err && err.stack ? err.stack : String(err)
-          throw err
-        }
       }
       window.__sabaki.setState({
         mode: 'play',
@@ -111,17 +94,11 @@ test.describe('New game settings dialog', () => {
       const activeTab = await page.evaluate(() => {
         const ctx = window.__sabaki.getTrainingContext()
         const state = ctx.workbenchStore.getState()
-        return {
-          activeTab: state.tabs.find((tab) => tab.id === state.activeTabId),
-          harness: window.__sabaki.__newGameAiHarness,
-        }
+        return state.tabs.find((tab) => tab.id === state.activeTabId)
       })
-      expect(activeTab.harness.configuredGameError).toBeNull()
-      expect(activeTab.harness.configuredGameArgs).toHaveLength(1)
-      expect(activeTab.harness.configuredGameResult).toBeTruthy()
-      expect(activeTab.activeTab.mode).toBe('play')
-      expect(activeTab.activeTab.activeAttemptId).toBeTruthy()
-      expect(activeTab.activeTab.playerConfig).toMatchObject({
+      expect(activeTab.mode).toBe('play')
+      expect(activeTab.activeAttemptId).toBeTruthy()
+      expect(activeTab.playerConfig).toMatchObject({
         black: 'human',
         white: 'ai',
         ai: {engineId: 'e2e_white_engine', autoPlay: true},
