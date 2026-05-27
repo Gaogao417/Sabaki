@@ -8,6 +8,7 @@ import type {
   OwnershipGrid,
   RunBoardAnalysis,
   ScratchAnalysisTab,
+  WorkbenchAnalysisScratchTarget,
 } from './analysisTypes.ts'
 import {SCRATCH_ANALYSIS_REQUEST_GROUP} from './analysisTypes.ts'
 
@@ -50,7 +51,7 @@ export function getCachedScratchOwnership(
   snapshot: ScratchPosition,
 ): OwnershipGrid | null {
   let key = getScratchAnalysisCacheKey(syncerId, snapshot)
-  return key == null ? null : scratchOwnershipCache[key] ?? null
+  return key == null ? null : (scratchOwnershipCache[key] ?? null)
 }
 
 // ---------------------------------------------------------------------------
@@ -93,13 +94,48 @@ export function createScratchAnalysisContext(
 // ---------------------------------------------------------------------------
 
 export type ScratchAnalysisDeps = {
-  getState: () => {editWorkspace?: EditWorkspaceAnalysisState; [k: string]: unknown}
+  getState: () => {
+    editWorkspace?: EditWorkspaceAnalysisState
+    [k: string]: unknown
+  }
   setState: (patch: Record<string, unknown>) => void
   getSyncer: () => EngineSyncerLike | null
   engineSupportsOwnership: (syncer: EngineSyncerLike) => boolean
   runBoardAnalysis: RunBoardAnalysis
   getSourceTree: () => GameTree | null
   logger?: {log: (...args: unknown[]) => void}
+}
+
+function getRequestTarget(
+  workspace: EditWorkspaceAnalysisState,
+  tab: ScratchAnalysisTab,
+): WorkbenchAnalysisScratchTarget | null {
+  const target = workspace.scratchTarget
+  if (target == null) return null
+
+  return {
+    ...target,
+    targetTab: tab,
+  }
+}
+
+function isRequestTargetCurrent(
+  deps: ScratchAnalysisDeps,
+  target: WorkbenchAnalysisScratchTarget | null,
+  tab: ScratchAnalysisTab,
+): boolean {
+  if (target == null) return true
+  if (target.status !== 'active' || target.targetTab !== tab) return false
+
+  const current = deps.getState().editWorkspace?.scratchTarget
+  return (
+    current != null &&
+    current.status === 'active' &&
+    current.kind === target.kind &&
+    current.tabId === target.tabId &&
+    current.workspaceId === target.workspaceId &&
+    current.generation === target.generation
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +212,8 @@ export async function refreshScratchAnalysis(
     })
     if (ctx == null) return null
 
+    let requestTarget = getRequestTarget(ws, tab)
+
     let result = await deps.runBoardAnalysis({
       syncer,
       tree: ctx.tree as GameTree,
@@ -184,8 +222,10 @@ export async function refreshScratchAnalysis(
       requestGroup: SCRATCH_ANALYSIS_REQUEST_GROUP,
       analysisSource: SCRATCH_ANALYSIS_REQUEST_GROUP,
       skipOwnershipCache: true,
+      scratchTarget: requestTarget ?? undefined,
       onAnalysisUpdate: (analysis: EngineAnalysis | null) => {
         if (scratchGeneration !== generation) return
+        if (!isRequestTargetCurrent(deps, requestTarget, tab)) return
         let current = deps.getState().editWorkspace
         if (current != null) {
           deps.setState({
@@ -198,6 +238,8 @@ export async function refreshScratchAnalysis(
         }
       },
     })
+
+    if (!isRequestTargetCurrent(deps, requestTarget, tab)) return null
 
     if (result?.ownership != null) {
       cacheScratchOwnership(syncer.id, snapshot, result.ownership)
@@ -214,11 +256,21 @@ export async function refreshScratchAnalysis(
   let referenceSnapshot = wsSnapshot.referenceSnapshot
 
   let currentAnalysis = analyzeCurrent
-    ? await analyzeTab(currentSnapshot, 'currentAnalysis', 'currentOwnership', 'current')
+    ? await analyzeTab(
+        currentSnapshot,
+        'currentAnalysis',
+        'currentOwnership',
+        'current',
+      )
     : wsSnapshot.currentAnalysis
 
   let referenceAnalysis = analyzeReference
-    ? await analyzeTab(referenceSnapshot, 'referenceAnalysis', 'referenceOwnership', 'reference')
+    ? await analyzeTab(
+        referenceSnapshot,
+        'referenceAnalysis',
+        'referenceOwnership',
+        'reference',
+      )
     : wsSnapshot.referenceAnalysis
 
   if (scratchGeneration !== generation) {
@@ -229,20 +281,42 @@ export async function refreshScratchAnalysis(
     return
   }
 
+  if (analyzeCurrent) {
+    let currentTarget = getRequestTarget(wsSnapshot, 'current')
+    if (!isRequestTargetCurrent(deps, currentTarget, 'current')) {
+      currentAnalysis = null
+    }
+  }
+
+  if (analyzeReference) {
+    let referenceTarget = getRequestTarget(wsSnapshot, 'reference')
+    if (!isRequestTargetCurrent(deps, referenceTarget, 'reference')) {
+      referenceAnalysis = null
+    }
+  }
+
   let finalWs = deps.getState().editWorkspace
   if (finalWs != null) {
     deps.setState({
       editWorkspace: {
         ...finalWs,
         currentAnalysis: currentAnalysis ?? finalWs.currentAnalysis,
-        currentOwnership: currentAnalysis?.ownership ?? finalWs.currentOwnership,
+        currentOwnership:
+          currentAnalysis?.ownership ?? finalWs.currentOwnership,
         referenceAnalysis: referenceAnalysis ?? finalWs.referenceAnalysis,
-        referenceOwnership: referenceAnalysis?.ownership ?? finalWs.referenceOwnership,
+        referenceOwnership:
+          referenceAnalysis?.ownership ?? finalWs.referenceOwnership,
         analysisPending: false,
       },
     })
-    deps.logger?.log('info', 'engine', 'analysis.completed', 'Analysis completed', {
-      targetTab,
-    })
+    deps.logger?.log(
+      'info',
+      'engine',
+      'analysis.completed',
+      'Analysis completed',
+      {
+        targetTab,
+      },
+    )
   }
 }

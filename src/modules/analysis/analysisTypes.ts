@@ -57,6 +57,23 @@ export type EngineAnalysis = {
   humanPolicyMap: HumanPolicyMap | null
 }
 
+export type WorkbenchAnalysisScratchTarget = {
+  kind: 'scratch'
+  tabId: string
+  workspaceId: string
+  generation: number
+  targetTab: ScratchAnalysisTab
+  status: 'active' | 'inactive'
+  sourceMode: 'play' | 'problem' | 'recall'
+  reason?: string
+}
+
+export type WorkbenchAnalysisScratchResultInput = {
+  target: WorkbenchAnalysisScratchTarget
+  analysis: EngineAnalysis | null
+  final: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Structural helpers for snapshot→GameTree conversion
 // ---------------------------------------------------------------------------
@@ -147,7 +164,11 @@ export type EngineSyncerLike = {
   commands: string[]
   treePosition: string
   analysis: EngineAnalysis | null
-  engine: {path: string; enableHumanSL?: boolean; analysis?: Record<string, unknown>}
+  engine: {
+    path: string
+    enableHumanSL?: boolean
+    analysis?: Record<string, unknown>
+  }
   on(event: string, handler: (...args: any[]) => void): void
   removeListener(event: string, handler: (...args: any[]) => void): void
   queueCommand(command: {name: string; args: string[] | null}): void
@@ -162,6 +183,7 @@ export type RunBoardAnalysisOptions = {
   requestGroup: 'analysis' | 'scratch-analysis' | 'aux'
   analysisSource?: 'game-tree' | 'scratch-analysis' | 'variation'
   skipOwnershipCache?: boolean
+  scratchTarget?: WorkbenchAnalysisScratchTarget
   onAnalysisUpdate?: (analysis: EngineAnalysis | null) => void
 }
 
@@ -178,6 +200,7 @@ export type EditWorkspaceAnalysisState = {
   currentOwnership: OwnershipGrid | null
   referenceOwnership: OwnershipGrid | null
   analysisPending?: boolean
+  scratchTarget?: WorkbenchAnalysisScratchTarget | null
 }
 
 export type AnalysisRuntimeState = {

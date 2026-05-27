@@ -17,6 +17,14 @@ export {
 } from './scratchAnalysis.ts'
 export type {ScratchAnalysisDeps} from './scratchAnalysis.ts'
 
+export {createWorkbenchAnalysisScratchRegion} from './workbenchAnalysisScratchRegion.ts'
+export type {
+  WorkbenchAnalysisScratchAdapter,
+  WorkbenchAnalysisScratchRegion,
+  WorkbenchAnalysisScratchResultInput,
+  WorkbenchAnalysisScratchTarget,
+} from './workbenchAnalysisScratchRegion.ts'
+
 export {
   analyzeGameTreePosition,
   scheduleGameTreeAnalysis,
@@ -42,7 +50,11 @@ export {
   getAnalysisSyncerId,
   refreshActiveBoardAnalysis,
 } from './analysisLifecycle.ts'
-export type {AnalysisLifecycleDeps, RunBoardAnalysisOptions, RunOwnershipAnalysisOptions} from './analysisLifecycle.ts'
+export type {
+  AnalysisLifecycleDeps,
+  RunBoardAnalysisOptions,
+  RunOwnershipAnalysisOptions,
+} from './analysisLifecycle.ts'
 
 export {
   SCRATCH_ANALYSIS_REQUEST_GROUP,
