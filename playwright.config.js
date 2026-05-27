@@ -20,6 +20,11 @@ module.exports = defineConfig({
       dependencies: [],
     },
     {
+      name: 'workbench-command',
+      testMatch: /workbench-command-acceptance\.spec\.js/,
+      dependencies: [],
+    },
+    {
       name: 'new-game-dialog',
       testMatch: /new-game-dialog\.spec\.js/,
       dependencies: [],
