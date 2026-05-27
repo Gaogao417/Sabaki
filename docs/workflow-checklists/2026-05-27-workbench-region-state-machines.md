@@ -25,7 +25,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step2.1.test-audit: Audit runtime companion tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.1.tests — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/test-audit-v0.3.md` — commit: 9c6e102e
 - [x] step2.1.impl: Implement runtime companion child-region cleanup boundary — role: implementation-agent — depends_on: step2.1.test-audit — production: `src/modules/training/workbench/workbenchRuntimeRegion.ts`, `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/training/recall/recallCheckpointService.ts`, `src/modules/training/recall/recallService.ts` — commit: 841bb74a
 - [x] step2.1.review: Architecture review of runtime companion implementation — role: architecture-reviewer — depends_on: step2.1.impl — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/architecture-review-v0.1.md` — commit: 8d4b7eaa
-- [ ] step2.2.contract: Contract sketch for analysis scratch child-region target/generation semantics — role: contract-designer — depends_on: step1.review; parallel_ready_with: step2.3 — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/scratch-region/test-contract-v0.1.md`
+- [x] step2.2.contract: Contract sketch for analysis scratch child-region target/generation semantics — role: contract-designer — depends_on: step1.review; parallel_ready_with: step2.3 — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/scratch-region/test-contract-v0.1.md` — commit: pending
 - [ ] step2.2.contract-audit: Audit analysis scratch child-region contract — role: contract-auditor — depends_on: step2.2.contract
 - [ ] step2.2.tests: Write focused analysis scratch region stale-result and flow outcome tests — role: test-writer — depends_on: step2.2.contract-audit
 - [ ] step2.2.test-audit: Audit analysis scratch tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.2.tests
@@ -53,6 +53,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - Full JS suite check: `npm test` passed 1879 tests and failed 6 unrelated existing/parallel wiring checks (`analysisNoMutation.test.js` C20 play/problem/recall snapshot rejection, `command-map-coverage.test.js` editbar edit-position affordance, `w5-analysis-mode-wiring.test.js` returnFromAnalysis reason payload assertions).
 - Runtime architecture review result: APPROVED in `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/architecture-review-v0.1.md` — commit: 8d4b7eaa.
 - Stage 2 parallelization rule: `step2.2` and `step2.3` may run concurrently for contracts, audits, and tests. Any conflicting production edit to shared `src/modules/training/workbench/workbenchFlowService.ts` is reserved for `step3.integration`.
+- Scratch contract result: submitted v0.1 in `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/scratch-region/test-contract-v0.1.md`; contract separates step2.2-local scratch owner/target/generation tests from step3 shared flow/default composition integration.
 
 ## Retries
 
