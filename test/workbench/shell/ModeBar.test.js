@@ -95,4 +95,17 @@ describe('ModeBar current-mode topbar (T-U2-2)', () => {
     fireEvent.click(action)
     assert.deepStrictEqual(calls, [], 'Mode actions should route through explicit callbacks, not onModeChange')
   })
+
+  it('opens preferences from the topbar icon', () => {
+    let opened = false
+    const {queryByTestId, fireEvent} = renderBar({
+      onOpenPreferences: () => { opened = true },
+    })
+
+    const preferences = queryByTestId('mode-action-preferences')
+    assert.ok(preferences, 'Expected preferences entry in ModeBar')
+
+    fireEvent.click(preferences)
+    assert.strictEqual(opened, true, 'Preferences entry should call onOpenPreferences')
+  })
 })

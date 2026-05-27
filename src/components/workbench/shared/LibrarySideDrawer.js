@@ -35,6 +35,11 @@ const externalSourceLabels = {
   oneOhOne: '101 错题',
 }
 
+const externalSourceInputLabels = {
+  fox: '野狐 ID',
+  oneOhOne: '101 ID',
+}
+
 function getErrorMessage(err) {
   return err?.message || String(err || '同步失败')
 }
@@ -78,6 +83,7 @@ export default class LibrarySideDrawer extends Component {
       savedGames: [],
       query: '',
       externalSourceStatus: {},
+      sourceEditor: null,
     }
   }
 
@@ -111,8 +117,8 @@ export default class LibrarySideDrawer extends Component {
   }
 
   normalizeType(type = 'history') {
-    if (type === 'games') return 'history'
-    return type || 'history'
+    if (type === 'problems') return 'problems'
+    return 'kifu'
   }
 
   getLibraryDataProvider() {
@@ -224,28 +230,91 @@ export default class LibrarySideDrawer extends Component {
     }
   }
 
+  toggleExternalSourceEditor(source) {
+    this.setState(({sourceEditor}) => ({
+      sourceEditor: sourceEditor === source ? null : source,
+    }))
+  }
+
+  async handleExternalSourceSubmit(source, handler, evt) {
+    evt.preventDefault()
+    if (typeof handler !== 'function') return
+
+    let value = (evt.currentTarget.elements.sourceId?.value || '').trim()
+    if (!value) return
+
+    this.setExternalSourceStatus(source, {status: 'loading', error: null})
+
+    try {
+      await handler(value)
+      this.setExternalSourceStatus(source, {status: 'synced', error: null})
+      this.setState({sourceEditor: null})
+    } catch (err) {
+      this.setExternalSourceStatus(source, {
+        status: 'error',
+        error: getErrorMessage(err),
+      })
+    }
+  }
+
   renderExternalSourceButton(source, testId, state, handler) {
     let statusText =
       state.loading ? '同步中' :
-        state.error ? '失败' :
-          state.status === 'synced' ? '已同步' : ''
+        state.status === 'synced' ? '已同步' : ''
+    let editorOpen = this.state.sourceEditor === source
+    let inputLabel = externalSourceInputLabels[source]
 
-    return h('button', {
-      type: 'button',
-      'data-testid': testId,
-      class: [
-        'wb-library-drawer__source',
-        state.loading ? 'wb-library-drawer__source--loading' : '',
-        state.error ? 'wb-library-drawer__source--error' : '',
-      ].filter(Boolean).join(' '),
-      disabled: state.disabled,
-      'aria-busy': state.loading ? 'true' : 'false',
-      'data-status': state.status,
-      title: state.disabledReason,
-      onClick: () => this.handleExternalSourceClick(source, handler),
-    },
-      externalSourceLabels[source],
-      statusText && h('small', {}, statusText),
+    return h('div', {class: 'wb-library-drawer__source-group'},
+      h('button', {
+        type: 'button',
+        'data-testid': testId,
+        class: [
+          'wb-library-drawer__source',
+          state.loading ? 'wb-library-drawer__source--loading' : '',
+          state.error ? 'wb-library-drawer__source--error' : '',
+          state.status === 'synced' && !state.loading ? 'wb-library-drawer__source--synced' : '',
+        ].filter(Boolean).join(' '),
+        disabled: state.disabled,
+        'aria-busy': state.loading ? 'true' : 'false',
+        'aria-invalid': state.error ? 'true' : undefined,
+        'data-status': state.status,
+        title: state.disabledReason,
+        onClick: () => this.handleExternalSourceClick(source, handler),
+      },
+        externalSourceLabels[source],
+        statusText && h('small', {}, statusText),
+      ),
+      h('button', {
+        type: 'button',
+        'data-testid': `${testId}-id-toggle`,
+        class: [
+          'wb-library-drawer__source-id-toggle',
+          editorOpen ? 'wb-library-drawer__source-id-toggle--active' : '',
+        ].filter(Boolean).join(' '),
+        disabled: state.loading,
+        title: `输入${inputLabel}`,
+        'aria-label': `输入${inputLabel}`,
+        onClick: () => this.toggleExternalSourceEditor(source),
+      }, 'ID'),
+      editorOpen && h('form', {
+        class: 'wb-library-drawer__source-id-form',
+        onSubmit: (evt) => this.handleExternalSourceSubmit(source, handler, evt),
+      },
+        h('input', {
+          name: 'sourceId',
+          type: 'text',
+          'data-testid': `${testId}-id-input`,
+          class: 'wb-library-drawer__source-id-input',
+          placeholder: inputLabel,
+          disabled: state.loading,
+        }),
+        h('button', {
+          type: 'submit',
+          'data-testid': `${testId}-id-submit`,
+          class: 'wb-library-drawer__source-id-submit',
+          disabled: state.loading,
+        }, '打开'),
+      ),
     )
   }
 
@@ -408,18 +477,44 @@ export default class LibrarySideDrawer extends Component {
 
   renderKifuLibrary() {
     let projection = this.getLibraryProjection()
-    let {onOpenLibraryTask = () => {}} = this.props
+    let {
+      gameTrees = [],
+      gameIndex = 0,
+      onOpenGame = () => {},
+      onOpenLibraryTask = () => {},
+    } = this.props
     let {query, savedGames} = this.state
     let normalizedQuery = query.trim().toLowerCase()
+    let projectedHistory = getProjectionItems(projection, 'history')
     let projectedKifu = getProjectionItems(projection, 'kifu')
-    let sourceItems = projectedKifu.length > 0 ? projectedKifu : savedGames
+    let projectedRecords = getProjectionItems(projection, 'gameRecords')
+    let currentGames = gameTrees.map((gameTree, index) => {
+      let data = getRootData(gameTree)
+      return {
+        id: `current-${index}`,
+        index,
+        title: gameTitle(gameTree, index),
+        source: index === gameIndex ? '当前打开' : '已打开',
+        updatedAt: getProperty(data, 'DT'),
+        result: getProperty(data, 'RE'),
+        badge: index === gameIndex ? '当前' : '',
+      }
+    })
+    let sourceItems = [
+      ...projectedHistory,
+      ...projectedKifu,
+      ...projectedRecords,
+      ...currentGames,
+      ...savedGames,
+    ]
     let kifuItems = sourceItems
-      .filter((game) => game.source !== 'play')
       .filter((game) => {
         if (!normalizedQuery) return true
         return [
           game.title,
+          game.name,
           game.source,
+          game.result,
           ...(game.tags || []),
         ].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
       })
@@ -435,13 +530,13 @@ export default class LibrarySideDrawer extends Component {
         h('button', {type: 'button', class: 'wb-library-drawer__filter'}, '≡'),
       ),
       h('button', {class: 'wb-library-drawer__open-file'}, '▣ 打开棋谱文件...  ⌘O'),
-      h('div', {class: 'wb-library-section-title'}, '本地棋谱'),
+      h('div', {class: 'wb-library-section-title'}, '棋谱库'),
       this.renderProjectionMessages(),
       this.renderSavedGameList(
         kifuItems,
         '暂无棋谱',
         '导入 SGF 或保存复盘棋谱后会进入棋谱库。',
-        (item) => onOpenLibraryTask(item),
+        (item) => item.index != null ? onOpenGame(item.index) : onOpenLibraryTask(item),
       ),
     )
   }
@@ -688,7 +783,7 @@ export default class LibrarySideDrawer extends Component {
       }),
       h('aside', {class: 'wb-library-drawer'},
         h('header', {class: 'wb-library-drawer__header'},
-          h('h2', {}, isProblemLibrary ? '错题库' : '资料库'),
+          h('h2', {}, isProblemLibrary ? '错题库' : '棋谱库'),
           h('button', {
             type: 'button',
             class: 'wb-library-drawer__close',
@@ -698,28 +793,16 @@ export default class LibrarySideDrawer extends Component {
         h('div', {class: 'wb-library-drawer__tabs'},
           h('button', {
             type: 'button',
-            'data-testid': 'library-tab-history',
-            class: activeType === 'history' ? 'active' : '',
-            onClick: () => onSwitch('history'),
-          }, '历史记录'),
-          h('button', {
-            type: 'button',
             'data-testid': 'library-tab-kifu',
             class: activeType === 'kifu' ? 'active' : '',
             onClick: () => onSwitch('kifu'),
           }, '棋谱库'),
           h('button', {
             type: 'button',
-            'data-testid': 'library-tab-game-records',
-            class: activeType === 'game-records' ? 'active' : '',
-            onClick: () => onSwitch('game-records'),
-          }, '对局库'),
-          h('button', {
-            type: 'button',
             'data-testid': 'library-tab-problems',
             class: activeType === 'problems' ? 'active' : '',
             onClick: () => onSwitch('problems'),
-          }, '历史问题'),
+          }, '错题库'),
         ),
         !isProblemLibrary && h('div', {class: 'wb-library-drawer__sources'},
           this.renderExternalSourceButton(
@@ -737,11 +820,7 @@ export default class LibrarySideDrawer extends Component {
         ),
         activeType === 'problems'
           ? this.renderProblemLibrary()
-          : activeType === 'kifu'
-            ? this.renderKifuLibrary()
-            : activeType === 'game-records'
-              ? this.renderGameRecordLibrary()
-              : this.renderHistory(),
+          : this.renderKifuLibrary(),
       ),
     )
   }

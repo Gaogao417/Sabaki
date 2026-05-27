@@ -104,7 +104,7 @@ describe('TrainingWorkbenchContainer new game wiring', () => {
 
     const drawer = container.querySelector('[data-testid="library-side-drawer"]')
     assert.ok(drawer, 'Expected topbar library command to render the library drawer')
-    assert.ok(drawer.textContent.includes('资料库'))
+    assert.ok(drawer.textContent.includes('棋谱库'))
   })
 
   it('opens the left wrong-problem drawer from the play mode left panel', async () => {
