@@ -13,6 +13,9 @@ import {
 } from './phase3TypedFakes.ts'
 
 const {createWorkbenchFlowService} = require('../../src/modules/training/workbench/workbenchFlowService.ts')
+const {
+  createOverlayStore,
+} = require('../../src/modules/overlays/overlayStore.ts')
 
 // --- Helpers ---
 
@@ -60,6 +63,74 @@ function createModeEffectsSpy() {
       },
       exitAnalysis(input) {
         calls.exitAnalysis.push(clone(input))
+      },
+    },
+  }
+}
+
+function createFlowOverlayHarness(initialMode = 'analysis') {
+  const appState = {
+    mode: initialMode,
+    editWorkspace: {referenceSnapshot: {}},
+    treePosition: 'root',
+    analysisTreePosition: 'root',
+    currentOwnership: () => [[0]],
+  }
+  const sideEffects = {
+    analyzeMove: [],
+    scheduleEditWorkspaceAnalysis: 0,
+    captureEditReference: 0,
+  }
+  const overlayStore = createOverlayStore({
+    getAppState: () => appState,
+    ensureAnalysisReady: () => Promise.resolve({id: 'syncer'}),
+    analyzeMove: treePosition => {
+      sideEffects.analyzeMove.push(treePosition)
+    },
+    scheduleEditWorkspaceAnalysis: () => {
+      sideEffects.scheduleEditWorkspaceAnalysis++
+    },
+    captureEditReference: () => {
+      sideEffects.captureEditReference++
+      appState.editWorkspace.referenceSnapshot = {}
+    },
+    getInfoOverlayDuration: () => 1,
+    notifyChange: () => {},
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    },
+  })
+
+  return {appState, overlayStore, sideEffects}
+}
+
+function createRecordingOverlayRegion(overlayStore) {
+  const {
+    createWorkbenchOverlayRegion,
+  } = require('../../src/modules/overlays/workbenchOverlayRegion.ts')
+  assert.strictEqual(
+    typeof createWorkbenchOverlayRegion,
+    'function',
+    'overlay region module must export createWorkbenchOverlayRegion',
+  )
+
+  const productionRegion = createWorkbenchOverlayRegion({overlayStore})
+  assert.strictEqual(
+    typeof productionRegion.onWorkbenchModeTransition,
+    'function',
+    'production overlay region must expose onWorkbenchModeTransition',
+  )
+
+  const calls = []
+  return {
+    calls,
+    overlayRegion: {
+      onWorkbenchModeTransition(input) {
+        calls.push(clone(input))
+        return productionRegion.onWorkbenchModeTransition(input)
       },
     },
   }
@@ -116,6 +187,7 @@ function createMockDeps(overrides = {}) {
       ...overrides.tabService,
     },
     modeEffects: overrides.modeEffects,
+    overlayRegion: overrides.overlayRegion,
     logger,
   }
 }
@@ -1082,6 +1154,150 @@ describe('workbenchFlowService', () => {
         'mode enter/exit must not call attempt/recall/source persistence services')
       assert.strictEqual(modeEffects.calls.enterAnalysis.length, 1)
       assert.strictEqual(modeEffects.calls.exitAnalysis.length, 1)
+    })
+  })
+
+  // ================================================================
+  // step1.tests: Overlay child-region transition boundary
+  // Contract:
+  // docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/test-contract-v0.2.md
+  //
+  // Harness manifest:
+  // - Production subjects: createWorkbenchFlowService, real workbenchStore,
+  //   real overlayStore, production createWorkbenchOverlayRegion adapter.
+  // - Recording layer: a tiny decorator records calls before delegating to the
+  //   production overlay region; final assertions are real tab/overlay state.
+  // - Forbidden fake greens: mocked workbenchFlowService, mocked updateTab,
+  //   legacy sabaki.setMode cleanup, logger-only assertions.
+  // ================================================================
+
+  describe('step1 overlay child-region transition boundary', () => {
+    it('OVR-T09 enterAnalysis notifies overlay region and does not auto-enable overlay', () => {
+      const overlay = createFlowOverlayHarness('play')
+      const recording = createRecordingOverlayRegion(overlay.overlayStore)
+      const deps = createMockDeps({overlayRegion: recording.overlayRegion})
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_overlay_enter',
+        taskId: 'task_overlay_enter',
+        mode: 'play',
+        currentTreePosition: 'play_node_1',
+      }))
+
+      service.enterAnalysis('tab_overlay_enter', {reason: 'manual'})
+
+      const tab = getTab(deps.store, 'tab_overlay_enter')
+      assert.strictEqual(tab.mode, 'analysis')
+      assert.strictEqual(tab.previousMode, 'play')
+      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, false)
+      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
+      assert.strictEqual(recording.calls.length, 1)
+      assert.strictEqual(recording.calls[0].tabId, 'tab_overlay_enter')
+      assert.strictEqual(recording.calls[0].fromMode, 'play')
+      assert.strictEqual(recording.calls[0].toMode, 'analysis')
+      assert.strictEqual(recording.calls[0].reason, 'manual')
+    })
+
+    it('OVR-T04 returnFromAnalysis restores target state and clears overlay through region', async () => {
+      const overlay = createFlowOverlayHarness('analysis')
+      const recording = createRecordingOverlayRegion(overlay.overlayStore)
+      const deps = createMockDeps({overlayRegion: recording.overlayRegion})
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_overlay_return',
+        taskId: 'task_overlay_return',
+        mode: 'analysis',
+        previousMode: 'recall',
+        recallSubstate: 'checkpoint_ai_revealed',
+        currentTreePosition: 'analysis_node',
+        activeRecallSessionId: 'recall_overlay',
+        analysisReturnTarget: {
+          mode: 'recall',
+          recallSubstate: 'normal',
+          treePosition: 'recall_node_7',
+          moveIndex: 7,
+        },
+      }))
+      assert.strictEqual(overlay.overlayStore.setTerritoryCompareEnabled(true), true)
+      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, true)
+
+      service.returnFromAnalysis({tabId: 'tab_overlay_return', reason: 'return'})
+      await Promise.resolve()
+
+      const tab = getTab(deps.store, 'tab_overlay_return')
+      assert.strictEqual(tab.mode, 'recall')
+      assert.strictEqual(tab.recallSubstate, 'normal')
+      assert.strictEqual(tab.currentTreePosition, 'recall_node_7')
+      assert.strictEqual(tab.analysisReturnTarget, undefined)
+      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, false)
+      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
+      assert.strictEqual(overlay.sideEffects.scheduleEditWorkspaceAnalysis, 0)
+      assert.strictEqual(recording.calls.length, 1)
+      assert.strictEqual(recording.calls[0].fromMode, 'analysis')
+      assert.strictEqual(recording.calls[0].toMode, 'recall')
+      assert.strictEqual(recording.calls[0].reason, 'return')
+    })
+
+    it('OVR-T05 restartAttempt exits analysis and clears overlay through the same region path', async () => {
+      const overlay = createFlowOverlayHarness('analysis')
+      const recording = createRecordingOverlayRegion(overlay.overlayStore)
+      const deps = createMockDeps({overlayRegion: recording.overlayRegion})
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_overlay_restart',
+        taskId: 'task_overlay_restart',
+        mode: 'analysis',
+        previousMode: 'problem',
+        analysisReturnTarget: {
+          mode: 'problem',
+          treePosition: 'problem_node_3',
+        },
+      }))
+      assert.strictEqual(overlay.overlayStore.setTerritoryEnabled(true), true)
+      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, true)
+
+      service.restartAttempt('tab_overlay_restart')
+      await Promise.resolve()
+
+      const tab = getTab(deps.store, 'tab_overlay_restart')
+      assert.strictEqual(tab.mode, 'problem')
+      assert.strictEqual(tab.analysisReturnTarget, undefined)
+      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, false)
+      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
+      assert.deepStrictEqual(overlay.sideEffects.analyzeMove, [])
+      assert.strictEqual(overlay.sideEffects.scheduleEditWorkspaceAnalysis, 0)
+      assert.strictEqual(recording.calls.length, 1)
+      assert.strictEqual(recording.calls[0].fromMode, 'analysis')
+      assert.strictEqual(recording.calls[0].toMode, 'problem')
+      assert.strictEqual(recording.calls[0].reason, 'restart-attempt')
+    })
+
+    it('OVR-T06 rejected returnFromAnalysis does not notify overlay region or clear overlay', () => {
+      const overlay = createFlowOverlayHarness('analysis')
+      const recording = createRecordingOverlayRegion(overlay.overlayStore)
+      const deps = createMockDeps({overlayRegion: recording.overlayRegion})
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_overlay_rejected',
+        taskId: 'task_overlay_rejected',
+        mode: 'analysis',
+      }))
+      assert.strictEqual(overlay.overlayStore.setTerritoryEnabled(true), true)
+      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, true)
+
+      assert.throws(
+        () => service.returnFromAnalysis({
+          tabId: 'tab_overlay_rejected',
+          reason: 'return',
+        }),
+        /Invalid mode transition/,
+      )
+
+      const tab = getTab(deps.store, 'tab_overlay_rejected')
+      assert.strictEqual(tab.mode, 'analysis')
+      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, true)
+      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
+      assert.strictEqual(recording.calls.length, 0)
     })
   })
 
