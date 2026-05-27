@@ -14,7 +14,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] workflow.classify: Classify request as business/state/architecture workflow — role: business-contract-workflow — commit: b67fd4b7
 - [x] phase-intake-slice-plan: Produce slice plan with explicit serial/parallel branches — role: phase-intake-slice-planner — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/slice-plan.md` — commit: 3ce058c2
 - [ ] step1.contract: Contract sketch for overlay child-region transition boundary — role: contract-designer — depends_on: phase-intake-slice-plan — contract: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/test-contract-v0.1.md` — commit: c413c4ab — retry required after step1.contract-audit REQUEST_CHANGES
-- [x] step1.contract-audit: Audit overlay child-region contract — role: contract-auditor — depends_on: step1.contract — verdict: REQUEST_CHANGES — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/contract-audit-v0.1.md` — commit: pending
+- [x] step1.contract-audit: Audit overlay child-region contract — role: contract-auditor — depends_on: step1.contract — verdict: REQUEST_CHANGES — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/contract-audit-v0.1.md` — commit: 867f5f45
 - [ ] step1.tests: Write focused overlay child-region and flow outcome tests — role: test-writer — depends_on: step1.contract-audit
 - [ ] step1.test-audit: Audit tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step1.tests
 - [ ] step1.impl: Implement overlay child-region transition boundary — role: implementation-agent — depends_on: step1.test-audit
