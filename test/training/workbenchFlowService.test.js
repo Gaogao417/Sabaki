@@ -12,7 +12,10 @@ import {
   seedPhase3RecallAttempt,
 } from './phase3TypedFakes.ts'
 
-const {createWorkbenchFlowService} = require('../../src/modules/training/workbench/workbenchFlowService.ts')
+const {
+  createSabakiModeEffects,
+  createWorkbenchFlowService,
+} = require('../../src/modules/training/workbench/workbenchFlowService.ts')
 const {
   createOverlayStore,
 } = require('../../src/modules/overlays/overlayStore.ts')
@@ -1326,6 +1329,53 @@ describe('workbenchFlowService', () => {
       assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, true)
       assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
       assert.strictEqual(recording.calls.length, 0)
+    })
+  })
+
+  describe('step1 production composition safeguards', () => {
+    it('Workbench mode effects enter analysis without legacy territory auto-enable', () => {
+      const calls = []
+      const modeEffects = createSabakiModeEffects({
+        state: {
+          mode: 'play',
+          editWorkspace: null,
+          analysisType: 'winrate',
+        },
+        setMode(mode, options) {
+          calls.push(['setMode', mode, options])
+        },
+        setState(patch) {
+          calls.push(['setState', clone(patch)])
+        },
+        createAnalysisWorkspace() {
+          calls.push(['createAnalysisWorkspace'])
+          return {activeTab: 'current'}
+        },
+        scheduleEditWorkspaceAnalysis(tab) {
+          calls.push(['scheduleEditWorkspaceAnalysis', tab])
+        },
+      })
+
+      modeEffects.enterAnalysis({
+        tabId: 'tab_mode_effect_guard',
+        fromMode: 'play',
+        toMode: 'analysis',
+        beforeTab: makeTab({id: 'tab_mode_effect_guard', mode: 'play'}),
+        afterTab: makeTab({id: 'tab_mode_effect_guard', mode: 'analysis'}),
+        analysisReturnTarget: {mode: 'play'},
+        analysisContext: {source: 'play', taskId: 'task_mode_effect_guard'},
+        reason: 'manual',
+      })
+
+      assert.deepStrictEqual(
+        calls[0],
+        ['setMode', 'analysis', {autoEnableTerritory: false}],
+        'Workbench mode effect must not let legacy sabaki.setMode auto-enable territory',
+      )
+      assert.deepStrictEqual(calls.at(-1), [
+        'setState',
+        {showAnalysis: true, analysisType: 'winrate'},
+      ])
     })
   })
 

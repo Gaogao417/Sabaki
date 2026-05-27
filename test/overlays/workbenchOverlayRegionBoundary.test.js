@@ -97,4 +97,24 @@ describe('Workbench overlay region boundary (OVR-T03)', () => {
       }
     })
   }
+
+  it('production training context injects overlay region into flow service', () => {
+    let source = readSource('src/modules/sabaki.js')
+
+    assert.match(
+      source,
+      /\bcreateWorkbenchOverlayRegion\b/,
+      'sabaki.js composition root must import/use createWorkbenchOverlayRegion',
+    )
+    assert.match(
+      source,
+      /const\s+overlayRegion\s*=\s*createWorkbenchOverlayRegion\s*\(\s*{[\s\S]*overlayStore:\s*this\.getOverlayStore\(\)[\s\S]*}\s*\)/,
+      'sabaki.js must create overlayRegion from the production overlayStore',
+    )
+    assert.match(
+      source,
+      /createWorkbenchFlowService\s*\(\s*{[\s\S]*\boverlayRegion\b[\s\S]*}\s*\)/,
+      'sabaki.js must pass overlayRegion into the production workbench flow service',
+    )
+  })
 })
