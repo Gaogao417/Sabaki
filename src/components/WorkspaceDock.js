@@ -6,43 +6,6 @@ import sabaki from '../modules/sabaki.js'
 const t = i18n.context('WorkspaceDock')
 
 export default class WorkspaceDock extends Component {
-  clearReviewWorkspace() {
-    let ws = sabaki.state.editWorkspace
-
-    if (ws != null && sabaki.getEditWorkspaceTabKeys != null) {
-      let tab = ws.activeTab || 'current'
-      let {snapshotKey, markerKey, linesKey} = sabaki.getEditWorkspaceTabKeys(tab)
-      let snapshot = ws[snapshotKey]
-
-      if (snapshot != null) {
-        let markerMap = Array.from({length: snapshot.height}, () =>
-          Array.from({length: snapshot.width}, () => null),
-        )
-
-        if (sabaki.commitEditResult != null) {
-          sabaki.commitEditResult({
-            tab,
-            markerMap,
-            lines: [],
-            lineFirstVertex: null,
-          })
-        } else {
-          sabaki.setState({
-            editWorkspace: {
-              ...ws,
-              [markerKey]: markerMap,
-              [linesKey]: [],
-              lineFirstVertex: null,
-            },
-          })
-        }
-        return
-      }
-    }
-
-    sabaki.clearAnalysisArea?.()
-  }
-
   render({mode, editWorkspaceActive, summary, treePosition, children}) {
     let isReviewDock = editWorkspaceActive || mode === 'analysis'
     let isPassiveDock = mode === 'play' || mode === 'recall'
@@ -53,12 +16,12 @@ export default class WorkspaceDock extends Component {
         : mode === 'recall'
           ? '回忆工作区'
           : mode === 'find'
-              ? t('Find')
-              : mode === 'autoplay'
-                  ? t('Autoplay')
-                  : ['scoring', 'estimator'].includes(mode)
-                    ? t('Scoring')
-                    : '棋盘工作区'
+            ? t('Find')
+            : mode === 'autoplay'
+              ? t('Autoplay')
+              : ['scoring', 'estimator'].includes(mode)
+                ? t('Scoring')
+                : '棋盘工作区'
 
     let shouldShowContent = isReviewDock || !isPassiveDock
     let simpleTools =
@@ -132,68 +95,50 @@ export default class WorkspaceDock extends Component {
         simpleTools,
       ),
       shouldShowContent && h('section', {class: 'workspace-stack'}, children),
-      isReviewDock &&
+      !isReviewDock &&
         h(
-          'div',
-          {class: 'workspace-dock__review-actions'},
+          'footer',
+          {class: 'workspace-dock__footer'},
           h(
-            'button',
-            {type: 'button', class: 'dock-tool', onClick: () => sabaki.undo()},
-            '撤销',
-          ),
-          h(
-            'button',
-            {type: 'button', class: 'dock-tool', onClick: () => sabaki.redo()},
-            '重做',
-          ),
-          h(
-            'button',
+            'div',
             {
-              type: 'button',
-              class: 'dock-tool',
-              onClick: () => this.clearReviewWorkspace(),
+              class: 'dock-status-item',
+              onClick: () => sabaki.toggleThirdPartyPanel('fox'),
             },
-            '清空',
+            '🦊 野狐: ',
+            h(
+              'span',
+              {},
+              (() => {
+                const defaultId = window.sabaki.setting.get(
+                  'fox.default_account',
+                )
+                const accounts = window.sabaki.setting.get('fox.accounts') || []
+                const entry =
+                  defaultId && accounts.find((a) => a.id === defaultId)
+                if (entry)
+                  return entry.alias
+                    ? `${entry.account} (${entry.alias})`
+                    : entry.account
+                const legacy = window.sabaki.setting.get('fox.account') || ''
+                return legacy || '未设置'
+              })(),
+            ),
           ),
-          h('button', {type: 'button', class: 'dock-tool'}, '100%'),
-        ),
-      h(
-        'footer',
-        {class: 'workspace-dock__footer'},
-        h(
-          'div',
-          {
-            class: 'dock-status-item',
-            onClick: () => sabaki.toggleThirdPartyPanel('fox'),
-          },
-          '🦊 野狐: ',
           h(
-            'span',
-            {},
-            (() => {
-              const defaultId = window.sabaki.setting.get('fox.default_account')
-              const accounts = window.sabaki.setting.get('fox.accounts') || []
-              const entry = defaultId && accounts.find(a => a.id === defaultId)
-              if (entry) return entry.alias ? `${entry.account} (${entry.alias})` : entry.account
-              const legacy = window.sabaki.setting.get('fox.account') || ''
-              return legacy || '未设置'
-            })()
-          )
+            'div',
+            {
+              class: 'dock-status-item',
+              onClick: () => sabaki.toggleThirdPartyPanel('101'),
+            },
+            '🧩 101: ',
+            h(
+              'span',
+              {class: sabaki.state.weiqi101Connected ? 'connected' : ''},
+              sabaki.state.weiqi101Connected ? '已连接 ✓' : '未登录',
+            ),
+          ),
         ),
-        h(
-          'div',
-          {
-            class: 'dock-status-item',
-            onClick: () => sabaki.toggleThirdPartyPanel('101'),
-          },
-          '🧩 101: ',
-          h(
-            'span',
-            {class: sabaki.state.weiqi101Connected ? 'connected' : ''},
-            sabaki.state.weiqi101Connected ? '已连接 ✓' : '未登录'
-          )
-        )
-      )
     )
   }
 }

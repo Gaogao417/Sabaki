@@ -1,5 +1,5 @@
 import {h} from 'preact'
-import AnnotationToolbar from '../shared/AnnotationToolbar.js'
+import EditBar from '../../bars/EditBar.js'
 
 /**
  * Mode-specific action button definitions.
@@ -9,7 +9,11 @@ const MODE_ACTIONS = {
   play: [
     {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
     {testId: 'action-pass', label: 'Pass', callback: 'onPass'},
-    {testId: 'action-mark-doubtful', label: '标记疑问手', callback: 'onMarkDoubtful'},
+    {
+      testId: 'action-mark-doubtful',
+      label: '标记疑问手',
+      callback: 'onMarkDoubtful',
+    },
   ],
   problem: [
     {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
@@ -25,7 +29,11 @@ const MODE_ACTIONS = {
     {testId: 'action-undo', label: '悔棋', callback: 'onUndo'},
     {testId: 'action-redo', label: '重做', callback: 'onRedo'},
     {testId: 'action-clear', label: '清除', callback: 'onClear'},
-    {testId: 'action-edit-position', label: '编辑局面', callback: 'onEditPosition'},
+    {
+      testId: 'action-edit-position',
+      label: '编辑局面',
+      callback: 'onEditPosition',
+    },
   ],
 }
 
@@ -89,28 +97,47 @@ export default function BottomActionBar({
   snapshotCount = 0,
   activeAnnotationTool = null,
   onAnnotationToolChange = () => {},
+  selectedTool = null,
+  editBarSabaki = null,
+  editWorkspace = null,
+  overlayStore = null,
+  areaSelectMode = false,
+  analysisAreaVertices = null,
+  territoryEnabled = false,
+  territoryCompareEnabled = false,
+  territoryCompareAvailable = true,
+  showAISuggestions = false,
+  showHumanPreference = false,
   ...callbacks
 }) {
   const modeActions = MODE_ACTIONS[mode] || []
-  const label = workspaceLabel || WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.play
-  const isCheckpoint = mode === 'recall' &&
-    (callbacks.activeCheckpoint || callbacks.activeCheckpointId ||
+  const label =
+    workspaceLabel || WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.play
+  const isCheckpoint =
+    mode === 'recall' &&
+    (callbacks.activeCheckpoint ||
+      callbacks.activeCheckpointId ||
       String(callbacks.recallSubstate || '').startsWith('checkpoint'))
 
   function actionBtn(btn) {
-    const cls = btn.variant === 'danger'
-      ? 'wb-btn wb-btn--sm wb-btn-danger'
-      : btn.variant === 'primary'
-        ? 'wb-btn wb-btn--sm wb-btn-primary'
-        : 'wb-btn wb-btn--sm wb-btn-ghost'
-    return h('button', {
-      'data-testid': btn.testId,
-      class: cls,
-      onClick: () => {
-        const handler = callbacks[btn.callback]
-        if (handler) handler()
+    const cls =
+      btn.variant === 'danger'
+        ? 'wb-btn wb-btn--sm wb-btn-danger'
+        : btn.variant === 'primary'
+          ? 'wb-btn wb-btn--sm wb-btn-primary'
+          : 'wb-btn wb-btn--sm wb-btn-ghost'
+    return h(
+      'button',
+      {
+        'data-testid': btn.testId,
+        class: cls,
+        onClick: () => {
+          const handler = callbacks[btn.callback]
+          if (handler) handler()
+        },
       },
-    }, btn.label)
+      btn.label,
+    )
   }
 
   /** Build mode-specific status segments */
@@ -121,30 +148,58 @@ export default function BottomActionBar({
     segs.push(h('span', {class: 'wb-status-text__divider'}))
 
     if (mode === 'recall') {
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        `当前进度 ${recallProgress} / ${recallTotal}`))
+      segs.push(
+        h(
+          'span',
+          {class: 'wb-status-text__value'},
+          `当前进度 ${recallProgress} / ${recallTotal}`,
+        ),
+      )
       segs.push(h('span', {class: 'wb-status-text__divider'}))
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        recallWaiting ? '等待输入下一手' : ''))
+      segs.push(
+        h(
+          'span',
+          {class: 'wb-status-text__value'},
+          recallWaiting ? '等待输入下一手' : '',
+        ),
+      )
     } else if (mode === 'problem') {
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        `当前第 ${moveNumber} 手`))
+      segs.push(
+        h('span', {class: 'wb-status-text__value'}, `当前第 ${moveNumber} 手`),
+      )
       segs.push(h('span', {class: 'wb-status-text__divider'}))
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        `对方：${opponentType === 'ai' ? 'AI' : '自己'}`))
+      segs.push(
+        h(
+          'span',
+          {class: 'wb-status-text__value'},
+          `对方：${opponentType === 'ai' ? 'AI' : '自己'}`,
+        ),
+      )
       segs.push(h('span', {class: 'wb-status-text__divider'}))
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        `题目范围：${problemAreaSet ? '已设置' : '未设置'}`))
+      segs.push(
+        h(
+          'span',
+          {class: 'wb-status-text__value'},
+          `题目范围：${problemAreaSet ? '已设置' : '未设置'}`,
+        ),
+      )
     } else if (mode === 'analysis') {
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        `当前第 ${moveNumber} 手`))
+      segs.push(
+        h('span', {class: 'wb-status-text__value'}, `当前第 ${moveNumber} 手`),
+      )
       segs.push(h('span', {class: 'wb-status-text__divider'}))
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        `关键点 ${keyPointCount} · Snapshot ${snapshotCount}`))
+      segs.push(
+        h(
+          'span',
+          {class: 'wb-status-text__value'},
+          `关键点 ${keyPointCount} · Snapshot ${snapshotCount}`,
+        ),
+      )
     } else {
       // play
-      segs.push(h('span', {class: 'wb-status-text__value'},
-        `当前第 ${moveNumber} 手`))
+      segs.push(
+        h('span', {class: 'wb-status-text__value'}, `当前第 ${moveNumber} 手`),
+      )
       segs.push(h('span', {class: 'wb-status-text__divider'}))
       segs.push(h('span', {class: 'wb-status-text__value'}, engineStatus))
     }
@@ -153,16 +208,22 @@ export default function BottomActionBar({
   }
 
   function visualButton(label, callback, options = {}) {
-    return h('button', {
-      class: [
-        'wb-visual-action',
-        options.primary ? 'wb-visual-action--primary' : '',
-        options.disabled ? 'wb-visual-action--disabled' : '',
-      ].filter(Boolean).join(' '),
-      'data-testid': options.testId,
-      disabled: options.disabled,
-      onClick: callback,
-    }, label)
+    return h(
+      'button',
+      {
+        class: [
+          'wb-visual-action',
+          options.primary ? 'wb-visual-action--primary' : '',
+          options.disabled ? 'wb-visual-action--disabled' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+        'data-testid': options.testId,
+        disabled: options.disabled,
+        onClick: callback,
+      },
+      label,
+    )
   }
 
   function renderVisualActions() {
@@ -170,7 +231,9 @@ export default function BottomActionBar({
       return [
         visualButton('撤销修正手', callbacks.onUndo),
         visualButton('清空修正图', callbacks.onClear),
-        visualButton('保存修正图', callbacks.onSubmitCorrection, {primary: true}),
+        visualButton('保存修正图', callbacks.onSubmitCorrection, {
+          primary: true,
+        }),
         visualButton('显示 AI 候选', callbacks.onRevealAI),
         visualButton('继续 Recall  →', callbacks.onEndRecall, {disabled: true}),
       ]
@@ -181,7 +244,11 @@ export default function BottomActionBar({
         visualButton('↶  悔棋', callbacks.onUndo),
         visualButton('↷  重做', callbacks.onRedo, {disabled: true}),
         visualButton('💡  请求提示', callbacks.onRequestHint),
-        visualButton('✈  提交', callbacks.onSubmitAnswer || callbacks.onSubmit, {primary: true}),
+        visualButton(
+          '✈  提交',
+          callbacks.onSubmitAnswer || callbacks.onSubmit,
+          {primary: true},
+        ),
       ]
     }
 
@@ -195,22 +262,28 @@ export default function BottomActionBar({
     }
 
     if (mode === 'analysis') {
-      return [
-        h('div', {class: 'wb-visual-annotation-strip'},
-          h(AnnotationToolbar, {
-            activeTool: activeAnnotationTool || 'stone_1',
-            onToolChange: onAnnotationToolChange,
-          }),
-        ),
-        visualButton('←  上一步', callbacks.onUndo),
-        visualButton('下一手  →', callbacks.onRedo),
-        visualButton('⊕  添加参考变化', callbacks.onSnapshot, {
-          testId: 'action-snapshot',
+      return h(
+        'div',
+        {
+          class: 'wb-edit-toolbar-drawer',
+          'data-testid': 'analysis-edit-toolbar',
+        },
+        h(EditBar, {
+          mode,
+          sabaki: editBarSabaki,
+          selectedTool: selectedTool || activeAnnotationTool || 'stone_1',
+          onToolButtonClick: (evt) => onAnnotationToolChange(evt.tool),
+          editWorkspace,
+          overlayStore,
+          territoryEnabled,
+          territoryCompareEnabled,
+          territoryCompareAvailable,
+          showAISuggestions,
+          showHumanPreference,
+          areaSelectMode,
+          analysisAreaVertices,
         }),
-        visualButton('▦  Edit Position', callbacks.onEditPosition),
-        h('label', {class: 'wb-visual-toggle'}, '显示候选手', h('input', {type: 'checkbox', checked: true}), h('span', {})),
-        visualButton('⚙', callbacks.onSettings),
-      ]
+      )
     }
 
     return [
@@ -221,39 +294,45 @@ export default function BottomActionBar({
     ]
   }
 
-  return h('div', {
-    'data-testid': 'bottom-action-bar',
-    class: `wb-bottom-action-bar wb-bottom-action-bar--${mode}${isCheckpoint ? ' wb-bottom-action-bar--checkpoint' : ''}`,
-  },
+  return h(
+    'div',
+    {
+      'data-testid': 'bottom-action-bar',
+      class: `wb-bottom-action-bar wb-bottom-action-bar--${mode}${isCheckpoint ? ' wb-bottom-action-bar--checkpoint' : ''}`,
+    },
     h('div', {class: 'wb-bottom-action-bar__visual'}, renderVisualActions()),
 
-    h('div', {class: 'wb-bottom-action-bar__compat', 'aria-hidden': 'true'},
-      h('div', {
-        'data-testid': 'bottom-status-text',
-        class: 'wb-status-text',
-      }, ...renderStatusSegments()),
-      modeActions.map(btn =>
-        h('div', {
-          key: btn.testId,
-          class: 'wb-bottom-action-bar__item',
-        }, actionBtn(btn)),
-      ),
-      VIEW_ACTIONS.map(btn =>
-        h('div', {
-          key: btn.testId,
-          class: 'wb-bottom-action-bar__item',
-        }, actionBtn(btn)),
-      ),
-      mode === 'analysis' &&
-        h('div', {
-          'data-testid': 'annotation-tool',
-          class: 'wb-bottom-action-bar__annotation-tools',
+    h(
+      'div',
+      {class: 'wb-bottom-action-bar__compat', 'aria-hidden': 'true'},
+      h(
+        'div',
+        {
+          'data-testid': 'bottom-status-text',
+          class: 'wb-status-text',
         },
-          h(AnnotationToolbar, {
-            activeTool: activeAnnotationTool || 'stone_1',
-            onToolChange: onAnnotationToolChange,
-          }),
+        ...renderStatusSegments(),
+      ),
+      modeActions.map((btn) =>
+        h(
+          'div',
+          {
+            key: btn.testId,
+            class: 'wb-bottom-action-bar__item',
+          },
+          actionBtn(btn),
         ),
+      ),
+      VIEW_ACTIONS.map((btn) =>
+        h(
+          'div',
+          {
+            key: btn.testId,
+            class: 'wb-bottom-action-bar__item',
+          },
+          actionBtn(btn),
+        ),
+      ),
     ),
   )
 }

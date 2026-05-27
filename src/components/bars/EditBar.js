@@ -2,10 +2,19 @@ import {h, Component} from 'preact'
 import classNames from 'classnames'
 
 import i18n from '../../i18n.js'
-import sabaki from '../../modules/sabaki.js'
 import {noop} from '../../modules/helper.js'
 
 const t = i18n.context('EditBar')
+let defaultSabaki = null
+
+function getDefaultSabaki() {
+  if (defaultSabaki == null) {
+    let mod = require('../../modules/sabaki.js')
+    defaultSabaki = mod.default || mod
+  }
+
+  return defaultSabaki
+}
 
 class EditBar extends Component {
   constructor(props) {
@@ -127,6 +136,7 @@ class EditBar extends Component {
     {
       mode,
       selectedTool,
+      sabaki,
       editWorkspace,
       overlayStore,
       territoryEnabled,
@@ -148,7 +158,8 @@ class EditBar extends Component {
 
     let isSelected = ([, id]) =>
       id.replace(/_-?1$/, '') === selectedTool.replace(/_-?1$/, '')
-    let overlayActions = overlayStore ?? sabaki.getOverlayStore()
+    let getSabaki = () => sabaki || getDefaultSabaki()
+    let overlayActions = overlayStore ?? sabaki?.getOverlayStore?.()
 
     return h(
       'section',
@@ -165,7 +176,6 @@ class EditBar extends Component {
           {},
           [
             [t('Stone'), `stone_${stoneTool}`],
-            [t('Play'), 'play'],
             [t('Cross'), 'cross'],
             [t('Triangle'), 'triangle'],
             [t('Square'), 'square'],
@@ -187,33 +197,39 @@ class EditBar extends Component {
           this.renderActionButton('区域选择', {
             icon: './node_modules/@primer/octicons/build/svg/pencil.svg',
             selected: areaSelectMode,
-            onClick: () => sabaki.toggleAreaSelectMode(),
+            onClick: () => getSabaki().toggleAreaSelectMode(),
           }),
           analysisAreaVertices != null &&
             this.renderActionButton('清除区域', {
               icon: './node_modules/@primer/octicons/build/svg/x.svg',
-              onClick: () => sabaki.clearAnalysisArea(),
+              onClick: () => getSabaki().clearAnalysisArea(),
             }),
           this.renderActionButton(t('Territory'), {
             icon: './node_modules/@primer/octicons/build/svg/eye.svg',
             selected: territoryEnabled,
-            onClick: () => overlayActions.toggleTerritoryEnabled(),
+            onClick: () =>
+              (
+                overlayActions ?? getSabaki().getOverlayStore()
+              ).toggleTerritoryEnabled(),
           }),
           this.renderActionButton(t('Territory Compare'), {
             icon: './node_modules/@primer/octicons/build/svg/git-compare.svg',
             selected: territoryCompareEnabled,
             disabled: !territoryCompareAvailable,
-            onClick: () => overlayActions.toggleTerritoryCompareEnabled(),
+            onClick: () =>
+              (
+                overlayActions ?? getSabaki().getOverlayStore()
+              ).toggleTerritoryCompareEnabled(),
           }),
           this.renderActionButton('AI 推荐点', {
             icon: './node_modules/@primer/octicons/build/svg/eye.svg',
             selected: showAISuggestions,
-            onClick: () => sabaki.toggleShowAISuggestions(),
+            onClick: () => getSabaki().toggleShowAISuggestions(),
           }),
           this.renderActionButton('人类偏好点', {
             icon: './node_modules/@primer/octicons/build/svg/person.svg',
             selected: showHumanPreference,
-            onClick: () => sabaki.toggleShowHumanPreference(),
+            onClick: () => getSabaki().toggleShowHumanPreference(),
           }),
         ),
       ),

@@ -53,7 +53,7 @@
  *   | Contract T6-06 | previousMode undefined defaults to 'play' | T6-06 | covered | Container handler test, spy flowService |
  *   | Contract T6-07 | ModeActions renders Snapshot button | T6-07 | covered | Real ModeActions render |
  *   | Contract T6-08 | ModeActions renders Return button | T6-08 | covered | Real ModeActions render |
- *   | Contract T6-09 | BottomActionBar renders Snapshot button | T6-09 | covered | Real BottomActionBar render |
+ *   | Contract T6-09 | BottomActionBar renders compact analysis tool drawer | T6-09 | covered | Real BottomActionBar render |
  *   | Contract T6-10 | handleSnapshot calls flowService.snapshotFromCurrentContext | T6-10 | covered | Container handler, spy flowService |
  *   | Contract T6-11 | handleReturnFromAnalysis calls flowService.returnFromAnalysis | T6-11 | covered | Container handler, spy flowService |
  *   | Contract T6-12 | returnFromAnalysis notifies subscriber | T6-12 | covered | Real workbenchStore subscription |
@@ -67,13 +67,14 @@
 import assert from 'assert'
 import {h} from 'preact'
 
-import {createLoggerService, createConsoleWriter} from '../../../src/modules/logger/index.js'
+import {
+  createLoggerService,
+  createConsoleWriter,
+} from '../../../src/modules/logger/index.js'
 import TrainingWorkbenchContainer from '../../../src/components/TrainingWorkbenchContainer.js'
 import {createWorkbenchStore} from '../../../src/modules/training/store/workbenchStore.ts'
 import {createTrainingRuntimeStore} from '../../../src/modules/training/store/trainingRuntimeStore.ts'
-import {
-  createWorkbenchFlowService,
-} from '../../../src/modules/training/workbench/workbenchFlowService.ts'
+import {createWorkbenchFlowService} from '../../../src/modules/training/workbench/workbenchFlowService.ts'
 import {createSnapshotService} from '../../../src/modules/training/analysis/snapshotService.ts'
 import ModeActions from '../../../src/components/workbench/shell/ModeActions.js'
 import BottomActionBar from '../../../src/components/workbench/shell/BottomActionBar.js'
@@ -148,7 +149,13 @@ function createSpyRepository() {
   const tasks = new Map<string, any>()
   return {
     async loadTask(taskId: string) {
-      return tasks.get(taskId) || {id: taskId, rootPositionSgf: '', origin: {provider: 'local'}}
+      return (
+        tasks.get(taskId) || {
+          id: taskId,
+          rootPositionSgf: '',
+          origin: {provider: 'local'},
+        }
+      )
     },
     async createTask(task: any) {
       tasks.set(task.id, task)
@@ -157,40 +164,96 @@ function createSpyRepository() {
     async transaction(fn: () => Promise<void>) {
       return fn()
     },
-    async getProblem() { return null },
-    async getGame() { return null },
-    async listMoveEvaluationsByAttempt() { return [] },
-    async listBadMovesByAttempt() { return [] },
-    async saveGame(g: any) { return g },
-    async createProblem(p: any) { return p },
-    async getProblemsByStatus() { return [] },
-    async saveProblem(p: any) { return p },
-    async saveProblemAttempt(a: any) { return a },
-    async saveBadMove(b: any) { return b },
-    async saveRecallSession(s: any) { return s },
+    async getProblem() {
+      return null
+    },
+    async getGame() {
+      return null
+    },
+    async listMoveEvaluationsByAttempt() {
+      return []
+    },
+    async listBadMovesByAttempt() {
+      return []
+    },
+    async saveGame(g: any) {
+      return g
+    },
+    async createProblem(p: any) {
+      return p
+    },
+    async getProblemsByStatus() {
+      return []
+    },
+    async saveProblem(p: any) {
+      return p
+    },
+    async saveProblemAttempt(a: any) {
+      return a
+    },
+    async saveBadMove(b: any) {
+      return b
+    },
+    async saveRecallSession(s: any) {
+      return s
+    },
     async saveRecallAttempts() {},
-    async getDueReviews() { return [] },
+    async getDueReviews() {
+      return []
+    },
     async upsertReviewSchedule() {},
-    async getDashboardSummary() { return {} },
+    async getDashboardSummary() {
+      return {}
+    },
     async updateBadMoveGeneratedProblem() {},
-    async findTaskBySource() { return null },
+    async findTaskBySource() {
+      return null
+    },
     async updateTask() {},
-    async createAttempt(a: any) { return a },
-    async loadAttempt() { return null },
-    async listAttemptsByTask() { return [] },
+    async createAttempt(a: any) {
+      return a
+    },
+    async loadAttempt() {
+      return null
+    },
+    async listAttemptsByTask() {
+      return []
+    },
     async updateAttempt() {},
-    async createMoveEvaluation(e: any) { return e },
-    async listMoveEvaluationsByAttempt2() { return [] },
-    async createBadMove(b: any) { return b },
-    async listBadMovesByAttempt2() { return [] },
-    async createRecallSession(s: any) { return s },
-    async loadRecallSession() { return null },
+    async createMoveEvaluation(e: any) {
+      return e
+    },
+    async listMoveEvaluationsByAttempt2() {
+      return []
+    },
+    async createBadMove(b: any) {
+      return b
+    },
+    async listBadMovesByAttempt2() {
+      return []
+    },
+    async createRecallSession(s: any) {
+      return s
+    },
+    async loadRecallSession() {
+      return null
+    },
     async updateRecallSession() {},
-    async createRecallAttempt(a: any) { return a },
-    async createRecallCheckpoint(c: any) { return c },
-    async createReviewSchedule(r: any) { return r },
-    async createMoveComment(c: any) { return c },
-    async listMoveCommentsByTask() { return [] },
+    async createRecallAttempt(a: any) {
+      return a
+    },
+    async createRecallCheckpoint(c: any) {
+      return c
+    },
+    async createReviewSchedule(r: any) {
+      return r
+    },
+    async createMoveComment(c: any) {
+      return c
+    },
+    async listMoveCommentsByTask() {
+      return []
+    },
   }
 }
 
@@ -213,10 +276,12 @@ function createHarness({
   const snapshotService = createSpySnapshotService()
   const legacyController = createSpyLegacyController()
 
-  const resolvedActiveTabId = activeTabId !== undefined ? activeTabId : (tabs[0]?.id ?? null)
+  const resolvedActiveTabId =
+    activeTabId !== undefined ? activeTabId : (tabs[0]?.id ?? null)
 
   for (const tab of tabs) workbenchStore.addTab(tab)
-  if (resolvedActiveTabId != null) workbenchStore.setActiveTab(resolvedActiveTabId)
+  if (resolvedActiveTabId != null)
+    workbenchStore.setActiveTab(resolvedActiveTabId)
   if (recallView != null) runtimeStore.setRecallView(recallView)
 
   const taskImportService = {
@@ -236,7 +301,9 @@ function createHarness({
     legacyTrainingFlowController: legacyController,
     snapshotService,
     documentStore: {
-      async playMove() { return {valid: true, changed: true, treePosition: 'node_2'} },
+      async playMove() {
+        return {valid: true, changed: true, treePosition: 'node_2'}
+      },
     },
     attemptService: {
       async appendMove() {},
@@ -293,7 +360,9 @@ function createHarnessWithRealFlowService({
   }
 
   const spyRecallService = {
-    async createRecallSession() { return {id: 'rs_real'} },
+    async createRecallSession() {
+      return {id: 'rs_real'}
+    },
     async completeRecall() {},
   }
 
@@ -301,7 +370,9 @@ function createHarnessWithRealFlowService({
     workbenchStore,
     repository: repository as any,
     attemptService: {
-      async createAttempt(input: any) { return {id: 'att_real', ...input} },
+      async createAttempt(input: any) {
+        return {id: 'att_real', ...input}
+      },
       async freezeAttempt() {},
       async finalizeAttemptResult() {},
     },
@@ -312,10 +383,12 @@ function createHarnessWithRealFlowService({
     logger: logger as any,
   })
 
-  const resolvedActiveTabId = activeTabId !== undefined ? activeTabId : (tabs[0]?.id ?? null)
+  const resolvedActiveTabId =
+    activeTabId !== undefined ? activeTabId : (tabs[0]?.id ?? null)
 
   for (const tab of tabs) workbenchStore.addTab(tab)
-  if (resolvedActiveTabId != null) workbenchStore.setActiveTab(resolvedActiveTabId)
+  if (resolvedActiveTabId != null)
+    workbenchStore.setActiveTab(resolvedActiveTabId)
 
   const taskImportService = {
     async createManualTask(input: any) {
@@ -336,7 +409,9 @@ function createHarnessWithRealFlowService({
     legacyTrainingFlowController: legacyController,
     snapshotService,
     documentStore: {
-      async playMove() { return {valid: true, changed: true, treePosition: 'node_2'} },
+      async playMove() {
+        return {valid: true, changed: true, treePosition: 'node_2'}
+      },
     },
     attemptService: {
       async appendMove() {},
@@ -399,7 +474,9 @@ function createHarnessWithRealSnapshotService({
   })
 
   const spyRecallService = {
-    async createRecallSession() { return {id: 'rs_snap'} },
+    async createRecallSession() {
+      return {id: 'rs_snap'}
+    },
     async completeRecall() {},
   }
 
@@ -407,7 +484,9 @@ function createHarnessWithRealSnapshotService({
     workbenchStore,
     repository: repository as any,
     attemptService: {
-      async createAttempt(input: any) { return {id: 'att_snap', ...input} },
+      async createAttempt(input: any) {
+        return {id: 'att_snap', ...input}
+      },
       async freezeAttempt() {},
       async finalizeAttemptResult() {},
     },
@@ -440,7 +519,9 @@ function createHarnessWithRealSnapshotService({
     legacyTrainingFlowController: legacyController,
     snapshotService: realSnapshotService,
     documentStore: {
-      async playMove() { return {valid: true, changed: true, treePosition: 'node_2'} },
+      async playMove() {
+        return {valid: true, changed: true, treePosition: 'node_2'}
+      },
     },
     attemptService: {
       async appendMove() {},
@@ -467,7 +548,9 @@ function createHarnessWithRealSnapshotService({
   }
 }
 
-function installAnalysisScratchHarness(harness: ReturnType<typeof createHarness>) {
+function installAnalysisScratchHarness(
+  harness: ReturnType<typeof createHarness>,
+) {
   const snapshot = {
     id: 'scratch_current_1',
     role: 'current',
@@ -524,36 +607,44 @@ function installAnalysisScratchHarness(harness: ReturnType<typeof createHarness>
 // =====================================================
 
 describe('W8-P3 Task 6: Analysis Action Buttons', function () {
-
   // ===================================================
   // ARCHITECTURE_BOUNDARY: T6-01
   // ===================================================
 
   describe('ARCHITECTURE_BOUNDARY', function () {
-
     // --- T6-01: Snapshot does not modify current tab activeAttemptId ---
 
     describe('T6-01: Snapshot preserves activeAttemptId', function () {
       it('after snapshot, original tab activeAttemptId is unchanged', async function () {
         const harness = createHarnessWithRealFlowService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_arch1',
-            taskId: 'task_arch1',
-            mode: 'analysis',
-            activeAttemptId: 'att_original',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_arch1',
+              taskId: 'task_arch1',
+              mode: 'analysis',
+              activeAttemptId: 'att_original',
+            }),
+          ],
         })
 
-        const beforeAttemptId = harness.workbenchStore.getState().tabs[0].activeAttemptId
-        assert.strictEqual(beforeAttemptId, 'att_original',
-          'Precondition: activeAttemptId must be att_original')
+        const beforeAttemptId =
+          harness.workbenchStore.getState().tabs[0].activeAttemptId
+        assert.strictEqual(
+          beforeAttemptId,
+          'att_original',
+          'Precondition: activeAttemptId must be att_original',
+        )
 
         // snapshotFromCurrentContext uses real flowService + spy snapshotService/repo/tabService
         await harness.flowService.snapshotFromCurrentContext('tab_arch1')
 
-        const afterAttemptId = harness.workbenchStore.getState().tabs[0].activeAttemptId
-        assert.strictEqual(afterAttemptId, 'att_original',
-          'Snapshot must not modify current tab activeAttemptId -- Contract T6-01, Arch v0.5 9.7')
+        const afterAttemptId =
+          harness.workbenchStore.getState().tabs[0].activeAttemptId
+        assert.strictEqual(
+          afterAttemptId,
+          'att_original',
+          'Snapshot must not modify current tab activeAttemptId -- Contract T6-01, Arch v0.5 9.7',
+        )
       })
     })
   })
@@ -563,34 +654,47 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
   // ===================================================
 
   describe('CONTROLLER_STATE_TRANSITION', function () {
-
     // --- T6-02: Snapshot creates new Tab (mode=problem, parentTabId=original) ---
 
     describe('T6-02: Snapshot creates new problem tab', function () {
       it('after snapshot, workbenchStore contains new tab with mode=problem and parentTabId=original', async function () {
         const harness = createHarnessWithRealFlowService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_snap_src',
-            taskId: 'task_snap_src',
-            mode: 'analysis',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_snap_src',
+              taskId: 'task_snap_src',
+              mode: 'analysis',
+            }),
+          ],
         })
 
-        assert.strictEqual(harness.workbenchStore.getState().tabs.length, 1,
-          'Precondition: exactly one tab')
+        assert.strictEqual(
+          harness.workbenchStore.getState().tabs.length,
+          1,
+          'Precondition: exactly one tab',
+        )
 
         // snapshotFromCurrentContext calls: snapshotService.capture -> repo.createTask -> tabService.openTask
         // tabService.openTask adds a new tab to the store
         await harness.flowService.snapshotFromCurrentContext('tab_snap_src')
 
-        assert.strictEqual(harness.tabService.calls.openTask.length, 1,
-          'tabService.openTask must be called once')
+        assert.strictEqual(
+          harness.tabService.calls.openTask.length,
+          1,
+          'tabService.openTask must be called once',
+        )
 
         const openTaskCall = harness.tabService.calls.openTask[0]
-        assert.strictEqual(openTaskCall.mode, 'problem',
-          'openTask must be called with mode=problem -- Contract T6-02, PRD v0.5 5.5')
-        assert.strictEqual(openTaskCall.parentTabId, 'tab_snap_src',
-          'openTask parentTabId must equal source tab id -- Contract T6-02, Arch v0.5 9.7')
+        assert.strictEqual(
+          openTaskCall.mode,
+          'problem',
+          'openTask must be called with mode=problem -- Contract T6-02, PRD v0.5 5.5',
+        )
+        assert.strictEqual(
+          openTaskCall.parentTabId,
+          'tab_snap_src',
+          'openTask parentTabId must equal source tab id -- Contract T6-02, Arch v0.5 9.7',
+        )
 
         // Verify the new tab exists in the store
         const tabs = harness.workbenchStore.getState().tabs
@@ -598,10 +702,16 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         const newTab = tabs.find((t: any) => t.id !== 'tab_snap_src')
         assert.ok(sourceTab, 'Source tab must still exist')
         assert.ok(newTab, 'New tab must exist in workbenchStore')
-        assert.strictEqual(newTab.mode, 'problem',
-          'New tab mode must be problem -- Contract T6-02')
-        assert.strictEqual(newTab.parentTabId, 'tab_snap_src',
-          'New tab parentTabId must equal source tab id -- Contract T6-02')
+        assert.strictEqual(
+          newTab.mode,
+          'problem',
+          'New tab mode must be problem -- Contract T6-02',
+        )
+        assert.strictEqual(
+          newTab.parentTabId,
+          'tab_snap_src',
+          'New tab parentTabId must equal source tab id -- Contract T6-02',
+        )
       })
     })
 
@@ -610,19 +720,28 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
     describe('T6-03: Snapshot preserves current tab mode', function () {
       it('after snapshot, source tab mode is still analysis', async function () {
         const harness = createHarnessWithRealFlowService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_mode_preserve',
-            taskId: 'task_mode_preserve',
-            mode: 'analysis',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_mode_preserve',
+              taskId: 'task_mode_preserve',
+              mode: 'analysis',
+            }),
+          ],
         })
 
-        await harness.flowService.snapshotFromCurrentContext('tab_mode_preserve')
+        await harness.flowService.snapshotFromCurrentContext(
+          'tab_mode_preserve',
+        )
 
-        const sourceTab = harness.workbenchStore.getState().tabs.find((t: any) => t.id === 'tab_mode_preserve')
+        const sourceTab = harness.workbenchStore
+          .getState()
+          .tabs.find((t: any) => t.id === 'tab_mode_preserve')
         assert.ok(sourceTab, 'Source tab must still exist')
-        assert.strictEqual(sourceTab.mode, 'analysis',
-          'Source tab mode must still be analysis after snapshot -- Contract T6-03, PRD v0.5 5.5')
+        assert.strictEqual(
+          sourceTab.mode,
+          'analysis',
+          'Source tab mode must still be analysis after snapshot -- Contract T6-03, PRD v0.5 5.5',
+        )
       })
     })
 
@@ -631,22 +750,35 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
     describe('T6-04: returnFromAnalysis changes mode', function () {
       it('after returnFromAnalysis(tabId, "recall"), tab.mode becomes "recall"', function () {
         const harness = createHarnessWithRealFlowService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_return1',
-            mode: 'analysis',
-            previousMode: 'recall',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_return1',
+              mode: 'analysis',
+              previousMode: 'recall',
+            }),
+          ],
         })
 
         const before = harness.workbenchStore.getState().tabs[0]
-        assert.strictEqual(before.mode, 'analysis', 'Precondition: mode=analysis')
-        assert.strictEqual(before.previousMode, 'recall', 'Precondition: previousMode=recall')
+        assert.strictEqual(
+          before.mode,
+          'analysis',
+          'Precondition: mode=analysis',
+        )
+        assert.strictEqual(
+          before.previousMode,
+          'recall',
+          'Precondition: previousMode=recall',
+        )
 
         harness.flowService.returnFromAnalysis({tabId: 'tab_return1'})
 
         const after = harness.workbenchStore.getState().tabs[0]
-        assert.strictEqual(after.mode, 'recall',
-          'After returnFromAnalysis, tab.mode must be previousMode value -- Contract T6-04, Arch v0.5 5.3')
+        assert.strictEqual(
+          after.mode,
+          'recall',
+          'After returnFromAnalysis, tab.mode must be previousMode value -- Contract T6-04, Arch v0.5 5.3',
+        )
       })
     })
 
@@ -655,21 +787,30 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
     describe('T6-05: returnFromAnalysis clears previousMode', function () {
       it('after returnFromAnalysis, tab.previousMode is undefined', function () {
         const harness = createHarnessWithRealFlowService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_return2',
-            mode: 'analysis',
-            previousMode: 'problem',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_return2',
+              mode: 'analysis',
+              previousMode: 'problem',
+            }),
+          ],
         })
 
         const before = harness.workbenchStore.getState().tabs[0]
-        assert.strictEqual(before.previousMode, 'problem', 'Precondition: previousMode=problem')
+        assert.strictEqual(
+          before.previousMode,
+          'problem',
+          'Precondition: previousMode=problem',
+        )
 
         harness.flowService.returnFromAnalysis({tabId: 'tab_return2'})
 
         const after = harness.workbenchStore.getState().tabs[0]
-        assert.strictEqual(after.previousMode, undefined,
-          'After returnFromAnalysis, tab.previousMode must be undefined -- Contract T6-05, Arch v0.5 5.3')
+        assert.strictEqual(
+          after.previousMode,
+          undefined,
+          'After returnFromAnalysis, tab.previousMode must be undefined -- Contract T6-05, Arch v0.5 5.3',
+        )
       })
     })
 
@@ -681,22 +822,29 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         // flowService.returnFromAnalysis({tabId}) reads tab.analysisReturnTarget internally.
         // When analysisReturnTarget is absent, defaults to 'play'.
         const harness = createHarness({
-          tabs: [makeAnalysisTab({
-            id: 'tab_default_play',
-            mode: 'analysis',
-            previousMode: undefined,
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_default_play',
+              mode: 'analysis',
+              previousMode: undefined,
+            }),
+          ],
         })
 
         const shellProps = harness.getShellProps()
 
-        assert.strictEqual(typeof shellProps.onReturn, 'function',
-          'Container must expose onReturn callback')
+        assert.strictEqual(
+          typeof shellProps.onReturn,
+          'function',
+          'Container must expose onReturn callback',
+        )
         shellProps.onReturn()
 
-        assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_default_play'},
-        ], 'Container must call flowService.returnFromAnalysis({tabId}) -- Contract T6-06')
+        assert.deepStrictEqual(
+          harness.flowService.calls.returnFromAnalysis,
+          [{tabId: 'tab_default_play'}],
+          'Container must call flowService.returnFromAnalysis({tabId}) -- Contract T6-06',
+        )
       })
     })
   })
@@ -706,7 +854,6 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
   // ===================================================
 
   describe('UI_COMMAND_MAPPING', function () {
-
     // --- T6-07: ModeActions analysis renders Snapshot button ---
 
     describe('T6-07: ModeActions Snapshot button', function () {
@@ -715,18 +862,26 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         const {queryByTestId, fireEvent} = renderToDom(
           h(ModeActions, {
             mode: 'analysis',
-            onSnapshot: () => { calls.snapshot = true },
+            onSnapshot: () => {
+              calls.snapshot = true
+            },
             onSettings: () => {},
             onReturn: () => {},
-          })
+          }),
         )
 
         const btn = queryByTestId('mode-action-snapshot')
-        assert.ok(btn, 'ModeActions analysis must render button[data-testid="mode-action-snapshot"] -- Contract T6-07, PRD v0.5 6.6')
+        assert.ok(
+          btn,
+          'ModeActions analysis must render button[data-testid="mode-action-snapshot"] -- Contract T6-07, PRD v0.5 6.6',
+        )
 
         fireEvent.click(btn)
-        assert.strictEqual(calls.snapshot, true,
-          'Clicking mode-action-snapshot must fire onSnapshot callback -- Contract T6-07')
+        assert.strictEqual(
+          calls.snapshot,
+          true,
+          'Clicking mode-action-snapshot must fire onSnapshot callback -- Contract T6-07',
+        )
       })
     })
 
@@ -740,49 +895,94 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
             mode: 'analysis',
             onSnapshot: () => {},
             onSettings: () => {},
-            onReturn: () => { calls.return_ = true },
-          })
+            onReturn: () => {
+              calls.return_ = true
+            },
+          }),
         )
 
         const btn = queryByTestId('mode-action-return')
-        assert.ok(btn, 'ModeActions analysis must render button[data-testid="mode-action-return"] -- Contract T6-08, PRD v0.5 6.6')
+        assert.ok(
+          btn,
+          'ModeActions analysis must render button[data-testid="mode-action-return"] -- Contract T6-08, PRD v0.5 6.6',
+        )
 
         fireEvent.click(btn)
-        assert.strictEqual(calls.return_, true,
-          'Clicking mode-action-return must fire onReturn callback -- Contract T6-08')
+        assert.strictEqual(
+          calls.return_,
+          true,
+          'Clicking mode-action-return must fire onReturn callback -- Contract T6-08',
+        )
       })
     })
 
-    // --- T6-09: BottomActionBar analysis renders Snapshot button ---
+    // --- T6-09: BottomActionBar analysis renders compact edit toolbar ---
 
-    describe('T6-09: BottomActionBar Snapshot button', function () {
-      it('renders button[data-testid="action-snapshot"] in analysis mode, click fires onSnapshot', function () {
-        const calls = {snapshot: false}
-        const {queryByTestId, fireEvent} = renderToDom(
+    describe('T6-09: BottomActionBar compact edit toolbar', function () {
+      it('renders the shared EditBar in analysis mode, click fires tool callback', function () {
+        const calls = {
+          selectedTool: null as string | null,
+        }
+        const {container, queryByTestId, fireEvent} = renderToDom(
           h(BottomActionBar, {
             mode: 'analysis',
             moveNumber: 10,
-            onUndo: () => {},
-            onRedo: () => {},
-            onClear: () => {},
-            onEditPosition: () => {},
-            onSnapshot: () => { calls.snapshot = true },
-            onSelect: () => {},
-            onHandShape: () => {},
-            onZoomIn: () => {},
-            onZoomOut: () => {},
-            onFullscreen: () => {},
-            activeAnnotationTool: null,
-            onAnnotationToolChange: () => {},
-          })
+            analysisAreaVertices: [[0, 0]],
+            selectedTool: 'stone_1',
+            onAnnotationToolChange: (tool: string) => {
+              calls.selectedTool = tool
+            },
+          }),
         )
 
-        const btn = queryByTestId('action-snapshot')
-        assert.ok(btn, 'BottomActionBar analysis must render button[data-testid="action-snapshot"] -- Contract T6-09, PRD v0.5 10')
+        const toolbar = queryByTestId('analysis-edit-toolbar')
+        assert.ok(
+          toolbar,
+          'BottomActionBar analysis must render compact edit toolbar -- Contract T6-09',
+        )
 
-        fireEvent.click(btn)
-        assert.strictEqual(calls.snapshot, true,
-          'Clicking action-snapshot must fire onSnapshot callback -- Contract T6-09')
+        const snapshotBtn = container.querySelector(
+          '.wb-bottom-action-bar__visual [data-testid="action-snapshot"]',
+        )
+        assert.strictEqual(
+          snapshotBtn,
+          null,
+          'BottomActionBar analysis drawer must not show Snapshot in the visible edit toolbar -- Contract T6-09',
+        )
+
+        const expectedToolLabels = [
+          '区域选择',
+          '清除区域',
+          'Territory',
+          'Territory Compare',
+          'AI 推荐点',
+          '人类偏好点',
+        ]
+
+        for (const label of expectedToolLabels) {
+          const tool = container.querySelector(
+            `[data-testid="analysis-edit-toolbar"] #edit a[aria-label="${label}"]`,
+          )
+          assert.ok(
+            tool,
+            `BottomActionBar analysis must render shared EditBar tool "${label}" -- Contract T6-09`,
+          )
+        }
+
+        const triangleTool = container.querySelector(
+          '[data-testid="analysis-edit-toolbar"] #edit a[data-id="triangle"]',
+        )
+        assert.ok(
+          triangleTool,
+          'BottomActionBar analysis must render the shared EditBar annotation tools -- Contract T6-09',
+        )
+
+        fireEvent.click(triangleTool)
+        assert.strictEqual(
+          calls.selectedTool,
+          'triangle',
+          'Clicking shared EditBar annotation tool must fire onAnnotationToolChange -- Contract T6-09',
+        )
       })
     })
   })
@@ -792,7 +992,6 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
   // ===================================================
 
   describe('CONTAINER_DELEGATION', function () {
-
     // --- T6-10: handleSnapshot calls flowService.snapshotFromCurrentContext ---
 
     describe('T6-10: handleSnapshot delegation', function () {
@@ -803,14 +1002,19 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
 
         const shellProps = harness.getShellProps()
 
-        assert.strictEqual(typeof shellProps.onSnapshot, 'function',
-          'Container must expose onSnapshot callback')
+        assert.strictEqual(
+          typeof shellProps.onSnapshot,
+          'function',
+          'Container must expose onSnapshot callback',
+        )
 
         await shellProps.onSnapshot()
 
-        assert.deepStrictEqual(harness.flowService.calls.snapshotFromCurrentContext, [
-          {tabId: 'tab_del_snap'},
-        ], 'handleSnapshot must call flowService.snapshotFromCurrentContext(activeTab.id) -- Contract T6-10, PRD v0.5 5.5')
+        assert.deepStrictEqual(
+          harness.flowService.calls.snapshotFromCurrentContext,
+          [{tabId: 'tab_del_snap'}],
+          'handleSnapshot must call flowService.snapshotFromCurrentContext(activeTab.id) -- Contract T6-10, PRD v0.5 5.5',
+        )
       })
     })
 
@@ -819,23 +1023,30 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
     describe('T6-11: handleReturnFromAnalysis delegation', function () {
       it('onReturn calls flowService.returnFromAnalysis({tabId})', function () {
         const harness = createHarness({
-          tabs: [makeAnalysisTab({
-            id: 'tab_del_return',
-            mode: 'analysis',
-            previousMode: 'recall',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_del_return',
+              mode: 'analysis',
+              previousMode: 'recall',
+            }),
+          ],
         })
 
         const shellProps = harness.getShellProps()
 
-        assert.strictEqual(typeof shellProps.onReturn, 'function',
-          'Container must expose onReturn callback')
+        assert.strictEqual(
+          typeof shellProps.onReturn,
+          'function',
+          'Container must expose onReturn callback',
+        )
 
         shellProps.onReturn()
 
-        assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_del_return'},
-        ], 'handleReturnFromAnalysis must call flowService.returnFromAnalysis({tabId: activeTab.id}) -- Contract T6-11, Arch v0.5 5.3')
+        assert.deepStrictEqual(
+          harness.flowService.calls.returnFromAnalysis,
+          [{tabId: 'tab_del_return'}],
+          'handleReturnFromAnalysis must call flowService.returnFromAnalysis({tabId: activeTab.id}) -- Contract T6-11, Arch v0.5 5.3',
+        )
       })
     })
 
@@ -848,13 +1059,19 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
 
         const shellProps = harness.getShellProps()
 
-        assert.strictEqual(shellProps.activeAnnotationTool, 'stone_1',
-          'Container must project selectedTool into the analysis edit bar')
+        assert.strictEqual(
+          shellProps.activeAnnotationTool,
+          'stone_1',
+          'Container must project selectedTool into the analysis edit bar',
+        )
 
         shellProps.onAnnotationToolChange('stone_-1')
 
-        assert.strictEqual(state.selectedTool, 'stone_-1',
-          'Analysis edit bar tool command must update the scratch/current tool selection')
+        assert.strictEqual(
+          state.selectedTool,
+          'stone_-1',
+          'Analysis edit bar tool command must update the scratch/current tool selection',
+        )
       })
 
       it('onClear clears scratch/current markers and lines without calling game-tree undo/redo', function () {
@@ -865,8 +1082,12 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         let undoCalls = 0
         let redoCalls = 0
         Object.assign(harness.sabaki, {
-          undo() { undoCalls += 1 },
-          redo() { redoCalls += 1 },
+          undo() {
+            undoCalls += 1
+          },
+          redo() {
+            redoCalls += 1
+          },
         })
 
         const shellProps = harness.getShellProps()
@@ -875,18 +1096,34 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         shellProps.onUndo()
         shellProps.onRedo()
 
-        assert.deepStrictEqual(state.editWorkspace.currentMarkerMap, [
-          [null, null],
-          [null, null],
-        ], 'Clear must write only scratch/current marker map')
-        assert.deepStrictEqual(state.editWorkspace.currentLines, [],
-          'Clear must write only scratch/current lines')
-        assert.strictEqual(state.editWorkspace.lineFirstVertex, null,
-          'Clear/undo must reset scratch/current line-first state')
-        assert.strictEqual(undoCalls, 0,
-          'Analysis undo must not dispatch sabaki.undo to the source game tree')
-        assert.strictEqual(redoCalls, 0,
-          'Analysis redo must not dispatch sabaki.redo to the source game tree')
+        assert.deepStrictEqual(
+          state.editWorkspace.currentMarkerMap,
+          [
+            [null, null],
+            [null, null],
+          ],
+          'Clear must write only scratch/current marker map',
+        )
+        assert.deepStrictEqual(
+          state.editWorkspace.currentLines,
+          [],
+          'Clear must write only scratch/current lines',
+        )
+        assert.strictEqual(
+          state.editWorkspace.lineFirstVertex,
+          null,
+          'Clear/undo must reset scratch/current line-first state',
+        )
+        assert.strictEqual(
+          undoCalls,
+          0,
+          'Analysis undo must not dispatch sabaki.undo to the source game tree',
+        )
+        assert.strictEqual(
+          redoCalls,
+          0,
+          'Analysis redo must not dispatch sabaki.redo to the source game tree',
+        )
       })
     })
 
@@ -902,13 +1139,19 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         const shellProps = harness.getShellProps()
 
         // onSnapshot should still be a function (the handler)
-        assert.strictEqual(typeof shellProps.onSnapshot, 'function',
-          'Container must expose onSnapshot even without active tab')
+        assert.strictEqual(
+          typeof shellProps.onSnapshot,
+          'function',
+          'Container must expose onSnapshot even without active tab',
+        )
 
         await shellProps.onSnapshot()
 
-        assert.strictEqual(harness.flowService.calls.snapshotFromCurrentContext.length, 0,
-          'flowService.snapshotFromCurrentContext must NOT be called when activeTab is null -- Contract T6-16')
+        assert.strictEqual(
+          harness.flowService.calls.snapshotFromCurrentContext.length,
+          0,
+          'flowService.snapshotFromCurrentContext must NOT be called when activeTab is null -- Contract T6-16',
+        )
       })
     })
 
@@ -923,13 +1166,19 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
 
         const shellProps = harness.getShellProps()
 
-        assert.strictEqual(typeof shellProps.onReturn, 'function',
-          'Container must expose onReturn even without active tab')
+        assert.strictEqual(
+          typeof shellProps.onReturn,
+          'function',
+          'Container must expose onReturn even without active tab',
+        )
 
         shellProps.onReturn()
 
-        assert.strictEqual(harness.flowService.calls.returnFromAnalysis.length, 0,
-          'flowService.returnFromAnalysis must NOT be called when activeTab is null -- Contract T6-17')
+        assert.strictEqual(
+          harness.flowService.calls.returnFromAnalysis.length,
+          0,
+          'flowService.returnFromAnalysis must NOT be called when activeTab is null -- Contract T6-17',
+        )
       })
     })
   })
@@ -939,26 +1188,32 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
   // ===================================================
 
   describe('STORE_SUBSCRIPTION', function () {
-
     // --- T6-12: returnFromAnalysis notifies subscriber ---
 
     describe('T6-12: returnFromAnalysis subscriber notification', function () {
       it('subscriber callback is called after returnFromAnalysis', function () {
         const harness = createHarnessWithRealFlowService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_sub_return',
-            mode: 'analysis',
-            previousMode: 'play',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_sub_return',
+              mode: 'analysis',
+              previousMode: 'play',
+            }),
+          ],
         })
 
         let notified = false
-        harness.workbenchStore.subscribe(() => { notified = true })
+        harness.workbenchStore.subscribe(() => {
+          notified = true
+        })
 
         harness.flowService.returnFromAnalysis({tabId: 'tab_sub_return'})
 
-        assert.strictEqual(notified, true,
-          'Subscriber must be notified after returnFromAnalysis -- Contract T6-12')
+        assert.strictEqual(
+          notified,
+          true,
+          'Subscriber must be notified after returnFromAnalysis -- Contract T6-12',
+        )
       })
     })
 
@@ -967,22 +1222,29 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
     describe('T6-13: snapshot subscriber notification', function () {
       it('subscriber callback is called after snapshotFromCurrentContext', async function () {
         const harness = createHarnessWithRealFlowService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_sub_snap',
-            taskId: 'task_sub_snap',
-            mode: 'analysis',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_sub_snap',
+              taskId: 'task_sub_snap',
+              mode: 'analysis',
+            }),
+          ],
         })
 
         let notified = false
-        harness.workbenchStore.subscribe(() => { notified = true })
+        harness.workbenchStore.subscribe(() => {
+          notified = true
+        })
 
         // snapshotFromCurrentContext -> spy snapshotService -> spy repo.createTask ->
         // tabService.openTask (which adds a tab to workbenchStore, triggering subscriber)
         await harness.flowService.snapshotFromCurrentContext('tab_sub_snap')
 
-        assert.strictEqual(notified, true,
-          'Subscriber must be notified after snapshotFromCurrentContext (new tab added triggers store notification) -- Contract T6-13')
+        assert.strictEqual(
+          notified,
+          true,
+          'Subscriber must be notified after snapshotFromCurrentContext (new tab added triggers store notification) -- Contract T6-13',
+        )
       })
     })
   })
@@ -992,23 +1254,27 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
   // ===================================================
 
   describe('PROJECTION_RETURN', function () {
-
     // --- T6-14: returnFromAnalysis projects mode=previousMode ---
 
     describe('T6-14: projectFromWorkbench returns mode after return', function () {
       it('after returnFromAnalysis, Container projection shows mode=recall', function () {
         const harness = createHarness({
-          tabs: [makeAnalysisTab({
-            id: 'tab_proj_return',
-            mode: 'analysis',
-            previousMode: 'recall',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_proj_return',
+              mode: 'analysis',
+              previousMode: 'recall',
+            }),
+          ],
         })
 
         // Verify initial projection: mode=analysis
         let shellProps = harness.getShellProps()
-        assert.strictEqual(shellProps.mode, 'analysis',
-          'Precondition: projection mode must be analysis')
+        assert.strictEqual(
+          shellProps.mode,
+          'analysis',
+          'Precondition: projection mode must be analysis',
+        )
 
         // Simulate returnFromAnalysis: update store state
         harness.workbenchStore.updateTab('tab_proj_return', {
@@ -1022,8 +1288,11 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
         // projectFromWorkbench reads activeTab.mode from store
         // This indirectly tests the projectFromWorkbench function
         // via Container.render() -> projectFromWorkbench(ws) -> shellProps.mode
-        assert.strictEqual(shellProps.mode, 'recall',
-          'After returnFromAnalysis, projection mode must be recall -- Contract T6-14, Container.js L517-546 projectFromWorkbench')
+        assert.strictEqual(
+          shellProps.mode,
+          'recall',
+          'After returnFromAnalysis, projection mode must be recall -- Contract T6-14, Container.js L517-546 projectFromWorkbench',
+        )
       })
     })
   })
@@ -1033,17 +1302,18 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
   // ===================================================
 
   describe('SIDE_EFFECT_BOUNDARY', function () {
-
     // --- T6-15: snapshotService.captureSnapshotInput does not call tabService.openTask ---
 
     describe('T6-15: snapshotService does not call tabService.openTask', function () {
       it('during captureSnapshotInput, tabService.openTask is not called', async function () {
         const harness = createHarnessWithRealSnapshotService({
-          tabs: [makeAnalysisTab({
-            id: 'tab_se_snap',
-            taskId: 'task_se_snap',
-            mode: 'analysis',
-          })],
+          tabs: [
+            makeAnalysisTab({
+              id: 'tab_se_snap',
+              taskId: 'task_se_snap',
+              mode: 'analysis',
+            }),
+          ],
         })
 
         // Reset openTask calls to track only captureSnapshotInput period
@@ -1056,8 +1326,11 @@ describe('W8-P3 Task 6: Analysis Action Buttons', function () {
           sourceAttemptId: undefined,
         })
 
-        assert.strictEqual(harness.tabService.calls.openTask.length, 0,
-          'snapshotService.captureSnapshotInput must NOT call tabService.openTask -- Contract T6-15, Arch v0.5 5.10: snapshotService only captures, Tab creation is flowService responsibility')
+        assert.strictEqual(
+          harness.tabService.calls.openTask.length,
+          0,
+          'snapshotService.captureSnapshotInput must NOT call tabService.openTask -- Contract T6-15, Arch v0.5 5.10: snapshotService only captures, Tab creation is flowService responsibility',
+        )
       })
     })
   })

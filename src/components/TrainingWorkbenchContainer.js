@@ -1,9 +1,12 @@
-import { h, Component } from 'preact'
+import {h, Component} from 'preact'
 
 import WorkbenchShell from './WorkbenchShell.js'
-import { computeModeBarPolicy, getModeTransitionAction } from '../modules/training/workbench/workbenchUiPolicy.ts'
-import { projectGobanProps } from '../modules/training/workbench/projectGobanProps.ts'
-import { createScratchEditExecutionContext } from '../modules/workbench/contracts/index.ts'
+import {
+  computeModeBarPolicy,
+  getModeTransitionAction,
+} from '../modules/training/workbench/workbenchUiPolicy.ts'
+import {projectGobanProps} from '../modules/training/workbench/projectGobanProps.ts'
+import {createScratchEditExecutionContext} from '../modules/workbench/contracts/index.ts'
 
 const DEFAULT_PLAY_PLAYER_CONFIG = Object.freeze({
   black: 'human',
@@ -29,13 +32,18 @@ try {
   if (adapterMod && adapterMod.createGobanDataAdapter) {
     createGobanDataAdapter = adapterMod.createGobanDataAdapter
   }
-} catch (_) { /* adapter not yet available */ }
+} catch (_) {
+  /* adapter not yet available */
+}
 try {
   const controllerMod = require('../modules/training/workbench/boardInteractionController.ts')
   if (controllerMod && controllerMod.createBoardInteractionController) {
-    createBoardInteractionController = controllerMod.createBoardInteractionController
+    createBoardInteractionController =
+      controllerMod.createBoardInteractionController
   }
-} catch (_) { /* controller not yet available */ }
+} catch (_) {
+  /* controller not yet available */
+}
 
 class TrainingWorkbenchContainer extends Component {
   constructor(props) {
@@ -53,8 +61,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     // Subscribe to store changes
-    const { runtimeStore, workbenchStore } =
-      props.sabaki.getTrainingContext()
+    const {runtimeStore, workbenchStore} = props.sabaki.getTrainingContext()
     this._unsubRuntime = runtimeStore.subscribe(() => this.forceUpdate())
     this._unsubWorkbench = workbenchStore.subscribe(() => this.forceUpdate())
 
@@ -79,25 +86,23 @@ class TrainingWorkbenchContainer extends Component {
 
   render() {
     const container = this
-    const { sabaki, ...shellProps } = this.props
+    const {sabaki, ...shellProps} = this.props
     const trainingContext = sabaki.getTrainingContext()
-    const {
-      runtimeStore,
-      workbenchStore,
-      flowService,
-      tabService,
-    } = trainingContext
+    const {runtimeStore, workbenchStore, flowService, tabService} =
+      trainingContext
     this._tryInstallModeEffects(sabaki)
-    const rt = typeof runtimeStore?.getState === 'function'
-      ? runtimeStore.getState()
-      : {}
-    const ws = typeof workbenchStore?.getState === 'function'
-      ? workbenchStore.getState()
-      : {tabs: [], activeTabId: null}
+    const rt =
+      typeof runtimeStore?.getState === 'function'
+        ? runtimeStore.getState()
+        : {}
+    const ws =
+      typeof workbenchStore?.getState === 'function'
+        ? workbenchStore.getState()
+        : {tabs: [], activeTabId: null}
 
     // Derive the active tab ID and active tab for handler wiring
     const activeTabId = ws.activeTabId
-    const activeTab = ws.tabs.find(t => t.id === activeTabId) || null
+    const activeTab = ws.tabs.find((t) => t.id === activeTabId) || null
 
     // Project runtimeStore view models into legacy prop shapes
     // that WorkbenchShell/RecallBar/ProblemBar expect.
@@ -187,7 +192,10 @@ class TrainingWorkbenchContainer extends Component {
 
       if (sabaki.state.mode !== 'analysis' && sabaki.setMode) {
         sabaki.setMode('analysis')
-      } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
+      } else if (
+        !sabaki.state.editWorkspace &&
+        sabaki.createAnalysisWorkspace
+      ) {
         sabaki.setState?.({
           editWorkspace: sabaki.createAnalysisWorkspace(),
         })
@@ -248,8 +256,10 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleAddTask() {
-      const { taskImportService } = sabaki.getTrainingContext()
-      const task = await taskImportService.createManualTask({ positionSgf: '(;SZ[19])' })
+      const {taskImportService} = sabaki.getTrainingContext()
+      const task = await taskImportService.createManualTask({
+        positionSgf: '(;SZ[19])',
+      })
       const tab = await tabService.openTask({
         taskId: task.id,
         mode: 'play',
@@ -461,7 +471,10 @@ class TrainingWorkbenchContainer extends Component {
       let task = null
 
       if (typeof repository?.findTaskBySource === 'function') {
-        task = await repository.findTaskBySource({provider: 'fox', kind: 'game'})
+        task = await repository.findTaskBySource({
+          provider: 'fox',
+          kind: 'game',
+        })
       }
       if (!task) {
         task = await taskImportService.importFoxGame({gameId: 'latest'})
@@ -478,7 +491,10 @@ class TrainingWorkbenchContainer extends Component {
       let task = null
 
       if (typeof repository?.findTaskBySource === 'function') {
-        task = await repository.findTaskBySource({provider: '101', kind: 'problem'})
+        task = await repository.findTaskBySource({
+          provider: '101',
+          kind: 'problem',
+        })
       }
       if (!task) {
         task = await taskImportService.import101Problem({problemId: 'latest'})
@@ -492,14 +508,17 @@ class TrainingWorkbenchContainer extends Component {
 
     async function handleOpenLibraryProblem(problemId, problemRow = null) {
       const {taskImportService, repository} = sabaki.getTrainingContext()
-      const row = problemRow && typeof problemRow === 'object'
-        ? problemRow
-        : null
+      const row =
+        problemRow && typeof problemRow === 'object' ? problemRow : null
       const id = row?.problemId || row?.legacyProblemId || problemId
       let taskId = row?.taskId || row?.trainingTaskId || null
       const candidateTaskId = row?.id || (!row ? problemId : null)
 
-      if (!taskId && candidateTaskId && typeof repository?.loadTask === 'function') {
+      if (
+        !taskId &&
+        candidateTaskId &&
+        typeof repository?.loadTask === 'function'
+      ) {
         const existingTask = await repository.loadTask(candidateTaskId)
         taskId = existingTask?.id || null
       }
@@ -512,8 +531,12 @@ class TrainingWorkbenchContainer extends Component {
         if (!id) {
           throw new Error('Library problem row is missing an id')
         }
-        if (typeof taskImportService?.createTaskFromLegacyProblem !== 'function') {
-          throw new Error('Library problem row requires taskImportService.createTaskFromLegacyProblem')
+        if (
+          typeof taskImportService?.createTaskFromLegacyProblem !== 'function'
+        ) {
+          throw new Error(
+            'Library problem row requires taskImportService.createTaskFromLegacyProblem',
+          )
         }
 
         const task = await taskImportService.createTaskFromLegacyProblem({
@@ -553,18 +576,18 @@ class TrainingWorkbenchContainer extends Component {
     function handleBlackPlayerChange(value) {
       if (!activeTab) return
       const mapped = value === 'self' ? 'human' : value
-      flowService.updatePlayerConfig(activeTab.id, { black: mapped })
+      flowService.updatePlayerConfig(activeTab.id, {black: mapped})
     }
 
     function handleWhitePlayerChange(value) {
       if (!activeTab) return
       const mapped = value === 'self' ? 'human' : value
-      flowService.updatePlayerConfig(activeTab.id, { white: mapped })
+      flowService.updatePlayerConfig(activeTab.id, {white: mapped})
     }
 
     function handleProblemOpponentChange(value) {
       if (!activeTab) return
-      flowService.updatePlayerConfig(activeTab.id, { problemOpponent: value })
+      flowService.updatePlayerConfig(activeTab.id, {problemOpponent: value})
     }
 
     // --- W4 Recall checkpoint handlers ---
@@ -587,9 +610,9 @@ class TrainingWorkbenchContainer extends Component {
       container._invalidateCheckpointProjection()
     }
 
-    async function handleSaveCheckpointComment({ content }) {
+    async function handleSaveCheckpointComment({content}) {
       if (!activeTab) return
-      await flowService.saveCheckpointComment({ tabId: activeTab.id, content })
+      await flowService.saveCheckpointComment({tabId: activeTab.id, content})
       container._invalidateCheckpointProjection()
     }
 
@@ -643,10 +666,7 @@ class TrainingWorkbenchContainer extends Component {
     async function handleRefreshDashboard() {
       const {reviewService} = sabaki.getTrainingContext()
 
-      const [
-        dueItems,
-        dashboardData,
-      ] = await Promise.all([
+      const [dueItems, dashboardData] = await Promise.all([
         reviewService.getDueItems(),
         flowService.loadDashboardData(),
       ])
@@ -688,9 +708,12 @@ class TrainingWorkbenchContainer extends Component {
     // W2 shell/tab handlers
     const shellHandlers = {
       onModeChange: handleModeChange,
-      onEnd: (activeTab && activeTab.mode === 'recall') ? handleEndRecall
-        : (activeTab && activeTab.mode === 'play') ? handleEndPlay
-        : handleSubmit,
+      onEnd:
+        activeTab && activeTab.mode === 'recall'
+          ? handleEndRecall
+          : activeTab && activeTab.mode === 'play'
+            ? handleEndPlay
+            : handleSubmit,
       onResign: handleResign,
       onSubmit: handleSubmit,
       onAbandon: handleAbandon,
@@ -767,7 +790,7 @@ class TrainingWorkbenchContainer extends Component {
       },
       onVerify: () =>
         activeTab ? flowService.skipRecallMove(activeTab.id) : undefined,
-      onRecallToggle: () => { },
+      onRecallToggle: () => {},
       // W5 Analysis: restart attempt
       onRestartAttempt: handleRestartAttempt,
       // W6 Review queue handlers
@@ -812,8 +835,13 @@ class TrainingWorkbenchContainer extends Component {
       workbenchMode,
       task: null,
       runtimeState: {},
-      boardState: { gameTree: null, treePosition: '', board: null },
-      overlayState: { paintMap: [], markerMap: [], dimmedStones: [], analysis: null },
+      boardState: {gameTree: null, treePosition: '', board: null},
+      overlayState: {
+        paintMap: [],
+        markerMap: [],
+        dimmedStones: [],
+        analysis: null,
+      },
       settings: {
         showMoveNumbers: false,
         showNextMoves: true,
@@ -841,11 +869,20 @@ class TrainingWorkbenchContainer extends Component {
           const snap = snapshot || {}
           this._clickController.handleBoardClick({
             vertex: evt.vertex,
-            event: { button: evt.button, ctrlKey: evt.ctrlKey, metaKey: evt.metaKey },
+            event: {
+              button: evt.button,
+              ctrlKey: evt.ctrlKey,
+              metaKey: evt.metaKey,
+            },
             activeTab: tabRef,
-            settings: snap.settings || { selectedTool: 'stone_1' },
-            board: (snap.boardState && snap.boardState.board) || { get: () => 0, markers: [] },
-            editWorkspacePresent: !!(snap.settings && snap.settings.editWorkspaceActive),
+            settings: snap.settings || {selectedTool: 'stone_1'},
+            board: (snap.boardState && snap.boardState.board) || {
+              get: () => 0,
+              markers: [],
+            },
+            editWorkspacePresent: !!(
+              snap.settings && snap.settings.editWorkspaceActive
+            ),
             task: snap.task || null,
             runtimeState: snap.runtimeState || rt,
           })
@@ -854,12 +891,16 @@ class TrainingWorkbenchContainer extends Component {
         // Fallback: no-op handler that does not throw (for test harnesses
         // without the controller). Differs from projectGobanProps noop by
         // being a named function the test can distinguish.
-        boardProps.handlerProps.onVertexClick = function onVertexClick() { }
+        boardProps.handlerProps.onVertexClick = function onVertexClick() {}
       }
 
-      if (workbenchMode === 'analysis' && boardProps.interactionProps.dragMode) {
+      if (
+        workbenchMode === 'analysis' &&
+        boardProps.interactionProps.dragMode
+      ) {
         boardProps.handlerProps.onLineDraw = handleLineDraw
-        boardProps.handlerProps.onStoneDragEnd = (evt) => sabaki.handleEditDragEnd?.(evt)
+        boardProps.handlerProps.onStoneDragEnd = (evt) =>
+          sabaki.handleEditDragEnd?.(evt)
         boardProps.handlerProps.onPlayVariationMoves = handlePlayVariationMoves
       }
     }
@@ -874,13 +915,20 @@ class TrainingWorkbenchContainer extends Component {
     // P0-T02: Index gameCurrents by gameIndex before passing to Shell.
     // Sidebar.js:777 passes gameCurrents[gameIndex] to GameGraph; Container
     // mirrors this projection so Shell receives the indexed value.
-    const gameCurrentsIndexed = shellProps.gameCurrents && shellProps.gameIndex != null
-      ? shellProps.gameCurrents[shellProps.gameIndex]
-      : shellProps.gameCurrents
-    const libraryProjection = shellProps.libraryProjection ||
+    const gameCurrentsIndexed =
+      shellProps.gameCurrents && shellProps.gameIndex != null
+        ? shellProps.gameCurrents[shellProps.gameIndex]
+        : shellProps.gameCurrents
+    const libraryProjection =
+      shellProps.libraryProjection ||
       this.state.dashboardData?.libraryProjection ||
       sabaki.getTrainingContext()?.libraryProjection ||
       null
+    const toolbarOverlayStore = sabaki.getOverlayStore
+      ? sabaki.getOverlayStore()
+      : null
+    const toolbarOverlayState = toolbarOverlayStore?.getState?.() || {}
+    const toolbarAreaState = sabaki.getAnalysisAreaStore?.()?.getState?.() || {}
 
     return h(WorkbenchShell, {
       ...shellProps,
@@ -892,6 +940,20 @@ class TrainingWorkbenchContainer extends Component {
       dashboardData: this.state.dashboardData,
       boardProps,
       activeAnnotationTool: sabaki.state?.selectedTool || 'stone_1',
+      selectedTool: sabaki.state?.selectedTool || 'stone_1',
+      editBarSabaki: sabaki,
+      editWorkspace: sabaki.state?.editWorkspace || null,
+      overlayStore: toolbarOverlayStore,
+      areaSelectMode: !!sabaki.state?.areaSelectMode,
+      analysisAreaVertices: toolbarAreaState.analysisAreaVertices ?? null,
+      territoryEnabled: !!toolbarOverlayState.territoryEnabled,
+      territoryCompareEnabled: !!toolbarOverlayState.territoryCompareEnabled,
+      territoryCompareAvailable:
+        toolbarOverlayStore?.getTerritoryCompareAvailable?.() ??
+        sabaki.getTerritoryCompareAvailable?.() ??
+        false,
+      showAISuggestions: !!sabaki.state?.showAISuggestions,
+      showHumanPreference: !!sabaki.state?.showHumanPreference,
       libraryDrawerType: this.state.libraryDrawerType,
       libraryProjection,
     })
@@ -908,9 +970,10 @@ class TrainingWorkbenchContainer extends Component {
       }
       if (this._modeEffectsFlowService === flowService) return
 
-      const modeEffects = typeof ctx.createModeEffects === 'function'
-        ? ctx.createModeEffects()
-        : ctx.modeEffects
+      const modeEffects =
+        typeof ctx.createModeEffects === 'function'
+          ? ctx.createModeEffects()
+          : ctx.modeEffects
       if (!modeEffects) return
 
       flowService.setModeEffects(modeEffects)
@@ -936,8 +999,11 @@ class TrainingWorkbenchContainer extends Component {
       const overlayStore = sabaki.getOverlayStore
         ? sabaki.getOverlayStore()
         : null
-      const analysisResultAdapter = ctx.analysisResultAdapter ||
-        (sabaki.getTrainingServices ? sabaki.getTrainingServices().analysisResultAdapter : null)
+      const analysisResultAdapter =
+        ctx.analysisResultAdapter ||
+        (sabaki.getTrainingServices
+          ? sabaki.getTrainingServices().analysisResultAdapter
+          : null)
 
       if (!documentStore) return // Cannot build adapter without documentStore
 
@@ -967,20 +1033,31 @@ class TrainingWorkbenchContainer extends Component {
           }
         },
         getDocumentStore: () => documentStore,
-        getOverlayStore: () => overlayStore || { getState: () => ({ territoryEnabled: false, territoryCompareEnabled: false }) },
-        getAnalysisResultAdapter: () => analysisResultAdapter || { getAnalysisForPosition: () => null },
+        getOverlayStore: () =>
+          overlayStore || {
+            getState: () => ({
+              territoryEnabled: false,
+              territoryCompareEnabled: false,
+            }),
+          },
+        getAnalysisResultAdapter: () =>
+          analysisResultAdapter || {getAnalysisForPosition: () => null},
         getWorkbenchStore: () => ctx.workbenchStore,
         getRuntimeStore: () => ctx.runtimeStore,
-        getRepository: () => ctx.repository || { loadTask: async () => null },
+        getRepository: () => ctx.repository || {loadTask: async () => null},
         subscribeToSabakiStateChange: (cb) => {
-          if (sabaki.on) { sabaki.on('change', cb); return () => sabaki.removeListener('change', cb) }
-          return () => { }
+          if (sabaki.on) {
+            sabaki.on('change', cb)
+            return () => sabaki.removeListener('change', cb)
+          }
+          return () => {}
         },
         subscribeToWorkbenchStore: (cb) => ctx.workbenchStore.subscribe(cb),
         subscribeToRuntimeStore: (cb) => ctx.runtimeStore.subscribe(cb),
         subscribeToAnalysisUpdates: (cb) => {
-          if (analysisResultAdapter && analysisResultAdapter.subscribe) return analysisResultAdapter.subscribe(cb)
-          return () => { }
+          if (analysisResultAdapter && analysisResultAdapter.subscribe)
+            return analysisResultAdapter.subscribe(cb)
+          return () => {}
         },
         getBoard: (tree, pos) => {
           const gametree = require('../modules/gametree.js')
@@ -991,8 +1068,13 @@ class TrainingWorkbenchContainer extends Component {
           return boardFromSnapshot(snapshot)
         },
         getRawAnalysisForPosition: (treePosition) => {
-          const services = sabaki.getPlayServices ? sabaki.getPlayServices() : null
-          return services?.engineService?.getAnalysisForPosition?.(treePosition) || null
+          const services = sabaki.getPlayServices
+            ? sabaki.getPlayServices()
+            : null
+          return (
+            services?.engineService?.getAnalysisForPosition?.(treePosition) ||
+            null
+          )
         },
       })
 
@@ -1010,12 +1092,14 @@ class TrainingWorkbenchContainer extends Component {
     if (!createBoardInteractionController) return
     try {
       const ctx = sabaki.getTrainingContext()
-      const playServices = sabaki.getPlayServices ? sabaki.getPlayServices() : null
+      const playServices = sabaki.getPlayServices
+        ? sabaki.getPlayServices()
+        : null
       const recallService = ctx.recallService || null
 
       this._clickController = createBoardInteractionController({
         getPlayServices: () => ({
-          ...(playServices || { documentStore: { playMove: async () => { } } }),
+          ...(playServices || {documentStore: {playMove: async () => {}}}),
           problemFlowService: ctx.problemFlowService,
           attemptService: ctx.attemptService,
           monitor: ctx.monitor,
@@ -1025,7 +1109,7 @@ class TrainingWorkbenchContainer extends Component {
         getRecallAdapter: () => {
           const ws = ctx.workbenchStore.getState()
           const activeTabId = ws.activeTabId
-          const activeTab = ws.tabs.find(t => t.id === activeTabId)
+          const activeTab = ws.tabs.find((t) => t.id === activeTabId)
           const activeRecallSessionId = activeTab?.activeRecallSessionId
 
           if (!activeRecallSessionId) {
@@ -1060,7 +1144,10 @@ class TrainingWorkbenchContainer extends Component {
               const activeCheckpointId = runtimeState.activeCheckpointId
               if (activeCheckpointId) {
                 const userMove = vertexToSgfMove(vertex)
-                if (typeof ctx.runtimeStore.appendCorrectionDraftMove === 'function') {
+                if (
+                  typeof ctx.runtimeStore.appendCorrectionDraftMove ===
+                  'function'
+                ) {
                   ctx.runtimeStore.appendCorrectionDraftMove({
                     checkpointId: activeCheckpointId,
                     move: userMove,
@@ -1086,7 +1173,9 @@ class TrainingWorkbenchContainer extends Component {
                 recallSessionId: activeRecallSessionId,
                 userMove,
               })
-              const session = await ctx.repository.loadRecallSession(activeRecallSessionId)
+              const session = await ctx.repository.loadRecallSession(
+                activeRecallSessionId,
+              )
               return {
                 handled: true,
                 changed: true,
@@ -1103,8 +1192,7 @@ class TrainingWorkbenchContainer extends Component {
         getEditWorkspaceDeps: () => ({
           scheduleEditWorkspaceAnalysis: (tab) =>
             sabaki.scheduleEditWorkspaceAnalysis?.(tab),
-          commitScratchResult: (result) =>
-            sabaki.commitEditResult?.(result),
+          commitScratchResult: (result) => sabaki.commitEditResult?.(result),
         }),
         getLegacySabaki: () => ({
           clickVertex: (vertex, opts) => {
@@ -1116,7 +1204,11 @@ class TrainingWorkbenchContainer extends Component {
           },
         }),
         getIsMac: () => {
-          try { return require('../modules/helper.js').isMac } catch (_) { return false }
+          try {
+            return require('../modules/helper.js').isMac
+          } catch (_) {
+            return false
+          }
         },
       })
     } catch (_e) {
@@ -1161,13 +1253,16 @@ function withCorrectionDraftBoardSource(input, runtimeState) {
   for (let index = 0; index < draft.moves.length; index++) {
     const vertex = moveToVertex(draft.moves[index])
     if (!vertex) continue
-    draftSigns.set(`${vertex[0]},${vertex[1]}`, index % 2 === 0 ? startSign : -startSign)
+    draftSigns.set(
+      `${vertex[0]},${vertex[1]}`,
+      index % 2 === 0 ? startSign : -startSign,
+    )
   }
 
   if (draftSigns.size === 0) return input
 
   const draftBoard = Object.create(baseBoard)
-  draftBoard.get = function(vertex) {
+  draftBoard.get = function (vertex) {
     const sign = draftSigns.get(`${vertex[0]},${vertex[1]}`)
     return sign ?? baseBoard.get(vertex)
   }
@@ -1220,15 +1315,16 @@ function projectFromRuntime(rt, activeTab = null) {
   const activeAttemptId = activeTab?.activeAttemptId
 
   result.pendingEval = activeAttemptId
-    ? Object.values(rt.pendingMoveEvaluations || {}).filter(e =>
-        e.attemptId === activeAttemptId && e.status === 'pending'
+    ? Object.values(rt.pendingMoveEvaluations || {}).filter(
+        (e) => e.attemptId === activeAttemptId && e.status === 'pending',
       ).length
     : 0
   result.badMoveCount = Array.isArray(rt.visibleBadMoveIds)
     ? rt.visibleBadMoveIds.length
     : 0
 
-  const recallViewMatchesActiveSession = rt.recallView &&
+  const recallViewMatchesActiveSession =
+    rt.recallView &&
     (!activeTab?.activeRecallSessionId ||
       rt.recallView.recallSessionId === activeTab.activeRecallSessionId) &&
     (!rt.activeRecallSessionId ||
@@ -1237,7 +1333,7 @@ function projectFromRuntime(rt, activeTab = null) {
   if (recallViewMatchesActiveSession) {
     const v = rt.recallView
     // Internal state kept for debugging / non-panel consumers
-    result.recallSession = { active: true }
+    result.recallSession = {active: true}
     result.recallMoveIndex = v.moveIndex
     result.recallExpectedMoves = v.expectedMoves
     result.recallUserAttempts = v.userAttempts
@@ -1247,12 +1343,13 @@ function projectFromRuntime(rt, activeTab = null) {
     // Panel-consumed props (names must match RecallModePanel destructured props)
     result.currentMove = v.moveIndex
     result.totalMoves = v.expectedMoves.length
-    result.correctCount = v.userAttempts.filter(a => a.isCorrect).length
-    result.wrongCount = v.userAttempts.filter(a => !a.isCorrect).length
+    result.correctCount = v.userAttempts.filter((a) => a.isCorrect).length
+    result.wrongCount = v.userAttempts.filter((a) => !a.isCorrect).length
     result.status = v.status || ''
-    result.progress = v.expectedMoves.length > 0
-      ? Math.round((v.moveIndex / v.expectedMoves.length) * 100)
-      : 0
+    result.progress =
+      v.expectedMoves.length > 0
+        ? Math.round((v.moveIndex / v.expectedMoves.length) * 100)
+        : 0
     result.errorRecords = v.userAttempts
       .map((attempt, index) => ({
         moveNumber: index + 1,
@@ -1260,7 +1357,7 @@ function projectFromRuntime(rt, activeTab = null) {
         isCorrect: attempt.isCorrect,
         sideLabel: formatExpectedMoveSide(v.expectedMoves[index]?.sign),
       }))
-      .filter(attempt => !attempt.isCorrect)
+      .filter((attempt) => !attempt.isCorrect)
     result.activeCheckpointId = rt.activeCheckpointId || null
     result.recallOriginalLine = !rt.activeCheckpointId
     result.canSubmitCorrection = !!rt.correctionDraft?.moves?.length
@@ -1308,7 +1405,7 @@ function projectFromRuntime(rt, activeTab = null) {
 function projectFromWorkbench(ws, repository, container) {
   const result = {}
 
-  const activeTab = ws.tabs.find(t => t.id === ws.activeTabId) || null
+  const activeTab = ws.tabs.find((t) => t.id === ws.activeTabId) || null
 
   if (activeTab) {
     result.mode = activeTab.mode
@@ -1317,12 +1414,22 @@ function projectFromWorkbench(ws, repository, container) {
     result.taskTitle = activeTab.taskId
 
     // W8-P3: Project playerConfig fields
-    result.blackPlayer = (activeTab.playerConfig?.black === 'human' ? 'self' : activeTab.playerConfig?.black) || 'self'
-    result.whitePlayer = (activeTab.playerConfig?.white === 'human' ? 'self' : activeTab.playerConfig?.white) || 'self'
+    result.blackPlayer =
+      (activeTab.playerConfig?.black === 'human'
+        ? 'self'
+        : activeTab.playerConfig?.black) || 'self'
+    result.whitePlayer =
+      (activeTab.playerConfig?.white === 'human'
+        ? 'self'
+        : activeTab.playerConfig?.white) || 'self'
     result.problemOpponent = activeTab.playerConfig?.problemOpponent || 'ai'
 
     // W8-P3: Project problemArea from task cache or repository
-    if (container && container._taskCache && container._taskCache[activeTab.taskId]) {
+    if (
+      container &&
+      container._taskCache &&
+      container._taskCache[activeTab.taskId]
+    ) {
       const task = container._taskCache[activeTab.taskId]
       if (task) {
         result.prompt = task.positionDescription || task.prompt || ''
@@ -1330,25 +1437,37 @@ function projectFromWorkbench(ws, repository, container) {
         result.goal = task.taskGoal || task.goal || ''
         result.taskGoal = task.taskGoal || ''
         result.sideToMove = task.sideToMove || ''
-        result.sideToMoveLabel = task.sideToMoveLabel || formatProblemSideToMove(task.sideToMove)
+        result.sideToMoveLabel =
+          task.sideToMoveLabel || formatProblemSideToMove(task.sideToMove)
         result.passRule = task.passRule || null
         result.passRuleSummary = task.passRule?.targetDescription || ''
-        result.referenceLines = Array.isArray(task.referenceLines) ? task.referenceLines : []
+        result.referenceLines = Array.isArray(task.referenceLines)
+          ? task.referenceLines
+          : []
         if (task.problemArea !== undefined) {
           result.problemArea = task.problemArea
         }
       }
-    } else if (container && repository && typeof repository.loadTask === 'function') {
+    } else if (
+      container &&
+      repository &&
+      typeof repository.loadTask === 'function'
+    ) {
       // Fire-and-forget async load to populate cache for next render
       const taskRef = activeTab
-      repository.loadTask(activeTab.taskId).then(function(task) {
-        if (task) {
-          if (!container._taskCache) container._taskCache = {}
-          container._taskCache[taskRef.taskId] = task
-          // Trigger re-render so problemArea is projected
-          container.forceUpdate()
-        }
-      }).catch(function() { /* ignore */ })
+      repository
+        .loadTask(activeTab.taskId)
+        .then(function (task) {
+          if (task) {
+            if (!container._taskCache) container._taskCache = {}
+            container._taskCache[taskRef.taskId] = task
+            // Trigger re-render so problemArea is projected
+            container.forceUpdate()
+          }
+        })
+        .catch(function () {
+          /* ignore */
+        })
     }
 
     result.modeBarPolicy = computeModeBarPolicy({
@@ -1358,10 +1477,14 @@ function projectFromWorkbench(ws, repository, container) {
       activeRecallSessionId: activeTab.activeRecallSessionId,
     })
 
-    const runtimeStore = container?.props?.sabaki?.getTrainingContext?.().runtimeStore
+    const runtimeStore =
+      container?.props?.sabaki?.getTrainingContext?.().runtimeStore
     const activeCheckpointId = runtimeStore?.getState?.().activeCheckpointId
-    result.recallSubstate = activeTab.recallSubstate ||
-      (activeTab.mode === 'recall' && activeCheckpointId ? 'checkpoint_correction' : 'normal')
+    result.recallSubstate =
+      activeTab.recallSubstate ||
+      (activeTab.mode === 'recall' && activeCheckpointId
+        ? 'checkpoint_correction'
+        : 'normal')
 
     if (activeTab.mode === 'recall' && container) {
       const checkpoint = applyCheckpointRuntimeProjection(
@@ -1370,10 +1493,13 @@ function projectFromWorkbench(ws, repository, container) {
       )
       result.activeCheckpoint = checkpoint
       result.checkpoints = checkpoint ? [checkpoint] : []
-      result.canRevealAi = !!checkpoint && checkpoint.userCorrectionLine.length > 0 &&
+      result.canRevealAi =
+        !!checkpoint &&
+        checkpoint.userCorrectionLine.length > 0 &&
         activeTab.recallSubstate !== 'checkpoint_ai_revealed' &&
         activeTab.recallSubstate !== 'checkpoint_commenting'
-      result.canEditCheckpointComment = !!checkpoint &&
+      result.canEditCheckpointComment =
+        !!checkpoint &&
         (activeTab.recallSubstate === 'checkpoint_ai_revealed' ||
           activeTab.recallSubstate === 'checkpoint_commenting')
     }
@@ -1388,16 +1514,25 @@ function projectFromWorkbench(ws, repository, container) {
       const projectionKey = activeCheckpointId
         ? `${activeCheckpointId}:${result.recallSubstate || 'normal'}`
         : null
-      if (activeCheckpointId && container._activeCheckpointProjectionKey !== projectionKey) {
+      if (
+        activeCheckpointId &&
+        container._activeCheckpointProjectionKey !== projectionKey
+      ) {
         container._checkpointProjectionLoading = true
-        loadActiveCheckpointProjection(repository, activeCheckpointId, activeTab).then(function(projection) {
-          container._activeCheckpointProjection = projection
-          container._activeCheckpointProjectionKey = projectionKey
-          container._checkpointProjectionLoading = false
-          container.forceUpdate()
-        }).catch(function() {
-          container._checkpointProjectionLoading = false
-        })
+        loadActiveCheckpointProjection(
+          repository,
+          activeCheckpointId,
+          activeTab,
+        )
+          .then(function (projection) {
+            container._activeCheckpointProjection = projection
+            container._activeCheckpointProjectionKey = projectionKey
+            container._checkpointProjectionLoading = false
+            container.forceUpdate()
+          })
+          .catch(function () {
+            container._checkpointProjectionLoading = false
+          })
       } else if (!activeCheckpointId) {
         container._activeCheckpointProjection = null
         container._activeCheckpointProjectionKey = null
@@ -1411,7 +1546,7 @@ function projectFromWorkbench(ws, repository, container) {
       title: tab.taskId,
       active: tab.id === ws.activeTabId,
     }))
-    result.activeIndex = ws.tabs.findIndex(t => t.id === ws.activeTabId)
+    result.activeIndex = ws.tabs.findIndex((t) => t.id === ws.activeTabId)
   }
 
   return result
@@ -1429,42 +1564,65 @@ function formatExpectedMoveSide(sign) {
   return ''
 }
 
-async function loadActiveCheckpointProjection(repository, activeCheckpointId, activeTab) {
+async function loadActiveCheckpointProjection(
+  repository,
+  activeCheckpointId,
+  activeTab,
+) {
   const checkpoint = await repository.loadRecallCheckpoint(activeCheckpointId)
   if (!checkpoint) return null
 
-  const badMove = checkpoint.badMoveId && typeof repository.loadBadMove === 'function'
-    ? await repository.loadBadMove(checkpoint.badMoveId)
-    : null
-  const evaluations = badMove?.attemptId && typeof repository.listMoveEvaluationsByAttempt === 'function'
-    ? await repository.listMoveEvaluationsByAttempt(badMove.attemptId)
-    : []
+  const badMove =
+    checkpoint.badMoveId && typeof repository.loadBadMove === 'function'
+      ? await repository.loadBadMove(checkpoint.badMoveId)
+      : null
+  const evaluations =
+    badMove?.attemptId &&
+    typeof repository.listMoveEvaluationsByAttempt === 'function'
+      ? await repository.listMoveEvaluationsByAttempt(badMove.attemptId)
+      : []
   const evaluation = badMove
-    ? evaluations.find(item => item.id === badMove.moveEvaluationId) ||
-      evaluations.find(item => item.moveIndex === badMove.moveIndex) ||
+    ? evaluations.find((item) => item.id === badMove.moveEvaluationId) ||
+      evaluations.find((item) => item.moveIndex === badMove.moveIndex) ||
       null
     : null
-  const comment = checkpoint.userCommentId && typeof repository.loadMoveComment === 'function'
-    ? await repository.loadMoveComment(checkpoint.userCommentId)
-    : null
+  const comment =
+    checkpoint.userCommentId && typeof repository.loadMoveComment === 'function'
+      ? await repository.loadMoveComment(checkpoint.userCommentId)
+      : null
 
-  return toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, comment})
+  return toCheckpointProjection({
+    checkpoint,
+    activeTab,
+    badMove,
+    evaluation,
+    comment,
+  })
 }
 
-function toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, comment}) {
+function toCheckpointProjection({
+  checkpoint,
+  activeTab,
+  badMove,
+  evaluation,
+  comment,
+}) {
   const moveNumber = checkpoint.moveNumber ?? badMove?.moveIndex ?? ''
-  const severityLabel = checkpoint.severityLabel || checkpoint.severity || badMove?.severity || ''
+  const severityLabel =
+    checkpoint.severityLabel || checkpoint.severity || badMove?.severity || ''
   const source = checkpoint.source || (badMove ? 'system' : '')
-  const sourceLabel = checkpoint.sourceLabel || (
-    source === 'manual' ? '用户手动' : source === 'system' ? '系统' : ''
-  )
+  const sourceLabel =
+    checkpoint.sourceLabel ||
+    (source === 'manual' ? '用户手动' : source === 'system' ? '系统' : '')
   const aiCandidateLines = checkpoint.aiCandidateLines || []
   const userCorrectionLine = checkpoint.userCorrectionLine || []
-  const originalLine = checkpoint.originalLine ||
-    (evaluation?.move ? [evaluation.move] : [])
-  const summary = checkpoint.summary || (
-    moveNumber !== '' ? `第 ${moveNumber} 手，先自己摆修正图` : '当前 checkpoint'
-  )
+  const originalLine =
+    checkpoint.originalLine || (evaluation?.move ? [evaluation.move] : [])
+  const summary =
+    checkpoint.summary ||
+    (moveNumber !== ''
+      ? `第 ${moveNumber} 手，先自己摆修正图`
+      : '当前 checkpoint')
 
   return {
     id: checkpoint.id,
@@ -1475,17 +1633,19 @@ function toCheckpointProjection({checkpoint, activeTab, badMove, evaluation, com
     severity: checkpoint.severity || severityLabel,
     summary,
     status: checkpoint.status,
-    statusLabel: checkpoint.status === 'ai_revealed'
-      ? 'AI candidates 已显示，写下你的判断'
-      : activeTab.recallSubstate === 'checkpoint_commenting'
-        ? '保存中'
-        : '先自己摆修正图',
+    statusLabel:
+      checkpoint.status === 'ai_revealed'
+        ? 'AI candidates 已显示，写下你的判断'
+        : activeTab.recallSubstate === 'checkpoint_commenting'
+          ? '保存中'
+          : '先自己摆修正图',
     originalLine,
     originalMoveLabel: originalLine[0] || '',
     userCorrectionLine,
     aiCandidateLines,
     scoreDrop: evaluation?.scoreDrop,
-    scoreDropLabel: evaluation?.scoreDropLabel || formatScoreDrop(evaluation?.scoreDrop),
+    scoreDropLabel:
+      evaluation?.scoreDropLabel || formatScoreDrop(evaluation?.scoreDrop),
     userCommentContent: comment?.content || '',
   }
 }
@@ -1496,7 +1656,8 @@ function applyCheckpointRuntimeProjection(checkpoint, runtimeState) {
   const draft = runtimeState?.correctionDraft
   if (!draft || draft.checkpointId !== checkpoint.id) return checkpoint
 
-  const draftLabel = draft.label || (Array.isArray(draft.moves) ? draft.moves.join(' ') : '')
+  const draftLabel =
+    draft.label || (Array.isArray(draft.moves) ? draft.moves.join(' ') : '')
   return {
     ...checkpoint,
     correctionDraftLine: Array.isArray(draft.moves) ? draft.moves : [],

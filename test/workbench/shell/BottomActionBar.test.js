@@ -19,7 +19,6 @@ import assert from 'assert'
 import {h} from 'preact'
 import {renderToDom} from '../preactTestHelper.js'
 import {tryImport} from '../tryImport.js'
-import {ANNOTATION_TOOL_DEFS} from '../../../src/components/workbench/shared/AnnotationToolbar.js'
 
 let BottomActionBar = null
 
@@ -66,12 +65,22 @@ const commonButtons = [
 ]
 
 function queryActionButtons(container) {
-  return Array.from(container.querySelectorAll('button[data-testid^="action-"]'))
+  return Array.from(
+    container.querySelectorAll('button[data-testid^="action-"]'),
+  )
+}
+
+function queryVisibleEditTool(container, label) {
+  return container.querySelector(
+    `[data-testid="analysis-edit-toolbar"] #edit a[aria-label="${label}"]`,
+  )
 }
 
 describe('BottomActionBar (T-4.3)', function () {
   before(async function () {
-    BottomActionBar = await tryImport('src/components/workbench/shell/BottomActionBar.js')
+    BottomActionBar = await tryImport(
+      'src/components/workbench/shell/BottomActionBar.js',
+    )
     if (!BottomActionBar) this.skip()
   })
 
@@ -88,7 +97,7 @@ describe('BottomActionBar (T-4.3)', function () {
     ]
 
     const {container, queryByTestId} = renderToDom(
-      h(BottomActionBar, noopProps({mode: 'play'}))
+      h(BottomActionBar, noopProps({mode: 'play'})),
     )
 
     const root = queryByTestId('bottom-action-bar')
@@ -96,14 +105,17 @@ describe('BottomActionBar (T-4.3)', function () {
 
     for (const testId of playButtons) {
       const btn = queryByTestId(testId)
-      assert.ok(btn, `Play mode should have button with data-testid="${testId}"`)
+      assert.ok(
+        btn,
+        `Play mode should have button with data-testid="${testId}"`,
+      )
     }
 
     const allButtons = queryActionButtons(container)
     assert.strictEqual(
       allButtons.length,
       playButtons.length,
-      `Expected ${playButtons.length} action buttons in play mode, got ${allButtons.length}`
+      `Expected ${playButtons.length} action buttons in play mode, got ${allButtons.length}`,
     )
   })
 
@@ -121,19 +133,22 @@ describe('BottomActionBar (T-4.3)', function () {
     ]
 
     const {container, queryByTestId} = renderToDom(
-      h(BottomActionBar, noopProps({mode: 'problem'}))
+      h(BottomActionBar, noopProps({mode: 'problem'})),
     )
 
     for (const testId of problemButtons) {
       const btn = queryByTestId(testId)
-      assert.ok(btn, `Problem mode should have button with data-testid="${testId}"`)
+      assert.ok(
+        btn,
+        `Problem mode should have button with data-testid="${testId}"`,
+      )
     }
 
     const allButtons = queryActionButtons(container)
     assert.strictEqual(
       allButtons.length,
       problemButtons.length,
-      `Expected ${problemButtons.length} action buttons in problem mode, got ${allButtons.length}`
+      `Expected ${problemButtons.length} action buttons in problem mode, got ${allButtons.length}`,
     )
   })
 
@@ -149,19 +164,22 @@ describe('BottomActionBar (T-4.3)', function () {
     ]
 
     const {container, queryByTestId} = renderToDom(
-      h(BottomActionBar, noopProps({mode: 'recall'}))
+      h(BottomActionBar, noopProps({mode: 'recall'})),
     )
 
     for (const testId of recallButtons) {
       const btn = queryByTestId(testId)
-      assert.ok(btn, `Recall mode should have button with data-testid="${testId}"`)
+      assert.ok(
+        btn,
+        `Recall mode should have button with data-testid="${testId}"`,
+      )
     }
 
     const allButtons = queryActionButtons(container)
     assert.strictEqual(
       allButtons.length,
       recallButtons.length,
-      `Expected ${recallButtons.length} action buttons in recall mode, got ${allButtons.length}`
+      `Expected ${recallButtons.length} action buttons in recall mode, got ${allButtons.length}`,
     )
   })
 
@@ -175,22 +193,58 @@ describe('BottomActionBar (T-4.3)', function () {
       'action-redo',
       'action-clear',
       'action-edit-position',
-      'action-snapshot',
       ...commonButtons,
     ]
 
-    const {queryByTestId} = renderToDom(
-      h(BottomActionBar, noopProps({mode: 'analysis'}))
+    const {container, queryByTestId} = renderToDom(
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'analysis',
+          analysisAreaVertices: [[0, 0]],
+        }),
+      ),
     )
 
-    // Annotation tool group must exist
-    const toolGroup = queryByTestId('annotation-tool')
-    assert.ok(toolGroup, 'Analysis mode should have annotation tool group with data-testid="annotation-tool"')
+    // The visible analysis drawer owns the edit toolbar; compatibility buttons
+    // remain hidden for older command-surface tests.
+    const toolbar = queryByTestId('analysis-edit-toolbar')
+    assert.ok(
+      toolbar,
+      'Analysis mode should have visible data-testid="analysis-edit-toolbar"',
+    )
 
     for (const testId of analysisButtons) {
       const btn = queryByTestId(testId)
-      assert.ok(btn, `Analysis mode should have button with data-testid="${testId}"`)
+      assert.ok(
+        btn,
+        `Analysis mode should have button with data-testid="${testId}"`,
+      )
     }
+
+    for (const testId of [
+      '区域选择',
+      '清除区域',
+      'Territory',
+      'Territory Compare',
+      'AI 推荐点',
+      '人类偏好点',
+    ]) {
+      const btn = queryVisibleEditTool(container, testId)
+      assert.ok(
+        btn,
+        `Analysis mode should have visible EditBar tool "${testId}"`,
+      )
+    }
+
+    const visibleLegacyActions = container.querySelectorAll(
+      '.wb-bottom-action-bar__visual button[data-testid^="action-"]',
+    )
+    assert.strictEqual(
+      visibleLegacyActions.length,
+      0,
+      'Analysis drawer should not show legacy undo/redo/clear/snapshot buttons',
+    )
   })
 
   // --- T-4.3e: button clicks fire callbacks ---
@@ -201,11 +255,18 @@ describe('BottomActionBar (T-4.3)', function () {
   it('T-4.3e: play button clicks fire callbacks', () => {
     const calls = {undo: false, pass: false}
     const {queryByTestId} = renderToDom(
-      h(BottomActionBar, noopProps({
-        mode: 'play',
-        onUndo: () => { calls.undo = true },
-        onPass: () => { calls.pass = true },
-      }))
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'play',
+          onUndo: () => {
+            calls.undo = true
+          },
+          onPass: () => {
+            calls.pass = true
+          },
+        }),
+      ),
     )
 
     const undoBtn = queryByTestId('action-undo')
@@ -220,20 +281,32 @@ describe('BottomActionBar (T-4.3)', function () {
     assert.strictEqual(calls.pass, true, 'onPass should fire on pass click')
   })
 
-  it('T-4.3e2: analysis snapshot button fires callback', () => {
-    let snapshotCalls = 0
-    const {queryByTestId} = renderToDom(
-      h(BottomActionBar, noopProps({
-        mode: 'analysis',
-        onSnapshot: () => { snapshotCalls += 1 },
-      }))
+  it('T-4.3e2: analysis annotation tool click delegates through EditBar', () => {
+    let selectedTool = null
+    const {container} = renderToDom(
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'analysis',
+          selectedTool: 'stone_1',
+          onAnnotationToolChange: (tool) => {
+            selectedTool = tool
+          },
+        }),
+      ),
     )
 
-    const snapshotBtn = queryByTestId('action-snapshot')
-    assert.ok(snapshotBtn, 'Analysis mode should expose data-testid="action-snapshot"')
+    const triangle = container.querySelector(
+      '[data-testid="analysis-edit-toolbar"] #edit a[data-id="triangle"]',
+    )
+    assert.ok(triangle, 'Visible EditBar triangle tool not found')
 
-    snapshotBtn.click()
-    assert.strictEqual(snapshotCalls, 1, 'onSnapshot should fire on snapshot click')
+    triangle.click()
+    assert.strictEqual(
+      selectedTool,
+      'triangle',
+      'EditBar tool click should fire onAnnotationToolChange with the selected tool id',
+    )
   })
 
   // --- T-4.3f: analysis annotation tools render ---
@@ -241,26 +314,38 @@ describe('BottomActionBar (T-4.3)', function () {
   // Production bug: annotation tool buttons missing
   // Controlled dependencies: props are inline
   it('T-4.3f: analysis annotation tools render all tool buttons', () => {
-    const annotationTools = ANNOTATION_TOOL_DEFS.map(tool => tool.id)
+    const annotationTools = [
+      'stone_1',
+      'cross',
+      'triangle',
+      'square',
+      'circle',
+      'line',
+      'arrow',
+      'label',
+      'number',
+    ]
 
     const {container} = renderToDom(
-      h(BottomActionBar, noopProps({mode: 'analysis'}))
+      h(BottomActionBar, noopProps({mode: 'analysis'})),
     )
 
-    const toolBtns = Array.from(container.querySelectorAll(
-      '.wb-bottom-action-bar__visual [data-testid="annotation-tool-btn"]'
-    ))
+    const toolBtns = Array.from(
+      container.querySelectorAll(
+        '[data-testid="analysis-edit-toolbar"] #edit a[data-id]',
+      ),
+    )
     assert.strictEqual(
       toolBtns.length,
       annotationTools.length,
-      `Expected ${annotationTools.length} annotation tool buttons, got ${toolBtns.length}`
+      `Expected ${annotationTools.length} annotation tool buttons, got ${toolBtns.length}`,
     )
 
-    const renderedTools = toolBtns.map(b => b.getAttribute('data-tool'))
+    const renderedTools = toolBtns.map((b) => b.getAttribute('data-id'))
     for (const tool of annotationTools) {
       assert.ok(
         renderedTools.includes(tool),
-        `Annotation tool "${tool}" not found. Got: [${renderedTools.join(', ')}]`
+        `Annotation tool "${tool}" not found. Got: [${renderedTools.join(', ')}]`,
       )
     }
   })
@@ -271,22 +356,29 @@ describe('BottomActionBar (T-4.3)', function () {
   // Controlled dependencies: props are inline
   it('T-4.3g: active annotation tool is highlighted', () => {
     const {container} = renderToDom(
-      h(BottomActionBar, noopProps({
-        mode: 'analysis',
-        activeAnnotationTool: 'triangle',
-      }))
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'analysis',
+          activeAnnotationTool: 'triangle',
+        }),
+      ),
     )
 
-    const toolBtns = Array.from(container.querySelectorAll(
-      '.wb-bottom-action-bar__visual [data-testid="annotation-tool-btn"]'
-    ))
-    const triangleBtn = toolBtns.find(b => b.getAttribute('data-tool') === 'triangle')
+    const toolBtns = Array.from(
+      container.querySelectorAll(
+        '[data-testid="analysis-edit-toolbar"] #edit li',
+      ),
+    )
+    const triangleBtn = toolBtns.find(
+      (b) => b.querySelector('a[data-id="triangle"]') != null,
+    )
     assert.ok(triangleBtn, 'Triangle annotation tool button not found')
 
     const classList = triangleBtn.className || ''
     assert.ok(
-      classList.includes('active'),
-      `Active tool "triangle" should have active class, got "${classList}"`
+      classList.includes('active') || classList.includes('selected'),
+      `Active tool "triangle" should have active class, got "${classList}"`,
     )
   })
 })
@@ -297,7 +389,9 @@ describe('BottomActionBar (T-4.3)', function () {
 
 describe('BottomActionBar status text (T-U2-3)', function () {
   before(async function () {
-    BottomActionBar = await tryImport('src/components/workbench/shell/BottomActionBar.js')
+    BottomActionBar = await tryImport(
+      'src/components/workbench/shell/BottomActionBar.js',
+    )
     if (!BottomActionBar) this.skip()
   })
 
@@ -308,12 +402,15 @@ describe('BottomActionBar status text (T-U2-3)', function () {
   // Controlled dependencies: props are inline
   it('T-U2-3a: renders .wb-status-text area', () => {
     const {container} = renderToDom(
-      h(BottomActionBar, noopProps({
-        mode: 'play',
-        workspaceLabel: '对局',
-        moveNumber: 42,
-        engineStatus: 'KataGo 已连接',
-      }))
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'play',
+          workspaceLabel: '对局',
+          moveNumber: 42,
+          engineStatus: 'KataGo 已连接',
+        }),
+      ),
     )
 
     const statusText = container.querySelector('.wb-status-text')
@@ -328,18 +425,27 @@ describe('BottomActionBar status text (T-U2-3)', function () {
   // Controlled dependencies: props are inline test data
   it('T-U2-3b: status text contains workspaceLabel, moveNumber, engineStatus', () => {
     const {container} = renderToDom(
-      h(BottomActionBar, noopProps({
-        mode: 'play',
-        workspaceLabel: '对局',
-        moveNumber: 42,
-        engineStatus: 'KataGo 已连接',
-      }))
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'play',
+          workspaceLabel: '对局',
+          moveNumber: 42,
+          engineStatus: 'KataGo 已连接',
+        }),
+      ),
     )
 
     const text = container.textContent
-    assert.ok(text.includes('对局'), 'Expected workspaceLabel "对局" in status text')
+    assert.ok(
+      text.includes('对局'),
+      'Expected workspaceLabel "对局" in status text',
+    )
     assert.ok(text.includes('42'), 'Expected moveNumber "42" in status text')
-    assert.ok(text.includes('KataGo'), 'Expected engineStatus containing "KataGo" in status text')
+    assert.ok(
+      text.includes('KataGo'),
+      'Expected engineStatus containing "KataGo" in status text',
+    )
   })
 
   // --- T-U2-3c: different mode produces different workspaceLabel ---
@@ -350,28 +456,44 @@ describe('BottomActionBar status text (T-U2-3)', function () {
   // Controlled dependencies: props are inline test data
   it('T-U2-3c: different mode produces different workspaceLabel', () => {
     const playResult = renderToDom(
-      h(BottomActionBar, noopProps({
-        mode: 'play',
-        workspaceLabel: '对局',
-        moveNumber: 1,
-        engineStatus: '',
-      }))
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'play',
+          workspaceLabel: '对局',
+          moveNumber: 1,
+          engineStatus: '',
+        }),
+      ),
     )
 
     const problemResult = renderToDom(
-      h(BottomActionBar, noopProps({
-        mode: 'problem',
-        workspaceLabel: '做题',
-        moveNumber: 1,
-        engineStatus: '',
-      }))
+      h(
+        BottomActionBar,
+        noopProps({
+          mode: 'problem',
+          workspaceLabel: '做题',
+          moveNumber: 1,
+          engineStatus: '',
+        }),
+      ),
     )
 
     const playText = playResult.container.textContent
     const problemText = problemResult.container.textContent
 
-    assert.ok(playText.includes('对局'), 'Play mode should show "对局" workspaceLabel')
-    assert.ok(problemText.includes('做题'), 'Problem mode should show "做题" workspaceLabel')
-    assert.notStrictEqual(playText, problemText, 'Different modes should produce different status text')
+    assert.ok(
+      playText.includes('对局'),
+      'Play mode should show "对局" workspaceLabel',
+    )
+    assert.ok(
+      problemText.includes('做题'),
+      'Problem mode should show "做题" workspaceLabel',
+    )
+    assert.notStrictEqual(
+      playText,
+      problemText,
+      'Different modes should produce different status text',
+    )
   })
 })
