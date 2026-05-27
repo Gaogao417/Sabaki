@@ -15,6 +15,19 @@ type Diagnostic = {
   detail?: Dict
 }
 
+type DiagnosticsPhase = 'preflight' | 'postflight'
+
+type DiagnosticsContext = {
+  phase?: DiagnosticsPhase
+  command?: string
+  tabId?: string
+}
+
+type DiagnosticsDecisionAction =
+  | 'allow'
+  | 'reject'
+  | 'invalid-after-commit'
+
 const runtimeRegionKey = 'en' + 'gine'
 
 export function resolveModeState(input: ResolverInput = {}) {
@@ -138,8 +151,46 @@ export function resolveModeState(input: ResolverInput = {}) {
   })
 }
 
+export function classifyModeStateDiagnostics(
+  result: Dict | null | undefined,
+  context: DiagnosticsContext = {},
+) {
+  const illegalCodes = collectCodes(result?.illegal)
+  const diagnosticCodes = collectCodes(result?.diagnostics)
+  const hasIllegal = result?.ok === false || illegalCodes.length > 0
+  const action: DiagnosticsDecisionAction = hasIllegal
+    ? context.phase === 'postflight'
+      ? 'invalid-after-commit'
+      : 'reject'
+    : 'allow'
+
+  return {
+    action,
+    phase: context.phase ?? 'preflight',
+    command: context.command,
+    tabId: context.tabId,
+    illegalCodes,
+    diagnosticCodes,
+  }
+}
+
 function asDict(value: unknown): Dict | null {
   return value != null && typeof value === 'object' ? value as Dict : null
+}
+
+function collectCodes(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .map(item => {
+      if (typeof item === 'string') return item
+      if (item != null && typeof item === 'object') {
+        const code = (item as Dict).code
+        return typeof code === 'string' ? code : null
+      }
+      return null
+    })
+    .filter((code): code is string => code != null)
 }
 
 function isWorkbenchMode(value: unknown): value is WorkbenchMode {
