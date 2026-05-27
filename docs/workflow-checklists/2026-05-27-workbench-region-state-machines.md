@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Workflow: business-contract-workflow
-Status: step4-review-ready
+Status: step4-approved
 
 ## Scope
 
@@ -38,7 +38,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step2.3.impl: Implement diagnostics owner/consumption in disjoint production scope; defer shared flow integration to step3 if needed — role: implementation-agent — depends_on: step2.3.test-audit — production: `src/modules/training/workbench/modeStateResolver.ts` — commit: f379a286
 - [x] step2.3.review: Architecture review of transition diagnostics implementation — role: architecture-reviewer — depends_on: step2.3.impl — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/diagnostics-region/architecture-review-v0.1.md` — commit: 0387fa6a
 - [x] step3.integration: Integrate runtime/scratch/diagnostics slices, resolve shared `workbenchFlowService.ts` edits, and run focused regressions — role: implementation-agent — depends_on: step2.1.review, step2.2.review, step2.3.review — production: `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/training/workbench/modeStateResolver.ts`, `src/modules/sabaki.js`; tests: `test/training/workbenchFlowService.test.js`, `test/training/modeStateResolver.test.js` — previous_commit: 2a66e5ac — retry1 commit: 2761140c
-- [ ] step4.review: Architecture review of parent/child-region boundary and evidence ledger — role: architecture-reviewer — depends_on: step3.integration — last_verdict: REQUEST_CHANGES — review: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.1.md`
+- [x] step4.review: Architecture review of parent/child-region boundary and evidence ledger — role: architecture-reviewer — depends_on: step3.integration — verdict: APPROVED — previous_review: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.1.md` — review: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.2.md` — commit: pending
 
 ## Notes
 
@@ -98,6 +98,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - Step4 architecture review result: REQUEST_CHANGES in `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.1.md`; production-shaped diagnostics provider can false-reject legal submit paths because resolver requires `runtime.attempt` / `runtime.sourceAttempt` objects not supplied by `trainingRuntimeStore`.
 - Step3 retry1 verification: `npx mocha --require tsx test/training/modeStateResolver.test.js test/training/workbenchFlowService.test.js` passed 132 tests after retargeting resolver illegal checks to production snapshot bindings and adding production-shaped diagnostics happy paths.
 - Step3 retry1 focused regression verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/analysis/workbenchAnalysisScratchRegion.test.ts test/analysis/analysisAreaStore.test.js test/training/workbenchRuntimeRegion.test.ts test/training/workbenchFlowService.test.js test/training/recallService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 286 tests.
+- Step4 retry architecture review result: APPROVED in `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.2.md`; local review verification reran the same focused 132-test and 286-test commands successfully.
 
 ## Step4 Review Retries
 
