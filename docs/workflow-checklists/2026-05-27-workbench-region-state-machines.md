@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Workflow: business-contract-workflow
-Status: step1-complete
+Status: step2.1-active
 
 ## Scope
 
@@ -19,6 +19,12 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step1.test-audit: Audit tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step1.tests — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/test-audit-v0.2.md` — commit: 3d210ff5
 - [x] step1.impl: Implement overlay child-region transition boundary — role: implementation-agent — depends_on: step1.test-audit — production: `src/modules/overlays/workbenchOverlayRegion.ts`, `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/sabaki.js` — commit: 38880948 — retry1 submitted after architecture-review REQUEST_CHANGES
 - [x] step1.review: Architecture review of overlay child-region implementation — role: architecture-reviewer — depends_on: step1.impl — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/architecture-review-v0.2.md` — commit: 8e09a3ce
+- [ ] step2.1.contract: Contract sketch for runtime companion child-region cleanup — role: contract-designer — depends_on: step1.review — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/test-contract-v0.1.md`
+- [ ] step2.1.contract-audit: Audit runtime companion child-region contract — role: contract-auditor — depends_on: step2.1.contract
+- [ ] step2.1.tests: Write focused runtime companion region and flow outcome tests — role: test-writer — depends_on: step2.1.contract-audit
+- [ ] step2.1.test-audit: Audit runtime companion tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.1.tests
+- [ ] step2.1.impl: Implement runtime companion child-region cleanup boundary — role: implementation-agent — depends_on: step2.1.test-audit
+- [ ] step2.1.review: Architecture review of runtime companion implementation — role: architecture-reviewer — depends_on: step2.1.impl
 
 ## Notes
 
