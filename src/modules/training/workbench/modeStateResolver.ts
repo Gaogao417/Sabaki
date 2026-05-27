@@ -2,7 +2,7 @@ type WorkbenchMode = 'play' | 'problem' | 'recall' | 'analysis'
 
 type Dict = Record<string, any>
 
-type ResolverInput = {
+export type ResolverInput = {
   tab?: Dict | null
   runtime?: Dict | null
   overlay?: Dict | null

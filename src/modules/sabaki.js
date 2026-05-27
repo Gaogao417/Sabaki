@@ -1040,6 +1040,16 @@ class Sabaki extends EventEmitter {
         overlayRegion,
         evaluationRules: { evaluateAttempt },
         runtimeStore,
+        getModeStateInput: tabId => ({
+          tab: workbenchStore.getState().tabs.find(tab => tab.id === tabId),
+          runtime: runtimeStore.getState(),
+          overlay: this.getOverlayStore().getState(),
+          sabaki: {
+            state: this.state,
+            document: this.document,
+            editWorkspace: this.state?.editWorkspace,
+          },
+        }),
         logger,
       })
 

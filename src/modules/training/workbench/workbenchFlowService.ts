@@ -21,7 +21,16 @@ import type {
   UndoMoveResult,
 } from '../problem/problemFlowService'
 import type {WorkbenchOverlayRegion} from '../../overlays/workbenchOverlayRegion'
+import {
+  createWorkbenchAnalysisScratchRegion,
+  type WorkbenchAnalysisScratchTarget,
+} from '../../analysis/workbenchAnalysisScratchRegion'
 import {resolveTransition} from './modeTransitions'
+import {
+  classifyModeStateDiagnostics,
+  resolveModeState,
+  type ResolverInput,
+} from './modeStateResolver'
 import {
   createWorkbenchRuntimeRegion,
   type WorkbenchRuntimeRegion,
@@ -35,6 +44,20 @@ export class InvalidModeTransitionError extends Error {
   ) {
     super(`Invalid mode transition: ${from} --${method}--> ? (tabId=${tabId})`)
     this.name = 'InvalidModeTransitionError'
+  }
+}
+
+export class WorkbenchModeInvariantError extends Error {
+  constructor(
+    public readonly tabId: string,
+    public readonly command: string,
+    public readonly action: string,
+    public readonly codes: string[],
+  ) {
+    super(
+      `Workbench mode invariant failed: ${action} (${command}, tabId=${tabId}, codes=${codes.join(',')})`,
+    )
+    this.name = 'WorkbenchModeInvariantError'
   }
 }
 
@@ -76,6 +99,7 @@ export type WorkbenchFlowServiceDeps = {
   }
   runtimeStore?: TrainingRuntimeStore
   runtimeRegion?: WorkbenchRuntimeRegion
+  getModeStateInput?: (tabId: string) => ResolverInput | null | undefined
   logger?: {
     info(channel: string, message: string, data?: Record<string, unknown>): void
   }
@@ -127,7 +151,7 @@ export type WorkbenchModeEffects = {
 type LegacySabakiAnalysisAdapter = {
   state?: {
     mode?: string
-    editWorkspace?: {activeTab?: string} | null
+    editWorkspace?: {activeTab?: string; [key: string]: unknown} | null
     analysisType?: string
   }
   setMode?: (
@@ -177,21 +201,8 @@ export type WorkbenchFlowService = {
 export function createSabakiModeEffects(
   sabaki: LegacySabakiAnalysisAdapter,
 ): WorkbenchModeEffects {
-  function ensureAnalysisWorkspace(selectedTool?: string): void {
+  function patchAnalysisState(selectedTool?: string): void {
     if (!sabaki.state || typeof sabaki.setState !== 'function') return
-
-    if (sabaki.state.mode !== 'analysis') {
-      sabaki.setMode?.('analysis', {autoEnableTerritory: false})
-    } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
-      sabaki.setState({
-        editWorkspace: sabaki.createAnalysisWorkspace(),
-      })
-      sabaki.scheduleEditWorkspaceAnalysis?.()
-    } else if (sabaki.state.editWorkspace) {
-      sabaki.scheduleEditWorkspaceAnalysis?.(
-        sabaki.state.editWorkspace.activeTab || 'current',
-      )
-    }
 
     const statePatch: Record<string, unknown> = {
       showAnalysis: true,
@@ -201,21 +212,62 @@ export function createSabakiModeEffects(
     sabaki.setState(statePatch)
   }
 
-  function exitAnalysisWorkspace(): void {
+  function ensureAnalysisWorkspace(
+    selectedTool: string | undefined,
+    scratchTarget: WorkbenchAnalysisScratchTarget,
+  ): void {
+    if (!sabaki.state || typeof sabaki.setState !== 'function') return
+
+    if (sabaki.state.mode !== 'analysis') {
+      sabaki.setMode?.('analysis', {autoEnableTerritory: false})
+    }
+
+    const workspace =
+      sabaki.state.editWorkspace ??
+      (sabaki.createAnalysisWorkspace
+        ? (sabaki.createAnalysisWorkspace() as Record<string, unknown>)
+        : null)
+
+    if (workspace != null) {
+      sabaki.setState({
+        editWorkspace: {
+          ...workspace,
+          scratchTarget,
+        },
+      })
+    }
+
+    patchAnalysisState(selectedTool)
+  }
+
+  function exitAnalysisWorkspace(target: WorkbenchAnalysisScratchTarget): void {
     if (!sabaki.state) return
+    if (sabaki.state.editWorkspace && typeof sabaki.setState === 'function') {
+      sabaki.setState({
+        editWorkspace: {
+          ...sabaki.state.editWorkspace,
+          scratchTarget: {...target, status: 'inactive'},
+        },
+      })
+    }
     if (sabaki.state.mode === 'analysis') {
       sabaki.setMode?.('play')
     }
   }
 
-  return {
-    enterAnalysis(input) {
-      ensureAnalysisWorkspace(input.selectedTool)
+  return createWorkbenchAnalysisScratchRegion({
+    adapter: {
+      createOrStampWorkspace(input) {
+        ensureAnalysisWorkspace(input.transition.selectedTool, input.target)
+      },
+      scheduleScratchAnalysis(input) {
+        sabaki.scheduleEditWorkspaceAnalysis?.(input.target.targetTab)
+      },
+      clearWorkspace(input) {
+        exitAnalysisWorkspace(input.target)
+      },
     },
-    exitAnalysis() {
-      exitAnalysisWorkspace()
-    },
-  }
+  })
 }
 
 export function createWorkbenchFlowService(
@@ -239,6 +291,58 @@ export function createWorkbenchFlowService(
   const runtimeRegion =
     deps.runtimeRegion ??
     (runtimeStore ? createWorkbenchRuntimeRegion({runtimeStore}) : undefined)
+
+  function checkModeStateInvariant(input: {
+    tabId: string
+    command: string
+    phase: 'preflight' | 'postflight'
+  }): void {
+    const modeStateInput = deps.getModeStateInput?.(input.tabId)
+    if (modeStateInput == null) return
+
+    const result = resolveModeState(modeStateInput)
+    const decision = classifyModeStateDiagnostics(result, {
+      phase: input.phase,
+      command: input.command,
+      tabId: input.tabId,
+    })
+
+    if (decision.diagnosticCodes.length > 0) {
+      logger?.info(
+        'flow.transition.diagnostic',
+        'Transition diagnostic',
+        {
+          tabId: input.tabId,
+          command: input.command,
+          phase: input.phase,
+          diagnostics: decision.diagnosticCodes,
+        },
+      )
+    }
+
+    if (decision.action === 'allow') return
+
+    logger?.info(
+      decision.action === 'reject'
+        ? 'flow.transition.rejected'
+        : 'flow.transition.invalid_after_commit',
+      'Transition invariant failed',
+      {
+        tabId: input.tabId,
+        command: input.command,
+        phase: input.phase,
+        action: decision.action,
+        illegal: decision.illegalCodes,
+      },
+    )
+
+    throw new WorkbenchModeInvariantError(
+      input.tabId,
+      input.command,
+      decision.action,
+      decision.illegalCodes,
+    )
+  }
 
   function getTab(tabId: string): WorkbenchTab {
     const tab = workbenchStore.getState().tabs.find((t) => t.id === tabId)
@@ -460,6 +564,7 @@ export function createWorkbenchFlowService(
 
   function submit(tabId: string): Promise<void> {
     const tab = getTab(tabId)
+    checkModeStateInvariant({tabId, command: 'submit', phase: 'preflight'})
 
     logger?.info('flow.submit', 'Submit attempt', {
       tabId,
@@ -480,6 +585,7 @@ export function createWorkbenchFlowService(
         throw new InvalidModeTransitionError(tab.id, tab.mode, 'submit')
       }
       workbenchStore.updateTab(tabId, {mode: 'recall'})
+      checkModeStateInvariant({tabId, command: 'submit', phase: 'postflight'})
       logger?.info(
         'flow.submit',
         'Submit completed (no active attempt, direct recall)',
@@ -509,6 +615,7 @@ export function createWorkbenchFlowService(
         })
 
         if (runtimeRegion) runtimeRegion.onRecallActivated({session})
+        checkModeStateInvariant({tabId, command: 'submit', phase: 'postflight'})
 
         logger?.info('flow.submit', 'Problem submit completed', {
           tabId,
@@ -552,6 +659,7 @@ export function createWorkbenchFlowService(
       })
 
       if (runtimeRegion) runtimeRegion.onRecallActivated({session})
+      checkModeStateInvariant({tabId, command: 'submit', phase: 'postflight'})
 
       logger?.info('flow.submit', 'Submit completed', {
         tabId,
@@ -612,6 +720,11 @@ export function createWorkbenchFlowService(
   ): void {
     const tab = getTab(tabId)
     assertTransition(tab, 'enterAnalysis')
+    checkModeStateInvariant({
+      tabId,
+      command: 'enterAnalysis',
+      phase: 'preflight',
+    })
 
     logger?.info('flow.enterAnalysis', 'Enter analysis mode', {
       tabId,
@@ -651,6 +764,11 @@ export function createWorkbenchFlowService(
       reason: options?.reason,
       selectedTool: options?.selectedTool,
     })
+    checkModeStateInvariant({
+      tabId,
+      command: 'enterAnalysis',
+      phase: 'postflight',
+    })
 
     logger?.info('flow.enterAnalysis', 'Analysis mode entered', {
       tabId,
@@ -681,6 +799,11 @@ export function createWorkbenchFlowService(
     }
 
     assertTransition(tab, 'returnFromAnalysis')
+    checkModeStateInvariant({
+      tabId: input.tabId,
+      command: 'returnFromAnalysis',
+      phase: 'preflight',
+    })
 
     const target = tab.analysisReturnTarget
 
@@ -717,6 +840,11 @@ export function createWorkbenchFlowService(
       afterTab,
       analysisReturnTarget: target,
       reason: input.reason,
+    })
+    checkModeStateInvariant({
+      tabId: input.tabId,
+      command: 'returnFromAnalysis',
+      phase: 'postflight',
     })
 
     logger?.info('flow.returnFromAnalysis', 'Returned from analysis', {
@@ -1103,6 +1231,11 @@ export function createWorkbenchFlowService(
     }
 
     assertTransition(tab, 'snapshot')
+    checkModeStateInvariant({
+      tabId,
+      command: 'snapshotFromCurrentContext',
+      phase: 'preflight',
+    })
 
     if (tab.taskId == null) {
       logger?.info(

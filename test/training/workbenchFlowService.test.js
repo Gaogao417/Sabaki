@@ -191,6 +191,7 @@ function createMockDeps(overrides = {}) {
     },
     modeEffects: overrides.modeEffects,
     overlayRegion: overrides.overlayRegion,
+    getModeStateInput: overrides.getModeStateInput,
     logger,
   }
 }
@@ -1333,19 +1334,22 @@ describe('workbenchFlowService', () => {
   })
 
   describe('step1 production composition safeguards', () => {
-    it('Workbench mode effects enter analysis without legacy territory auto-enable', () => {
+    it('Workbench mode effects enter analysis without legacy territory auto-enable and stamp scratch target', () => {
       const calls = []
+      const appState = {
+        mode: 'play',
+        editWorkspace: null,
+        analysisType: 'winrate',
+      }
       const modeEffects = createSabakiModeEffects({
-        state: {
-          mode: 'play',
-          editWorkspace: null,
-          analysisType: 'winrate',
-        },
+        state: appState,
         setMode(mode, options) {
           calls.push(['setMode', mode, options])
+          appState.mode = mode
         },
         setState(patch) {
           calls.push(['setState', clone(patch)])
+          Object.assign(appState, patch)
         },
         createAnalysisWorkspace() {
           calls.push(['createAnalysisWorkspace'])
@@ -1372,7 +1376,139 @@ describe('workbenchFlowService', () => {
         ['setMode', 'analysis', {autoEnableTerritory: false}],
         'Workbench mode effect must not let legacy sabaki.setMode auto-enable territory',
       )
+      const editWorkspacePatch = calls.find(
+        call => call[0] === 'setState' && call[1]?.editWorkspace,
+      )
+      assert.ok(editWorkspacePatch, 'mode effect should stamp editWorkspace')
+      assert.strictEqual(
+        editWorkspacePatch[1].editWorkspace.scratchTarget.kind,
+        'scratch',
+      )
+      assert.strictEqual(
+        editWorkspacePatch[1].editWorkspace.scratchTarget.tabId,
+        'tab_mode_effect_guard',
+      )
+      assert.deepStrictEqual(calls.at(-2), [
+        'setState',
+        {showAnalysis: true, analysisType: 'winrate'},
+      ])
       assert.deepStrictEqual(calls.at(-1), [
+        'scheduleEditWorkspaceAnalysis',
+        'current',
+      ])
+    })
+  })
+
+  describe('step3 mode diagnostics integration', () => {
+    it('rejects illegal preflight state before submit writes', async () => {
+      const writeCalls = []
+      const deps = createMockDeps({
+        getModeStateInput(tabId) {
+          const tab = getTab(deps.store, tabId)
+          return {
+            tab,
+            runtime: {},
+            overlay: {territoryEnabled: true},
+            sabaki: {state: {mode: tab.mode}},
+          }
+        },
+        attemptService: {
+          async freezeAttempt(id) {
+            writeCalls.push(['freezeAttempt', id])
+          },
+          async finalizeAttemptResult(id, result) {
+            writeCalls.push(['finalizeAttemptResult', id, result])
+          },
+        },
+      })
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_diagnostics_preflight',
+        mode: 'play',
+        activeAttemptId: 'attempt_diagnostics',
+      }))
+
+      assert.throws(
+        () => service.submit('tab_diagnostics_preflight'),
+        error =>
+          error?.name === 'WorkbenchModeInvariantError' &&
+          error.action === 'reject' &&
+          error.codes.includes('non-analysis-territory-overlay'),
+      )
+
+      assert.deepStrictEqual(writeCalls, [])
+      assert.strictEqual(getTab(deps.store, 'tab_diagnostics_preflight').mode, 'play')
+    })
+
+    it('surfaces postflight invalid state without repairing the committed transition', () => {
+      const deps = createMockDeps({
+        modeEffects: {
+          enterAnalysis() {},
+          exitAnalysis() {},
+        },
+        getModeStateInput(tabId) {
+          const tab = getTab(deps.store, tabId)
+          return {
+            tab,
+            runtime: {},
+            overlay: {},
+            sabaki: {
+              state: {mode: tab.mode},
+              editWorkspace: null,
+            },
+          }
+        },
+      })
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_diagnostics_postflight',
+        mode: 'play',
+        taskId: 'task_1',
+      }))
+
+      assert.throws(
+        () => service.enterAnalysis('tab_diagnostics_postflight'),
+        error =>
+          error?.name === 'WorkbenchModeInvariantError' &&
+          error.action === 'invalid-after-commit' &&
+          error.codes.includes('analysis-missing-scratch-current'),
+      )
+
+      const tab = getTab(deps.store, 'tab_diagnostics_postflight')
+      assert.strictEqual(tab.mode, 'analysis')
+      assert.ok(tab.analysisReturnTarget)
+    })
+  })
+
+  describe('step1 production composition safeguards', () => {
+    it('legacy analysis state patch remains explicit', () => {
+      const calls = []
+      const modeEffects = createSabakiModeEffects({
+        state: {
+          mode: 'analysis',
+          editWorkspace: {activeTab: 'current'},
+          analysisType: 'winrate',
+        },
+        setState(patch) {
+          calls.push(['setState', clone(patch)])
+        },
+        scheduleEditWorkspaceAnalysis(tab) {
+          calls.push(['scheduleEditWorkspaceAnalysis', tab])
+        },
+      })
+
+      modeEffects.enterAnalysis({
+        tabId: 'tab_mode_effect_patch',
+        fromMode: 'play',
+        toMode: 'analysis',
+        beforeTab: makeTab({id: 'tab_mode_effect_patch', mode: 'play'}),
+        afterTab: makeTab({id: 'tab_mode_effect_patch', mode: 'analysis'}),
+        analysisReturnTarget: {mode: 'play'},
+        analysisContext: {source: 'play', taskId: 'task_mode_effect_patch'},
+        reason: 'manual',
+      })
+
+      assert.deepStrictEqual(calls.find(call => call[1]?.showAnalysis), [
         'setState',
         {showAnalysis: true, analysisType: 'winrate'},
       ])
