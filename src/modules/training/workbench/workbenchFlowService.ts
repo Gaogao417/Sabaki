@@ -21,6 +21,7 @@ import type {
   SubmitProblemResult,
   UndoMoveResult,
 } from '../problem/problemFlowService'
+import type {WorkbenchOverlayRegion} from '../../overlays/workbenchOverlayRegion'
 import {resolveTransition} from './modeTransitions'
 
 export class InvalidModeTransitionError extends Error {
@@ -62,6 +63,7 @@ export type WorkbenchFlowServiceDeps = {
   tabService: WorkbenchTabService
   problemFlowService?: ProblemFlowService
   modeEffects?: WorkbenchModeEffects
+  overlayRegion?: WorkbenchOverlayRegion
   evaluationRules?: {
     evaluateAttempt(input: {
       attempt: Record<string, unknown>
@@ -224,6 +226,7 @@ export function createWorkbenchFlowService(
     logger,
   } = deps
   let activeModeEffects = deps.modeEffects
+  const overlayRegion = deps.overlayRegion
   const evaluationRules = deps.evaluationRules
   const runtimeStore = deps.runtimeStore
 
@@ -639,10 +642,20 @@ export function createWorkbenchFlowService(
       analysisContext: analysisContext as ModeEffectAnalysisContext,
     })
     const afterTab = getTab(tabId)
+    const fromMode = tab.mode as 'play' | 'problem' | 'recall'
+
+    overlayRegion?.onWorkbenchModeTransition({
+      tabId,
+      fromMode,
+      toMode: 'analysis',
+      beforeTab: tab,
+      afterTab,
+      reason: options?.reason,
+    })
 
     activeModeEffects?.enterAnalysis({
       tabId,
-      fromMode: tab.mode as 'play' | 'problem' | 'recall',
+      fromMode,
       toMode: 'analysis',
       beforeTab: tab,
       afterTab,
@@ -699,6 +712,15 @@ export function createWorkbenchFlowService(
       analysisReturnTarget: undefined,
     })
     const afterTab = getTab(input.tabId)
+
+    overlayRegion?.onWorkbenchModeTransition({
+      tabId: input.tabId,
+      fromMode: 'analysis',
+      toMode: target.mode,
+      beforeTab: tab,
+      afterTab,
+      reason: input.reason,
+    })
 
     activeModeEffects?.exitAnalysis({
       tabId: input.tabId,
@@ -790,6 +812,15 @@ export function createWorkbenchFlowService(
       analysisContext: analysisContext as ModeEffectAnalysisContext,
     })
     const afterTab = getTab(tabId)
+
+    overlayRegion?.onWorkbenchModeTransition({
+      tabId,
+      fromMode: 'recall',
+      toMode: 'analysis',
+      beforeTab: tab,
+      afterTab,
+      reason: 'recall-complete',
+    })
 
     activeModeEffects?.enterAnalysis({
       tabId,
@@ -900,6 +931,15 @@ export function createWorkbenchFlowService(
     const afterTab = getTab(tabId)
 
     if (shouldExitAnalysis && analysisReturnTarget) {
+      overlayRegion?.onWorkbenchModeTransition({
+        tabId,
+        fromMode: 'analysis',
+        toMode: targetMode as 'play' | 'problem' | 'recall',
+        beforeTab: tab,
+        afterTab,
+        reason: 'restart-attempt',
+      })
+
       activeModeEffects?.exitAnalysis({
         tabId,
         fromMode: 'analysis',
