@@ -200,7 +200,6 @@ export default function ModeBar({
   return h(
     'nav',
     {'data-testid': 'mode-bar', class: `wb-mode-bar wb-mode-bar--${activeMode}${isCheckpoint ? ' wb-mode-bar--checkpoint' : ''}`},
-    renderCompatSegmented({activeMode, modeBarPolicy, onModeChange}),
     h('button', {class: 'wb-topbar-menu', 'aria-label': '打开资料库', onClick: rest.onOpenGameLibrary}, '☷'),
     h(Divider),
     h('div', {class: 'wb-topbar-title'}, title),

@@ -60,9 +60,14 @@ async function installGoldenPathHarness(page) {
       ctx.taskImportService,
     )
     const originalOpenTask = ctx.tabService.openTask.bind(ctx.tabService)
+    const originalOpenPlayTab = ctx.tabService.openPlayTab.bind(ctx.tabService)
+    const originalOpenProblemTask = ctx.tabService.openProblemTask.bind(ctx.tabService)
 
     window.__sabaki.__goldenPathHarness = {
       openTask: [],
+      openPlayTab: [],
+      openProblemTask: [],
+      openCalls: [],
       sourceLookups: [],
       imports: [],
     }
@@ -88,7 +93,18 @@ async function installGoldenPathHarness(page) {
     }
     ctx.tabService.openTask = async (opts) => {
       window.__sabaki.__goldenPathHarness.openTask.push(opts)
+      window.__sabaki.__goldenPathHarness.openCalls.push({kind: 'openTask', opts})
       return originalOpenTask(opts)
+    }
+    ctx.tabService.openPlayTab = async (opts) => {
+      window.__sabaki.__goldenPathHarness.openPlayTab.push(opts)
+      window.__sabaki.__goldenPathHarness.openCalls.push({kind: 'openPlayTab', opts})
+      return originalOpenPlayTab(opts)
+    }
+    ctx.tabService.openProblemTask = async (opts) => {
+      window.__sabaki.__goldenPathHarness.openProblemTask.push(opts)
+      window.__sabaki.__goldenPathHarness.openCalls.push({kind: 'openProblemTask', opts})
+      return originalOpenProblemTask(opts)
     }
 
     ctx.libraryProjection = {
@@ -144,9 +160,10 @@ async function installGoldenPathHarness(page) {
   }, NOW)
 }
 
-async function latestOpenTask(page) {
+async function latestOpen(page) {
   return page.evaluate(() => {
-    const calls = window.__sabaki.__goldenPathHarness.openTask
+    const harness = window.__sabaki.__goldenPathHarness
+    const calls = harness.openCalls
     return calls[calls.length - 1] || null
   })
 }
@@ -222,8 +239,9 @@ test.describe('Workbench golden path smoke', () => {
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-tab-kifu"]').click()
     await clickLibraryRow(page, 'Golden kifu fixture')
-    expect(await latestOpenTask(page)).toMatchObject({
-      taskId: 'task_kifu_fixture',
+    expect(await latestOpen(page)).toMatchObject({
+      kind: 'openPlayTab',
+      opts: {taskId: 'task_kifu_fixture'},
     })
     expect(await activeTab(page)).toMatchObject({
       taskId: 'task_kifu_fixture',
@@ -233,16 +251,17 @@ test.describe('Workbench golden path smoke', () => {
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-tab-game-records"]').click()
     await clickLibraryRow(page, 'Golden saved game fixture')
-    expect(await latestOpenTask(page)).toMatchObject({
-      taskId: 'task_saved_game_fixture',
+    expect(await latestOpen(page)).toMatchObject({
+      kind: 'openPlayTab',
+      opts: {taskId: 'task_saved_game_fixture'},
     })
 
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-tab-problems"]').click()
     await clickLibraryRow(page, 'Golden problem fixture')
-    expect(await latestOpenTask(page)).toMatchObject({
-      taskId: 'task_problem_fixture',
-      mode: 'problem',
+    expect(await latestOpen(page)).toMatchObject({
+      kind: 'openProblemTask',
+      opts: {taskId: 'task_problem_fixture'},
     })
     expect(await activeTab(page)).toMatchObject({
       taskId: 'task_problem_fixture',
@@ -252,15 +271,17 @@ test.describe('Workbench golden path smoke', () => {
     await closeLibraryIfOpen(page)
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-source-fox"]').click()
-    expect(await latestOpenTask(page)).toMatchObject({
-      taskId: 'task_fox_yiwoo_fixture',
+    expect(await latestOpen(page)).toMatchObject({
+      kind: 'openPlayTab',
+      opts: {taskId: 'task_fox_yiwoo_fixture'},
     })
 
     await closeLibraryIfOpen(page)
     await ensureLibraryOpen(page)
     await page.locator('[data-testid="library-source-101"]').click()
-    expect(await latestOpenTask(page)).toMatchObject({
-      taskId: 'task_101_fixture',
+    expect(await latestOpen(page)).toMatchObject({
+      kind: 'openProblemTask',
+      opts: {taskId: 'task_101_fixture'},
     })
   })
 })

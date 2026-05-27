@@ -144,7 +144,7 @@ describe('Workbench command map coverage', () => {
     )
   })
 
-  it('external material commands dispatch through task import and openTask instead of legacy third-party panels', () => {
+  it('external material commands dispatch through task import and explicit play/problem task entrypoints instead of legacy third-party panels', () => {
     const container = read(SOURCE_FILES.container)
     const externalCommands = [
       {
@@ -192,8 +192,8 @@ describe('Workbench command map coverage', () => {
       )
       assert.match(
         body,
-        /tabService\.openTask\s*\(/,
-        `${id} must open the imported/synced TrainingTask through tabService.openTask`,
+        id === 'library.fox' ? /openPlayTask\s*\(/ : /openProblemTask\s*\(/,
+        `${id} must open the imported/synced TrainingTask through the explicit Workbench task entrypoint`,
       )
     }
   })
@@ -224,7 +224,7 @@ describe('Workbench command map coverage', () => {
     )
     assert.match(
       body,
-      /tabService\.openTask\s*\(\s*{taskId,\s*mode:\s*['"]problem['"]/,
+      /openProblemTask\s*\(\s*{taskId}/,
       'Visible problem rows must open a Workbench problem task tab',
     )
   })

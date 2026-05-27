@@ -519,8 +519,8 @@ describe('W5 Analysis Mode Wiring', function () {
 
         // Verify flowService.returnFromAnalysis was called with {tabId} (no toMode)
         assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_a'},
-        ], 'flowService.returnFromAnalysis must be called with {tabId} only')
+          {tabId: 'tab_a', reason: 'return'},
+        ], 'flowService.returnFromAnalysis must be called with tabId and return reason')
 
         // Simulate what flowService.returnFromAnalysis does to the store
         harness.workbenchStore.updateTab('tab_a', {
@@ -549,8 +549,8 @@ describe('W5 Analysis Mode Wiring', function () {
 
         // The Container handler calls with {tabId} only; flowService reads analysisReturnTarget
         assert.deepStrictEqual(harness.flowService.calls.returnFromAnalysis, [
-          {tabId: 'tab_a2'},
-        ], 'returnFromAnalysis must be called with {tabId} only -- Arch v0.5 5.3')
+          {tabId: 'tab_a2', reason: 'return'},
+        ], 'returnFromAnalysis must be called with tabId and return reason -- Arch v0.5 5.3')
 
         // Simulate flowService behavior (defaults to 'play' when no analysisReturnTarget)
         harness.workbenchStore.updateTab('tab_a2', {

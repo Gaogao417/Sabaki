@@ -9,8 +9,8 @@
  *   Production module missing -> tests FAIL (import error), no silent pass.
  *   Controlled dependencies: jsdom DOM via preactTestHelper; props are inline.
  *
- * NOTE: ModeBar exists but needs to be rewritten to use segmented control
- *   classes and Chinese labels. These tests verify the POST-rewrite state.
+ * NOTE: ModeBar now displays current-mode context and actions only. Manual
+ *   mode segmented tabs were removed so users enter modes through task flows.
  */
 
 import assert from 'assert'
@@ -19,7 +19,7 @@ import {renderToDom} from '../preactTestHelper.js'
 
 import ModeBar from '../../../src/components/workbench/shell/ModeBar.js'
 
-describe('ModeBar segmented control (T-U2-2)', () => {
+describe('ModeBar current-mode topbar (T-U2-2)', () => {
   function renderBar(overrides = {}) {
     return renderToDom(
       h(ModeBar, {
@@ -31,58 +31,42 @@ describe('ModeBar segmented control (T-U2-2)', () => {
     )
   }
 
-  // --- T-U2-2a: uses .wb-segmented-control container ---
-  // Production subject: ModeBar component
-  // Production import path: src/components/workbench/shell/ModeBar.js
-  // Production bug: ModeBar still uses .wb-mode-bar__tabs instead of
-  //   .wb-segmented-control container
-  // Controlled dependencies: props are inline
-  it('T-U2-2a: uses .wb-segmented-control container', () => {
+  it('T-U2-2a: renders the mode bar container with active mode class', () => {
     const {container} = renderBar()
 
-    const segmentedControl = container.querySelector('.wb-segmented-control')
-    assert.ok(segmentedControl, 'Expected element with class .wb-segmented-control')
+    const modeBar = container.querySelector('[data-testid="mode-bar"]')
+    assert.ok(modeBar, 'Expected data-testid="mode-bar"')
+    assert.ok(
+      modeBar.className.includes('wb-mode-bar--play'),
+      'ModeBar should include the active mode class',
+    )
   })
 
-  // --- T-U2-2b: 4 .wb-segmented-control__item children ---
-  // Production subject: ModeBar component
-  // Production import path: src/components/workbench/shell/ModeBar.js
-  // Production bug: ModeBar renders wrong number of items, or uses
-  //   old .wb-mode-bar__tab class instead of .wb-segmented-control__item
-  // Controlled dependencies: props are inline
-  it('T-U2-2b: has 4 .wb-segmented-control__item children', () => {
+  it('T-U2-2b: does not render manual segmented mode items', () => {
     const {container} = renderBar()
 
     const items = container.querySelectorAll('.wb-segmented-control__item')
-    assert.strictEqual(items.length, 4, `Expected 4 segmented control items, got ${items.length}`)
+    assert.strictEqual(items.length, 0, `Expected no segmented control items, got ${items.length}`)
   })
 
-  // --- T-U2-2c: active item has --active modifier class ---
-  // Production subject: ModeBar component
-  // Production import path: src/components/workbench/shell/ModeBar.js
-  // Production bug: active mode item lacks .wb-segmented-control__item--active
-  // Controlled dependencies: props are inline, activeMode varies
-  it('T-U2-2c: active item has .wb-segmented-control__item--active', () => {
+  it('T-U2-2c: problem mode is represented in topbar metadata', () => {
     const {container} = renderBar({activeMode: 'problem'})
 
-    const activeItems = container.querySelectorAll('.wb-segmented-control__item--active')
-    assert.strictEqual(activeItems.length, 1, `Expected exactly 1 active item, got ${activeItems.length}`)
+    assert.ok(
+      container.querySelector('[data-testid="mode-bar"]').className.includes('wb-mode-bar--problem'),
+      'ModeBar should include problem active mode class',
+    )
+    assert.ok(container.textContent.includes('Problem'), 'ModeBar should display current problem mode metadata')
   })
 
-  // --- T-U2-2d: Chinese labels ---
-  // Production subject: ModeBar component
-  // Production import path: src/components/workbench/shell/ModeBar.js
-  // Production bug: ModeBar still uses English labels (Play/Problem/Recall/Analysis)
-  //   instead of Chinese (对局/做题/回忆/复盘)
-  // Controlled dependencies: props are inline
-  it('T-U2-2d: uses Chinese labels 对局/做题/回忆/复盘', () => {
+  it('T-U2-2d: renders play actions without manual mode switch labels', () => {
     const {container} = renderBar()
 
     const text = container.textContent
-    assert.ok(text.includes('对局'), 'Missing Chinese label "对局" for play mode')
-    assert.ok(text.includes('做题'), 'Missing Chinese label "做题" for problem mode')
-    assert.ok(text.includes('回忆'), 'Missing Chinese label "回忆" for recall mode')
-    assert.ok(text.includes('复盘'), 'Missing Chinese label "复盘" for analysis mode')
+    assert.ok(text.includes('新对局'), 'Missing New Game play action')
+    assert.ok(text.includes('复盘'), 'Missing Analysis play action')
+    assert.ok(!text.includes('做题模式'), 'ModeBar must not invite manual problem-mode switching')
+    assert.ok(!text.includes('回忆模式'), 'ModeBar must not invite manual recall-mode switching')
   })
 
   // --- T-U2-2e: no .wb-mode-bar__tab-indicator ---
@@ -98,30 +82,17 @@ describe('ModeBar segmented control (T-U2-2)', () => {
     assert.strictEqual(indicator, null, 'Legacy .wb-mode-bar__tab-indicator should NOT exist')
   })
 
-  // --- T-U2-2f: click triggers onModeChange ---
-  // Production subject: ModeBar component
-  // Production import path: src/components/workbench/shell/ModeBar.js
-  // Production bug: clicking a segmented control item does not call onModeChange
-  //   with the correct mode key
-  // Controlled dependencies: callback spy is an inline function
-  it('T-U2-2f: clicking an item triggers onModeChange', () => {
+  it('T-U2-2f: clicking mode actions does not call onModeChange', () => {
     const calls = []
     const {container, fireEvent} = renderBar({
       activeMode: 'play',
       onModeChange: (mode) => { calls.push(mode) },
     })
 
-    // Find the segmented control items and click the second one
-    const items = container.querySelectorAll('.wb-segmented-control__item')
-    assert.ok(items.length >= 2, 'Expected at least 2 items to click')
+    const action = container.querySelector('[data-testid="mode-action-analysis"]')
+    assert.ok(action, 'Expected analysis action button')
 
-    // Click an inactive item (not the currently active one)
-    // The second item should correspond to a different mode
-    fireEvent.click(items[1])
-    assert.ok(calls.length >= 1, 'onModeChange should be called at least once')
-    assert.ok(
-      typeof calls[0] === 'string' && calls[0].length > 0,
-      `onModeChange should receive a mode string, got "${calls[0]}"`
-    )
+    fireEvent.click(action)
+    assert.deepStrictEqual(calls, [], 'Mode actions should route through explicit callbacks, not onModeChange')
   })
 })

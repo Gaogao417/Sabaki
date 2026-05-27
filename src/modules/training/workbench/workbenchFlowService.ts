@@ -536,6 +536,13 @@ export function createWorkbenchFlowService(
     }
   }
 
+  function clearPlayCompanions(): void {
+    runtimeStore?.setProblemView(null)
+    runtimeStore?.setRecallView(null)
+    runtimeStore?.setActiveRecallSession(undefined)
+    runtimeStore?.setActiveCheckpoint(undefined)
+  }
+
   async function createRecallForAttempt(
     tab: WorkbenchTab,
   ): Promise<RecallSession> {
@@ -693,6 +700,14 @@ export function createWorkbenchFlowService(
   async function abandonProblem(tabId: string): Promise<void> {
     const tab = getTab(tabId)
     assertProblemCommand(tab, 'abandonProblem')
+    runtimeStore?.setRecallView(null)
+    runtimeStore?.setActiveRecallSession(undefined)
+    runtimeStore?.setActiveCheckpoint(undefined)
+    checkModeStateInvariant({
+      tabId,
+      command: 'abandonProblem',
+      phase: 'preflight',
+    })
 
     logger?.info('flow.problemAbandon', 'Abandon problem attempt', {
       tabId,
@@ -711,6 +726,16 @@ export function createWorkbenchFlowService(
     workbenchStore.updateTab(tabId, {
       mode: 'play',
       activeAttemptId: undefined,
+      activeRecallSessionId: undefined,
+      recallSubstate: undefined,
+      previousMode: undefined,
+      analysisReturnTarget: undefined,
+    })
+    clearPlayCompanions()
+    checkModeStateInvariant({
+      tabId,
+      command: 'abandonProblem',
+      phase: 'postflight',
     })
   }
 
@@ -1020,6 +1045,11 @@ export function createWorkbenchFlowService(
 
   function restartAttempt(tabId: string): void {
     const tab = getTab(tabId)
+    checkModeStateInvariant({
+      tabId,
+      command: 'restartAttempt',
+      phase: 'preflight',
+    })
     const targetMode =
       tab.analysisReturnTarget?.mode ?? tab.previousMode ?? 'play'
     const shouldExitAnalysis = tab.mode === 'analysis' && targetMode !== 'analysis'
@@ -1040,6 +1070,9 @@ export function createWorkbenchFlowService(
       previousMode: undefined,
       analysisReturnTarget: undefined,
     })
+    if (targetMode === 'play') {
+      clearPlayCompanions()
+    }
     const afterTab = getTab(tabId)
 
     if (shouldExitAnalysis && analysisReturnTarget) {
@@ -1067,10 +1100,29 @@ export function createWorkbenchFlowService(
       tabId,
       targetMode,
     })
+    checkModeStateInvariant({
+      tabId,
+      command: 'restartAttempt',
+      phase: 'postflight',
+    })
   }
 
   async function startAttempt(tabId: string): Promise<void> {
     const tab = getTab(tabId)
+    if (tab.mode !== 'play') {
+      logger?.info('flow.transition.rejected', 'Transition rejected', {
+        tabId: tab.id,
+        from: tab.mode,
+        method: 'startAttempt',
+      })
+      throw new InvalidModeTransitionError(tab.id, tab.mode, 'startAttempt')
+    }
+    clearPlayCompanions()
+    checkModeStateInvariant({
+      tabId,
+      command: 'startAttempt',
+      phase: 'preflight',
+    })
 
     logger?.info('flow.startAttempt', 'Start attempt', {
       tabId,
@@ -1086,7 +1138,19 @@ export function createWorkbenchFlowService(
     })
 
     workbenchStore.updateTab(tabId, {
+      mode: 'play',
       activeAttemptId: attempt.id,
+      activeRecallSessionId: undefined,
+      recallSubstate: undefined,
+      previousMode: undefined,
+      analysisReturnTarget: undefined,
+    })
+    runtimeStore?.setActiveAttempt(attempt.id)
+    clearPlayCompanions()
+    checkModeStateInvariant({
+      tabId,
+      command: 'startAttempt',
+      phase: 'postflight',
     })
 
     logger?.info('flow.startAttempt', 'Attempt started', {

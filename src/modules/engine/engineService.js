@@ -1153,7 +1153,7 @@ export function createEngineService(deps) {
   }
 
   async function requestMove(input = {}) {
-    let treePosition = getTreePosition()
+    let treePosition = input.treePosition ?? getTreePosition()
     let syncerId = input.engineId
 
     if (syncerId == null) {

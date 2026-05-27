@@ -68,6 +68,7 @@ import {
   evaluateAttempt,
   projectTrainingState,
 } from './training/index.ts'
+import {createConfiguredGamePlayerConfig} from './training/workbench/configuredGamePlayerConfig.ts'
 import {
   boardFromSnapshot,
   cloneSnapshot,
@@ -1870,6 +1871,45 @@ class Sabaki extends EventEmitter {
     return this.getPlayServices().engineService
   }
 
+  createConfiguredGamePlayerConfig({black, white, blackSyncer, whiteSyncer}) {
+    return createConfiguredGamePlayerConfig({
+      black,
+      white,
+      blackSyncer,
+      whiteSyncer,
+    })
+  }
+
+  async syncConfiguredGameWorkbench({emptyTree, black, white, blackSyncer, whiteSyncer}) {
+    const {taskImportService, tabService, flowService} = this.getTrainingContext()
+    const playerConfig = this.createConfiguredGamePlayerConfig({
+      black,
+      white,
+      blackSyncer,
+      whiteSyncer,
+    })
+    const task = await taskImportService.createManualTask({
+      positionSgf: sgf.stringify([emptyTree.root]),
+      sideToMove: 'black',
+      title: 'New Game',
+    })
+    const tab = await tabService.openPlayTab({
+      taskId: task.id,
+      playerConfig,
+    })
+    await flowService.startAttempt(tab.id)
+
+    logger.info('game.workbench_synced', 'Configured game synced to Workbench', {
+      tabId: tab.id,
+      taskId: task.id,
+      black: playerConfig.black,
+      white: playerConfig.white,
+      aiEngineId: playerConfig.ai.engineId ?? null,
+    })
+
+    return {tab, task, playerConfig}
+  }
+
   async startConfiguredGame({
     black = {type: 'human'},
     white = {type: 'human'},
@@ -1935,6 +1975,13 @@ class Sabaki extends EventEmitter {
       blackSyncer?.id || null,
       whiteSyncer?.id || null,
     )
+    const workbenchGame = await this.syncConfiguredGameWorkbench({
+      emptyTree,
+      black,
+      white,
+      blackSyncer,
+      whiteSyncer,
+    })
 
     if (blackSyncer != null || whiteSyncer != null) {
       logger.info('engine.waiting', 'Waiting for engines to be ready', {
@@ -1992,14 +2039,17 @@ class Sabaki extends EventEmitter {
       boardSize,
     })
 
-    // Start training monitor when playing against an engine
-    if (blackSyncer != null || whiteSyncer != null) {
+    // Workbench owns the active attempt for configured games once synced.
+    // Keep the legacy monitor only as a fallback for older/non-Workbench flows.
+    if ((blackSyncer != null || whiteSyncer != null) && workbenchGame == null) {
       this.startEngineGameTraining().catch((err) => {
         logger.info('engineGame.training.start.error', 'Failed to start training', {
           error: String(err),
         })
       })
     }
+
+    return workbenchGame
   }
 
   async newFile({

@@ -25,10 +25,10 @@ test.describe('Smoke Tests', () => {
   })
 
   test('main layout elements present', async ({page}) => {
-    await expect(page.locator('#main')).toBeVisible()
-    await expect(page.locator('.board-toolbar')).toBeVisible()
-    await expect(page.locator('.workspace-dock')).toBeVisible()
+    await expect(page.locator('[data-testid="main-board-stage"]')).toBeVisible()
     await expect(page.locator('.workbench-shell')).toBeVisible()
+    await expect(page.locator('[data-testid="mode-bar"]')).toBeVisible()
+    await expect(page.locator('[data-testid="bottom-action-bar"]')).toBeVisible()
   })
 
   test('load SGF via IPC from main process', async ({electronApp, page}) => {

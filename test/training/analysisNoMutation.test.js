@@ -251,18 +251,17 @@ describeFlow('Analysis no-mutation invariant (flow level)', () => {
         const beforeAttemptId = beforeTab.activeAttemptId
         const beforeRecallId = beforeTab.activeRecallSessionId
 
-        if (mode === 'analysis') {
-          await flowService.snapshotFromCurrentContext('tab_orig')
-        } else {
-          await assert.rejects(
-            () => flowService.snapshotFromCurrentContext('tab_orig'),
-            /Invalid mode transition/,
-          )
-        }
+        await flowService.snapshotFromCurrentContext('tab_orig')
 
         // Verify tab state is unchanged after snapshot
         const afterTab = store.getState().tabs.find(t => t.id === 'tab_orig')
-        assert.strictEqual(afterTab.mode, beforeMode, `mode should remain ${beforeMode}`)
+        assert.strictEqual(
+          afterTab.mode,
+          mode === 'analysis' ? beforeMode : 'analysis',
+          mode === 'analysis'
+            ? `mode should remain ${beforeMode}`
+            : 'snapshot should enter analysis before persistence',
+        )
         assert.strictEqual(afterTab.activeAttemptId, beforeAttemptId, 'activeAttemptId should be preserved')
         assert.strictEqual(afterTab.activeRecallSessionId, beforeRecallId, 'activeRecallSessionId should be preserved')
       })

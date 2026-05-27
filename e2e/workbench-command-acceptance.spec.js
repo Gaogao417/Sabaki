@@ -325,6 +325,8 @@ async function installLibraryCommandHarness(page) {
       sourceLookups: [],
       loadTask: [],
       openTask: [],
+      openPlayTab: [],
+      openProblemTask: [],
       legacyThirdPartyCalls: [],
       legacyStartProblemCalls: [],
       legacySetModeCalls: [],
@@ -342,8 +344,11 @@ async function installLibraryCommandHarness(page) {
     if (typeof ctx.repository.loadTask !== 'function') {
       throw new Error('repository.loadTask must exist for opened library task projection')
     }
-    if (typeof ctx.tabService.openTask !== 'function') {
-      throw new Error('tabService.openTask must exist for library command tab opening')
+    if (typeof ctx.tabService.openPlayTab !== 'function') {
+      throw new Error('tabService.openPlayTab must exist for play library command tab opening')
+    }
+    if (typeof ctx.tabService.openProblemTask !== 'function') {
+      throw new Error('tabService.openProblemTask must exist for problem library command tab opening')
     }
 
     const originalImportFoxGame = ctx.taskImportService.importFoxGame?.bind(
@@ -356,6 +361,8 @@ async function installLibraryCommandHarness(page) {
     )
     const originalLoadTask = ctx.repository.loadTask?.bind(ctx.repository)
     const originalOpenTask = ctx.tabService.openTask.bind(ctx.tabService)
+    const originalOpenPlayTab = ctx.tabService.openPlayTab.bind(ctx.tabService)
+    const originalOpenProblemTask = ctx.tabService.openProblemTask.bind(ctx.tabService)
     const originalStartProblem = window.__sabaki.startProblem?.bind(window.__sabaki)
     const originalSetMode = window.__sabaki.setMode?.bind(window.__sabaki)
 
@@ -411,6 +418,22 @@ async function installLibraryCommandHarness(page) {
       return tab
     }
 
+    ctx.tabService.openPlayTab = async (opts) => {
+      const record = {opts, result: null}
+      window.__sabaki.__e2eLibraryCommandHarness.openPlayTab.push(record)
+      const tab = await originalOpenPlayTab(opts)
+      record.result = {id: tab.id, taskId: tab.taskId, mode: tab.mode}
+      return tab
+    }
+
+    ctx.tabService.openProblemTask = async (opts) => {
+      const record = {opts, result: null}
+      window.__sabaki.__e2eLibraryCommandHarness.openProblemTask.push(record)
+      const tab = await originalOpenProblemTask(opts)
+      record.result = {id: tab.id, taskId: tab.taskId, mode: tab.mode}
+      return tab
+    }
+
     window.__sabaki.toggleThirdPartyPanel = (panel) => {
       window.__sabaki.__e2eLibraryCommandHarness.legacyThirdPartyCalls.push(
         panel,
@@ -443,6 +466,8 @@ async function installLibraryCommandHarness(page) {
       }
       if (originalLoadTask) ctx.repository.loadTask = originalLoadTask
       ctx.tabService.openTask = originalOpenTask
+      ctx.tabService.openPlayTab = originalOpenPlayTab
+      ctx.tabService.openProblemTask = originalOpenProblemTask
       if (originalStartProblem) window.__sabaki.startProblem = originalStartProblem
       if (originalSetMode) window.__sabaki.setMode = originalSetMode
     }
@@ -457,6 +482,8 @@ async function getLibraryCommandHarness(page) {
       sourceLookups: calls.sourceLookups,
       loadTask: calls.loadTask,
       openTask: calls.openTask,
+      openPlayTab: calls.openPlayTab,
+      openProblemTask: calls.openProblemTask,
       legacyThirdPartyCalls: calls.legacyThirdPartyCalls,
       legacyStartProblemCalls: calls.legacyStartProblemCalls,
       legacySetModeCalls: calls.legacySetModeCalls,
@@ -537,11 +564,8 @@ test.describe('Workbench command acceptance', () => {
         new RegExp(`wb-mode-bar--${scenario.mode}`),
       )
       await expect(
-        page.locator(`[data-testid="mode-bar-${scenario.mode}"]`),
-      ).toHaveClass(/wb-segmented-control__item--active/)
-      await expect(
-        page.locator(`[data-testid="mode-bar-${scenario.mode}"]`),
-      ).not.toHaveAttribute('aria-disabled', 'true')
+        page.locator(`[data-testid^="mode-bar-"]`),
+      ).toHaveCount(0)
       await expect(
         page.locator('[data-testid="bottom-action-bar"]'),
       ).toHaveClass(new RegExp(`wb-bottom-action-bar--${scenario.mode}`))
@@ -611,29 +635,18 @@ test.describe('Workbench command acceptance', () => {
     }).toPass({timeout: 5000})
   })
 
-  test('disabled segmented command exposes a reason and is a click/keyboard no-op', async ({
+  test('mode bar exposes current mode metadata without manual segmented commands', async ({
     page,
   }) => {
     await installCommandInstrumentation(page)
     await setActiveWorkbenchTab(page, 'problem')
 
-    const blockedPlay = page.locator('[data-testid="mode-bar-play"]')
-    await expect(blockedPlay).toHaveAttribute('aria-disabled', 'true')
-    await expect(blockedPlay).toHaveAttribute('title', '请先提交或放弃当前题目')
-
     const before = await getWorkbenchSnapshot(page)
-
-    await blockedPlay.evaluate((button) => {
-      button.click()
-      for (const key of ['Enter', ' ']) {
-        button.dispatchEvent(
-          new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true}),
-        )
-        button.dispatchEvent(
-          new KeyboardEvent('keyup', {key, bubbles: true, cancelable: true}),
-        )
-      }
-    })
+    await expect(page.locator('[data-testid="mode-bar"]')).toHaveClass(
+      /wb-mode-bar--problem/,
+    )
+    await expect(page.locator('.wb-topbar-meta-group')).toContainText('Problem')
+    await expect(page.locator('[data-testid^="mode-bar-"]')).toHaveCount(0)
 
     await expect(async () => {
       const after = await getWorkbenchSnapshot(page)
@@ -723,13 +736,17 @@ test.describe('Workbench command acceptance', () => {
         ...calls.imports.map((call) => call.provider),
         ...calls.sourceLookups.map((call) => call.provider),
       ])
-      const openedTaskIds = calls.openTask.map((call) => call.opts.taskId)
+      const openedPlayTaskIds = calls.openPlayTab.map((call) => call.opts.taskId)
+      const openedProblemTaskIds = calls.openProblemTask.map((call) => call.opts.taskId)
 
       expect(calls.legacyThirdPartyCalls).toEqual([])
       expect(touchedProviders.has('fox')).toBe(true)
       expect(touchedProviders.has('101')).toBe(true)
-      expect(openedTaskIds).toEqual(
-        expect.arrayContaining(['e2e_task_fox_synced', 'e2e_task_101_synced']),
+      expect(openedPlayTaskIds).toEqual(
+        expect.arrayContaining(['e2e_task_fox_synced']),
+      )
+      expect(openedProblemTaskIds).toEqual(
+        expect.arrayContaining(['e2e_task_101_synced']),
       )
     }).toPass({timeout: 5000})
   })
@@ -763,10 +780,9 @@ test.describe('Workbench command acceptance', () => {
 
     await expect(async () => {
       const calls = await getLibraryCommandHarness(page)
-      expect(calls.openTask.map((call) => call.opts)).toEqual(
+      expect(calls.openProblemTask.map((call) => call.opts)).toEqual(
         expect.arrayContaining([{
           taskId: 'e2e_task_visible_problem_row',
-          mode: 'problem',
         }]),
       )
       expect(calls.legacyStartProblemCalls).toEqual([])
@@ -851,6 +867,8 @@ test.describe('Workbench command acceptance', () => {
     expect(after.imports).toEqual(before.imports)
     expect(after.sourceLookups).toEqual(before.sourceLookups)
     expect(after.openTask).toEqual(before.openTask)
+    expect(after.openPlayTab).toEqual(before.openPlayTab)
+    expect(after.openProblemTask).toEqual(before.openProblemTask)
     expect(after.legacyThirdPartyCalls).toEqual([])
   })
 
@@ -861,7 +879,7 @@ test.describe('Workbench command acceptance', () => {
     await page.waitForSelector('[data-testid="mode-bar"]')
     await page.locator('[data-testid="mode-action-analysis"]').click()
     await page.waitForSelector(
-      '.wb-bottom-action-bar--analysis [data-testid="annotation-tool-btn-stone_-1"]',
+      '.wb-bottom-action-bar--analysis [data-testid="annotation-tool-btn-stone_1"]',
     )
 
     const before = await page.evaluate(() => {
@@ -884,7 +902,7 @@ test.describe('Workbench command acceptance', () => {
 
     await dispatchMouseEvent(
       page.locator(
-        '.wb-bottom-action-bar--analysis .wb-bottom-action-bar__visual [data-testid="annotation-tool-btn-stone_-1"]',
+        '.wb-bottom-action-bar--analysis .wb-bottom-action-bar__visual [data-testid="annotation-tool-btn-stone_1"]',
       ),
       'click',
     )

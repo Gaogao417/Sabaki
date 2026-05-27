@@ -546,6 +546,37 @@ describe('modeStateResolver', () => {
       assertIllegalCode(result, 'problem-view-in-recall')
     })
 
+    it('diagnoses play mode polluted with problemView', () => {
+      const resolveModeState = getResolveModeState()
+      const result = resolveModeState(
+        deepFreeze(
+          makeInput({
+            runtime: baseRuntime({
+              problemView: {attemptId: 'attempt_1'},
+            }),
+          }),
+        ),
+      )
+
+      assertIllegalCode(result, 'problem-view-in-play')
+    })
+
+    it('diagnoses play mode polluted with recall companions', () => {
+      const resolveModeState = getResolveModeState()
+      const result = resolveModeState(
+        deepFreeze(
+          makeInput({
+            runtime: baseRuntime({
+              activeRecallSessionId: 'recall_1',
+              recallView: {recallSessionId: 'recall_1'},
+            }),
+          }),
+        ),
+      )
+
+      assertIllegalCode(result, 'recall-companion-in-play')
+    })
+
     it('diagnoses checkpoint companion outside recall mode', () => {
       const resolveModeState = getResolveModeState()
       const result = resolveModeState(

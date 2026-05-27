@@ -114,6 +114,18 @@ class TrainingWorkbenchContainer extends Component {
 
     // --- Handler wiring: UI callback -> service method ---
 
+    function openPlayTask(opts) {
+      return typeof tabService.openPlayTab === 'function'
+        ? tabService.openPlayTab(opts)
+        : tabService.openTask({...opts, mode: 'play'})
+    }
+
+    function openProblemTask(opts) {
+      return typeof tabService.openProblemTask === 'function'
+        ? tabService.openProblemTask(opts)
+        : tabService.openTask({...opts, mode: 'problem'})
+    }
+
     function handleModeChange(mode) {
       if (!activeTab) return
       const action = getModeTransitionAction(
@@ -260,9 +272,8 @@ class TrainingWorkbenchContainer extends Component {
       const task = await taskImportService.createManualTask({
         positionSgf: '(;SZ[19])',
       })
-      const tab = await tabService.openTask({
+      const tab = await openPlayTask({
         taskId: task.id,
-        mode: 'play',
         playerConfig: createDefaultPlayPlayerConfig(),
       })
       if (flowService.startAttempt) {
@@ -483,7 +494,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!task?.id) {
         throw new Error('Fox sync did not return a TrainingTask')
       }
-      await tabService.openTask({taskId: task.id})
+      await openPlayTask({taskId: task.id})
     }
 
     async function handleOpenOneOhOneWeiqi() {
@@ -503,7 +514,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!task?.id) {
         throw new Error('101 sync did not return a TrainingTask')
       }
-      await tabService.openTask({taskId: task.id})
+      await openProblemTask({taskId: task.id})
     }
 
     async function handleOpenLibraryProblem(problemId, problemRow = null) {
@@ -548,7 +559,7 @@ class TrainingWorkbenchContainer extends Component {
         taskId = task.id
       }
 
-      await tabService.openTask({taskId, mode: 'problem'})
+      await openProblemTask({taskId})
     }
 
     async function handleOpenLibraryTask(row, options = {}) {
@@ -560,10 +571,12 @@ class TrainingWorkbenchContainer extends Component {
         throw new Error('Library row is missing a task id')
       }
 
-      await tabService.openTask({
-        taskId,
-        ...(options.mode ? {mode: options.mode} : {}),
-      })
+      if (options.mode === 'problem') {
+        await openProblemTask({taskId})
+        return
+      }
+
+      await openPlayTask({taskId})
     }
 
     function handleOpenPreferences(tab = 'general') {
@@ -646,7 +659,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleOpenInboxTask(taskId) {
-      await tabService.openTask({taskId})
+      await openPlayTask({taskId})
     }
 
     async function handleOpenIncompleteAttempt(attemptId) {
@@ -658,7 +671,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleOpenBadMoveTask(taskId) {
-      await tabService.openTask({taskId, mode: 'problem'})
+      await openProblemTask({taskId})
     }
 
     const _container = this
@@ -739,7 +752,6 @@ class TrainingWorkbenchContainer extends Component {
         if (gameTree == null) return
 
         this.setState({libraryDrawerType: null})
-        sabaki.setMode('play')
         sabaki.setCurrentTreePosition(gameTree, gameTree.root.id)
       },
       onStartReview: async () => {

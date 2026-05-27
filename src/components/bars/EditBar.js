@@ -98,6 +98,8 @@ class EditBar extends Component {
           title,
           href: '#',
           'data-id': toolId,
+          'data-testid': `annotation-tool-btn-${toolId}`,
+          'aria-pressed': selected ? 'true' : 'false',
           'aria-label': title,
           onClick: this.handleToolButtonClick,
         },

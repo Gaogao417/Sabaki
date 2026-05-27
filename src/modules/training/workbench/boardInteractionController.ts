@@ -61,6 +61,7 @@ export type BoardInteractionControllerDeps = {
         attempt: {rootPositionSgf: string; userLine: string[]}
         task: {problemArea?: [number, number][]; rootPositionSgf?: string; sideToMove?: 'black' | 'white'}
         sideToMove?: 'black' | 'white'
+        treePosition?: string
       }): Promise<string | null>
     }
   }
@@ -399,6 +400,7 @@ export function createBoardInteractionController(
               attempt: attemptAfter,
               task: loadedTask,
               sideToMove: loadedTask.sideToMove,
+              treePosition: playResult.treePosition,
             })
             const aiVertex = aiMove ? moveToVertex(aiMove) : null
 

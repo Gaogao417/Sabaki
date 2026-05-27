@@ -8,6 +8,7 @@ export type AiMoveServiceDeps = {
     requestMove(input: {
       engineId?: string
       positionSgf: string
+      treePosition?: string
       timeLimitMs?: number
       maxVisits?: number
       analysisAreaVertices?: ProblemArea
@@ -75,6 +76,7 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     attempt: { rootPositionSgf: string; userLine: string[] }
     task: { problemArea?: ProblemArea; rootPositionSgf?: string; sideToMove?: 'black' | 'white' }
     color?: 'black' | 'white'
+    treePosition?: string
   }): Promise<string | null> {
     const { tab, attempt, task } = input
 
@@ -101,11 +103,15 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     const engineInput: {
       engineId?: string
       positionSgf: string
+      treePosition?: string
       timeLimitMs?: number
       maxVisits?: number
       analysisAreaVertices?: ProblemArea
     } = {
       positionSgf: attempt.rootPositionSgf,
+    }
+    if (input.treePosition) {
+      engineInput.treePosition = input.treePosition
     }
 
     // Pass engine params from playerConfig if available
@@ -164,13 +170,19 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     attempt: { rootPositionSgf: string; userLine: string[] }
     task: { problemArea?: ProblemArea; rootPositionSgf?: string; sideToMove?: 'black' | 'white' }
     sideToMove?: 'black' | 'white'
+    treePosition?: string
   }): Promise<string | null> {
     const { tab, attempt, task } = input
     if (!shouldAiMove({ tab, attempt, sideToMove: input.sideToMove ?? task.sideToMove })) {
       return null
     }
 
-    return requestAiMove({ tab, attempt, task })
+    return requestAiMove({
+      tab,
+      attempt,
+      task,
+      treePosition: input.treePosition,
+    })
   }
 
   return { requestAiMove, maybePlayAiMove }

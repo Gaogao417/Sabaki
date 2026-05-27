@@ -396,6 +396,11 @@ describe('W3.5 boardInteractionController', function () {
       )
       assert.strictEqual(deps._calls.aiMoveRequest.length, 1)
       assert.deepStrictEqual(deps._calls.aiMoveRequest[0].attempt.userLine, ['dd'])
+      assert.strictEqual(
+        deps._calls.aiMoveRequest[0].treePosition,
+        'node_2',
+        'AI request must use the post-human-move treePosition',
+      )
     })
   })
 

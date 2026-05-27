@@ -521,6 +521,74 @@ describe('workbenchFlowService', () => {
       assert.strictEqual(runtimeStore.getState().problemView, null)
       assert.strictEqual(runtimeStore.getState().activeRecallSessionId, undefined)
     })
+
+    it('clears problem and recall companions when abandoning back to play', async () => {
+      const workbenchStore = createWorkbenchStore()
+      const runtimeStore = createTrainingRuntimeStore()
+      const overlayStore = createOverlayStore({
+        getAppState: () => ({mode: 'play'}),
+        logger: {info: () => {}, warn: () => {}, error: () => {}, debug: () => {}},
+      })
+      const service = createWorkbenchFlowService({
+        workbenchStore,
+        runtimeStore,
+        repository: {},
+        attemptService: {
+          createAttempt: async input => ({id: 'unused', ...input}),
+          freezeAttempt: async () => {},
+          finalizeAttemptResult: async () => {},
+        },
+        recallService: {completeRecall: async () => {}},
+        snapshotService: {},
+        tabService: {},
+        problemFlowService: {
+          appendProblemMove: async () => null,
+          undoProblemMove: async () => null,
+          submitActiveProblem: async () => null,
+          abandonActiveProblem: async () => null,
+        },
+        runtimeStore,
+        getModeStateInput: createProductionModeStateInputProvider({
+          workbenchStore,
+          runtimeStore,
+          overlayStore,
+          appState: {mode: 'play'},
+        }),
+      })
+      workbenchStore.addTab(makeTab({
+        id: 'tab_problem_abandon_cleanup',
+        mode: 'problem',
+        activeAttemptId: 'attempt_problem_abandon_cleanup',
+      }))
+      runtimeStore.setProblemView({
+        taskId: 'task_problem',
+        tabId: 'tab_problem_abandon_cleanup',
+        attemptId: 'attempt_problem_abandon_cleanup',
+        legacyProblemSession: null,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+      runtimeStore.setRecallView({
+        recallSessionId: 'stale_recall',
+        taskId: 'task_problem',
+        moveIndex: 0,
+        expectedMoves: [],
+        userAttempts: [],
+        showHint: false,
+        completed: false,
+      })
+      runtimeStore.setActiveRecallSession('stale_recall')
+
+      await service.abandonProblem('tab_problem_abandon_cleanup')
+
+      const tab = getTab(workbenchStore, 'tab_problem_abandon_cleanup')
+      assert.strictEqual(tab.mode, 'play')
+      assert.strictEqual(runtimeStore.getState().problemView, null)
+      assert.strictEqual(runtimeStore.getState().recallView, null)
+      assert.strictEqual(runtimeStore.getState().activeRecallSessionId, undefined)
+    })
   })
 
   describe('submit — real recall surface hydration', () => {
@@ -1843,6 +1911,49 @@ describe('workbenchFlowService', () => {
 
       const tab = deps.store.getState().tabs.find(t => t.id === 'tab_1')
       assert.strictEqual(tab.activeAttemptId, 'attempt_1')
+    })
+
+    it('rejects startAttempt outside play mode', async () => {
+      const deps = createMockDeps()
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'problem'}))
+
+      await assert.rejects(
+        () => service.startAttempt('tab_1'),
+        /Invalid mode transition/,
+      )
+    })
+
+    it('clears stale play companions and sets runtime activeAttempt', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const deps = createMockDeps({runtimeStore})
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({id: 'tab_1', mode: 'play'}))
+      runtimeStore.setProblemView({
+        taskId: 'task_1',
+        tabId: 'tab_1',
+        attemptId: 'stale_problem_attempt',
+        legacyProblemSession: null,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+      runtimeStore.setRecallView({
+        recallSessionId: 'stale_recall',
+        taskId: 'task_1',
+        moveIndex: 0,
+        expectedMoves: [],
+        userAttempts: [],
+        showHint: false,
+        completed: false,
+      })
+
+      await service.startAttempt('tab_1')
+
+      assert.strictEqual(runtimeStore.getState().problemView, null)
+      assert.strictEqual(runtimeStore.getState().recallView, null)
+      assert.strictEqual(runtimeStore.getState().activeAttemptId, 'attempt_1')
     })
   })
 

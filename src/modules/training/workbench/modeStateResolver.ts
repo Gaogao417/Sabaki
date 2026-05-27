@@ -254,6 +254,15 @@ function collectIllegal(
     }
   }
 
+  if (mode === 'play') {
+    if (runtime?.problemView != null) {
+      illegal.push({code: 'problem-view-in-play'})
+    }
+    if (runtime?.activeRecallSessionId != null || runtime?.recallView != null) {
+      illegal.push({code: 'recall-companion-in-play'})
+    }
+  }
+
   if (mode === 'recall') {
     if (runtime?.activeRecallSessionId == null || runtime?.recallView == null) {
       illegal.push({code: 'missing-recall-view'})

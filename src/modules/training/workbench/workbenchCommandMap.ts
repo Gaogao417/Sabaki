@@ -150,7 +150,7 @@ export const WORKBENCH_COMMANDS: WorkbenchCommand[] = [
     id: 'editbar.edit-position',
     surface: 'editbar',
     modes: ['analysis'],
-    label: 'Edit Position',
+    label: '编辑局面',
     owner: 'scratchEditInteractionExecutor',
     handlerProp: 'onEditPosition',
     disabledReason: '当前局面不可编辑',

@@ -235,6 +235,38 @@ describe('aiMoveService', () => {
       assert.strictEqual(receivedInput.positionSgf, '(;SZ[9])')
     })
 
+    it('passes post-human-move treePosition to engine request when provided', async () => {
+      let receivedInput = null
+      const mockAdapter = {
+        async requestMove(input) {
+          receivedInput = input
+          return { move: 'Q16', candidates: ['Q16'] }
+        },
+      }
+
+      const service = createAiMoveService({ engineService: mockAdapter })
+      const tab = makeTab({
+        mode: 'play',
+        playerConfig: {
+          black: 'human',
+          white: 'ai',
+          ai: {engineId: 'engine_white', autoPlay: true},
+        },
+      })
+      const attempt = makeAttempt({ rootPositionSgf: '(;SZ[9])', userLine: ['D4'] })
+
+      await service.maybePlayAiMove({
+        tab,
+        attempt,
+        task: makeTask({sideToMove: 'black'}),
+        treePosition: 'node_after_human_black',
+      })
+
+      assert.ok(receivedInput, 'adapter.requestMove should have been called')
+      assert.strictEqual(receivedInput.treePosition, 'node_after_human_black')
+      assert.strictEqual(receivedInput.engineId, 'engine_white')
+    })
+
     it('returns engine top move in play mode (C15)', async () => {
       const mockAdapter = {
         async requestMove() {
