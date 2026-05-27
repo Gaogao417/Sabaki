@@ -400,6 +400,82 @@ function seedStaleCheckpoint(runtimeStore: TrainingRuntimeStore, checkpointId = 
   })
 }
 
+function replaceFunctionBody(source: string, functionName: string): string {
+  const marker = `function ${functionName}`
+  const start = source.indexOf(marker)
+  if (start === -1) return source
+
+  const bodyStart = source.indexOf('{', start)
+  if (bodyStart === -1) return source
+
+  let depth = 0
+  for (let index = bodyStart; index < source.length; index++) {
+    const char = source[index]
+    if (char === '{') depth++
+    if (char === '}') depth--
+    if (depth === 0) {
+      return `${source.slice(0, bodyStart + 1)}/* removed ${functionName} */${source.slice(index)}`
+    }
+  }
+
+  return source
+}
+
+function replaceFunctionBodies(source: string, functionNames: string[]): string {
+  return functionNames.reduce(
+    (nextSource, functionName) => replaceFunctionBody(nextSource, functionName),
+    source,
+  )
+}
+
+function assertNoDirectRuntimeSetterCalls(
+  label: string,
+  source: string,
+  setters: string[],
+) {
+  for (const setter of setters) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`(?:runtimeStore|deps\\.runtimeStore)\\s*\\??\\.\\s*${setter}\\s*\\(`),
+      `${label} must not call ${setter} directly through runtimeStore`,
+    )
+    assert.doesNotMatch(
+      source,
+      new RegExp(`(?:runtimeStore|deps\\.runtimeStore)\\s*\\??\\.\\s*\\[\\s*['"]${setter}['"]\\s*\\]\\s*\\(`),
+      `${label} must not call ${setter} through bracket runtimeStore access`,
+    )
+    assert.doesNotMatch(
+      source,
+      new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\b${setter}\\b[^}]*\\}\\s*=\\s*(?:deps\\.)?runtimeStore\\b`),
+      `${label} must not destructure ${setter} from runtimeStore`,
+    )
+    assert.doesNotMatch(
+      source,
+      new RegExp(`\\b${setter}\\s*=\\s*(?:deps\\.)?runtimeStore\\s*\\??\\.\\s*${setter}\\b`),
+      `${label} must not alias ${setter} from runtimeStore`,
+    )
+  }
+}
+
+function assertNoCheckpointCleanupSetterCalls(label: string, source: string) {
+  assert.doesNotMatch(
+    source,
+    /(?:runtimeStore|deps\.runtimeStore)\s*\??\.\s*setActiveCheckpoint\s*\(\s*(?:undefined|void\s+0|null)?\s*\)/,
+    `${label} must not clear active checkpoint directly`,
+  )
+  assert.doesNotMatch(
+    source,
+    /(?:runtimeStore|deps\.runtimeStore)\s*\??\.\s*\[\s*['"]setActiveCheckpoint['"]\s*\]\s*\(\s*(?:undefined|void\s+0|null)?\s*\)/,
+    `${label} must not clear active checkpoint through bracket access`,
+  )
+  assert.doesNotMatch(
+    source,
+    /\bsetActiveCheckpoint\s*\(\s*(?:undefined|void\s+0|null)?\s*\)/,
+    `${label} must not clear active checkpoint through destructured setter`,
+  )
+  assertNoDirectRuntimeSetterCalls(label, source, ['clearCorrectionDraft'])
+}
+
 describe('workbench runtime region transition contract', () => {
   it('RTM-T01 play submit activates recall runtime and clears stale problem/checkpoint runtime after success', async () => {
     const runtimeStore = createTrainingRuntimeStore()
@@ -656,6 +732,48 @@ describe('workbench runtime region transition contract', () => {
   })
 
   it('RTM-T10 runtime region owns transition cleanup without importing parent writers or forbidden side effects', () => {
+    const flowSource = fs.readFileSync(
+      path.join(process.cwd(), 'src/modules/training/workbench/workbenchFlowService.ts'),
+      'utf8',
+    )
+    const flowCleanupSource = replaceFunctionBodies(flowSource, [
+      'abandonProblem',
+      'showRecallHint',
+      'skipRecallMove',
+    ])
+    assert.match(flowSource, /runtimeRegion\.onRecallActivated\s*\(/)
+    assert.match(flowSource, /runtimeRegion\.onRecallCompleted\s*\(/)
+    assert.match(flowSource, /runtimeRegion\.onCheckpointResumed\s*\(/)
+    assertNoDirectRuntimeSetterCalls(
+      'workbenchFlowService transition cleanup paths',
+      flowCleanupSource,
+      [
+        'setProblemView',
+        'setActiveRecallSession',
+        'setRecallView',
+        'setActiveCheckpoint',
+        'setCorrectionDraft',
+        'clearCorrectionDraft',
+      ],
+    )
+
+    const checkpointSource = fs.readFileSync(
+      path.join(process.cwd(), 'src/modules/training/recall/recallCheckpointService.ts'),
+      'utf8',
+    )
+    const checkpointCleanupSource = replaceFunctionBodies(checkpointSource, [
+      'refreshRecallView',
+      'startCheckpoint',
+      'submitUserCorrectionLine',
+      'shouldTriggerCheckpoint',
+      'revealAiCandidateLines',
+      'saveComment',
+    ])
+    assertNoCheckpointCleanupSetterCalls(
+      'recallCheckpointService resume/skip cleanup paths',
+      checkpointCleanupSource,
+    )
+
     const runtimeRegionPath = path.join(
       process.cwd(),
       'src/modules/training/workbench/workbenchRuntimeRegion.ts',
@@ -665,23 +783,18 @@ describe('workbench runtime region transition contract', () => {
       'runtime region owner module must exist',
     )
     const ownerSource = fs.readFileSync(runtimeRegionPath, 'utf8')
+    const runtimeRegionModule = require('../../src/modules/training/workbench/workbenchRuntimeRegion.ts')
+    assert.strictEqual(
+      typeof runtimeRegionModule.createWorkbenchRuntimeRegion,
+      'function',
+      'runtime region module must export createWorkbenchRuntimeRegion factory',
+    )
     assert.match(ownerSource, /WorkbenchRuntimeRegion/)
+    assert.match(ownerSource, /onRecallActivated/)
+    assert.match(ownerSource, /onRecallCompleted/)
+    assert.match(ownerSource, /onCheckpointResumed/)
     assert.doesNotMatch(ownerSource, /workbenchStore|workbenchFlowService|window\.sabaki/)
     assert.doesNotMatch(ownerSource, /repository|snapshotService|tabService/)
     assert.doesNotMatch(ownerSource, /components|overlays|engine|scratch/)
-
-    const flowSource = fs.readFileSync(
-      path.join(process.cwd(), 'src/modules/training/workbench/workbenchFlowService.ts'),
-      'utf8',
-    )
-    assert.match(flowSource, /runtimeRegion/)
-    assert.doesNotMatch(flowSource, /runtimeStore\?\.(setProblemView|setActiveRecallSession|setRecallView|setActiveCheckpoint|setCorrectionDraft|clearCorrectionDraft)/)
-
-    const checkpointSource = fs.readFileSync(
-      path.join(process.cwd(), 'src/modules/training/recall/recallCheckpointService.ts'),
-      'utf8',
-    )
-    assert.doesNotMatch(checkpointSource, /runtimeStore\.setActiveCheckpoint\(undefined\)/)
-    assert.doesNotMatch(checkpointSource, /runtimeStore\.clearCorrectionDraft\(checkpointId\)/)
   })
 })
