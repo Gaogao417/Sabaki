@@ -193,9 +193,9 @@ describe('Workbench command map coverage', () => {
       assert.match(
         body,
         id === 'library.fox'
-          ? /openTask\s*\(\s*{[^}]*mode\s*:\s*['"]play['"]/
-          : /openTask\s*\(\s*{[^}]*mode\s*:\s*['"]problem['"]/,
-        `${id} must open the imported/synced TrainingTask through openTask with an explicit Workbench mode`,
+          ? /openPlayTab\s*\(\s*{[^}]*taskId/
+          : /openProblemTab\s*\(\s*{[^}]*taskId/,
+        `${id} must open the imported/synced TrainingTask through the semantic Workbench tab entrypoint`,
       )
     }
   })
@@ -226,8 +226,17 @@ describe('Workbench command map coverage', () => {
     )
     assert.match(
       body,
-      /openTask\s*\(\s*{[^}]*taskId[^}]*mode\s*:\s*['"]problem['"]/,
-      'Visible problem rows must open a Workbench task tab with problem mode',
+      /openProblemTab\s*\(\s*{[^}]*taskId/,
+      'Visible problem rows must open a semantic Workbench problem tab',
+    )
+  })
+
+  it('container does not call the internal generic openTask primitive', () => {
+    const container = read(SOURCE_FILES.container)
+    assert.doesNotMatch(
+      container,
+      /tabService\.openTask\s*\(/,
+      'TrainingWorkbenchContainer must route through openPlayTab/openProblemTab, not openTask',
     )
   })
 

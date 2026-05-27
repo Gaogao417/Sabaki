@@ -46,29 +46,43 @@ function createFakeRepo(overrides = {}) {
 
 function createFakeTabService(overrides = {}) {
   const openedTabs = []
-  const calls = { openProblemTab: 0, openTask: 0 }
+  const calls = { openPlayTab: 0, openProblemTab: 0, openTask: 0 }
 
   return {
     openedTabs,
     calls,
 
-    async openProblemTab(problemId) {
-      calls.openProblemTab++
-      throw new Error('openProblemTab should not be called in Phase 7')
-    },
-
-    async openTask({ taskId, mode, parentTabId }) {
-      calls.openTask++
+    async openPlayTab({ taskId, parentTabId }) {
+      calls.openPlayTab++
       const tab = {
         id: `tab_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         taskId,
-        mode: mode || 'play',
+        mode: 'play',
         childTabIds: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
-      openedTabs.push({ taskId, mode, parentTabId, tab })
+      openedTabs.push({ taskId, mode: 'play', parentTabId, tab })
       return tab
+    },
+
+    async openProblemTab({ taskId, parentTabId }) {
+      calls.openProblemTab++
+      const tab = {
+        id: `tab_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        taskId,
+        mode: 'problem',
+        childTabIds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      openedTabs.push({ taskId, mode: 'problem', parentTabId, tab })
+      return tab
+    },
+
+    async openTask() {
+      calls.openTask++
+      throw new Error('openTask should not be called by reviewService')
     },
 
     ...overrides,
@@ -201,7 +215,7 @@ describe('reviewService', () => {
   // ====================================================================
 
   describe('openDueItem (C01, C02, C03)', () => {
-    it('C01: calls openTask with schedule.taskId, not openProblemTab', async () => {
+    it('C01: calls openPlayTab with schedule.taskId for play review items', async () => {
       const repo = createFakeRepo()
       seedSchedule(repo, { id: 'rev_1', taskId: 'task_1' })
       const tabSvc = createFakeTabService()
@@ -209,12 +223,33 @@ describe('reviewService', () => {
 
       const tab = await svc.openDueItem('rev_1')
 
-      // Contract: openTask was called (not openProblemTab)
-      assert.strictEqual(tabSvc.calls.openTask, 1, 'openTask should be called exactly once')
-      assert.strictEqual(tabSvc.calls.openProblemTab, 0, 'openProblemTab should not be called')
-      // Contract: openTask received the taskId from the schedule
+      assert.strictEqual(tabSvc.calls.openPlayTab, 1, 'openPlayTab should be called exactly once')
+      assert.strictEqual(tabSvc.calls.openProblemTab, 0, 'openProblemTab should not be called for play-shaped tasks')
+      assert.strictEqual(tabSvc.calls.openTask, 0, 'reviewService must not call generic openTask')
       assert.strictEqual(tabSvc.openedTabs[0].taskId, 'task_1')
       assert.strictEqual(tab.taskId, 'task_1')
+    })
+
+    it('C01b: calls openProblemTab with schedule.taskId for problem review items', async () => {
+      const repo = createFakeRepo()
+      repo.tasks.task_problem = {
+        id: 'task_problem',
+        rootPositionSgf: '(;GM[1]FF[4]SZ[19])',
+        prompt: 'Find the vital point',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }
+      seedSchedule(repo, { id: 'rev_problem', taskId: 'task_problem' })
+      const tabSvc = createFakeTabService()
+      const svc = createReviewService({ repository: repo, workbenchTabService: tabSvc })
+
+      const tab = await svc.openDueItem('rev_problem')
+
+      assert.strictEqual(tabSvc.calls.openProblemTab, 1, 'openProblemTab should be called exactly once')
+      assert.strictEqual(tabSvc.calls.openPlayTab, 0, 'openPlayTab should not be called for problem-shaped tasks')
+      assert.strictEqual(tabSvc.calls.openTask, 0, 'reviewService must not call generic openTask')
+      assert.strictEqual(tabSvc.openedTabs[0].taskId, 'task_problem')
+      assert.strictEqual(tab.mode, 'problem')
     })
 
     it('C02: throws if schedule not found', async () => {
@@ -441,7 +476,7 @@ describe('reviewService', () => {
   // ====================================================================
 
   describe('architecture boundary guards (C19-C22)', () => {
-    it('C19: openDueItem does not call openProblemTab', async () => {
+    it('C19: openDueItem does not call generic openTask', async () => {
       const repo = createFakeRepo()
       seedSchedule(repo, { id: 'rev_1', taskId: 'task_1' })
       const tabSvc = createFakeTabService()
@@ -449,8 +484,8 @@ describe('reviewService', () => {
 
       await svc.openDueItem('rev_1')
 
-      assert.strictEqual(tabSvc.calls.openProblemTab, 0,
-        'openProblemTab must not be called -- review should use openTask')
+      assert.strictEqual(tabSvc.calls.openTask, 0,
+        'openTask must not be called -- review should use semantic play/problem entrypoints')
     })
 
     // C20: ReviewItemType is a TypeScript type-level constraint. It cannot be

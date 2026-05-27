@@ -96,7 +96,7 @@ function createMockSgfParser(overrides = {}) {
 }
 
 function createMockTaskStore(tasks = {}) {
-  // Tasks keyed by id for openTask to load.
+  // Tasks keyed by id for openPlayTab to load.
   return tasks
 }
 
@@ -106,7 +106,7 @@ function createTestServices(overrides = {}) {
   const legacyAdapter = createMockLegacyAdapter()
   const sgfParser = createMockSgfParser(overrides)
 
-  // Extend repository with loadTask for Phase 1 openTask.
+  // Extend repository with loadTask for Phase 1 openPlayTab.
   if (!repository.loadTask) {
     const taskStore = createMockTaskStore(overrides.tasks)
     repository.loadTask = async id => taskStore[id] ?? null
@@ -126,7 +126,7 @@ function createTestServices(overrides = {}) {
 // --- Tests ---
 
 describe('workbenchTabService', () => {
-  describe('openProblemTab — new system path (no legacy)', () => {
+  describe('openLegacyProblemTab — legacy id adapter', () => {
     let store, tabService
 
     beforeEach(() => {
@@ -135,32 +135,32 @@ describe('workbenchTabService', () => {
       tabService = ctx.tabService
     })
 
-    it('creates a tab with mode=play', async () => {
-      const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      assert.strictEqual(tab.mode, 'play')
+    it('creates a problem tab from a legacy problem id', async () => {
+      const tab = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
+      assert.strictEqual(tab.mode, 'problem')
       assert.ok(tab.taskId)
     })
 
     it('sets the new tab as active', async () => {
-      const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+      const tab = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
       assert.strictEqual(store.getState().activeTabId, tab.id)
     })
 
     it('does NOT call legacy adapter', async () => {
       const {tabService, legacyAdapter} = createTestServices()
-      await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+      await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
       assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 0)
       assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
     })
 
     it('throws if problem not found', async () => {
       await assert.rejects(
-        () => tabService.openProblemTab('nonexistent', {legacyCompatibility: false}),
+        () => tabService.openLegacyProblemTab('nonexistent', {legacyCompatibility: false}),
         /problem not found/,
       )
     })
 
-    it('P2-T05: delegates legacy problem material creation to taskImportService then openTask when available', async () => {
+    it('P2-T05: delegates legacy problem material creation to taskImportService then openProblemTab when available', async () => {
       const importedTask = {
         id: 'task_from_legacy_problem',
         rootPositionSgf: '(;GM[1]FF[4]SZ[19])',
@@ -181,7 +181,7 @@ describe('workbenchTabService', () => {
         },
       })
 
-      const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+      const tab = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
 
       assert.deepStrictEqual(calls, [{problemId: 'prob_1'}])
       assert.strictEqual(tab.taskId, importedTask.id)
@@ -193,14 +193,14 @@ describe('workbenchTabService', () => {
     it('does not run legacy compatibility by default', async () => {
       const {tabService, legacyAdapter} = createTestServices()
 
-      await tabService.openProblemTab('prob_1')
+      await tabService.openLegacyProblemTab('prob_1')
 
       assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
       assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 0)
       assert.strictEqual(legacyAdapter.calls.setCurrentTreePosition.length, 0)
     })
 
-    it('uses taskImportService and openTask without legacy setup when no flag is provided', async () => {
+    it('uses taskImportService and openProblemTab without legacy setup when no flag is provided', async () => {
       const importedTask = {
         id: 'task_default_open_problem',
         rootPositionSgf: '(;GM[1]FF[4]SZ[19])',
@@ -221,7 +221,7 @@ describe('workbenchTabService', () => {
         },
       })
 
-      const tab = await tabService.openProblemTab('prob_1')
+      const tab = await tabService.openLegacyProblemTab('prob_1')
 
       assert.deepStrictEqual(importCalls, [{problemId: 'prob_1'}])
       assert.strictEqual(tab.taskId, importedTask.id)
@@ -232,7 +232,7 @@ describe('workbenchTabService', () => {
     })
   })
 
-  describe('openProblemTab — legacy compatibility mode', () => {
+  describe('openLegacyProblemTab — legacy compatibility mode', () => {
     let store, tabService, legacyAdapter
 
     beforeEach(() => {
@@ -243,24 +243,24 @@ describe('workbenchTabService', () => {
     })
 
     it('calls legacy adapter to load game trees and set mode', async () => {
-      await tabService.openProblemTab('prob_1', {legacyCompatibility: true})
+      await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: true})
       assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 1)
       assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 1)
       assert.strictEqual(legacyAdapter.calls.setCurrentTreePosition.length, 1)
     })
 
     it('does not run legacy by default when flag not specified', async () => {
-      await tabService.openProblemTab('prob_1')
+      await tabService.openLegacyProblemTab('prob_1')
       assert.strictEqual(legacyAdapter.calls.loadGameTrees.length, 0)
       assert.strictEqual(legacyAdapter.calls.setProblemMode.length, 0)
     })
   })
 
-  describe('openProblemTab — error cases', () => {
+  describe('openLegacyProblemTab — error cases', () => {
     it('does not mutate store if SGF cannot be parsed (legacy mode)', async () => {
       const {store, tabService} = createTestServices()
       await assert.rejects(
-        () => tabService.openProblemTab('bad_sgf_prob', {legacyCompatibility: true}),
+        () => tabService.openLegacyProblemTab('bad_sgf_prob', {legacyCompatibility: true}),
         /failed to parse SGF/,
       )
       assert.strictEqual(store.getState().tabs.length, 0)
@@ -270,7 +270,7 @@ describe('workbenchTabService', () => {
     it('throws if parentTabId does not exist', async () => {
       const {tabService} = createTestServices()
       await assert.rejects(
-        () => tabService.openProblemTab('prob_1', {
+        () => tabService.openLegacyProblemTab('prob_1', {
           parentTabId: 'missing_tab',
           legacyCompatibility: false,
         }),
@@ -279,11 +279,11 @@ describe('workbenchTabService', () => {
     })
   })
 
-  describe('openProblemTab — parent-child linking', () => {
+  describe('openLegacyProblemTab — parent-child linking', () => {
     it('links parent tab when parentTabId provided', async () => {
       const {store, tabService} = createTestServices()
-      const parentTab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      const childTab = await tabService.openProblemTab('prob_1', {
+      const parentTab = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
+      const childTab = await tabService.openLegacyProblemTab('prob_1', {
         parentTabId: parentTab.id,
         legacyCompatibility: false,
       })
@@ -292,7 +292,7 @@ describe('workbenchTabService', () => {
     })
   })
 
-  describe('openGameTab', () => {
+  describe('openLegacyGameTab', () => {
     let store, tabService
 
     beforeEach(() => {
@@ -302,24 +302,24 @@ describe('workbenchTabService', () => {
     })
 
     it('creates a tab with mode=play', async () => {
-      const tab = await tabService.openGameTab('game_1')
+      const tab = await tabService.openLegacyGameTab('game_1')
       assert.strictEqual(tab.mode, 'play')
     })
 
     it('sets opened game tab as active', async () => {
-      const tab = await tabService.openGameTab('game_1')
+      const tab = await tabService.openLegacyGameTab('game_1')
       assert.strictEqual(store.getState().activeTabId, tab.id)
     })
 
     it('creates a task with kind=game', async () => {
-      const tab = await tabService.openGameTab('game_1')
+      const tab = await tabService.openLegacyGameTab('game_1')
       assert.ok(tab.taskId)
       // taskId is generated, just verify it exists
     })
 
     it('throws if game not found', async () => {
       await assert.rejects(
-        () => tabService.openGameTab('nonexistent'),
+        () => tabService.openLegacyGameTab('nonexistent'),
         /game not found/,
       )
     })
@@ -335,20 +335,20 @@ describe('workbenchTabService', () => {
     })
 
     it('removes the tab', async () => {
-      const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+      const tab = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
       await tabService.closeTab(tab.id)
       assert.strictEqual(store.getState().tabs.length, 0)
     })
 
     it('clears activeTabId when active tab is closed', async () => {
-      const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+      const tab = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
       await tabService.closeTab(tab.id)
       assert.strictEqual(store.getState().activeTabId, null)
     })
 
     it('closes child tabs recursively', async () => {
-      const parent = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      const child = await tabService.openProblemTab('prob_1', {
+      const parent = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
+      const child = await tabService.openLegacyProblemTab('prob_1', {
         parentTabId: parent.id,
         legacyCompatibility: false,
       })
@@ -357,8 +357,8 @@ describe('workbenchTabService', () => {
     })
 
     it('clears activeTabId when active child is closed via parent', async () => {
-      const parent = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      const child = await tabService.openProblemTab('prob_1', {
+      const parent = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
+      const child = await tabService.openLegacyProblemTab('prob_1', {
         parentTabId: parent.id,
         legacyCompatibility: false,
       })
@@ -368,8 +368,8 @@ describe('workbenchTabService', () => {
     })
 
     it('unlinks from parent', async () => {
-      const parent = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      const child = await tabService.openProblemTab('prob_1', {
+      const parent = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
+      const child = await tabService.openLegacyProblemTab('prob_1', {
         parentTabId: parent.id,
         legacyCompatibility: false,
       })
@@ -393,8 +393,8 @@ describe('workbenchTabService', () => {
     })
 
     it('changes active tab', async () => {
-      const tab1 = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
-      const tab2 = await tabService.openGameTab('game_1')
+      const tab1 = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
+      const tab2 = await tabService.openLegacyGameTab('game_1')
       tabService.switchTab(tab1.id)
       assert.strictEqual(store.getState().activeTabId, tab1.id)
     })
@@ -412,14 +412,23 @@ describe('workbenchTabService + workbenchPhaseService integration', () => {
   let store, tabService, phaseService
 
   beforeEach(() => {
-    const ctx = createTestServices()
+    const ctx = createTestServices({
+      tasks: {
+        task_phase: {
+          id: 'task_phase',
+          rootPositionSgf: '(;SZ[19])',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    })
     store = ctx.store
     tabService = ctx.tabService
     phaseService = ctx.phaseService
   })
 
-  it('full flow: open problem -> submit -> recall -> complete -> analysis', async () => {
-    const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+  it('full flow: open play -> submit -> recall -> complete -> analysis', async () => {
+    const tab = await tabService.openPlayTab({taskId: 'task_phase'})
     assert.strictEqual(phaseService.getMode(tab.id), 'play')
 
     phaseService.transition(tab.id, 'submit')
@@ -430,7 +439,7 @@ describe('workbenchTabService + workbenchPhaseService integration', () => {
   })
 
   it('cannot skip directly from play to analysis', async () => {
-    const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+    const tab = await tabService.openPlayTab({taskId: 'task_phase'})
     assert.throws(
       () => phaseService.transition(tab.id, 'complete'),
       /InvalidPhaseTransitionError/,
@@ -438,14 +447,14 @@ describe('workbenchTabService + workbenchPhaseService integration', () => {
   })
 
   it('can restart from recall back to play', async () => {
-    const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+    const tab = await tabService.openPlayTab({taskId: 'task_phase'})
     phaseService.transition(tab.id, 'submit')
     phaseService.transition(tab.id, 'restart')
     assert.strictEqual(phaseService.getMode(tab.id), 'play')
   })
 
   it('snapshot from analysis does not change tab mode', async () => {
-    const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+    const tab = await tabService.openPlayTab({taskId: 'task_phase'})
     phaseService.transition(tab.id, 'submit')
     phaseService.transition(tab.id, 'complete')
     assert.strictEqual(phaseService.getMode(tab.id), 'analysis')
@@ -455,19 +464,9 @@ describe('workbenchTabService + workbenchPhaseService integration', () => {
   })
 })
 
-// --- Phase 1 contracts: openTask, legacy wrappers, playerConfig ---
+// --- Current public entrypoint contracts: openPlayTab/openProblemTab ---
 
-// openTask may not exist yet; skip gracefully.
-const hasOpenTask = () => {
-  try {
-    const {tabService} = createTestServices()
-    return typeof tabService.openTask === 'function'
-  } catch {
-    return false
-  }
-}
-
-;(hasOpenTask() ? describe : describe.skip)('workbenchTabService.openTask', () => {
+describe('workbenchTabService semantic task entrypoints', () => {
   let store, tabService
 
   beforeEach(() => {
@@ -493,36 +492,40 @@ const hasOpenTask = () => {
     tabService = ctx.tabService
   })
 
-  it('infers problem mode for task with prompt', async () => {
-    const tab = await tabService.openTask({taskId: 'task_problem'})
+  it('does not expose the generic internal openTask primitive', () => {
+    assert.strictEqual(tabService.openTask, undefined)
+  })
+
+  it('openProblemTab opens a task as problem mode', async () => {
+    const tab = await tabService.openProblemTab({taskId: 'task_problem'})
     assert.strictEqual(tab.mode, 'problem')
   })
 
-  it('infers play mode for free task', async () => {
-    const tab = await tabService.openTask({taskId: 'task_free'})
+  it('openPlayTab opens a free task as play mode', async () => {
+    const tab = await tabService.openPlayTab({taskId: 'task_free'})
     assert.strictEqual(tab.mode, 'play')
   })
 
-  it('explicit mode overrides inference', async () => {
-    const tab = await tabService.openTask({taskId: 'task_problem', mode: 'play'})
+  it('openPlayTab opens a problem-shaped task as play mode when the caller explicitly chose play', async () => {
+    const tab = await tabService.openPlayTab({taskId: 'task_problem'})
     assert.strictEqual(tab.mode, 'play')
   })
 
   it('adds tab to store and sets it active', async () => {
-    const tab = await tabService.openTask({taskId: 'task_free'})
+    const tab = await tabService.openPlayTab({taskId: 'task_free'})
     assert.strictEqual(store.getState().activeTabId, tab.id)
     assert.ok(store.getState().tabs.find(t => t.id === tab.id))
   })
 
   it('creates tab with mode field (not phase)', async () => {
-    const tab = await tabService.openTask({taskId: 'task_free'})
+    const tab = await tabService.openPlayTab({taskId: 'task_free'})
     assert.ok('mode' in tab)
     assert.strictEqual(tab.phase, undefined)
   })
 
   it('links parent/child when parentTabId provided', async () => {
-    const parentTab = await tabService.openTask({taskId: 'task_free'})
-    const childTab = await tabService.openTask({taskId: 'task_problem', parentTabId: parentTab.id})
+    const parentTab = await tabService.openPlayTab({taskId: 'task_free'})
+    const childTab = await tabService.openProblemTab({taskId: 'task_problem', parentTabId: parentTab.id})
     const updatedParent = store.getState().tabs.find(t => t.id === parentTab.id)
     assert.ok(updatedParent.childTabIds.includes(childTab.id))
     assert.strictEqual(childTab.parentTabId, parentTab.id)
@@ -530,33 +533,27 @@ const hasOpenTask = () => {
 
   it('throws when task does not exist', async () => {
     await assert.rejects(
-      () => tabService.openTask({taskId: 'nonexistent'}),
+      () => tabService.openPlayTab({taskId: 'nonexistent'}),
       /task not found/,
     )
   })
 
   it('throws when parentTabId does not exist', async () => {
     await assert.rejects(
-      () => tabService.openTask({taskId: 'task_free', parentTabId: 'missing_tab'}),
+      () => tabService.openPlayTab({taskId: 'task_free', parentTabId: 'missing_tab'}),
       /parent tab not found/,
     )
   })
 
-  it('does not expose temporary mode-specific task wrappers', () => {
-    assert.strictEqual(tabService.openPlayTab, undefined)
-    assert.strictEqual(tabService.openProblemTask, undefined)
-  })
-
-  it('preserves configured black human / white AI playerConfig through openTask', async () => {
+  it('preserves configured black human / white AI playerConfig through openPlayTab', async () => {
     const playerConfig = {
       black: 'human',
       white: 'ai',
       ai: {engineId: 'engine_white', autoPlay: true},
     }
 
-    const tab = await tabService.openTask({
+    const tab = await tabService.openPlayTab({
       taskId: 'task_free',
-      mode: 'play',
       playerConfig,
     })
 
@@ -565,22 +562,22 @@ const hasOpenTask = () => {
   })
 })
 
-;(hasOpenTask() ? describe : describe.skip)('legacy wrappers via openTask', () => {
-  it('openProblemTab produces tab with mode (not phase)', async () => {
+describe('workbenchTabService legacy adapters', () => {
+  it('openLegacyProblemTab produces tab with mode (not phase)', async () => {
     const {tabService} = createTestServices()
-    const tab = await tabService.openProblemTab('prob_1', {legacyCompatibility: false})
+    const tab = await tabService.openLegacyProblemTab('prob_1', {legacyCompatibility: false})
     assert.ok('mode' in tab)
   })
 
-  it('openGameTab produces tab with mode=play', async () => {
+  it('openLegacyGameTab produces tab with mode=play', async () => {
     const {tabService} = createTestServices()
-    const tab = await tabService.openGameTab('game_1')
+    const tab = await tabService.openLegacyGameTab('game_1')
     assert.strictEqual(tab.mode, 'play')
   })
 })
 
-;(hasOpenTask() ? describe : describe.skip)('playerConfig on tab', () => {
-  it('stores playerConfig on tab via openTask', async () => {
+describe('playerConfig on tab', () => {
+  it('stores playerConfig on tab via openPlayTab', async () => {
     const {tabService, store} = createTestServices({
       tasks: {
         task_1: {
@@ -592,7 +589,7 @@ const hasOpenTask = () => {
       },
     })
     const config = {black: 'human', white: 'ai', ai: {engineId: 'leela'}}
-    const tab = await tabService.openTask({taskId: 'task_1', playerConfig: config})
+    const tab = await tabService.openPlayTab({taskId: 'task_1', playerConfig: config})
     assert.deepStrictEqual(tab.playerConfig, config)
   })
 
@@ -608,7 +605,7 @@ const hasOpenTask = () => {
       },
     })
     const config = {black: 'ai', white: 'human', ai: {maxVisits: 100}}
-    const tab = await tabService.openTask({taskId: 'task_1', playerConfig: config})
+    const tab = await tabService.openPlayTab({taskId: 'task_1', playerConfig: config})
     const stored = store.getState().tabs.find(t => t.id === tab.id)
     assert.deepStrictEqual(stored.playerConfig, config)
   })
@@ -624,7 +621,7 @@ const hasOpenTask = () => {
         },
       },
     })
-    const tab = await tabService.openTask({taskId: 'task_1'})
+    const tab = await tabService.openPlayTab({taskId: 'task_1'})
     assert.strictEqual(tab.playerConfig, undefined)
 
     const newConfig = {black: 'human', white: 'ai', ai: {autoPlay: true}}

@@ -130,10 +130,10 @@ describe('TrainingWorkbenchContainer new game wiring', () => {
     assert.ok(drawer.textContent.includes('错题库'))
   })
 
-  it('opens visible problem rows through Workbench task tabs, not legacy startProblem', async () => {
+  it('opens visible problem rows through semantic Workbench problem tabs, not legacy startProblem', async () => {
     const calls = {
       createTaskFromLegacyProblem: [],
-      openTask: [],
+      openPlayTab: [],
       openProblemTab: [],
       startProblem: [],
       setMode: [],
@@ -147,13 +147,13 @@ describe('TrainingWorkbenchContainer new game wiring', () => {
           },
         },
         tabService: {
-          async openTask(input) {
-            calls.openTask.push(input)
-            return {id: 'tab_from_visible_problem_row', taskId: input.taskId, mode: input.mode}
+          async openPlayTab(input) {
+            calls.openPlayTab.push(input)
+            return {id: 'tab_unexpected_play', taskId: input.taskId, mode: 'play'}
           },
-          async openProblemTab(problemId, options) {
-            calls.openProblemTab.push({problemId, options})
-            throw new Error('openProblemTab should not be called for visible Workbench problem rows')
+          async openProblemTab(input) {
+            calls.openProblemTab.push(input)
+            return {id: 'tab_from_visible_problem_row', taskId: input.taskId, mode: 'problem'}
           },
         },
         repository: {
@@ -197,16 +197,15 @@ describe('TrainingWorkbenchContainer new game wiring', () => {
 
     assert.deepStrictEqual(calls.startProblem, [],
       'visible Workbench problem rows must not call sabaki.startProblem')
-    assert.deepStrictEqual(calls.openProblemTab, [],
-      'visible Workbench problem rows must not call openProblemTab')
+    assert.deepStrictEqual(calls.openPlayTab, [],
+      'visible Workbench problem rows must not call openPlayTab')
     assert.deepStrictEqual(calls.setMode.filter(mode => mode === 'play'), [],
       'visible Workbench problem rows must not enter legacy play mode')
     assert.deepStrictEqual(calls.createTaskFromLegacyProblem, [{
       problemId: 'legacy_problem_visible_row',
     }])
-    assert.deepStrictEqual(calls.openTask, [{
+    assert.deepStrictEqual(calls.openProblemTab, [{
       taskId: 'task_from_visible_problem_row',
-      mode: 'problem',
     }])
   })
 })
