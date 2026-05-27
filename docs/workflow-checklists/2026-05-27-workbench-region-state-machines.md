@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Workflow: business-contract-workflow
-Status: active
+Status: step1-complete
 
 ## Scope
 
@@ -18,7 +18,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step1.tests: Write focused overlay child-region and flow outcome tests — role: test-writer — depends_on: step1.contract-audit — tests: `test/overlays/overlayStore.test.js`, `test/overlays/workbenchOverlayRegionBoundary.test.js`, `test/training/workbenchFlowService.test.js` — commit: c5599ec0 — retry1 submitted after test-audit REQUEST_CHANGES; expected status: OVR-T01/T02 GREEN; OVR-T03/T04/T05/T06/T09 RED until production overlay region is implemented
 - [x] step1.test-audit: Audit tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step1.tests — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/test-audit-v0.2.md` — commit: 3d210ff5
 - [x] step1.impl: Implement overlay child-region transition boundary — role: implementation-agent — depends_on: step1.test-audit — production: `src/modules/overlays/workbenchOverlayRegion.ts`, `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/sabaki.js` — commit: 38880948 — retry1 submitted after architecture-review REQUEST_CHANGES
-- [ ] step1.review: Architecture review of overlay child-region implementation — role: architecture-reviewer — depends_on: step1.impl — verdict: REQUEST_CHANGES — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/architecture-review-v0.1.md` — commit: 0926e1e9 — retry required for production composition root overlayRegion injection and legacy mode effect overlay auto-enable isolation
+- [x] step1.review: Architecture review of overlay child-region implementation — role: architecture-reviewer — depends_on: step1.impl — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/architecture-review-v0.2.md` — commit: 8e09a3ce
 
 ## Notes
 
@@ -26,6 +26,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - Per AGENTS, each role/skill step must commit only its owned changes before the next step.
 - Test-writer retry verification: `npx mocha --require tsx test/overlays/overlayStore.test.js` passed 10 tests; `npx mocha --require tsx test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js --grep "Workbench overlay region boundary|step1 overlay child-region transition boundary"` failed as expected on missing `src/modules/overlays/workbenchOverlayRegion.ts` after expanding OVR-T04/T09 matrix.
 - Implementation verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 168 tests before production composition retry.
+- Final step1 verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 170 tests; architecture review retry approved.
 
 ## Retries
 
@@ -37,3 +38,4 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - retry1 test result: added production composition and mode-effect isolation tests in `test/overlays/workbenchOverlayRegionBoundary.test.js` and `test/training/workbenchFlowService.test.js` — commit: 6d898777 — expected RED until production composition is wired.
 - retry1 implementation result: injected `createWorkbenchOverlayRegion({overlayStore: this.getOverlayStore(), logger})` into production `createWorkbenchFlowService` deps and isolated `createSabakiModeEffects` from legacy territory auto-enable — commit: 38880948.
 - retry1 verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 170 tests.
+- retry1 review result: architecture-review retry APPROVED in `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/architecture-review-v0.2.md` — commit: 8e09a3ce.
