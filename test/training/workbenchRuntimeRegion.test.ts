@@ -434,6 +434,11 @@ function assertNoDirectRuntimeSetterCalls(
   setters: string[],
 ) {
   for (const setter of setters) {
+    assert.strictEqual(
+      source.includes(setter),
+      false,
+      `${label} must not reference ${setter}; route cleanup through runtime region port`,
+    )
     assert.doesNotMatch(
       source,
       new RegExp(`(?:runtimeStore|deps\\.runtimeStore)\\s*\\??\\.\\s*${setter}\\s*\\(`),
@@ -441,17 +446,17 @@ function assertNoDirectRuntimeSetterCalls(
     )
     assert.doesNotMatch(
       source,
-      new RegExp(`(?:runtimeStore|deps\\.runtimeStore)\\s*\\??\\.\\s*\\[\\s*['"]${setter}['"]\\s*\\]\\s*\\(`),
+      new RegExp(`(?:runtimeStore|deps\\.runtimeStore)\\s*(?:\\?\\.\\s*)?\\[\\s*['"]${setter}['"]\\s*\\]\\s*\\(`),
       `${label} must not call ${setter} through bracket runtimeStore access`,
     )
     assert.doesNotMatch(
       source,
-      new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\b${setter}\\b[^}]*\\}\\s*=\\s*(?:deps\\.)?runtimeStore\\b`),
+      new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\b${setter}\\b(?:\\s*:\\s*\\w+)?[^}]*\\}\\s*=\\s*(?:deps\\.)?runtimeStore\\b`),
       `${label} must not destructure ${setter} from runtimeStore`,
     )
     assert.doesNotMatch(
       source,
-      new RegExp(`\\b${setter}\\s*=\\s*(?:deps\\.)?runtimeStore\\s*\\??\\.\\s*${setter}\\b`),
+      new RegExp(`(?:const|let|var)?\\s*\\w+\\s*=\\s*(?:deps\\.)?runtimeStore\\s*(?:\\?\\.\\s*)?(?:\\.\\s*${setter}|\\[\\s*['"]${setter}['"]\\s*\\])(?:\\.bind\\s*\\()?`),
       `${label} must not alias ${setter} from runtimeStore`,
     )
   }
@@ -465,7 +470,7 @@ function assertNoCheckpointCleanupSetterCalls(label: string, source: string) {
   )
   assert.doesNotMatch(
     source,
-    /(?:runtimeStore|deps\.runtimeStore)\s*\??\.\s*\[\s*['"]setActiveCheckpoint['"]\s*\]\s*\(\s*(?:undefined|void\s+0|null)?\s*\)/,
+    /(?:runtimeStore|deps\.runtimeStore)\s*(?:\?\.\s*)?\[\s*['"]setActiveCheckpoint['"]\s*\]\s*\(\s*(?:undefined|void\s+0|null)?\s*\)/,
     `${label} must not clear active checkpoint through bracket access`,
   )
   assert.doesNotMatch(
@@ -473,7 +478,10 @@ function assertNoCheckpointCleanupSetterCalls(label: string, source: string) {
     /\bsetActiveCheckpoint\s*\(\s*(?:undefined|void\s+0|null)?\s*\)/,
     `${label} must not clear active checkpoint through destructured setter`,
   )
-  assertNoDirectRuntimeSetterCalls(label, source, ['clearCorrectionDraft'])
+  assertNoDirectRuntimeSetterCalls(label, source, [
+    'setCorrectionDraft',
+    'clearCorrectionDraft',
+  ])
 }
 
 describe('workbench runtime region transition contract', () => {
