@@ -114,18 +114,6 @@ class TrainingWorkbenchContainer extends Component {
 
     // --- Handler wiring: UI callback -> service method ---
 
-    function openPlayTask(opts) {
-      return typeof tabService.openPlayTab === 'function'
-        ? tabService.openPlayTab(opts)
-        : tabService.openTask({...opts, mode: 'play'})
-    }
-
-    function openProblemTask(opts) {
-      return typeof tabService.openProblemTask === 'function'
-        ? tabService.openProblemTask(opts)
-        : tabService.openTask({...opts, mode: 'problem'})
-    }
-
     function handleModeChange(mode) {
       if (!activeTab) return
       const action = getModeTransitionAction(
@@ -272,8 +260,9 @@ class TrainingWorkbenchContainer extends Component {
       const task = await taskImportService.createManualTask({
         positionSgf: '(;SZ[19])',
       })
-      const tab = await openPlayTask({
+      const tab = await tabService.openTask({
         taskId: task.id,
+        mode: 'play',
         playerConfig: createDefaultPlayPlayerConfig(),
       })
       if (flowService.startAttempt) {
@@ -504,7 +493,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!task?.id) {
         throw new Error('Fox sync did not return a TrainingTask')
       }
-      await openPlayTask({taskId: task.id})
+      await tabService.openTask({taskId: task.id, mode: 'play'})
     }
 
     async function handleOpenOneOhOneWeiqi(problemId) {
@@ -530,7 +519,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!task?.id) {
         throw new Error('101 sync did not return a TrainingTask')
       }
-      await openProblemTask({taskId: task.id})
+      await tabService.openTask({taskId: task.id, mode: 'problem'})
     }
 
     async function handleOpenLibraryProblem(problemId, problemRow = null) {
@@ -575,7 +564,7 @@ class TrainingWorkbenchContainer extends Component {
         taskId = task.id
       }
 
-      await openProblemTask({taskId})
+      await tabService.openTask({taskId, mode: 'problem'})
     }
 
     async function handleOpenLibraryTask(row, options = {}) {
@@ -588,11 +577,11 @@ class TrainingWorkbenchContainer extends Component {
       }
 
       if (options.mode === 'problem') {
-        await openProblemTask({taskId})
+        await tabService.openTask({taskId, mode: 'problem'})
         return
       }
 
-      await openPlayTask({taskId})
+      await tabService.openTask({taskId, mode: 'play'})
     }
 
     function handleOpenPreferences(tab = 'general') {
@@ -675,7 +664,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleOpenInboxTask(taskId) {
-      await openPlayTask({taskId})
+      await tabService.openTask({taskId, mode: 'play'})
     }
 
     async function handleOpenIncompleteAttempt(attemptId) {
@@ -687,7 +676,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleOpenBadMoveTask(taskId) {
-      await openProblemTask({taskId})
+      await tabService.openTask({taskId, mode: 'problem'})
     }
 
     const _container = this

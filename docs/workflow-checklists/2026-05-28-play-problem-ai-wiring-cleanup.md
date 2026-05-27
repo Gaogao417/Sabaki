@@ -15,4 +15,4 @@
 
 ## Retries
 
-(none)
+- retry1 step3 from step4 verification: focused command-map tests found `TrainingWorkbenchContainer` still called local `openPlayTask` / `openProblemTask` wrappers; retry removes those wrapper calls and routes handlers directly through `tabService.openTask({mode})`.
