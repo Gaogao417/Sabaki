@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Workflow: business-contract-workflow
-Status: step3-retry-required
+Status: step4-review-ready
 
 ## Scope
 
@@ -37,7 +37,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step2.3.test-audit: Audit diagnostics tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.3.tests — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/diagnostics-region/test-audit-v0.1.md` — commit: ed3c3248
 - [x] step2.3.impl: Implement diagnostics owner/consumption in disjoint production scope; defer shared flow integration to step3 if needed — role: implementation-agent — depends_on: step2.3.test-audit — production: `src/modules/training/workbench/modeStateResolver.ts` — commit: f379a286
 - [x] step2.3.review: Architecture review of transition diagnostics implementation — role: architecture-reviewer — depends_on: step2.3.impl — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/diagnostics-region/architecture-review-v0.1.md` — commit: 0387fa6a
-- [ ] step3.integration: Integrate runtime/scratch/diagnostics slices, resolve shared `workbenchFlowService.ts` edits, and run focused regressions — role: implementation-agent — depends_on: step2.1.review, step2.2.review, step2.3.review — production: `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/training/workbench/modeStateResolver.ts`, `src/modules/sabaki.js`; tests: `test/training/workbenchFlowService.test.js` — previous_commit: 2a66e5ac — retry1 required after step4.review REQUEST_CHANGES
+- [x] step3.integration: Integrate runtime/scratch/diagnostics slices, resolve shared `workbenchFlowService.ts` edits, and run focused regressions — role: implementation-agent — depends_on: step2.1.review, step2.2.review, step2.3.review — production: `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/training/workbench/modeStateResolver.ts`, `src/modules/sabaki.js`; tests: `test/training/workbenchFlowService.test.js`, `test/training/modeStateResolver.test.js` — previous_commit: 2a66e5ac — retry1 commit: 9ecec277
 - [ ] step4.review: Architecture review of parent/child-region boundary and evidence ledger — role: architecture-reviewer — depends_on: step3.integration — last_verdict: REQUEST_CHANGES — review: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.1.md`
 
 ## Notes
@@ -96,7 +96,10 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - Step3 focused regression verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/analysis/workbenchAnalysisScratchRegion.test.ts test/analysis/analysisAreaStore.test.js test/training/workbenchRuntimeRegion.test.ts test/training/workbenchFlowService.test.js test/training/recallService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 282 tests.
 - Step3 integration commit: 2a66e5ac.
 - Step4 architecture review result: REQUEST_CHANGES in `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.1.md`; production-shaped diagnostics provider can false-reject legal submit paths because resolver requires `runtime.attempt` / `runtime.sourceAttempt` objects not supplied by `trainingRuntimeStore`.
+- Step3 retry1 verification: `npx mocha --require tsx test/training/modeStateResolver.test.js test/training/workbenchFlowService.test.js` passed 132 tests after retargeting resolver illegal checks to production snapshot bindings and adding production-shaped diagnostics happy paths.
+- Step3 retry1 focused regression verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/analysis/workbenchAnalysisScratchRegion.test.ts test/analysis/analysisAreaStore.test.js test/training/workbenchRuntimeRegion.test.ts test/training/workbenchFlowService.test.js test/training/recallService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 286 tests.
 
 ## Step4 Review Retries
 
 - retry1 step3.integration after `step4.review` REQUEST_CHANGES (`docs/archive/daily-design/2026-05-27/workbench-region-state-machines/architecture-review-v0.1.md`): fix production diagnostics projection or resolver illegal rules so legal submit/recall states are representable without false invalids; add production-shaped happy-path diagnostics tests for `submit`, `enterAnalysis`, and `returnFromAnalysis`; update evidence ledger and rerun focused regressions.
+- retry1 step3.integration result: `modeStateResolver` no longer requires full `runtime.attempt` / `runtime.sourceAttempt` objects that `trainingRuntimeStore` does not own; it uses active/source attempt bindings from runtime/tab snapshots and returns `{id}` refs when full objects are absent. Added production-shaped flow tests for play submit, problem submit, and enter/return analysis diagnostics — commit: 9ecec277.

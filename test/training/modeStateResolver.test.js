@@ -415,6 +415,31 @@ describe('modeStateResolver', () => {
       assertIncludesContract(result, 'recallAnswer')
     })
 
+    it('resolves problem and recall from production runtime-store shape without attempt objects', () => {
+      const resolveModeState = getResolveModeState()
+      const problemResult = resolveModeState(deepFreeze(
+        makeProblemInput({
+          runtime: {
+            attempt: undefined,
+            sourceAttempt: undefined,
+          },
+        }),
+      ))
+      const recallResult = resolveModeState(deepFreeze(
+        makeRecallInput({
+          runtime: {
+            attempt: undefined,
+            sourceAttempt: undefined,
+          },
+        }),
+      ))
+
+      assertLegal(problemResult, 'problem')
+      assert.deepStrictEqual(problemResult.companion.attempt, {id: 'attempt_1'})
+      assertLegal(recallResult, 'recall')
+      assert.deepStrictEqual(recallResult.companion.sourceAttempt, {id: 'attempt_1'})
+    })
+
     it('resolves analysis with scratch/current source, saved return target, overlay owner, and scratchEdit hint', () => {
       const resolveModeState = getResolveModeState()
       const input = deepFreeze(makeAnalysisInput())
@@ -594,6 +619,7 @@ describe('modeStateResolver', () => {
         'problem mode without an active attempt',
         () =>
           makeProblemInput({
+            tab: {activeAttemptId: null},
             runtime: {activeAttemptId: null, attempt: null},
           }),
         'missing-problem-attempt',
@@ -607,10 +633,22 @@ describe('modeStateResolver', () => {
         'missing-recall-view',
       ],
       [
-        'recall mode without frozen source attempt',
+        'recall mode without a source attempt binding',
         () =>
           makeRecallInput({
-            runtime: {sourceAttempt: null},
+            tab: {activeAttemptId: null},
+            runtime: {
+              sourceAttempt: null,
+              recallView: {
+                recallSessionId: 'recall_1',
+                moveIndex: 2,
+                positionSource: {
+                  kind: 'scratch',
+                  role: 'problem-attempt',
+                  workspaceId: 'recall_ws_1',
+                },
+              },
+            },
           }),
         'missing-frozen-source-attempt',
       ],

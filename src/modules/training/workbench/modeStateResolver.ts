@@ -38,7 +38,7 @@ export function resolveModeState(input: ResolverInput = {}) {
   const runtimeRegion = asDict(input[runtimeRegionKey])
   const mode = isWorkbenchMode(tab?.mode) ? tab.mode : null
   const diagnostics = collectDiagnostics(mode, tab, sabaki)
-  const illegal = collectIllegal(mode, runtime, overlay, sabaki)
+  const illegal = collectIllegal(mode, tab, runtime, overlay, sabaki)
 
   if (mode == null) {
     illegal.push({code: 'missing-active-tab'})
@@ -63,7 +63,7 @@ export function resolveModeState(input: ResolverInput = {}) {
       tab,
       companion: {
         kind: 'play',
-        attempt: runtime?.attempt,
+        attempt: runtime?.attempt ?? attemptRef(activeAttemptId(tab, runtime)),
         pendingMoveEvaluations: runtime?.pendingMoveEvaluations ?? [],
         visibleBadMoveIds: runtime?.visibleBadMoveIds ?? [],
       },
@@ -84,7 +84,7 @@ export function resolveModeState(input: ResolverInput = {}) {
       tab,
       companion: {
         kind: 'problem',
-        attempt: runtime?.attempt,
+        attempt: runtime?.attempt ?? attemptRef(activeAttemptId(tab, runtime)),
         problemView,
         pendingMoveEvaluations: runtime?.pendingMoveEvaluations ?? [],
         visibleBadMoveIds: runtime?.visibleBadMoveIds ?? [],
@@ -106,7 +106,7 @@ export function resolveModeState(input: ResolverInput = {}) {
       tab,
       companion: {
         kind: 'recall',
-        sourceAttempt: runtime?.sourceAttempt,
+        sourceAttempt: runtime?.sourceAttempt ?? attemptRef(sourceAttemptId(tab, runtime)),
         recallView,
         activeCheckpoint: runtime?.activeCheckpoint,
         correctionDraft: runtime?.correctionDraft,
@@ -130,7 +130,7 @@ export function resolveModeState(input: ResolverInput = {}) {
       kind: 'analysis',
       previousMode: tab?.analysisContext?.previousMode,
       returnTarget: tab?.analysisReturnTarget,
-      sourceAttempt: runtime?.sourceAttempt,
+      sourceAttempt: runtime?.sourceAttempt ?? attemptRef(sourceAttemptId(tab, runtime)),
       sourceRecallSessionId: runtime?.activeRecallSessionId ?? tab?.activeRecallSessionId,
       scratch,
     },
@@ -235,6 +235,7 @@ function sourceLooksLikeLiveFeed(tab: Dict | null): boolean {
 
 function collectIllegal(
   mode: WorkbenchMode | null,
+  tab: Dict | null,
   runtime: Dict | null,
   overlay: Dict | null,
   sabaki: Dict | null,
@@ -242,7 +243,7 @@ function collectIllegal(
   const illegal: Diagnostic[] = []
 
   if (mode === 'problem') {
-    if (runtime?.activeAttemptId == null || runtime?.attempt == null) {
+    if (activeAttemptId(tab, runtime) == null) {
       illegal.push({code: 'missing-problem-attempt'})
     }
     if (runtime?.problemView == null) {
@@ -257,7 +258,7 @@ function collectIllegal(
     if (runtime?.activeRecallSessionId == null || runtime?.recallView == null) {
       illegal.push({code: 'missing-recall-view'})
     }
-    if (runtime?.sourceAttempt == null) {
+    if (sourceAttemptId(tab, runtime) == null && runtime?.sourceAttempt == null) {
       illegal.push({code: 'missing-frozen-source-attempt'})
     }
     if (runtime?.problemView != null) {
@@ -290,6 +291,24 @@ function collectIllegal(
   }
 
   return illegal
+}
+
+function activeAttemptId(tab: Dict | null, runtime: Dict | null): string | null {
+  const id = runtime?.activeAttemptId ?? tab?.activeAttemptId
+  return typeof id === 'string' && id.length > 0 ? id : null
+}
+
+function sourceAttemptId(tab: Dict | null, runtime: Dict | null): string | null {
+  const id =
+    runtime?.sourceAttempt?.id ??
+    runtime?.sourceAttemptId ??
+    runtime?.recallView?.attemptId ??
+    tab?.activeAttemptId
+  return typeof id === 'string' && id.length > 0 ? id : null
+}
+
+function attemptRef(id: string | null): Dict | undefined {
+  return id == null ? undefined : {id}
 }
 
 function gameTreeSource(tab: Dict | null, sabaki: Dict | null): Dict {

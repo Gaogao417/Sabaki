@@ -191,9 +191,33 @@ function createMockDeps(overrides = {}) {
     },
     modeEffects: overrides.modeEffects,
     overlayRegion: overrides.overlayRegion,
+    problemFlowService: overrides.problemFlowService,
+    runtimeStore: overrides.runtimeStore,
+    runtimeRegion: overrides.runtimeRegion,
     getModeStateInput: overrides.getModeStateInput,
     logger,
   }
+}
+
+function createProductionModeStateInputProvider(input) {
+  const {
+    workbenchStore,
+    runtimeStore,
+    overlayStore,
+    appState,
+    document = {treePosition: 'root'},
+  } = input
+
+  return tabId => ({
+    tab: getTab(workbenchStore, tabId),
+    runtime: runtimeStore.getState(),
+    overlay: overlayStore?.getState?.() ?? {},
+    sabaki: {
+      state: appState,
+      document,
+      editWorkspace: appState?.editWorkspace,
+    },
+  })
 }
 
 function createSnapshotGuardDeps(overrides = {}) {
@@ -366,7 +390,8 @@ describe('workbenchFlowService', () => {
 
     it('freezes attempt before creating recall session', async () => {
       const order = []
-      const deps = createMockDeps({
+      let deps
+      deps = createMockDeps({
         attemptService: {
           freezeAttempt: async id => { order.push('freeze') },
         },
@@ -1088,7 +1113,8 @@ describe('workbenchFlowService', () => {
       })
       const runtimeBefore = clone(runtimeStore.getState())
       const forbiddenCalls = []
-      const deps = createMockDeps({
+      let deps
+      deps = createMockDeps({
         runtimeStore,
         modeEffects: modeEffects.modeEffects,
         attemptService: {
@@ -1400,6 +1426,191 @@ describe('workbenchFlowService', () => {
   })
 
   describe('step3 mode diagnostics integration', () => {
+    it('allows production-shaped play submit diagnostics without attempt objects in runtime store', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const appState = {mode: 'play', editWorkspace: null}
+      const overlayStore = {getState: () => ({})}
+      runtimeStore.setActiveAttempt('attempt_prod_submit')
+
+      let deps
+      deps = createMockDeps({
+        runtimeStore,
+        getModeStateInput(tabId) {
+          return createProductionModeStateInputProvider({
+            workbenchStore: deps.store,
+            runtimeStore,
+            overlayStore,
+            appState,
+          })(tabId)
+        },
+        attemptService: {
+          async freezeAttempt() {},
+        },
+        recallService: {
+          async createRecallFromAttempt(attemptId) {
+            return {
+              id: 'recall_prod_submit',
+              taskId: 'task_prod_submit',
+              tabId: 'tab_prod_submit',
+              attemptId,
+              expectedMoves: ['D4'],
+              currentMoveIndex: 0,
+              completed: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            }
+          },
+        },
+      })
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_prod_submit',
+        taskId: 'task_prod_submit',
+        mode: 'play',
+        activeAttemptId: 'attempt_prod_submit',
+      }))
+
+      await service.submit('tab_prod_submit')
+
+      const tab = getTab(deps.store, 'tab_prod_submit')
+      assert.strictEqual(tab.mode, 'recall')
+      assert.strictEqual(tab.activeRecallSessionId, 'recall_prod_submit')
+      assert.strictEqual(
+        runtimeStore.getState().activeRecallSessionId,
+        'recall_prod_submit',
+      )
+      assert.ok(runtimeStore.getState().recallView)
+    })
+
+    it('allows production-shaped problem submit diagnostics without attempt objects in runtime store', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const appState = {mode: 'problem', editWorkspace: null}
+      const overlayStore = {getState: () => ({})}
+      runtimeStore.setActiveAttempt('attempt_prod_problem')
+      runtimeStore.setProblemView({
+        taskId: 'task_prod_problem',
+        tabId: 'tab_prod_problem',
+        attemptId: 'attempt_prod_problem',
+        legacyProblemSession: null,
+        evalCache: [],
+        badMoves: [],
+        submitted: false,
+        result: null,
+      })
+
+      const deps = createMockDeps({
+        runtimeStore,
+        getModeStateInput(tabId) {
+          return createProductionModeStateInputProvider({
+            workbenchStore: deps.store,
+            runtimeStore,
+            overlayStore,
+            appState,
+          })(tabId)
+        },
+        problemFlowService: {
+          appendProblemMove: async () => null,
+          undoProblemMove: async () => null,
+          submitActiveProblem: async () => ({
+            attempt: {id: 'attempt_prod_problem'},
+            result: 'pass',
+            generatedPunishmentProblemIds: [],
+          }),
+          abandonActiveProblem: async () => null,
+        },
+        recallService: {
+          async createRecallFromAttempt(attemptId) {
+            return {
+              id: 'recall_prod_problem',
+              taskId: 'task_prod_problem',
+              tabId: 'tab_prod_problem',
+              attemptId,
+              expectedMoves: ['Q16'],
+              currentMoveIndex: 0,
+              completed: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            }
+          },
+        },
+      })
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_prod_problem',
+        taskId: 'task_prod_problem',
+        mode: 'problem',
+        activeAttemptId: 'attempt_prod_problem',
+      }))
+
+      await service.submit('tab_prod_problem')
+
+      const tab = getTab(deps.store, 'tab_prod_problem')
+      assert.strictEqual(tab.mode, 'recall')
+      assert.strictEqual(tab.activeRecallSessionId, 'recall_prod_problem')
+      assert.strictEqual(runtimeStore.getState().problemView, null)
+      assert.ok(runtimeStore.getState().recallView)
+    })
+
+    it('allows production-shaped enter and return analysis diagnostics', () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const overlayStore = {getState: () => ({})}
+      const appState = {
+        mode: 'play',
+        editWorkspace: null,
+        analysisType: 'winrate',
+      }
+      const modeEffects = createSabakiModeEffects({
+        state: appState,
+        setMode(mode) {
+          appState.mode = mode
+        },
+        setState(patch) {
+          Object.assign(appState, patch)
+        },
+        createAnalysisWorkspace() {
+          return {
+            activeTab: 'current',
+            currentSnapshot: {
+              id: 'scratch_current_prod',
+              workspaceId: 'workspace_prod',
+              role: 'current',
+            },
+          }
+        },
+        scheduleEditWorkspaceAnalysis() {},
+      })
+      const deps = createMockDeps({
+        runtimeStore,
+        modeEffects,
+        getModeStateInput(tabId) {
+          return createProductionModeStateInputProvider({
+            workbenchStore: deps.store,
+            runtimeStore,
+            overlayStore,
+            appState,
+          })(tabId)
+        },
+      })
+      const service = createWorkbenchFlowService(deps)
+      deps.store.addTab(makeTab({
+        id: 'tab_prod_analysis',
+        taskId: 'task_prod_analysis',
+        mode: 'play',
+      }))
+
+      service.enterAnalysis('tab_prod_analysis')
+      assert.strictEqual(getTab(deps.store, 'tab_prod_analysis').mode, 'analysis')
+      assert.strictEqual(appState.mode, 'analysis')
+      assert.strictEqual(appState.editWorkspace.currentSnapshot.role, 'current')
+
+      service.returnFromAnalysis({
+        tabId: 'tab_prod_analysis',
+        reason: 'return',
+      })
+
+      assert.strictEqual(getTab(deps.store, 'tab_prod_analysis').mode, 'play')
+      assert.strictEqual(appState.mode, 'play')
+      assert.strictEqual(appState.editWorkspace.scratchTarget.status, 'inactive')
+    })
+
     it('rejects illegal preflight state before submit writes', async () => {
       const writeCalls = []
       const deps = createMockDeps({
