@@ -7,7 +7,7 @@
 
 ## Steps
 
-- [ ] step1: Write cleanup contract sketch for TabService API, configured play setup, AI reply ownership, and test boundaries — role: contract-designer — mode: serial
+- [x] step1: Write cleanup contract sketch for TabService API, configured play setup, AI reply ownership, and test boundaries — role: contract-designer — mode: serial — result: wrote `docs/archive/daily-design/2026-05-28/play-problem-ai-wiring-cleanup/test-contract-v0.1.md`; commit: pending
 - [ ] step2: Rewrite focused tests and E2E harnesses so they protect source-truth behavior rather than temporary openPlayTab/openProblemTask/startConfiguredGame wrappers — role: test-writer — mode: serial — depends_on: step1 — scope: test/training/workbenchTabService.test.js, test/training/configuredGamePlayerConfig.test.js, e2e/golden-path-smoke.spec.js, e2e/workbench-command-acceptance.spec.js, e2e/new-game-dialog.spec.js, command-map coverage
 - [ ] step3: Implement cleanup: remove temporary TabService wrappers, route UI/configured play through openTask, remove odd playerConfig helper file, preserve AI post-move reply behavior — role: implementation-agent — mode: serial — depends_on: step2 — scope: workbenchTabService, TrainingWorkbenchContainer, sabaki configured game setup, AI reply wiring as needed
 - [ ] step4: Run targeted and full verification, update any drifted tests without changing contracts — role: verification — mode: serial — depends_on: step3
