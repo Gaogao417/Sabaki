@@ -6,10 +6,11 @@
  *
  * Harness/mock manifest:
  * - Real production subject: src/modules/training/workbench/modeStateResolver.ts::resolveModeState
+ * - RED production subject: src/modules/training/workbench/modeStateResolver.ts::classifyModeStateDiagnostics
  * - Fake/spy modules: NONE
  * - Inputs: immutable plain tab/runtime/overlay/engine/Sabaki snapshots
  * - Forbidden mocks: stores, services, repositories, controller, engine, overlay, document, Sabaki globals
- * - Expected status before step3.1: RED if production resolver is absent/incomplete
+ * - Expected status for step2.3: RED until the pure diagnostics classifier helper is exported
  */
 
 import assert from 'assert'
@@ -42,6 +43,17 @@ function getResolveModeState() {
     'modeStateResolver.ts must export resolveModeState(input)',
   )
   return mod.resolveModeState
+}
+
+function getClassifyModeStateDiagnostics() {
+  const mod = loadResolverModule()
+  assert.ifError(mod.loadError)
+  assert.strictEqual(
+    typeof mod.classifyModeStateDiagnostics,
+    'function',
+    'modeStateResolver.ts must export classifyModeStateDiagnostics(result, context)',
+  )
+  return mod.classifyModeStateDiagnostics
 }
 
 function makeTab(overrides = {}) {
@@ -310,6 +322,32 @@ function assertIllegalCode(result, code) {
   )
 }
 
+function diagnosticCodes(result) {
+  return (result.diagnostics ?? []).map((item) => item?.code ?? item)
+}
+
+function illegalCodes(result) {
+  return (result.illegal ?? []).map((item) => item?.code ?? item)
+}
+
+function assertNoRepairSurface(decision) {
+  const stack = [decision]
+
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (value == null || typeof value !== 'object') continue
+
+    for (const [key, child] of Object.entries(value)) {
+      assert.ok(
+        !/repair|patch|setter|callback|effect|write/i.test(key),
+        `diagnostics classifier must not return repair/write surface key ${key}`,
+      )
+
+      if (child != null && typeof child === 'object') stack.push(child)
+    }
+  }
+}
+
 describe('modeStateResolver', () => {
   describe('legal mode projections from immutable snapshots', () => {
     it('resolves play from WorkbenchTab.mode with game-tree source and playMove hint', () => {
@@ -402,6 +440,55 @@ describe('modeStateResolver', () => {
       assert.strictEqual(result.engine?.kind, 'scratch')
       assert.strictEqual(result.engine?.mayWrite, 'edit-workspace-only')
       assert.strictEqual(result.snapshotPersistAllowed, true)
+    })
+  })
+
+  describe('DIAG-T01B snapshot affordance matrix', () => {
+    for (const [label, inputFactory] of [
+      ['play', () => makeInput()],
+      ['problem', () => makeProblemInput()],
+      ['recall', () => makeRecallInput()],
+    ]) {
+      it(`${label} requires entering analysis before snapshot persistence`, () => {
+        const resolveModeState = getResolveModeState()
+        const result = resolveModeState(deepFreeze(inputFactory()))
+
+        assertLegal(result, label)
+        assert.strictEqual(result.snapshotPersistAllowed, false)
+        assert.strictEqual(result.snapshotNextStep, 'enter-analysis')
+      })
+    }
+
+    it('analysis with scratch/current allows snapshot persistence', () => {
+      const resolveModeState = getResolveModeState()
+      const result = resolveModeState(deepFreeze(makeAnalysisInput()))
+
+      assertLegal(result, 'analysis')
+      assert.strictEqual(result.positionSource?.kind, 'scratch')
+      assert.strictEqual(result.positionSource?.role, 'current')
+      assert.strictEqual(result.snapshotPersistAllowed, true)
+      assert.strictEqual(result.snapshotNextStep, undefined)
+    })
+
+    it('analysis without scratch/current is invalid and cannot persist a snapshot', () => {
+      const resolveModeState = getResolveModeState()
+      const result = resolveModeState(
+        deepFreeze(
+          makeAnalysisInput({
+            sabaki: {
+              editWorkspace: {
+                currentSnapshot: null,
+                referenceSnapshot: null,
+                currentAnalysis: {workspaceId: 'analysis_ws_1'},
+              },
+            },
+          }),
+        ),
+      )
+
+      assertIllegalCode(result, 'analysis-missing-scratch-current')
+      assert.strictEqual(result.snapshotPersistAllowed, false)
+      assert.strictEqual(result.snapshotNextStep, undefined)
     })
   })
 
@@ -501,6 +588,52 @@ describe('modeStateResolver', () => {
       assertIllegalCode(result, 'analysis-missing-scratch-current')
       assert.strictEqual(result.snapshotPersistAllowed, false)
     })
+
+    for (const [label, inputFactory, code] of [
+      [
+        'problem mode without an active attempt',
+        () =>
+          makeProblemInput({
+            runtime: {activeAttemptId: null, attempt: null},
+          }),
+        'missing-problem-attempt',
+      ],
+      [
+        'recall mode without recallView',
+        () =>
+          makeRecallInput({
+            runtime: {recallView: null},
+          }),
+        'missing-recall-view',
+      ],
+      [
+        'recall mode without frozen source attempt',
+        () =>
+          makeRecallInput({
+            runtime: {sourceAttempt: null},
+          }),
+        'missing-frozen-source-attempt',
+      ],
+      [
+        'missing active tab',
+        () => ({
+          ...makeInput(),
+          tab: null,
+        }),
+        'missing-active-tab',
+      ],
+    ]) {
+      it(`DIAG-T02B diagnoses ${label} without repairing input`, () => {
+        const resolveModeState = getResolveModeState()
+        const input = inputFactory()
+        const before = clone(input)
+
+        const result = resolveModeState(deepFreeze(input))
+
+        assertIllegalCode(result, code)
+        assert.deepStrictEqual(clone(input), before)
+      })
+    }
   })
 
   describe('mode truth and legacy/source diagnostics', () => {
@@ -559,6 +692,98 @@ describe('modeStateResolver', () => {
         assert.deepStrictEqual(clone(input), before)
       })
     }
+  })
+
+  describe('DIAG-T05 pure diagnostics policy classifier', () => {
+    it('maps preflight illegal resolver output to reject and preserves illegal codes without repair operations', () => {
+      const resolveModeState = getResolveModeState()
+      const classifyModeStateDiagnostics = getClassifyModeStateDiagnostics()
+      const result = resolveModeState(
+        deepFreeze(makeProblemInput({runtime: {problemView: null}})),
+      )
+      const frozenResult = deepFreeze(clone(result))
+
+      const decision = classifyModeStateDiagnostics(frozenResult, {
+        phase: 'preflight',
+        command: 'submit',
+        tabId: 'tab_1',
+      })
+
+      assert.deepStrictEqual(frozenResult, result)
+      assert.strictEqual(decision?.action, 'reject')
+      assert.deepStrictEqual(
+        decision?.illegalCodes,
+        illegalCodes(result),
+        'reject decisions must preserve resolver illegal codes',
+      )
+      assertNoRepairSurface(decision)
+    })
+
+    it('maps preflight diagnostics-only resolver output to allow with diagnostic codes', () => {
+      const resolveModeState = getResolveModeState()
+      const classifyModeStateDiagnostics = getClassifyModeStateDiagnostics()
+      const result = resolveModeState(
+        deepFreeze(
+          makeProblemInput({
+            tab: {
+              source: {kind: 'game', source_kind: 'fox-live-game'},
+              origin: {provider: 'fox', externalId: 'game_99'},
+            },
+            sabaki: {state: {mode: 'play'}},
+          }),
+        ),
+      )
+      const frozenResult = deepFreeze(clone(result))
+
+      const decision = classifyModeStateDiagnostics(frozenResult, {
+        phase: 'preflight',
+        command: 'enterAnalysis',
+        tabId: 'tab_1',
+      })
+
+      assert.notStrictEqual(result.ok, false)
+      assert.deepStrictEqual(illegalCodes(result), [])
+      assert.strictEqual(decision?.action, 'allow')
+      assert.deepStrictEqual(
+        decision?.diagnosticCodes,
+        diagnosticCodes(result),
+        'allow decisions must preserve non-blocking diagnostic codes',
+      )
+      assertNoRepairSurface(decision)
+    })
+
+    it('maps postflight illegal resolver output to invalid-after-commit without repair operations', () => {
+      const resolveModeState = getResolveModeState()
+      const classifyModeStateDiagnostics = getClassifyModeStateDiagnostics()
+      const result = resolveModeState(
+        deepFreeze(
+          makeAnalysisInput({
+            sabaki: {
+              editWorkspace: {
+                currentSnapshot: null,
+                referenceSnapshot: null,
+                currentAnalysis: {workspaceId: 'analysis_ws_1'},
+              },
+            },
+          }),
+        ),
+      )
+      const frozenResult = deepFreeze(clone(result))
+
+      const decision = classifyModeStateDiagnostics(frozenResult, {
+        phase: 'postflight',
+        command: 'returnFromAnalysis',
+        tabId: 'tab_1',
+      })
+
+      assert.strictEqual(decision?.action, 'invalid-after-commit')
+      assert.deepStrictEqual(
+        decision?.illegalCodes,
+        illegalCodes(result),
+        'postflight invalid decisions must preserve resolver illegal codes',
+      )
+      assertNoRepairSurface(decision)
+    })
   })
 
   describe('architecture boundary', () => {
