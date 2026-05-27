@@ -18,6 +18,10 @@
 - 当前模块架构以 [Training Architecture v0.5](../architecture/gabaki-sabaki-training-architecture-v0.5.md) 为准。
 - 当前长期迁移执行以 [Training Implementation Plan](../architecture/gabaki-sabaki-training-implementation-plan.md) 为准。
 - 棋盘读写边界以 [Position Source and Mutation Contract](../architecture/position-source-mutation-contract.md) 为准。
+- 野狐对局数据入口以 [Fox Game Import PRD](./fox_game_import_prd.md) 为准，并必须进入本 PRD 的
+  TrainingTask / Game / Recall 训练闭环。
+- 101 围棋错题入口以 [101 Weiqi Error Sync PRD](./101weiqi_error_sync_prd.md) 为准，并必须进入本 PRD
+  的 Problem / Review 训练闭环。
 - 如 PRD 与具体 UI/UX 方案存在范围差异，产品能力边界以 PRD 为准；具体阶段的布局、视觉层级和控件呈现以对应 UI/UX 方案为准。
 
 ---
@@ -183,6 +187,9 @@ Punishment Problem 是错误沉淀机制，不是 RecallCheckpoint 的替代品�
 ## 5.1 主流程总览
 
 ```text
+0. Material / Library
+   野狐对局、101 错题、本地 SGF、本地题库进入 TrainingTask / Game / Problem
+
 1. Play Mode
    用户和 AI 对战 / 指定局面续弈
    用户产生 TrainingAttempt.userLine
@@ -581,6 +588,31 @@ type ProblemSnapshotInput = {
 
 Snapshot 后进入 Problem Editor。
 
+### 6.3.7 Analysis Edit Bar / 标注工具栏
+
+Analysis Mode 必须提供可直接操作当前 scratch/current 局面的 edit bar。它不是装饰性工具条，而是
+Snapshot 出题、局面说明和 reference line 整理的核心输入面。
+
+Edit bar 至少包含：
+
+```text
+选择 / 落子 / 黑白摆子 / 删除
+标记：X / △ / □ / ○ / label / number
+线与箭头
+撤销 / 重做 / 清空
+Edit position
+Snapshot
+缩放 / 全屏
+```
+
+工程约束：
+
+- edit bar 只在 Analysis scratch / working position 上写入；
+- edit bar 不能改写 source `TrainingAttempt.userLine`；
+- edit bar 的 Snapshot 按钮必须走与顶部 Snapshot 相同的 command path；
+- edit bar 的每个按钮必须有 disabled reason 和 E2E 点击验收；
+- 标注、线、箭头和摆子结果必须能进入 Snapshot / Problem draft 的局面素材。
+
 ---
 
 ## 6.4 Problem Editor：题目编辑器
@@ -966,6 +998,67 @@ type ReviewSchedule = {
   totalFailCount: number
 }
 ```
+
+---
+
+## 6.8 Material Library / 外部数据入口
+
+### 6.8.1 目标
+
+材料库是训练系统的输入层。用户不应只能从当前棋盘手动开始训练；野狐对局、101 错题、本地 SGF、
+本地题库和手动创建材料都必须进入统一的 `TrainingTask` / `Game` / `Problem` 训练闭环。
+
+材料库不是第五个 Workbench mode。打开材料后，系统根据材料类型进入：
+
+```text
+Fox / imported SGF game      -> Game + TrainingTask -> Recall 或 Play
+101 wrong problem            -> TrainingTask(problem-like) -> Problem
+local SGF                    -> Game / TrainingTask -> Play / Recall / Analysis
+manual problem draft         -> TrainingTask(problem-like) -> Problem Editor / Problem
+review due item              -> ReviewSchedule.taskId -> Problem
+```
+
+### 6.8.2 Fox / 野狐对局
+
+野狐对局是 Play/Recall 训练素材的核心来源。
+
+必须支持：
+
+- 绑定并保存野狐用户名；
+- 加载公开对局列表；
+- 单击预览对局元数据与终局盘面；
+- 双击打开对局，默认进入 Recall 训练；
+- 导入到本地棋谱库，`TrainingTask.origin.provider = 'fox'`；
+- 去重导入；
+- 启动时后台增量同步；
+- 全局状态栏或材料库中展示同步中、成功、失败和重试状态。
+
+### 6.8.3 101 围棋错题
+
+101 错题是 Problem/Review 训练素材的核心来源。
+
+必须支持：
+
+- 登录或复用 101 会话；
+- 同步错题本分页；
+- 抓取、解码并生成 SGF；
+- 持久化为本地 `TrainingTask`，`origin.provider = '101weiqi'`；
+- 离线进入 Problem Mode；
+- 增量同步、失败重试和会话过期反馈；
+- 同步后的题目可进入 Review。
+
+### 6.8.4 材料库 UI
+
+材料库必须提供可验收的数据接线，不允许只显示静态 tab：
+
+```text
+历史记录：recent activity、最近打开、最近训练、最近同步
+棋谱库：本地 SGF、Fox 导入对局、Play 保存对局
+对局库：active/saved games、未完成 Recall/Analysis
+错题 / 题库入口：101 错题、Problem Inbox、Review 到期题
+```
+
+每个入口都必须能打开或导入真实 `TrainingTask`，并显示 loading、empty、error、syncing 和 success 状态。
 
 ---
 
@@ -1357,6 +1450,20 @@ Play 结束
 - 支持普通题和惩罚题；
 - 根据结果更新复习间隔。
 
+### H. Material Library / External Data v1
+
+- 野狐对局可查询、预览、导入并默认进入 Recall；
+- 101 错题可同步、解码、缓存并进入 Problem；
+- 本地 SGF / Play 保存对局能进入棋谱库；
+- 材料库 tabs 展示真实数据、空态、错误态和同步态。
+
+### I. Analysis Edit Bar v1
+
+- Analysis 底部 edit bar 可操作 scratch/current 局面；
+- 支持摆子、删除、标记、线/箭头、撤销、重做、清空；
+- Snapshot 使用 edit bar 当前局面作为可选来源；
+- edit bar 不污染 Attempt 和真实 game tree。
+
 ---
 
 ## 11.3 MVP 暂不做
@@ -1439,6 +1546,32 @@ Play 结束
 - 用户完成复习后，系统更新下一次复习时间；
 - 做错题会更快再次出现；
 - 通过题会延长复习间隔。
+
+## 12.8 Material Library / External Data
+
+- 野狐用户名保存后，材料库能加载、预览并导入真实对局；
+- 野狐对局双击打开后默认进入 Recall 或可直接进入 Analysis；
+- 101 登录会话有效时，能同步错题、解码 SGF 并生成可离线训练的 Problem Task；
+- 101 / Fox 后台同步状态必须在 UI 中可见，并支持失败重试；
+- 材料库历史记录、棋谱库、对局库、错题入口都必须来自 repository / sync service / runtime projection，不能只展示静态 mock。
+
+## 12.9 Analysis Edit Bar
+
+- Analysis edit bar 的每个按钮都有可见 affordance、disabled reason 和 command handler；
+- 摆子、删除、标记、线/箭头、清空和撤销/重做只修改 scratch/current working position；
+- edit bar Snapshot 与顶部 Snapshot 使用同一条 service command path；
+- edit bar 操作后创建的 Snapshot 可以进入 Problem Editor / Problem；
+- 任何 edit bar 操作都不能修改 frozen Attempt 或 source game tree。
+
+## 12.10 Frontend Playwright E2E / Command Coverage
+
+- Workbench 六个 canonical states 必须有 Playwright 截图验收：Problem、Recall、RecallCheckpoint、
+  Play + library drawer、Analysis、Analysis + library drawer；
+- 每个可见按钮、快捷键、drawer tab、mode segment 必须出现在 command map 中；
+- Playwright 至少点击一次每类主 command：submit、enter/return analysis、snapshot、problem undo/abandon、
+  recall hint/skip/checkpoint、edit bar tool、library open/import/sync retry；
+- disabled 状态必须验证不会触发副作用，并显示与按钮一致的 disabled reason；
+- E2E 不能只检查元素存在，必须验证 UI command 到 service/store/projection 的一段真实结果。
 
 ---
 
