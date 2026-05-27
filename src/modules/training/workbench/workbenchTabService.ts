@@ -24,13 +24,8 @@ export type OpenTaskOptions = {
   playerConfig?: PlayerConfig
 }
 
-export type OpenPlayTabOptions = Omit<OpenTaskOptions, 'mode'>
-export type OpenProblemTaskOptions = Omit<OpenTaskOptions, 'mode'>
-
 export type WorkbenchTabService = {
   openGameTab(gameId: string): Promise<WorkbenchTab>
-  openPlayTab(opts: OpenPlayTabOptions): Promise<WorkbenchTab>
-  openProblemTask(opts: OpenProblemTaskOptions): Promise<WorkbenchTab>
   openProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab>
   openTask(opts: OpenTaskOptions): Promise<WorkbenchTab>
   openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab>
@@ -323,22 +318,6 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     return tab
   }
 
-  async function openPlayTab(opts: OpenPlayTabOptions): Promise<WorkbenchTab> {
-    logger?.info('tab.openPlayTab', 'Opening play tab', {
-      taskId: opts.taskId,
-      parentTabId: opts.parentTabId,
-    })
-    return openTask({...opts, mode: 'play'})
-  }
-
-  async function openProblemTask(opts: OpenProblemTaskOptions): Promise<WorkbenchTab> {
-    logger?.info('tab.openProblemTask', 'Opening problem task tab', {
-      taskId: opts.taskId,
-      parentTabId: opts.parentTabId,
-    })
-    return openTask({...opts, mode: 'problem'})
-  }
-
   async function openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab> {
     logger?.info('tab.openSnapshotProblemTab', 'Opening snapshot problem tab', { problemId, parentTabId: options.parentTabId })
     const tab = await openProblemTab(problemId, { parentTabId: options.parentTabId })
@@ -404,8 +383,6 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
   }
 
   return {
-    openPlayTab,
-    openProblemTask,
     openProblemTab,
     openGameTab,
     openTask,

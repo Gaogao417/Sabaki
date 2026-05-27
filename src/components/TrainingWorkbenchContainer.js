@@ -477,18 +477,28 @@ class TrainingWorkbenchContainer extends Component {
       sabaki.flashInfoOverlay(`已切换筛选：${tag}`)
     }
 
-    async function handleOpenFoxGames() {
+    function normalizeExternalSourceId(value, fallback = 'latest') {
+      if (typeof value !== 'string') return fallback
+      let trimmed = value.trim()
+      return trimmed || fallback
+    }
+
+    async function handleOpenFoxGames(gameId) {
       const {taskImportService, repository} = sabaki.getTrainingContext()
+      const requestedGameId = normalizeExternalSourceId(gameId)
       let task = null
 
-      if (typeof repository?.findTaskBySource === 'function') {
+      if (
+        requestedGameId === 'latest' &&
+        typeof repository?.findTaskBySource === 'function'
+      ) {
         task = await repository.findTaskBySource({
           provider: 'fox',
           kind: 'game',
         })
       }
       if (!task) {
-        task = await taskImportService.importFoxGame({gameId: 'latest'})
+        task = await taskImportService.importFoxGame({gameId: requestedGameId})
       }
 
       if (!task?.id) {
@@ -497,18 +507,24 @@ class TrainingWorkbenchContainer extends Component {
       await openPlayTask({taskId: task.id})
     }
 
-    async function handleOpenOneOhOneWeiqi() {
+    async function handleOpenOneOhOneWeiqi(problemId) {
       const {taskImportService, repository} = sabaki.getTrainingContext()
+      const requestedProblemId = normalizeExternalSourceId(problemId)
       let task = null
 
-      if (typeof repository?.findTaskBySource === 'function') {
+      if (
+        requestedProblemId === 'latest' &&
+        typeof repository?.findTaskBySource === 'function'
+      ) {
         task = await repository.findTaskBySource({
           provider: '101',
           kind: 'problem',
         })
       }
       if (!task) {
-        task = await taskImportService.import101Problem({problemId: 'latest'})
+        task = await taskImportService.import101Problem({
+          problemId: requestedProblemId,
+        })
       }
 
       if (!task?.id) {

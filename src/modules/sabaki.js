@@ -68,7 +68,6 @@ import {
   evaluateAttempt,
   projectTrainingState,
 } from './training/index.ts'
-import {createConfiguredGamePlayerConfig} from './training/workbench/configuredGamePlayerConfig.ts'
 import {
   boardFromSnapshot,
   cloneSnapshot,
@@ -1871,30 +1870,32 @@ class Sabaki extends EventEmitter {
     return this.getPlayServices().engineService
   }
 
-  createConfiguredGamePlayerConfig({black, white, blackSyncer, whiteSyncer}) {
-    return createConfiguredGamePlayerConfig({
-      black,
-      white,
-      blackSyncer,
-      whiteSyncer,
-    })
-  }
-
   async syncConfiguredGameWorkbench({emptyTree, black, white, blackSyncer, whiteSyncer}) {
     const {taskImportService, tabService, flowService} = this.getTrainingContext()
-    const playerConfig = this.createConfiguredGamePlayerConfig({
-      black,
-      white,
-      blackSyncer,
-      whiteSyncer,
-    })
+    const blackPlayer = black?.type === 'engine' ? 'ai' : 'human'
+    const whitePlayer = white?.type === 'engine' ? 'ai' : 'human'
+    const engineId =
+      whitePlayer === 'ai'
+        ? whiteSyncer?.id
+        : blackPlayer === 'ai'
+          ? blackSyncer?.id
+          : undefined
+    const playerConfig = {
+      black: blackPlayer,
+      white: whitePlayer,
+      ai: {
+        autoPlay: true,
+        ...(engineId != null ? {engineId} : {}),
+      },
+    }
     const task = await taskImportService.createManualTask({
       positionSgf: sgf.stringify([emptyTree.root]),
       sideToMove: 'black',
       title: 'New Game',
     })
-    const tab = await tabService.openPlayTab({
+    const tab = await tabService.openTask({
       taskId: task.id,
+      mode: 'play',
       playerConfig,
     })
     await flowService.startAttempt(tab.id)
