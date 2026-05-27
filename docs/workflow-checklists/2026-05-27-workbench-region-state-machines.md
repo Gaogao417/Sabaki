@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Workflow: business-contract-workflow
-Status: step2.1-complete
+Status: step2-parallel-active
 
 ## Scope
 
@@ -25,6 +25,20 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step2.1.test-audit: Audit runtime companion tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.1.tests — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/test-audit-v0.3.md` — commit: 9c6e102e
 - [x] step2.1.impl: Implement runtime companion child-region cleanup boundary — role: implementation-agent — depends_on: step2.1.test-audit — production: `src/modules/training/workbench/workbenchRuntimeRegion.ts`, `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/training/recall/recallCheckpointService.ts`, `src/modules/training/recall/recallService.ts` — commit: 841bb74a
 - [x] step2.1.review: Architecture review of runtime companion implementation — role: architecture-reviewer — depends_on: step2.1.impl — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/architecture-review-v0.1.md` — commit: 8d4b7eaa
+- [ ] step2.2.contract: Contract sketch for analysis scratch child-region target/generation semantics — role: contract-designer — depends_on: step1.review; parallel_ready_with: step2.3 — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/scratch-region/test-contract-v0.1.md`
+- [ ] step2.2.contract-audit: Audit analysis scratch child-region contract — role: contract-auditor — depends_on: step2.2.contract
+- [ ] step2.2.tests: Write focused analysis scratch region stale-result and flow outcome tests — role: test-writer — depends_on: step2.2.contract-audit
+- [ ] step2.2.test-audit: Audit analysis scratch tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.2.tests
+- [ ] step2.2.impl: Implement analysis scratch child-region owner and disjoint production scope; defer shared flow integration to step3 if needed — role: implementation-agent — depends_on: step2.2.test-audit
+- [ ] step2.2.review: Architecture review of analysis scratch child-region implementation — role: architecture-reviewer — depends_on: step2.2.impl
+- [ ] step2.3.contract: Contract sketch for transition invariant diagnostics consumption — role: contract-designer — depends_on: step1.review; parallel_ready_with: step2.2 — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/diagnostics-region/test-contract-v0.1.md`
+- [ ] step2.3.contract-audit: Audit transition invariant diagnostics contract — role: contract-auditor — depends_on: step2.3.contract
+- [ ] step2.3.tests: Write focused modeStateResolver preflight/postflight diagnostics tests — role: test-writer — depends_on: step2.3.contract-audit
+- [ ] step2.3.test-audit: Audit diagnostics tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.3.tests
+- [ ] step2.3.impl: Implement diagnostics owner/consumption in disjoint production scope; defer shared flow integration to step3 if needed — role: implementation-agent — depends_on: step2.3.test-audit
+- [ ] step2.3.review: Architecture review of transition diagnostics implementation — role: architecture-reviewer — depends_on: step2.3.impl
+- [ ] step3.integration: Integrate runtime/scratch/diagnostics slices, resolve shared `workbenchFlowService.ts` edits, and run focused regressions — role: implementation-agent — depends_on: step2.1.review, step2.2.review, step2.3.review
+- [ ] step4.review: Architecture review of parent/child-region boundary and evidence ledger — role: architecture-reviewer — depends_on: step3.integration
 
 ## Notes
 
@@ -38,6 +52,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - Runtime + overlay regression verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchRuntimeRegion.test.ts test/training/workbenchFlowService.test.js test/training/recallService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 232 tests.
 - Full JS suite check: `npm test` passed 1879 tests and failed 6 unrelated existing/parallel wiring checks (`analysisNoMutation.test.js` C20 play/problem/recall snapshot rejection, `command-map-coverage.test.js` editbar edit-position affordance, `w5-analysis-mode-wiring.test.js` returnFromAnalysis reason payload assertions).
 - Runtime architecture review result: APPROVED in `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/architecture-review-v0.1.md` — commit: 8d4b7eaa.
+- Stage 2 parallelization rule: `step2.2` and `step2.3` may run concurrently for contracts, audits, and tests. Any conflicting production edit to shared `src/modules/training/workbench/workbenchFlowService.ts` is reserved for `step3.integration`.
 
 ## Retries
 
