@@ -7,12 +7,12 @@ const SHORTCUT_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
  * Harness/mock manifest: Workbench command acceptance
  * layer: Playwright Electron E2E command scaffold
  * production subject: TrainingWorkbenchContainer -> WorkbenchShell command props
- * real dependencies: renderer app, Workbench stores, LibrarySideDrawer, tabService.openTask
+ * real dependencies: renderer app, Workbench stores, LibrarySideDrawer, semantic tab service entrypoints
  * mocked globals: selected task import/repository methods return deterministic Fox/101 tasks;
  *   service methods are wrapped as instrumentation while still delegating to production;
  *   toggleThirdPartyPanel is wrapped only as a forbidden legacy-call guard
  * primary assertions: command clicks reach taskImportService or synced task lookup, then
- *   workbenchTabService.openTask with explicit mode; mode commands update active tab; edit-bar commands mutate
+ *   workbenchTabService.openPlayTab/openProblemTab; mode commands update active tab; edit-bar commands mutate
  *   scratch/current without mutating the source tree; disabled commands expose reasons and
  *   no-op on click/keyboard; declared-but-unwired keyboard shortcuts are guarded as gaps.
  */
@@ -324,7 +324,8 @@ async function installLibraryCommandHarness(page) {
       imports: [],
       sourceLookups: [],
       loadTask: [],
-      openTask: [],
+      openPlayTab: [],
+      openProblemTab: [],
       legacyThirdPartyCalls: [],
       legacyStartProblemCalls: [],
       legacySetModeCalls: [],
@@ -351,7 +352,8 @@ async function installLibraryCommandHarness(page) {
       ctx.repository,
     )
     const originalLoadTask = ctx.repository.loadTask?.bind(ctx.repository)
-    const originalOpenTask = ctx.tabService.openTask.bind(ctx.tabService)
+    const originalOpenPlayTab = ctx.tabService.openPlayTab.bind(ctx.tabService)
+    const originalOpenProblemTab = ctx.tabService.openProblemTab.bind(ctx.tabService)
     const originalStartProblem = window.__sabaki.startProblem?.bind(window.__sabaki)
     const originalSetMode = window.__sabaki.setMode?.bind(window.__sabaki)
 
@@ -392,13 +394,28 @@ async function installLibraryCommandHarness(page) {
       return originalLoadTask ? originalLoadTask(taskId) : null
     }
 
-    ctx.tabService.openTask = async (opts) => {
+    ctx.tabService.openPlayTab = async (opts) => {
       const record = {
         opts,
         result: null,
       }
-      window.__sabaki.__e2eLibraryCommandHarness.openTask.push(record)
-      const tab = await originalOpenTask(opts)
+      window.__sabaki.__e2eLibraryCommandHarness.openPlayTab.push(record)
+      const tab = await originalOpenPlayTab(opts)
+      record.result = {
+        id: tab.id,
+        taskId: tab.taskId,
+        mode: tab.mode,
+      }
+      return tab
+    }
+
+    ctx.tabService.openProblemTab = async (opts) => {
+      const record = {
+        opts,
+        result: null,
+      }
+      window.__sabaki.__e2eLibraryCommandHarness.openProblemTab.push(record)
+      const tab = await originalOpenProblemTab(opts)
       record.result = {
         id: tab.id,
         taskId: tab.taskId,
@@ -438,7 +455,8 @@ async function installLibraryCommandHarness(page) {
         ctx.repository.findTaskBySource = originalFindTaskBySource
       }
       if (originalLoadTask) ctx.repository.loadTask = originalLoadTask
-      ctx.tabService.openTask = originalOpenTask
+      ctx.tabService.openPlayTab = originalOpenPlayTab
+      ctx.tabService.openProblemTab = originalOpenProblemTab
       if (originalStartProblem) window.__sabaki.startProblem = originalStartProblem
       if (originalSetMode) window.__sabaki.setMode = originalSetMode
     }
@@ -452,7 +470,8 @@ async function getLibraryCommandHarness(page) {
       imports: calls.imports,
       sourceLookups: calls.sourceLookups,
       loadTask: calls.loadTask,
-      openTask: calls.openTask,
+      openPlayTab: calls.openPlayTab,
+      openProblemTab: calls.openProblemTab,
       legacyThirdPartyCalls: calls.legacyThirdPartyCalls,
       legacyStartProblemCalls: calls.legacyStartProblemCalls,
       legacySetModeCalls: calls.legacySetModeCalls,
@@ -705,12 +724,8 @@ test.describe('Workbench command acceptance', () => {
         ...calls.imports.map((call) => call.provider),
         ...calls.sourceLookups.map((call) => call.provider),
       ])
-      const openedPlayTaskIds = calls.openTask
-        .filter((call) => call.opts.mode === 'play')
-        .map((call) => call.opts.taskId)
-      const openedProblemTaskIds = calls.openTask
-        .filter((call) => call.opts.mode === 'problem')
-        .map((call) => call.opts.taskId)
+      const openedPlayTaskIds = calls.openPlayTab.map((call) => call.opts.taskId)
+      const openedProblemTaskIds = calls.openProblemTab.map((call) => call.opts.taskId)
 
       expect(calls.legacyThirdPartyCalls).toEqual([])
       expect(touchedProviders.has('fox')).toBe(true)
@@ -753,10 +768,9 @@ test.describe('Workbench command acceptance', () => {
 
     await expect(async () => {
       const calls = await getLibraryCommandHarness(page)
-      expect(calls.openTask.map((call) => call.opts)).toEqual(
+      expect(calls.openProblemTab.map((call) => call.opts)).toEqual(
         expect.arrayContaining([{
           taskId: 'e2e_task_visible_problem_row',
-          mode: 'problem',
         }]),
       )
       expect(calls.legacyStartProblemCalls).toEqual([])
@@ -764,7 +778,7 @@ test.describe('Workbench command acceptance', () => {
     }).toPass({timeout: 5000})
   })
 
-  test('101 and Fox sync fixture states render loading, empty, error, syncing, and success without import/openTask side effects', async ({
+  test('101 and Fox sync fixture states render loading, empty, error, syncing, and success without import/open side effects', async ({
     page,
   }) => {
     await installLibraryCommandHarness(page)
@@ -840,7 +854,8 @@ test.describe('Workbench command acceptance', () => {
     const after = await getLibraryCommandHarness(page)
     expect(after.imports).toEqual(before.imports)
     expect(after.sourceLookups).toEqual(before.sourceLookups)
-    expect(after.openTask).toEqual(before.openTask)
+    expect(after.openPlayTab).toEqual(before.openPlayTab)
+    expect(after.openProblemTab).toEqual(before.openProblemTab)
     expect(after.legacyThirdPartyCalls).toEqual([])
   })
 

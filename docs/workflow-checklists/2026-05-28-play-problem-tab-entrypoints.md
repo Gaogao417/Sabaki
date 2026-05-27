@@ -17,7 +17,8 @@ Scope: correct the Workbench play/problem tab entrypoint API after the AI wiring
 - step1: wrote `docs/archive/daily-design/2026-05-28/play-problem-tab-entrypoints/test-contract-v0.1.md`.
 - step2: updated focused unit/static tests for `openPlayTab`, task-object `openProblemTab`, legacy adapters, and no container `openTask` calls.
 - step3: removed public `openTask`, added semantic play/problem APIs, renamed legacy adapters, and migrated production callers plus stale test harnesses.
+- step3 retry: migrated Playwright harness instrumentation from `openTask` to `openPlayTab`/`openProblemTab`.
 
 ## Retries
 
-- None.
+- step4 verification failed once: Playwright e2e harness still bound removed public `openTask`; retry step3 to migrate e2e harness instrumentation to `openPlayTab`/`openProblemTab`.
