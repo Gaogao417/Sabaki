@@ -41,6 +41,7 @@ import {createDocumentStore} from './document/documentStore.js'
 import {createEngineService} from './engine/engineService.js'
 import {createAnalysisService} from './analysis/analysisService.ts'
 import {createOverlayStore} from './overlays/overlayStore.ts'
+import {createWorkbenchOverlayRegion} from './overlays/workbenchOverlayRegion.ts'
 import {createAnalysisAreaStore} from './analysis/analysisAreaStore.ts'
 import {
   createWorkbenchStore,
@@ -498,7 +499,7 @@ class Sabaki extends EventEmitter {
     logger.info('analysis.workspace_reset', 'Analysis workspace reset')
   }
 
-  setMode(mode) {
+  setMode(mode, options = {}) {
     if (this.state.mode === mode) return
 
     let oldMode = this.state.mode
@@ -559,8 +560,10 @@ class Sabaki extends EventEmitter {
 
     if (mode === 'analysis') {
       this.scheduleEditWorkspaceAnalysis()
-      // Auto-enable territory overlay when entering analysis mode
-      this.getOverlayStore().setTerritoryEnabled(true)
+      if (options.autoEnableTerritory !== false) {
+        // Legacy board-mode entry auto-enables territory outside Workbench flow.
+        this.getOverlayStore().setTerritoryEnabled(true)
+      }
     } else if (
       mode !== 'analysis' &&
       this.state.territoryCompareEnabled &&
@@ -1022,6 +1025,10 @@ class Sabaki extends EventEmitter {
         taskImportService,
         logger,
       })
+      const overlayRegion = createWorkbenchOverlayRegion({
+        overlayStore: this.getOverlayStore(),
+        logger,
+      })
       const flowService = createWorkbenchFlowService({
         workbenchStore,
         repository,
@@ -1030,6 +1037,7 @@ class Sabaki extends EventEmitter {
         recallCheckpointService: checkpointService,
         snapshotService,
         tabService,
+        overlayRegion,
         evaluationRules: { evaluateAttempt },
         runtimeStore,
         logger,

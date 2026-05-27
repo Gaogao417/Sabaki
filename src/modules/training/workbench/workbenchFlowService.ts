@@ -126,7 +126,10 @@ type LegacySabakiAnalysisAdapter = {
     editWorkspace?: {activeTab?: string} | null
     analysisType?: string
   }
-  setMode?: (mode: string) => void
+  setMode?: (
+    mode: string,
+    options?: {autoEnableTerritory?: boolean},
+  ) => void
   setState?: (patch: Record<string, unknown>) => void
   createAnalysisWorkspace?: () => unknown
   scheduleEditWorkspaceAnalysis?: (tab?: string) => void
@@ -174,7 +177,7 @@ export function createSabakiModeEffects(
     if (!sabaki.state || typeof sabaki.setState !== 'function') return
 
     if (sabaki.state.mode !== 'analysis') {
-      sabaki.setMode?.('analysis')
+      sabaki.setMode?.('analysis', {autoEnableTerritory: false})
     } else if (!sabaki.state.editWorkspace && sabaki.createAnalysisWorkspace) {
       sabaki.setState({
         editWorkspace: sabaki.createAnalysisWorkspace(),
