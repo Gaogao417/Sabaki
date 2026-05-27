@@ -89,6 +89,7 @@ class EditBar extends Component {
           title,
           href: '#',
           'data-id': toolId,
+          'aria-label': title,
           onClick: this.handleToolButtonClick,
         },
 
@@ -109,6 +110,9 @@ class EditBar extends Component {
         {
           title,
           href: '#',
+          'aria-label': title,
+          'aria-disabled': disabled ? 'true' : null,
+          tabIndex: disabled ? -1 : 0,
           onClick: (evt) => {
             evt.preventDefault()
             if (!disabled) onClick()
@@ -154,7 +158,7 @@ class EditBar extends Component {
       },
       h(
         'div',
-        {class: 'edit-tool-group'},
+        {class: 'edit-tool-group edit-tool-group--annotation'},
         h('span', {class: 'edit-tool-group__label'}, '标注工具'),
         h(
           'ul',
@@ -175,7 +179,7 @@ class EditBar extends Component {
       ),
       h(
         'div',
-        {class: 'edit-tool-group'},
+        {class: 'edit-tool-group edit-tool-group--analysis'},
         h('span', {class: 'edit-tool-group__label'}, '分析工具'),
         h(
           'ul',

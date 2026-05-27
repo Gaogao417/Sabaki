@@ -18,9 +18,16 @@ import EmptyStatePanel from '../shared/EmptyStatePanel.js'
  */
 export default function ProblemModePanel({
   prompt = '',
+  positionDescription = '',
   goal = '',
+  taskGoal = '',
   passRuleSummary = '',
+  passRule = null,
   referenceLines = [],
+  sideToMove = '',
+  sideToMoveLabel = '',
+  problemArea = null,
+  problemSession = null,
   blackPlayer = '',
   whitePlayer = '',
   problemOpponent = 'ai',
@@ -30,6 +37,22 @@ export default function ProblemModePanel({
   onAbandonAnswer = () => {},
   state = 'active',
 }) {
+  const session = asRecord(problemSession)
+  const effectivePrompt = firstText(prompt, positionDescription, session?.positionDescription)
+  const effectiveGoal = firstText(goal, taskGoal, session?.taskGoal, session?.goal)
+  const effectivePassRule = firstText(
+    passRuleSummary,
+    session?.passRuleSummary,
+    asRecord(passRule)?.targetDescription,
+    formatPassRule(passRule),
+  )
+  const effectiveSide = firstText(sideToMoveLabel, session?.sideToMoveLabel, formatSideToMove(sideToMove))
+  const effectiveArea = firstText(
+    formatProblemArea(problemArea),
+    formatProblemArea(session?.problemArea),
+  )
+  const effectiveReferenceLines = normalizeReferenceLines(referenceLines)
+
   function renderContent() {
     if (state === 'loading') {
       return h('div', {class: 'wb-state-loading'},
@@ -73,20 +96,28 @@ export default function ProblemModePanel({
         h('div', {class: 'wb-panel-title'}, '题目说明 / 题面与目标'),
         h('section', {class: 'wb-brief-section'},
           h('h3', {}, '局面说明'),
-          h('p', {}, prompt || '局部战斗中的局面。黑棋需要选择合适的攻击方向，继续施压并争取更大的实地。'),
+          h('p', {}, effectivePrompt || '局部战斗中的局面。黑棋需要选择合适的攻击方向，继续施压并争取更大的实地。'),
         ),
         h('section', {class: 'wb-brief-section'},
           h('h3', {}, '训练目标'),
-          h('p', {}, goal || '选择最有利的攻击方向，扩大战果，迫使白棋受损或退让。'),
+          h('p', {}, effectiveGoal || '选择最有利的攻击方向，扩大战果，迫使白棋受损或退让。'),
         ),
         h('section', {class: 'wb-brief-section wb-brief-section--rules'},
           h('h3', {}, '规则简述'),
-          h('ul', {},
-            ['黑先落子', '轮流落子', '贴目 7.5', '数字法计算胜负', '终局需两次确认'].map(item =>
-              h('li', {key: item}, item),
+          effectiveSide && h('p', {class: 'wb-panel-caption'}, effectiveSide),
+          effectiveArea && h('p', {class: 'wb-panel-caption'}, effectiveArea),
+          effectivePassRule
+            ? h('p', {class: 'wb-panel-caption'}, effectivePassRule)
+            : h('ul', {},
+              ['黑先落子', '轮流落子', '贴目 7.5', '数字法计算胜负', '终局需两次确认'].map(item =>
+                h('li', {key: item}, item),
+              ),
+            ),
+          effectiveReferenceLines.length > 0 && h('ul', {class: 'wb-brief-section__refs'},
+            effectiveReferenceLines.map((line, index) =>
+              h('li', {key: line.key || index}, line.label),
             ),
           ),
-          passRuleSummary && h('p', {class: 'wb-panel-caption'}, passRuleSummary),
         ),
       ),
 
@@ -109,4 +140,56 @@ export default function ProblemModePanel({
   return h('div', {'data-testid': 'problem-mode-panel', class: 'wb-problem-mode-panel'},
     renderContent(),
   )
+}
+
+function asRecord(value) {
+  return value != null && typeof value === 'object' ? value : null
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim() !== '') return value
+    if (typeof value === 'number') return String(value)
+  }
+  return ''
+}
+
+function formatSideToMove(value) {
+  if (value === 'black') return '黑先'
+  if (value === 'white') return '白先'
+  return ''
+}
+
+function formatProblemArea(value) {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.length > 0 ? `题目范围：${value.length} 点` : ''
+  const record = asRecord(value)
+  return firstText(record?.label, record?.summary, record?.description)
+}
+
+function formatPassRule(value) {
+  const record = asRecord(value)
+  if (!record) return ''
+
+  const parts = []
+  if (record.requireNoSevereBadMove) parts.push('无严重坏棋')
+  if (record.maxBadMoveCount != null) parts.push(`坏棋不超过 ${record.maxBadMoveCount}`)
+  if (record.scoreDropThreshold != null) parts.push(`掉目不超过 ${record.scoreDropThreshold}`)
+  return parts.join('，')
+}
+
+function normalizeReferenceLines(lines) {
+  if (!Array.isArray(lines)) return []
+  return lines.map((line, index) => {
+    if (typeof line === 'string') return {key: line, label: line}
+    const record = asRecord(line)
+    if (!record) return {key: index, label: ''}
+    const label = firstText(
+      record.label,
+      record.summary,
+      record.name,
+      Array.isArray(record.moves) ? `${record.moves.join(' ')} (${record.moves.length})` : '',
+    )
+    return {key: record.id || label || index, label}
+  }).filter(line => line.label !== '')
 }

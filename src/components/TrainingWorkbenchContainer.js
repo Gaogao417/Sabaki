@@ -1319,8 +1319,19 @@ function projectFromWorkbench(ws, repository, container) {
     // W8-P3: Project problemArea from task cache or repository
     if (container && container._taskCache && container._taskCache[activeTab.taskId]) {
       const task = container._taskCache[activeTab.taskId]
-      if (task && task.problemArea !== undefined) {
-        result.problemArea = task.problemArea
+      if (task) {
+        result.prompt = task.positionDescription || task.prompt || ''
+        result.positionDescription = task.positionDescription || ''
+        result.goal = task.taskGoal || task.goal || ''
+        result.taskGoal = task.taskGoal || ''
+        result.sideToMove = task.sideToMove || ''
+        result.sideToMoveLabel = task.sideToMoveLabel || formatProblemSideToMove(task.sideToMove)
+        result.passRule = task.passRule || null
+        result.passRuleSummary = task.passRule?.targetDescription || ''
+        result.referenceLines = Array.isArray(task.referenceLines) ? task.referenceLines : []
+        if (task.problemArea !== undefined) {
+          result.problemArea = task.problemArea
+        }
       }
     } else if (container && repository && typeof repository.loadTask === 'function') {
       // Fire-and-forget async load to populate cache for next render
@@ -1399,6 +1410,12 @@ function projectFromWorkbench(ws, repository, container) {
   }
 
   return result
+}
+
+function formatProblemSideToMove(sideToMove) {
+  if (sideToMove === 'black') return '黑先'
+  if (sideToMove === 'white') return '白先'
+  return ''
 }
 
 function formatExpectedMoveSide(sign) {

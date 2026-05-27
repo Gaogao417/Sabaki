@@ -26,6 +26,7 @@ export default function RightModePanel(props) {
       break
     case 'problem':
       panelContent = h(ProblemRightPanel, {
+        ...rest,
         currentVariation: rest.currentVariation,
         opponentMode: rest.opponentMode,
         hint: rest.hint,

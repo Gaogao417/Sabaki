@@ -81,6 +81,7 @@ export default function ModeBar({
   wrongCount = 1,
   badMoveCount = 0,
   hintLevelUsed = 1,
+  problemSession = null,
   onSubmit = () => {},
   onAbandon = () => {},
   onEnd = () => {},
@@ -92,12 +93,15 @@ export default function ModeBar({
 }) {
   const isCheckpoint = activeMode === 'recall' &&
     (activeCheckpoint || activeCheckpointId || String(recallSubstate).startsWith('checkpoint'))
-  const title = taskTitle ||
-    (activeMode === 'problem' ? '攻击方向训练 #12' : '黑方 vs 白方 #1')
   const checkpointMoveNumber = activeCheckpoint?.moveNumber
   const checkpointOriginalMove = activeCheckpoint?.originalMoveLabel ||
     formatLine(activeCheckpoint?.originalLine?.slice(0, 1))
   const checkpointSeverity = activeCheckpoint?.severityLabel || activeCheckpoint?.severity || ''
+  const title = taskTitle ||
+    (activeMode === 'problem' ? '攻击方向训练 #12' : '黑方 vs 白方 #1')
+  const problemHintUsage = activeMode === 'problem'
+    ? getProblemHintUsageLabel(problemSession, hintLevelUsed)
+    : ''
 
   function renderMeta() {
     if (isCheckpoint) {
@@ -117,7 +121,7 @@ export default function ModeBar({
         h('span', {class: 'wb-topbar-stone wb-topbar-stone--black'}),
         h('span', {class: 'wb-topbar-meta'}, '黑先'),
         h(Divider),
-        h('span', {class: 'wb-topbar-meta'}, '💡 hint ', hintLevelUsed, '/5'),
+        h('span', {class: 'wb-topbar-meta'}, '💡 hint ', problemHintUsage),
         h(Divider),
         h('span', {class: 'wb-topbar-warning'}, '△'),
         h('span', {class: 'wb-topbar-meta'}, 'bad move ', badMoveCount),
@@ -163,6 +167,7 @@ export default function ModeBar({
     if (activeMode === 'problem') {
       return [
         h(ActionButton, {testId: 'mode-action-submit', primary: true, onClick: onSubmit}, '提交'),
+        h(ActionButton, {testId: 'mode-action-analysis', onClick: onAnalysis}, '复盘'),
         h(ActionButton, {testId: 'mode-action-abandon', onClick: onAbandon}, '放弃'),
       ]
     }
@@ -184,7 +189,9 @@ export default function ModeBar({
     }
 
     return [
+      h(ActionButton, {testId: 'mode-action-analysis', onClick: onAnalysis}, '复盘'),
       h(ActionButton, {testId: 'mode-action-save', primary: true, onClick: onSnapshot}, '保存'),
+      h(ActionButton, {testId: 'mode-action-resign', danger: true, onClick: rest.onResign}, '认输'),
       h(ActionButton, {testId: 'mode-action-end', onClick: onEnd}, '结束对局'),
     ]
   }
@@ -202,4 +209,12 @@ export default function ModeBar({
       h(ActionButton, {testId: 'mode-action-new-game', onClick: rest.onNewGame}, '新对局'),
     ),
   )
+}
+
+function getProblemHintUsageLabel(problemSession, hintLevelUsed) {
+  if (problemSession && typeof problemSession === 'object') {
+    const value = problemSession.hintUsageLabel || problemSession.hint
+    if (typeof value === 'string' && value.trim() !== '') return value
+  }
+  return `${hintLevelUsed}/5`
 }

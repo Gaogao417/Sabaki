@@ -428,8 +428,9 @@ function createHarness({
     workbenchStore,
     async renderText() {
       await flushPromises()
-      const {container: dom} = renderToDom(container.render())
+      renderToDom(container.render())
       await flushPromises()
+      const {container: dom} = renderToDom(container.render())
       return normalizeText(dom.textContent)
     },
     getShellProps() {
