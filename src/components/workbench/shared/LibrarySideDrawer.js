@@ -293,9 +293,10 @@ export default class LibrarySideDrawer extends Component {
         ].filter(Boolean).join(' '),
         disabled: state.loading,
         title: `输入${inputLabel}`,
-        'aria-label': `输入${inputLabel}`,
+        'aria-label': `${editorOpen ? '收起' : '展开'}${inputLabel}输入框`,
+        'aria-expanded': editorOpen ? 'true' : 'false',
         onClick: () => this.toggleExternalSourceEditor(source),
-      }, 'ID'),
+      }, editorOpen ? '⌃' : '⌄'),
       editorOpen && h('form', {
         class: 'wb-library-drawer__source-id-form',
         onSubmit: (evt) => this.handleExternalSourceSubmit(source, handler, evt),
@@ -488,6 +489,7 @@ export default class LibrarySideDrawer extends Component {
     let projectedHistory = getProjectionItems(projection, 'history')
     let projectedKifu = getProjectionItems(projection, 'kifu')
     let projectedRecords = getProjectionItems(projection, 'gameRecords')
+    let foxRows = getProjectionSource(projection, 'fox').rows || []
     let currentGames = gameTrees.map((gameTree, index) => {
       let data = getRootData(gameTree)
       return {
@@ -504,6 +506,7 @@ export default class LibrarySideDrawer extends Component {
       ...projectedHistory,
       ...projectedKifu,
       ...projectedRecords,
+      ...(Array.isArray(foxRows) ? foxRows : []),
       ...currentGames,
       ...savedGames,
     ]
@@ -639,7 +642,9 @@ export default class LibrarySideDrawer extends Component {
       ...(Array.isArray(oneOhOneRows) ? oneOhOneRows : []),
     ]
     let problemItems = projectedProblems.length > 0 ? projectedProblems : inboxProblems
-    let sourceRows = this.renderProjectedSourceRows()
+    let sourceRows = this.renderProjectedSourceRows(['oneOhOne'], {
+      renderRows: false,
+    })
     let librarySummary = summary || {dueCount: 0, inboxCount: problemItems.length, recentPunishmentCount: 0}
 
     if ((loading || summary == null) && problemItems.length === 0 && !sourceRows) {
@@ -706,10 +711,11 @@ export default class LibrarySideDrawer extends Component {
     )
   }
 
-  renderProjectedSourceRows() {
+  renderProjectedSourceRows(sourceIds = ['oneOhOne'], options = {}) {
     let projection = this.getLibraryProjection()
     let {onOpenLibraryTask = () => {}, onStartProblem = () => {}} = this.props
-    let sources = ['oneOhOne', 'fox']
+    let {renderRows = true} = options
+    let sources = sourceIds
       .map((source) => ({
         source,
         label: externalSourceLabels[source],
@@ -718,7 +724,7 @@ export default class LibrarySideDrawer extends Component {
       .filter(({state}) =>
         state.message ||
         state.status ||
-        (Array.isArray(state.rows) && state.rows.length > 0),
+        (renderRows && Array.isArray(state.rows) && state.rows.length > 0),
       )
 
     if (sources.length === 0) return null
@@ -733,7 +739,7 @@ export default class LibrarySideDrawer extends Component {
           state.message && !state.status && h('div', {
             class: 'wb-library-drawer__projection-message',
           }, state.message),
-          Array.isArray(state.rows) && state.rows.length > 0 &&
+          renderRows && Array.isArray(state.rows) && state.rows.length > 0 &&
             h('ol', {class: 'wb-library-drawer__list'},
               state.rows.map((item, index) =>
                 h('li', {
@@ -804,18 +810,15 @@ export default class LibrarySideDrawer extends Component {
             onClick: () => onSwitch('problems'),
           }, '错题库'),
         ),
-        !isProblemLibrary && h('div', {class: 'wb-library-drawer__sources'},
+        h('div', {class: 'wb-library-drawer__sources'},
           this.renderExternalSourceButton(
-            'fox',
-            'library-source-fox',
-            this.getExternalSourceState('fox', librarySourceStates),
-            onOpenFoxGames,
-          ),
-          this.renderExternalSourceButton(
-            'oneOhOne',
-            'library-source-101',
-            this.getExternalSourceState('oneOhOne', librarySourceStates),
-            onOpenOneOhOneWeiqi,
+            isProblemLibrary ? 'oneOhOne' : 'fox',
+            isProblemLibrary ? 'library-source-101' : 'library-source-fox',
+            this.getExternalSourceState(
+              isProblemLibrary ? 'oneOhOne' : 'fox',
+              librarySourceStates,
+            ),
+            isProblemLibrary ? onOpenOneOhOneWeiqi : onOpenFoxGames,
           ),
         ),
         activeType === 'problems'

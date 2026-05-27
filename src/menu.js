@@ -940,13 +940,14 @@ exports.get = function (props = {}) {
 
     appMenu.push(...items.slice(0, 2))
 
-    // Remove original 'Preferences' and 'Quit' menu items
-
     let fileMenu = findMenuItem('file')
-    let preferenceItem = fileMenu.submenu.splice(
-      fileMenu.submenu.length - 4,
-      4,
-    )[1]
+    let preferenceItem = {
+      ...fileMenu.submenu[fileMenu.submenu.length - 3],
+    }
+
+    // Remove original separator + Quit only; keep Preferences visible in File.
+
+    fileMenu.submenu.splice(fileMenu.submenu.length - 2, 2)
 
     appMenu.push(
       {type: 'separator'},

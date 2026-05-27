@@ -741,7 +741,7 @@ describe('Workbench six-screen projection anti-fake-green', function () {
       'Sourced analysis note must not render fixed date')
   })
 
-  it('S6P-T06: projects library history, kifu, records, 101/Fox rows, and sync states from source props without library mode', async function () {
+  it('S6P-T06: projects library history, kifu, records, split 101/Fox rows, and sync states from source props without library mode', async function () {
     const gameTrees = [{
       root: {id: 'root_s6p', data: {GN: [SENTINELS.libraryHistory], PB: ['S6P Black'], PW: ['S6P White'], DT: ['2026-05-26']}},
       get(id) {
@@ -789,6 +789,8 @@ describe('Workbench six-screen projection anti-fake-green', function () {
     text = await harness.renderText()
     assertTextIncludes(text, SENTINELS.libraryKifu,
       'Library kifu tab must come from repository/container projection')
+    assertTextIncludes(text, SENTINELS.libraryFox,
+      'Fox game rows must stay in the kifu library projection')
     assertTextIncludes(text, SENTINELS.libraryLoading,
       'Library loading affordance must come from explicit sync/source state')
 
@@ -801,14 +803,14 @@ describe('Workbench six-screen projection anti-fake-green', function () {
     text = await harness.renderText()
     assertTextIncludes(text, SENTINELS.library101,
       '101 wrong-problem rows must come from sync/repository projection')
-    assertTextIncludes(text, SENTINELS.libraryFox,
-      'Fox game rows must come from sync/repository projection')
     assertTextIncludes(text, SENTINELS.librarySyncing,
       'Syncing affordance must come from explicit sync source state')
-    assertTextIncludes(text, SENTINELS.libraryError,
-      'Error affordance must come from explicit sync source state')
     assertTextIncludes(text, SENTINELS.libraryEmpty,
       'Empty affordance must come from explicit empty source state')
+    assertTextExcludes(text, SENTINELS.libraryFox,
+      'Problem library must not render Fox game rows')
+    assertTextExcludes(text, SENTINELS.libraryError,
+      'Problem library must not render Fox error text as problem-library copy')
     assertTextExcludes(text, '暂无错题',
       'Sourced 101/problem library state must not render static empty copy')
   })

@@ -136,6 +136,42 @@ describe('LibrarySideDrawer golden path row routing', () => {
     assert.strictEqual(sourceButton.getAttribute('title'), '野狐账号不可用')
   })
 
+  it('renders Fox only in the kifu library and 101 only in the problem library', () => {
+    const {container: kifuContainer} = renderToDom(
+      h(LibrarySideDrawer, {
+        open: true,
+        type: 'kifu',
+      }),
+    )
+
+    assert.ok(
+      kifuContainer.querySelector('[data-testid="library-source-fox"]'),
+      'Kifu library should render the Fox source button',
+    )
+    assert.strictEqual(
+      kifuContainer.querySelector('[data-testid="library-source-101"]'),
+      null,
+      'Kifu library should not render the 101 source button',
+    )
+
+    const {container: problemContainer} = renderToDom(
+      h(LibrarySideDrawer, {
+        open: true,
+        type: 'problems',
+      }),
+    )
+
+    assert.ok(
+      problemContainer.querySelector('[data-testid="library-source-101"]'),
+      'Problem library should render the 101 source button',
+    )
+    assert.strictEqual(
+      problemContainer.querySelector('[data-testid="library-source-fox"]'),
+      null,
+      'Problem library should not render the Fox source button',
+    )
+  })
+
   it('opens a Fox id input and submits the id to the source handler', async () => {
     const submitted = []
     const {container, fireEvent} = renderToDom(
@@ -146,11 +182,20 @@ describe('LibrarySideDrawer golden path row routing', () => {
       }),
     )
 
-    fireEvent.click(container.querySelector('[data-testid="library-source-fox-id-toggle"]'))
+    const toggle = container.querySelector('[data-testid="library-source-fox-id-toggle"]')
+    assert.strictEqual(
+      container.querySelector('[data-testid="library-source-fox-id-input"]'),
+      null,
+      'Fox id input should be collapsed by default',
+    )
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'false')
+
+    fireEvent.click(toggle)
     await Promise.resolve()
 
     const input = container.querySelector('[data-testid="library-source-fox-id-input"]')
     assert.ok(input, 'Fox id input should appear after clicking the side button')
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'true')
     input.value = 'fox_game_42'
 
     const form = container.querySelector('.wb-library-drawer__source-id-form')
@@ -166,16 +211,25 @@ describe('LibrarySideDrawer golden path row routing', () => {
     const {container, fireEvent} = renderToDom(
       h(LibrarySideDrawer, {
         open: true,
-        type: 'kifu',
+        type: 'problems',
         onOpenOneOhOneWeiqi: async (problemId) => submitted.push(problemId),
       }),
     )
 
-    fireEvent.click(container.querySelector('[data-testid="library-source-101-id-toggle"]'))
+    const toggle = container.querySelector('[data-testid="library-source-101-id-toggle"]')
+    assert.strictEqual(
+      container.querySelector('[data-testid="library-source-101-id-input"]'),
+      null,
+      '101 id input should be collapsed by default',
+    )
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'false')
+
+    fireEvent.click(toggle)
     await Promise.resolve()
 
     const input = container.querySelector('[data-testid="library-source-101-id-input"]')
     assert.ok(input, '101 id input should appear after clicking the side button')
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'true')
     input.value = '101_problem_9'
 
     const form = container.querySelector('.wb-library-drawer__source-id-form')
