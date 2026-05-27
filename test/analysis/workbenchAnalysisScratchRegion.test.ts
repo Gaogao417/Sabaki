@@ -49,6 +49,12 @@ const REGION_PATH = path.resolve(
 )
 const ANALYSIS_INDEX_PATH = path.resolve(process.cwd(), 'src/modules/analysis/index.ts')
 const SCRATCH_ANALYSIS_PATH = path.resolve(process.cwd(), 'src/modules/analysis/scratchAnalysis.ts')
+const EXPECTED_REGION_TYPE_EXPORTS = [
+  'WorkbenchAnalysisScratchAdapter',
+  'WorkbenchAnalysisScratchRegion',
+  'WorkbenchAnalysisScratchResultInput',
+  'WorkbenchAnalysisScratchTarget',
+]
 
 type ScratchRegionTarget = {
   kind: 'scratch'
@@ -98,6 +104,27 @@ type ScratchRegionModule = {
 
 type ExtendedEditWorkspace = EditWorkspaceAnalysisState & {
   scratchTarget?: ScratchRegionTarget
+}
+
+function assertExportsValue(source: string, exportName: string, label: string): void {
+  assert.match(
+    source,
+    new RegExp(`export\\s*\\{[\\s\\S]*\\b${exportName}\\b[\\s\\S]*\\}`),
+    `${label} must re-export ${exportName}`,
+  )
+}
+
+function assertExportsType(source: string, exportName: string, label: string): void {
+  const declarationPattern = new RegExp(
+    `export\\s+(?:type|interface)\\s+${exportName}\\b`,
+  )
+  const reexportPattern = new RegExp(
+    `export\\s+type\\s*\\{[\\s\\S]*\\b${exportName}\\b[\\s\\S]*\\}`,
+  )
+  assert.ok(
+    declarationPattern.test(source) || reexportPattern.test(source),
+    `${label} must export typed contract ${exportName}`,
+  )
 }
 
 function clone<T>(value: T): T {
@@ -212,6 +239,43 @@ function createScratchAnalysisHarness(input?: {
   } satisfies ScratchAnalysisDeps
 
   return {state, patches, runOptions, deps}
+}
+
+function describeForbiddenAnalysisPatches(
+  patches: Array<Record<string, unknown>>,
+): string[] {
+  const editWorkspaceKeys = [
+    'currentAnalysis',
+    'currentOwnership',
+    'referenceAnalysis',
+    'referenceOwnership',
+  ]
+  const writes: string[] = []
+
+  patches.forEach((patch, index) => {
+    if (
+      Object.prototype.hasOwnProperty.call(patch, 'analysis') &&
+      patch.analysis != null
+    ) {
+      writes.push(`patch[${index}].analysis`)
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(patch, 'analysisTreePosition') &&
+      patch.analysisTreePosition != null
+    ) {
+      writes.push(`patch[${index}].analysisTreePosition`)
+    }
+
+    const editWorkspace = patch.editWorkspace
+    if (editWorkspace == null || typeof editWorkspace !== 'object') return
+
+    for (const key of editWorkspaceKeys) {
+      const value = (editWorkspace as Record<string, unknown>)[key]
+      if (value != null) writes.push(`patch[${index}].editWorkspace.${key}`)
+    }
+  })
+
+  return writes
 }
 
 function makeWorkbenchTab(overrides: Partial<WorkbenchTab> = {}): WorkbenchTab {
@@ -520,11 +584,15 @@ describe('workbench analysis scratch region contract', () => {
         /createWorkbenchAnalysisScratchRegion/,
         'SCR-T01: scratch region module must expose a production factory',
       )
-      assert.match(
+      assertExportsValue(
         indexSource,
-        /workbenchAnalysisScratchRegion/,
-        'SCR-T01: src/modules/analysis/index.ts must re-export the scratch region owner and port types',
+        'createWorkbenchAnalysisScratchRegion',
+        'SCR-T01: src/modules/analysis/index.ts',
       )
+      for (const exportName of EXPECTED_REGION_TYPE_EXPORTS) {
+        assertExportsType(regionSource, exportName, 'SCR-T01: scratch region module')
+        assertExportsType(indexSource, exportName, 'SCR-T01: src/modules/analysis/index.ts')
+      }
 
       const mod = await loadScratchRegionModule()
       assert.strictEqual(typeof mod.createWorkbenchAnalysisScratchRegion, 'function')
@@ -584,6 +652,21 @@ describe('workbench analysis scratch region contract', () => {
       assert.strictEqual(calls.createOrStampWorkspace.length, 1)
       assert.strictEqual(calls.scheduleScratchAnalysis.length, 1)
       assert.deepStrictEqual(
+        calls.createOrStampWorkspace[0].target,
+        active,
+        'SCR-T02: createOrStampWorkspace must receive the active target',
+      )
+      assert.deepStrictEqual(
+        calls.createOrStampWorkspace[0].transition,
+        clone(input),
+        'SCR-T02: createOrStampWorkspace must receive the upstream enter transition object',
+      )
+      assert.deepStrictEqual(
+        calls.scheduleScratchAnalysis[0].target,
+        active,
+        'SCR-T02: scheduleScratchAnalysis must receive the active target',
+      )
+      assert.deepStrictEqual(
         input.afterTab,
         afterTabBefore,
         'SCR-T02: child region must not mutate WorkbenchTab parent state',
@@ -599,10 +682,22 @@ describe('workbench analysis scratch region contract', () => {
       await region.enterAnalysis(enterInput)
       const oldTarget = region.getActiveTarget(enterInput.tabId)
       assert.ok(oldTarget, 'SCR-T03 setup: active target should exist after enter')
+      const expectedOldTarget = clone(oldTarget)
 
-      await region.exitAnalysis(makeExitInput(enterInput.afterTab))
+      const exitInput = makeExitInput(enterInput.afterTab)
+      await region.exitAnalysis(exitInput)
 
       assert.strictEqual(calls.clearWorkspace.length, 1)
+      assert.deepStrictEqual(
+        calls.clearWorkspace[0].target,
+        expectedOldTarget,
+        'SCR-T03: clearWorkspace must receive the old active target',
+      )
+      assert.deepStrictEqual(
+        calls.clearWorkspace[0].transition,
+        clone(exitInput),
+        'SCR-T03: clearWorkspace must receive the upstream exit transition object',
+      )
       const activeAfterExit = region.getActiveTarget(enterInput.tabId)
       assert.ok(
         activeAfterExit == null || activeAfterExit.status === 'inactive',
@@ -610,7 +705,7 @@ describe('workbench analysis scratch region contract', () => {
       )
 
       const accepted = region.applyScratchAnalysisResult({
-        target: oldTarget,
+        target: expectedOldTarget,
         analysis: makeAnalysis('late-old-target'),
         final: true,
       })
@@ -710,17 +805,21 @@ describe('workbench analysis scratch region contract', () => {
       })
       const staleAnalysis = makeAnalysis('stale-old-target')
       let capturedOptions: RunBoardAnalysisOptions | null = null
+      let stalePatchStart = -1
+      let harness: ReturnType<typeof createScratchAnalysisHarness> | null = null
       let stateRef: ReturnType<typeof createScratchAnalysisHarness>['state'] | null = null
 
       const runBoardAnalysis: RunBoardAnalysis = async (options) => {
         capturedOptions = options
+        assert.ok(harness, 'test setup requires patch harness')
         assert.ok(stateRef?.editWorkspace, 'test setup requires editWorkspace')
         stateRef.editWorkspace = makeWorkspace({scratchTarget: newTarget})
+        stalePatchStart = harness.patches.length
         options.onAnalysisUpdate?.(staleAnalysis)
         return staleAnalysis
       }
 
-      const harness = createScratchAnalysisHarness({
+      harness = createScratchAnalysisHarness({
         workspace: makeWorkspace({scratchTarget: oldTarget}),
         syncerId: 'syncer-t04',
         runBoardAnalysis,
@@ -730,6 +829,13 @@ describe('workbench analysis scratch region contract', () => {
       await refreshScratchAnalysis(harness.deps, 'current')
 
       assert.ok(capturedOptions, 'SCR-T04 setup: runBoardAnalysis should be invoked')
+      assert.ok(stalePatchStart >= 0, 'SCR-T04 setup: stale patch boundary should be captured')
+      const stalePatches = harness.patches.slice(stalePatchStart)
+      assert.deepStrictEqual(
+        describeForbiddenAnalysisPatches(stalePatches),
+        [],
+        'SCR-T04/SCR-T05B: stale update/final must not write editWorkspace or global analysis result fields',
+      )
       assert.strictEqual(
         harness.state.editWorkspace?.scratchTarget?.workspaceId,
         newTarget.workspaceId,
@@ -743,6 +849,11 @@ describe('workbench analysis scratch region contract', () => {
       assert.strictEqual(harness.state.analysis, null)
       assert.strictEqual(harness.state.analysisTreePosition, null)
       assert.deepStrictEqual(harness.state.gameTrees, [{id: 'source-tree'}])
+      assert.deepStrictEqual(
+        describeForbiddenAnalysisPatches(stalePatches),
+        [],
+        'SCR-T04/SCR-T05B: stale zero-write guarantee must hold after final state assertions',
+      )
     })
   })
 
@@ -790,9 +901,12 @@ describe('workbench analysis scratch region contract', () => {
       }
 
       const forbiddenPatterns: Array<[RegExp, string]> = [
-        [/\bupdateAttempt\b|\bAttempt\.userLine\b|\bresult:\s*|\bstatus:\s*/, 'Attempt fact write'],
+        [
+          /\b(?:createAttempt|updateAttempt)\b|\bAttempt\.userLine\b|\b(?:attempt|trainingAttempt)\.(?:userLine|result|status)\s*=|\b(?:attempt|trainingAttempt)\s*:\s*\{[^}]*\b(?:userLine|result|status)\s*:/i,
+          'Attempt fact write',
+        ],
         [/\bcreateProblem\b|\bupdateProblem\b|\bupsertReviewSchedule\b|\brepository\./, 'repository/review write'],
-        [/\bdocumentStore\b|\bsetState\(\s*\{\s*gameTrees\s*:|\bsetState\(\s*\{\s*treePosition\s*:|\bsetCurrentTreePosition\b/, 'SGF tree/history/current-node write'],
+        [/\bdocumentStore\b|\bsetState\(\s*\{\s*gameTrees\s*:|\bsetState\(\s*\{\s*treePosition\s*:|\bsetCurrentTreePosition\b|\bhistory\s*:|\bcurrentNode\b/, 'SGF tree/history/current-node write'],
         [/\bsetState\(\s*\{\s*analysis\s*:/, 'global analysis write'],
         [/\bSBKV\b|\bSBKS\b/, 'SGF analysis property write'],
       ]
