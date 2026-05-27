@@ -12,8 +12,8 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 
 - [x] setup.docs: Update `AGENTS.md` with Workbench state-machine implementation principles — role: main session — commit: b4cebd31
 - [x] workflow.classify: Classify request as business/state/architecture workflow — role: business-contract-workflow — commit: b67fd4b7
-- [ ] phase-intake-slice-plan: Produce slice plan with explicit serial/parallel branches — role: phase-intake-slice-planner — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/slice-plan.md`
-- [ ] step1.contract: Contract sketch for overlay child-region transition boundary — role: contract-designer — depends_on: phase-intake-slice-plan
+- [x] phase-intake-slice-plan: Produce slice plan with explicit serial/parallel branches — role: phase-intake-slice-planner — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/slice-plan.md` — commit: 3ce058c2
+- [x] step1.contract: Contract sketch for overlay child-region transition boundary — role: contract-designer — depends_on: phase-intake-slice-plan — contract: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/test-contract-v0.1.md` — commit: c413c4ab
 - [ ] step1.contract-audit: Audit overlay child-region contract — role: contract-auditor — depends_on: step1.contract
 - [ ] step1.tests: Write focused overlay child-region and flow outcome tests — role: test-writer — depends_on: step1.contract-audit
 - [ ] step1.test-audit: Audit tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step1.tests
@@ -24,4 +24,3 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 
 - Full parent/child region migration is `SPLIT_REQUIRED`; do not combine overlay, runtime, scratch, engine, and resolver diagnostics in one implementation step.
 - Per AGENTS, each role/skill step must commit only its owned changes before the next step.
-
