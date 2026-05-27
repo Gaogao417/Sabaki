@@ -10,7 +10,7 @@ Scope: correct the Workbench play/problem tab entrypoint API after the AI wiring
 - [x] step2 test-writer: add focused tests for semantic play/problem entrypoints and legacy adapters. commit: pending
 - [x] step3 implementation-agent: implement tab service API cleanup and update production callers. commit: pending
 - [x] step4 verification: run focused tests, type/build checks, and relevant e2e smoke. commit: pending
-- [ ] step5 architecture-reviewer: review entrypoint boundaries and state loop. commit: pending
+- [x] step5 architecture-reviewer: review entrypoint boundaries and state loop. commit: pending
 
 ## Result Log
 
@@ -19,6 +19,7 @@ Scope: correct the Workbench play/problem tab entrypoint API after the AI wiring
 - step3: removed public `openTask`, added semantic play/problem APIs, renamed legacy adapters, and migrated production callers plus stale test harnesses.
 - step3 retry: migrated Playwright harness instrumentation from `openTask` to `openPlayTab`/`openProblemTab`.
 - step4: verified `npm test` (1914 passing), `npx webpack --mode development`, and Playwright smoke/workbench-command/new-game-dialog (19 passing).
+- step5: wrote architecture review with PASS verdict and event-loop traces.
 
 ## Retries
 
