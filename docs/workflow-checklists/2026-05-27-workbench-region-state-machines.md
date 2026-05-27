@@ -23,7 +23,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step2.1.contract-audit: Audit runtime companion child-region contract — role: contract-auditor — depends_on: step2.1.contract — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/contract-audit-v0.2.md` — commit: f3006ef9
 - [x] step2.1.tests: Write focused runtime companion region and flow outcome tests — role: test-writer — depends_on: step2.1.contract-audit — tests: `test/training/workbenchRuntimeRegion.test.ts` — commit: bc721684 — retry2 submitted after test-audit retry REQUEST_CHANGES; expected status: RTM-T05/T06/T07/T08 GREEN; RTM-T01/T02/T03/T04/T09/T10 RED until production runtime-region owner is implemented
 - [x] step2.1.test-audit: Audit runtime companion tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.1.tests — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/test-audit-v0.3.md` — commit: 9c6e102e
-- [ ] step2.1.impl: Implement runtime companion child-region cleanup boundary — role: implementation-agent — depends_on: step2.1.test-audit
+- [x] step2.1.impl: Implement runtime companion child-region cleanup boundary — role: implementation-agent — depends_on: step2.1.test-audit — production: `src/modules/training/workbench/workbenchRuntimeRegion.ts`, `src/modules/training/workbench/workbenchFlowService.ts`, `src/modules/training/recall/recallCheckpointService.ts`, `src/modules/training/recall/recallService.ts` — commit: 841bb74a
 - [ ] step2.1.review: Architecture review of runtime companion implementation — role: architecture-reviewer — depends_on: step2.1.impl
 
 ## Notes
@@ -34,6 +34,9 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - Implementation verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 168 tests before production composition retry.
 - Final step1 verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 170 tests; architecture review retry approved.
 - Runtime test-writer verification: `npx mocha --require tsx test/training/workbenchRuntimeRegion.test.ts` passed RTM-T05/T06/T07/T08 and failed as expected on RTM-T01/T02/T03/T04/T09/T10 because runtime-region owner/integration is not implemented yet.
+- Runtime implementation verification: `npx mocha --require tsx test/training/workbenchRuntimeRegion.test.ts test/training/workbenchFlowService.test.js test/training/recallService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 218 tests.
+- Runtime + overlay regression verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchRuntimeRegion.test.ts test/training/workbenchFlowService.test.js test/training/recallService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 232 tests.
+- Full JS suite check: `npm test` passed 1879 tests and failed 6 unrelated existing/parallel wiring checks (`analysisNoMutation.test.js` C20 play/problem/recall snapshot rejection, `command-map-coverage.test.js` editbar edit-position affordance, `w5-analysis-mode-wiring.test.js` returnFromAnalysis reason payload assertions).
 
 ## Retries
 
