@@ -453,8 +453,8 @@ describe('W8-P4 Dashboard Wiring', function () {
     // D-T01-guard: handler does not call workbenchTabService directly
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container.handleOpenDueReviewItem
-    // Primary Assertion: tabService.openTask NOT called (reviewService handles it internally)
-    it('handleOpenDueReviewItem does NOT call tabService.openTask directly', async function () {
+    // Primary Assertion: semantic tab entrypoints NOT called (reviewService handles it internally)
+    it('handleOpenDueReviewItem does NOT call tabService play/problem entrypoints directly', async function () {
       const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
 
@@ -464,10 +464,12 @@ describe('W8-P4 Dashboard Wiring', function () {
 
       await handler('sched_42')
 
-      // Container must NOT call tabService.openTask for this handler --
+      // Container must NOT open a tab directly for this handler --
       // that is reviewService's internal responsibility (Contract D-T01 rationale)
-      assert.strictEqual(harness.tabService.calls.openTask.length, 0,
-        'Container must NOT call tabService.openTask directly for openDueReviewItem -- Contract D-T01')
+      assert.strictEqual(harness.tabService.calls.openPlayTab.length, 0,
+        'Container must NOT call tabService.openPlayTab directly for openDueReviewItem -- Contract D-T01')
+      assert.strictEqual(harness.tabService.calls.openProblemTab.length, 0,
+        'Container must NOT call tabService.openProblemTab directly for openDueReviewItem -- Contract D-T01')
     })
   })
 
@@ -516,14 +518,14 @@ describe('W8-P4 Dashboard Wiring', function () {
 
   describe('D-T02: CONTAINER_DELEGATION - openInboxTask', function () {
 
-    // D-T02: Container.handleOpenInboxTask delegates to workbenchTabService.openTask
+    // D-T02: Container.handleOpenInboxTask delegates to workbenchTabService.openPlayTab
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container.handleOpenInboxTask
     // Real Dependencies: Container render
     // Mocked Dependencies: tabService (spy)
     // Forbidden Mocks: workbenchStore
-    // Primary Assertion: tabService.openTask called with {taskId}
-    it('handleOpenInboxTask delegates to tabService.openTask with taskId', async function () {
+    // Primary Assertion: tabService.openPlayTab called with {taskId}
+    it('handleOpenInboxTask delegates to tabService.openPlayTab with taskId', async function () {
       const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
 
@@ -533,10 +535,10 @@ describe('W8-P4 Dashboard Wiring', function () {
 
       await handler('task_inbox_1')
 
-      assert.strictEqual(harness.tabService.calls.openTask.length, 1,
-        'tabService.openTask must be called exactly once -- Contract D-T02')
-      assert.strictEqual(harness.tabService.calls.openTask[0].taskId, 'task_inbox_1',
-        'tabService.openTask must be called with taskId="task_inbox_1" -- Contract D-T02')
+      assert.strictEqual(harness.tabService.calls.openPlayTab.length, 1,
+        'tabService.openPlayTab must be called exactly once -- Contract D-T02')
+      assert.strictEqual(harness.tabService.calls.openPlayTab[0].taskId, 'task_inbox_1',
+        'tabService.openPlayTab must be called with taskId="task_inbox_1" -- Contract D-T02')
     })
   })
 
@@ -581,8 +583,10 @@ describe('W8-P4 Dashboard Wiring', function () {
       await handler('att_incomplete_1')
 
       // Container must NOT call repository.loadAttempt directly -- Arch v0.5 SS1.3
-      assert.strictEqual(harness.tabService.calls.openTask.length, 0,
-        'Container must NOT call tabService.openTask directly for incomplete attempt -- Contract D-T03, Arch v0.5 SS1.3')
+      assert.strictEqual(harness.tabService.calls.openPlayTab.length, 0,
+        'Container must NOT call tabService.openPlayTab directly for incomplete attempt -- Contract D-T03, Arch v0.5 SS1.3')
+      assert.strictEqual(harness.tabService.calls.openProblemTab.length, 0,
+        'Container must NOT call tabService.openProblemTab directly for incomplete attempt -- Contract D-T03, Arch v0.5 SS1.3')
     })
   })
 
@@ -628,8 +632,10 @@ describe('W8-P4 Dashboard Wiring', function () {
       await handler('rs_incomplete_1')
 
       // Container must NOT call repository.loadRecallSession directly -- Arch v0.5 SS1.3
-      assert.strictEqual(harness.tabService.calls.openTask.length, 0,
-        'Container must NOT call tabService.openTask directly for recall session -- Contract D-T04, Arch v0.5 SS1.3')
+      assert.strictEqual(harness.tabService.calls.openPlayTab.length, 0,
+        'Container must NOT call tabService.openPlayTab directly for recall session -- Contract D-T04, Arch v0.5 SS1.3')
+      assert.strictEqual(harness.tabService.calls.openProblemTab.length, 0,
+        'Container must NOT call tabService.openProblemTab directly for recall session -- Contract D-T04, Arch v0.5 SS1.3')
     })
   })
 
@@ -639,15 +645,14 @@ describe('W8-P4 Dashboard Wiring', function () {
 
   describe('D-T05: CONTAINER_DELEGATION - openBadMoveTask', function () {
 
-    // D-T05: Container.handleOpenBadMoveTask delegates to workbenchTabService.openTask
-    // with mode defaulting to 'problem'.
+    // D-T05: Container.handleOpenBadMoveTask delegates to workbenchTabService.openProblemTab.
     // Layer: CONTAINER_DELEGATION
     // Production Subject: Container.handleOpenBadMoveTask
     // Real Dependencies: Container render
     // Mocked Dependencies: tabService (spy)
     // Forbidden Mocks: workbenchStore
-    // Primary Assertion: tabService.openTask called with {taskId, mode inferred as 'problem'}
-    it('handleOpenBadMoveTask delegates to tabService.openTask with mode problem', async function () {
+    // Primary Assertion: tabService.openProblemTab called with {taskId}
+    it('handleOpenBadMoveTask delegates to tabService.openProblemTab', async function () {
       const harness = createDashboardDelegationHarness()
       const shellProps = harness.getShellProps()
 
@@ -657,14 +662,11 @@ describe('W8-P4 Dashboard Wiring', function () {
 
       await handler('task_badmove_1')
 
-      assert.strictEqual(harness.tabService.calls.openTask.length, 1,
-        'tabService.openTask must be called exactly once -- Contract D-T05')
-      const openTaskCall = harness.tabService.calls.openTask[0]
-      assert.strictEqual(openTaskCall.taskId, 'task_badmove_1',
-        'tabService.openTask must be called with the bad-move task id -- Contract D-T05')
-      // Mode defaults to 'problem' for bad-move derived tasks (Contract Section 6.5)
-      assert.strictEqual(openTaskCall.mode, 'problem',
-        'tabService.openTask must specify mode="problem" for bad-move tasks -- Contract D-T05')
+      assert.strictEqual(harness.tabService.calls.openProblemTab.length, 1,
+        'tabService.openProblemTab must be called exactly once -- Contract D-T05')
+      const openProblemCall = harness.tabService.calls.openProblemTab[0]
+      assert.strictEqual(openProblemCall.taskId, 'task_badmove_1',
+        'tabService.openProblemTab must be called with the bad-move task id -- Contract D-T05')
     })
   })
 
@@ -980,15 +982,15 @@ describe('W8-P4 Dashboard Wiring', function () {
     // D-T08: Container dashboard handlers do not call legacy tab APIs
     // Layer: ARCHITECTURE_BOUNDARY
     // Production Subject: Container source code
-    // Primary Assertion: No calls to openProblemTab, openGameTab, sabaki.startReviewSession
-    it('Container must not call openProblemTab', function () {
-      assert.ok(!source.includes('openProblemTab'),
-        'Container must not call openProblemTab -- Contract D-T08, Arch v0.5 SS5.2')
+    // Primary Assertion: No calls to legacy tab adapters or sabaki.startReviewSession
+    it('Container must not call legacy problem tab adapter', function () {
+      assert.ok(!source.includes('openLegacyProblemTab'),
+        'Container must not call openLegacyProblemTab -- Contract D-T08')
     })
 
-    it('Container must not call openGameTab', function () {
-      assert.ok(!source.includes('openGameTab'),
-        'Container must not call openGameTab -- Contract D-T08, Arch v0.5 SS5.2')
+    it('Container must not call legacy game tab adapter', function () {
+      assert.ok(!source.includes('openLegacyGameTab'),
+        'Container must not call openLegacyGameTab -- Contract D-T08')
     })
 
     it('Container must not call sabaki.startReviewSession', function () {

@@ -613,18 +613,18 @@ describe('W6 Review Queue Wiring', function () {
       })
     })
 
-    // --- W6-T12: openDueItem does not use openProblemTab ---
+    // --- W6-T12: openDueItem does not use legacy problem id adapters ---
 
-    describe('W6-T12: openDueItem does not call openProblemTab', function () {
-      it('reviewService.openDueItem source does not call openProblemTab', function () {
+    describe('W6-T12: openDueItem does not call legacy problem adapter', function () {
+      it('reviewService.openDueItem source does not call openLegacyProblemTab', function () {
         const servicePath = path.resolve(
           __dirname, '../../../src/modules/training/review/reviewService.ts',
         )
         const source = fs.readFileSync(servicePath, 'utf-8')
 
         assert.ok(
-          !source.includes('openProblemTab'),
-          'reviewService.openDueItem must NOT call openProblemTab -- Arch v0.5 14: use openTask',
+          !source.includes('openLegacyProblemTab'),
+          'reviewService.openDueItem must NOT call openLegacyProblemTab',
         )
       })
     })

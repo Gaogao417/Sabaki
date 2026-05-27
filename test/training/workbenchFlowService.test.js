@@ -178,6 +178,15 @@ function createMockDeps(overrides = {}) {
       ...overrides.snapshotService,
     },
     tabService: {
+      openProblemTab: async opts => ({
+        id: 'tab_snap_1',
+        taskId: 'task_snap_1',
+        mode: 'problem',
+        parentTabId: opts?.parentTabId,
+        childTabIds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
       openTask: async opts => ({
         id: 'tab_snap_1',
         taskId: 'task_snap_1',
@@ -257,6 +266,10 @@ function createSnapshotGuardDeps(overrides = {}) {
       ...overrides.snapshotService,
     },
     tabService: {
+      async openProblemTab(opts) {
+        persistenceCalls.openTask.push(clone(opts))
+        throw new Error('snapshot guard must not open a child tab before Analysis')
+      },
       async openTask(opts) {
         persistenceCalls.openTask.push(clone(opts))
         throw new Error('snapshot guard must not open a child tab before Analysis')
@@ -640,6 +653,7 @@ describe('workbenchFlowService', () => {
           },
         },
         tabService: {
+          async openProblemTab() { throw new Error('not used') },
           async openTask() { throw new Error('not used') },
           closeTab() {},
           switchTab() {},
@@ -729,6 +743,15 @@ describe('workbenchFlowService', () => {
           }),
         },
         tabService: {
+          openProblemTab: async opts => ({
+            id: 'tab_snap_1',
+            taskId: 'task_snap_1',
+            mode: 'problem',
+            parentTabId: opts?.parentTabId,
+            childTabIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }),
           openTask: async opts => ({
             id: 'tab_snap_1',
             taskId: 'task_snap_1',
@@ -2103,6 +2126,15 @@ describe('workbenchFlowService', () => {
           ...overrides.snapshotService,
         },
         tabService: {
+          openProblemTab: async opts => ({
+            id: 'tab_snap_1',
+            taskId: createdTasks.length > 0 ? createdTasks[createdTasks.length - 1].id : 'task_snap_1',
+            mode: 'problem',
+            parentTabId: opts?.parentTabId,
+            childTabIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }),
           openTask: async opts => ({
             id: 'tab_snap_1',
             taskId: createdTasks.length > 0 ? createdTasks[createdTasks.length - 1].id : 'task_snap_1',

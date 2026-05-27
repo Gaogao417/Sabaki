@@ -161,11 +161,21 @@ function seedSchedule(repo, overrides = {}) {
 
 function createFakeTabService() {
   const openedTabs = []
-  const calls = {openTask: 0}
+  const calls = {openPlayTab: 0, openProblemTab: 0, openTask: 0}
 
   return {
     openedTabs,
     calls,
+    async openPlayTab({taskId}) {
+      calls.openPlayTab++
+      openedTabs.push({taskId, mode: 'play'})
+      return {taskId, mode: 'play'}
+    },
+    async openProblemTab({taskId}) {
+      calls.openProblemTab++
+      openedTabs.push({taskId, mode: 'problem'})
+      return {taskId, mode: 'problem'}
+    },
     async openTask({taskId, mode}) {
       calls.openTask++
       openedTabs.push({taskId, mode})
@@ -240,11 +250,13 @@ function createSpyReviewService() {
 }
 
 function createSpyTabService() {
-  const calls = {switchTab: [], closeTab: [], openTask: []}
+  const calls = {switchTab: [], closeTab: [], openPlayTab: [], openProblemTab: [], openTask: []}
   return {
     calls,
     switchTab(tabId) { calls.switchTab.push({tabId}) },
     async closeTab(tabId) { calls.closeTab.push({tabId}) },
+    async openPlayTab(opts) { calls.openPlayTab.push(opts) },
+    async openProblemTab(opts) { calls.openProblemTab.push(opts) },
     async openTask(opts) { calls.openTask.push(opts) },
   }
 }
@@ -482,8 +494,12 @@ describe('W7-B1: Container Store Write Fix', function () {
 
         await harness.reviewService.startSession()
 
-        assert.strictEqual(harness.tabService.calls.openTask, 1,
-          'openDueItem must call workbenchTabService.openTask exactly once')
+        assert.strictEqual(
+          harness.tabService.calls.openPlayTab + harness.tabService.calls.openProblemTab,
+          1,
+          'openDueItem must call one semantic Workbench tab entrypoint')
+        assert.strictEqual(harness.tabService.calls.openTask, 0,
+          'openDueItem must not call workbenchTabService.openTask')
         assert.strictEqual(harness.tabService.openedTabs[0].taskId, 'task_a',
           'openDueItem must open the first schedule\'s task')
       })

@@ -105,6 +105,15 @@ function createMockDeps(overrides = {}) {
       ...overrides.snapshotService,
     },
     tabService: {
+      openProblemTab: async opts => ({
+        id: 'tab_snap_1',
+        taskId: 'task_snap_1',
+        mode: 'problem',
+        parentTabId: opts?.parentTabId,
+        childTabIds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
       openTask: async opts => ({
         id: 'tab_snap_1',
         taskId: 'task_snap_1',

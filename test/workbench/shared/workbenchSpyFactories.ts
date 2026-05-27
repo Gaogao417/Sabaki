@@ -1,8 +1,9 @@
 import type { SnapshotService, ProblemSnapshotInput } from '../../../src/modules/training/analysis/snapshotService'
 import type { WorkbenchFlowService } from '../../../src/modules/training/workbench/workbenchFlowService'
 import type {
+  OpenPlayTabOptions,
+  OpenProblemTaskTabOptions,
   OpenProblemTabOptions,
-  OpenTaskOptions,
   WorkbenchTabService,
 } from '../../../src/modules/training/workbench/workbenchTabService'
 import type { ReviewService, ReviewServiceDeps } from '../../../src/modules/training/review/reviewService'
@@ -46,9 +47,10 @@ export type SpyWorkbenchFlowService = WorkbenchFlowService & {
 }
 
 export type SpyTabServiceCalls = {
-  openGameTab: Array<Call<{gameId: string}>>
-  openProblemTab: Array<Call<{problemId: string; options?: OpenProblemTabOptions}>>
-  openTask: OpenTaskOptions[]
+  openPlayTab: OpenPlayTabOptions[]
+  openProblemTab: OpenProblemTaskTabOptions[]
+  openLegacyGameTab: Array<Call<{gameId: string}>>
+  openLegacyProblemTab: Array<Call<{problemId: string; options?: OpenProblemTabOptions}>>
   openSnapshotProblemTab: Array<Call<{problemId: string; options: {parentTabId: string}}>>
   openAttemptTab: Array<Call<{attemptId: string}>>
   openRecallSessionTab: Array<Call<{sessionId: string}>>
@@ -180,9 +182,10 @@ export function createSpyFlowService(
 
 export function createSpyTabService(): SpyWorkbenchTabService {
   const calls: SpyTabServiceCalls = {
-    openGameTab: [],
+    openPlayTab: [],
     openProblemTab: [],
-    openTask: [],
+    openLegacyGameTab: [],
+    openLegacyProblemTab: [],
     openSnapshotProblemTab: [],
     openAttemptTab: [],
     openRecallSessionTab: [],
@@ -193,31 +196,40 @@ export function createSpyTabService(): SpyWorkbenchTabService {
 
   const service = {
     calls,
-    async openGameTab(gameId: string) {
-      calls.openGameTab.push({gameId})
+    async openPlayTab(opts: OpenPlayTabOptions) {
+      calls.openPlayTab.push(opts)
+      return makeTab({
+        id: `tab_play_${++tabCounter}`,
+        taskId: opts.taskId,
+        mode: 'play',
+        parentTabId: opts.parentTabId,
+        playerConfig: opts.playerConfig,
+      })
+    },
+    async openProblemTab(opts: OpenProblemTaskTabOptions) {
+      calls.openProblemTab.push(opts)
+      return makeTab({
+        id: `tab_problem_${++tabCounter}`,
+        taskId: opts.taskId,
+        mode: 'problem',
+        parentTabId: opts.parentTabId,
+      })
+    },
+    async openLegacyGameTab(gameId: string) {
+      calls.openLegacyGameTab.push({gameId})
       return makeTab({
         id: `tab_game_${++tabCounter}`,
         taskId: gameId,
         mode: 'play',
       })
     },
-    async openProblemTab(problemId: string, options?: OpenProblemTabOptions) {
-      calls.openProblemTab.push({problemId, options})
+    async openLegacyProblemTab(problemId: string, options?: OpenProblemTabOptions) {
+      calls.openLegacyProblemTab.push({problemId, options})
       return makeTab({
-        id: `tab_problem_${++tabCounter}`,
+        id: `tab_legacy_problem_${++tabCounter}`,
         taskId: problemId,
         mode: 'problem',
         parentTabId: options?.parentTabId,
-      })
-    },
-    async openTask(opts: OpenTaskOptions) {
-      calls.openTask.push(opts)
-      return makeTab({
-        id: `tab_new_${++tabCounter}`,
-        taskId: opts.taskId,
-        mode: opts.mode ?? 'problem',
-        parentTabId: opts.parentTabId,
-        playerConfig: opts.playerConfig,
       })
     },
     async openSnapshotProblemTab(problemId: string, options: {parentTabId: string}) {

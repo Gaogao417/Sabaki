@@ -17,7 +17,18 @@ export type OpenProblemTabOptions = {
   legacyCompatibility?: boolean
 }
 
-export type OpenTaskOptions = {
+export type OpenPlayTabOptions = {
+  taskId: string
+  parentTabId?: string
+  playerConfig?: PlayerConfig
+}
+
+export type OpenProblemTaskTabOptions = {
+  taskId: string
+  parentTabId?: string
+}
+
+type OpenTaskInternalOptions = {
   taskId: string
   mode?: WorkbenchMode
   parentTabId?: string
@@ -25,9 +36,10 @@ export type OpenTaskOptions = {
 }
 
 export type WorkbenchTabService = {
-  openGameTab(gameId: string): Promise<WorkbenchTab>
-  openProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab>
-  openTask(opts: OpenTaskOptions): Promise<WorkbenchTab>
+  openPlayTab(opts: OpenPlayTabOptions): Promise<WorkbenchTab>
+  openProblemTab(opts: OpenProblemTaskTabOptions): Promise<WorkbenchTab>
+  openLegacyGameTab(gameId: string): Promise<WorkbenchTab>
+  openLegacyProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab>
   openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab>
   openAttemptTab(attemptId: string): Promise<WorkbenchTab>
   openRecallSessionTab(sessionId: string): Promise<WorkbenchTab>
@@ -95,14 +107,18 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     }
   }
 
-  function createTabForTask(task: TrainingTask, options?: { parentTabId?: string }): WorkbenchTab {
+  function createTabForTask(
+    task: TrainingTask,
+    options?: { parentTabId?: string; mode?: WorkbenchMode; playerConfig?: PlayerConfig },
+  ): WorkbenchTab {
     const now = new Date().toISOString()
     return {
       id: generateId(),
       taskId: task.id,
-      mode: 'play' as WorkbenchMode,
+      mode: options?.mode ?? 'play' as WorkbenchMode,
       childTabIds: [],
       parentTabId: options?.parentTabId,
+      playerConfig: options?.playerConfig,
       createdAt: now,
       updatedAt: now,
     }
@@ -115,7 +131,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     const positionSgf = problem.positionSgf ?? problem.position_sgf ?? ''
     const trees = sgfParser.parse(positionSgf)
     if (!trees || trees.length === 0) {
-      throw new Error(`workbenchTabService.openProblemTab: failed to parse SGF for problem ${problemId}`)
+      throw new Error(`workbenchTabService.openLegacyProblemTab: failed to parse SGF for problem ${problemId}`)
     }
     const tree = trees[0]
 
@@ -125,13 +141,13 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     legacyAdapter.startAnalysisIfEngineReady((tree as { root: { id: string } }).root.id)
   }
 
-  async function openProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab> {
-    logger?.info('tab.openProblemTab', 'Opening problem tab', { problemId, parentTabId: options?.parentTabId, legacyCompatibility: options?.legacyCompatibility })
+  async function openLegacyProblemTab(problemId: string, options?: OpenProblemTabOptions): Promise<WorkbenchTab> {
+    logger?.info('tab.openLegacyProblemTab', 'Opening legacy problem tab', { problemId, parentTabId: options?.parentTabId, legacyCompatibility: options?.legacyCompatibility })
 
     const problem = await repository.getProblem(problemId)
     if (!problem) {
-      logger?.info('tab.openProblemTab.error', 'Problem not found', { problemId })
-      throw new Error(`workbenchTabService.openProblemTab: problem not found (id=${problemId})`)
+      logger?.info('tab.openLegacyProblemTab.error', 'Problem not found', { problemId })
+      throw new Error(`workbenchTabService.openLegacyProblemTab: problem not found (id=${problemId})`)
     }
 
     logger?.info('problem.start', 'Problem started', {
@@ -144,7 +160,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
       if (options?.parentTabId) {
         const parent = workbenchStore.getState().tabs.find(t => t.id === options.parentTabId)
         if (!parent) {
-          throw new Error(`workbenchTabService.openProblemTab: parent tab not found (id=${options.parentTabId})`)
+          throw new Error(`workbenchTabService.openLegacyProblemTab: parent tab not found (id=${options.parentTabId})`)
         }
       }
 
@@ -153,9 +169,8 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
       }
 
       const savedTask = await taskImportService.createTaskFromLegacyProblem({ problemId })
-      const tab = await openTask({
+      const tab = await openProblemTab({
         taskId: savedTask.id,
-        mode: 'problem',
         parentTabId: options?.parentTabId,
       })
       const attempt = attemptService
@@ -185,7 +200,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
         })
       }
 
-      logger?.info('tab.openProblemTab.created', 'Problem task tab created', {
+      logger?.info('tab.openLegacyProblemTab.created', 'Legacy problem task tab created', {
         tabId: tab.id,
         problemId,
         taskId: savedTask.id,
@@ -197,13 +212,13 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
 
     // Create new-system Task + Tab
     const task = createTaskFromProblem(problemId, problem)
-    const tab = createTabForTask(task, options)
+    const tab = createTabForTask(task, {...options, mode: 'problem'})
 
     // Link parent → child
     if (options?.parentTabId) {
       const parent = workbenchStore.getState().tabs.find(t => t.id === options.parentTabId)
       if (!parent) {
-        throw new Error(`workbenchTabService.openProblemTab: parent tab not found (id=${options.parentTabId})`)
+        throw new Error(`workbenchTabService.openLegacyProblemTab: parent tab not found (id=${options.parentTabId})`)
       }
       workbenchStore.updateTab(options.parentTabId, {
         childTabIds: [...parent.childTabIds, tab.id],
@@ -247,18 +262,18 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     workbenchStore.addTab(tab)
     workbenchStore.setActiveTab(tab.id)
 
-    logger?.info('tab.openProblemTab.created', 'Problem tab created', { tabId: tab.id, problemId, taskId: savedTask.id, attemptId: attempt?.id ?? null })
+    logger?.info('tab.openLegacyProblemTab.created', 'Legacy problem tab created', { tabId: tab.id, problemId, taskId: savedTask.id, attemptId: attempt?.id ?? null })
 
     return tab
   }
 
-  async function openGameTab(gameId: string): Promise<WorkbenchTab> {
-    logger?.info('tab.openGameTab', 'Opening game tab', { gameId })
+  async function openLegacyGameTab(gameId: string): Promise<WorkbenchTab> {
+    logger?.info('tab.openLegacyGameTab', 'Opening legacy game tab', { gameId })
 
     const game = await repository.getGame(gameId)
     if (!game) {
-      logger?.info('tab.openGameTab.error', 'Game not found', { gameId })
-      throw new Error(`workbenchTabService.openGameTab: game not found (id=${gameId})`)
+      logger?.info('tab.openLegacyGameTab.error', 'Game not found', { gameId })
+      throw new Error(`workbenchTabService.openLegacyGameTab: game not found (id=${gameId})`)
     }
 
     const task = createTaskFromGame(gameId, game)
@@ -267,18 +282,18 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     workbenchStore.addTab(tab)
     workbenchStore.setActiveTab(tab.id)
 
-    logger?.info('tab.openGameTab.created', 'Game tab created', { tabId: tab.id, gameId, taskId: task.id })
+    logger?.info('tab.openLegacyGameTab.created', 'Legacy game tab created', { tabId: tab.id, gameId, taskId: task.id })
 
     return tab
   }
 
-  async function openTask(opts: OpenTaskOptions): Promise<WorkbenchTab> {
-    logger?.info('tab.openTask', 'Opening task tab', { taskId: opts.taskId, mode: opts.mode, parentTabId: opts.parentTabId })
+  async function openTaskInternal(opts: OpenTaskInternalOptions): Promise<WorkbenchTab> {
+    logger?.info('tab.openTaskInternal', 'Opening task tab', { taskId: opts.taskId, mode: opts.mode, parentTabId: opts.parentTabId })
 
     const task = await repository.loadTask(opts.taskId)
     if (!task) {
-      logger?.info('tab.openTask.error', 'Task not found', { taskId: opts.taskId })
-      throw new Error(`workbenchTabService.openTask: task not found (id=${opts.taskId})`)
+      logger?.info('tab.openTaskInternal.error', 'Task not found', { taskId: opts.taskId })
+      throw new Error(`workbenchTabService.openTaskInternal: task not found (id=${opts.taskId})`)
     }
 
     const mode = opts.mode ?? inferDefaultMode(task)
@@ -286,8 +301,8 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     if (opts.parentTabId) {
       const parent = workbenchStore.getState().tabs.find(t => t.id === opts.parentTabId)
       if (!parent) {
-        logger?.info('tab.openTask.error', 'Parent tab not found', { parentTabId: opts.parentTabId })
-        throw new Error(`workbenchTabService.openTask: parent tab not found (id=${opts.parentTabId})`)
+        logger?.info('tab.openTaskInternal.error', 'Parent tab not found', { parentTabId: opts.parentTabId })
+        throw new Error(`workbenchTabService.openTaskInternal: parent tab not found (id=${opts.parentTabId})`)
       }
     }
 
@@ -313,14 +328,24 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     workbenchStore.addTab(tab)
     workbenchStore.setActiveTab(tab.id)
 
-    logger?.info('tab.openTask.created', 'Task tab created', { tabId: tab.id, taskId: task.id, mode })
+    logger?.info('tab.openTaskInternal.created', 'Task tab created', { tabId: tab.id, taskId: task.id, mode })
 
     return tab
   }
 
+  async function openPlayTab(opts: OpenPlayTabOptions): Promise<WorkbenchTab> {
+    logger?.info('tab.openPlayTab', 'Opening play tab', { taskId: opts.taskId, parentTabId: opts.parentTabId })
+    return openTaskInternal({...opts, mode: 'play'})
+  }
+
+  async function openProblemTab(opts: OpenProblemTaskTabOptions): Promise<WorkbenchTab> {
+    logger?.info('tab.openProblemTab', 'Opening problem tab', { taskId: opts.taskId, parentTabId: opts.parentTabId })
+    return openTaskInternal({...opts, mode: 'problem'})
+  }
+
   async function openSnapshotProblemTab(problemId: string, options: { parentTabId: string }): Promise<WorkbenchTab> {
     logger?.info('tab.openSnapshotProblemTab', 'Opening snapshot problem tab', { problemId, parentTabId: options.parentTabId })
-    const tab = await openProblemTab(problemId, { parentTabId: options.parentTabId })
+    const tab = await openLegacyProblemTab(problemId, { parentTabId: options.parentTabId })
     logger?.info('tab.openSnapshotProblemTab.created', 'Snapshot problem tab created', { tabId: tab.id, problemId })
     return tab
   }
@@ -370,7 +395,7 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     if (!attempt || !attempt.taskId) {
       throw new Error(`workbenchTabService.openAttemptTab: attempt not found or has no taskId (id=${attemptId})`)
     }
-    return openTask({ taskId: attempt.taskId })
+    return openTaskInternal({ taskId: attempt.taskId })
   }
 
   async function openRecallSessionTab(sessionId: string): Promise<WorkbenchTab> {
@@ -379,13 +404,14 @@ export function createWorkbenchTabService(deps: WorkbenchTabServiceDeps): Workbe
     if (!session || !session.taskId) {
       throw new Error(`workbenchTabService.openRecallSessionTab: session not found or has no taskId (id=${sessionId})`)
     }
-    return openTask({ taskId: session.taskId, mode: 'recall' })
+    return openTaskInternal({ taskId: session.taskId, mode: 'recall' })
   }
 
   return {
+    openPlayTab,
     openProblemTab,
-    openGameTab,
-    openTask,
+    openLegacyGameTab,
+    openLegacyProblemTab,
     openSnapshotProblemTab,
     openAttemptTab,
     openRecallSessionTab,

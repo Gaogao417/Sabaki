@@ -102,14 +102,18 @@ function createSpyFlowService() {
 }
 
 function createSpyTabService() {
-  const calls = { switchTab: [], closeTab: [], openTask: [] }
+  const calls = { switchTab: [], closeTab: [], openPlayTab: [], openProblemTab: [] }
   return {
     calls,
     switchTab(tabId) { calls.switchTab.push({ tabId }) },
     async closeTab(tabId) { calls.closeTab.push({ tabId }) },
-    async openTask(opts) {
-      calls.openTask.push(opts)
-      return {id: 'opened_tab_1', ...opts}
+    async openPlayTab(opts) {
+      calls.openPlayTab.push(opts)
+      return {id: 'opened_tab_1', mode: 'play', ...opts}
+    },
+    async openProblemTab(opts) {
+      calls.openProblemTab.push(opts)
+      return {id: 'opened_problem_tab_1', mode: 'problem', ...opts}
     },
   }
 }
@@ -607,12 +611,12 @@ describe('W3.5 Container Wiring', function () {
       await shellProps.onAddGame()
 
       assert.strictEqual(
-        tabService.calls.openTask.length,
+        tabService.calls.openPlayTab.length,
         1,
-        'new game must open a task tab',
+        'new game must open a play tab',
       )
       assert.deepStrictEqual(
-        tabService.calls.openTask[0].playerConfig,
+        tabService.calls.openPlayTab[0].playerConfig,
         {black: 'human', white: 'human', ai: {autoPlay: true}},
         'new game must initialize playerConfig so later AI side changes are actionable',
       )

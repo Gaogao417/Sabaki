@@ -139,6 +139,15 @@ function createMockDeps(overrides = {}) {
       ...overrides.snapshotService,
     },
     tabService: {
+      openProblemTab: async opts => ({
+        id: 'tab_snap_1',
+        taskId: 'task_snap_1',
+        mode: 'problem',
+        parentTabId: opts?.parentTabId,
+        childTabIds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
       openTask: async opts => ({
         id: 'tab_snap_1',
         taskId: 'task_snap_1',
@@ -390,12 +399,12 @@ describeFlow('W2 State Transitions: workbenchFlowService', () => {
       assert.ok(deps.createdTasks.length >= 1, 'should create at least one task')
     })
 
-    it('creates a new tab via tabService.openTask', async () => {
-      const openTaskCalls = []
+    it('creates a new tab via tabService.openProblemTab', async () => {
+      const openProblemTabCalls = []
       const deps = createMockDeps({
         tabService: {
-          openTask: async opts => {
-            openTaskCalls.push(opts)
+          openProblemTab: async opts => {
+            openProblemTabCalls.push(opts)
             return {
               id: 'tab_snap_new',
               taskId: 'task_snap_new',
@@ -413,8 +422,8 @@ describeFlow('W2 State Transitions: workbenchFlowService', () => {
 
       await service.snapshotFromCurrentContext('tab_1')
 
-      assert.strictEqual(openTaskCalls.length, 1)
-      assert.strictEqual(openTaskCalls[0].parentTabId, 'tab_1')
+      assert.strictEqual(openProblemTabCalls.length, 1)
+      assert.strictEqual(openProblemTabCalls[0].parentTabId, 'tab_1')
     })
 
     it('original tab mode remains unchanged', async () => {
@@ -608,7 +617,7 @@ describeTab('W2-T08: closeTab via tabService', () => {
   it('removes tab from store', async () => {
     const deps = createMockTabDeps()
     const service = createWorkbenchTabService(deps)
-    const tab = await service.openTask({taskId: 'task_free'})
+    const tab = await service.openPlayTab({taskId: 'task_free'})
 
     await service.closeTab(tab.id)
 
@@ -618,8 +627,8 @@ describeTab('W2-T08: closeTab via tabService', () => {
   it('cascades child tabs recursively', async () => {
     const deps = createMockTabDeps()
     const service = createWorkbenchTabService(deps)
-    const parent = await service.openTask({taskId: 'task_free'})
-    const child = await service.openTask({taskId: 'task_problem', parentTabId: parent.id})
+    const parent = await service.openPlayTab({taskId: 'task_free'})
+    const child = await service.openProblemTab({taskId: 'task_problem', parentTabId: parent.id})
 
     await service.closeTab(parent.id)
 
@@ -629,8 +638,8 @@ describeTab('W2-T08: closeTab via tabService', () => {
   it('unlinks child from parent childTabIds when child is closed', async () => {
     const deps = createMockTabDeps()
     const service = createWorkbenchTabService(deps)
-    const parent = await service.openTask({taskId: 'task_free'})
-    const child = await service.openTask({taskId: 'task_problem', parentTabId: parent.id})
+    const parent = await service.openPlayTab({taskId: 'task_free'})
+    const child = await service.openProblemTab({taskId: 'task_problem', parentTabId: parent.id})
 
     await service.closeTab(child.id)
 
@@ -642,7 +651,7 @@ describeTab('W2-T08: closeTab via tabService', () => {
   it('clears activeTabId when active tab is closed', async () => {
     const deps = createMockTabDeps()
     const service = createWorkbenchTabService(deps)
-    const tab = await service.openTask({taskId: 'task_free'})
+    const tab = await service.openPlayTab({taskId: 'task_free'})
     assert.strictEqual(deps.store.getState().activeTabId, tab.id)
 
     await service.closeTab(tab.id)

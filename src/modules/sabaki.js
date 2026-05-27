@@ -706,7 +706,7 @@ class Sabaki extends EventEmitter {
   // Problem Mode — thin proxy to workbenchTabService
 
   async startProblem(problemId) {
-    return this.getTrainingContext().tabService.openProblemTab(problemId, {
+    return this.getTrainingContext().tabService.openLegacyProblemTab(problemId, {
       legacyCompatibility: true,
     })
   }
@@ -1893,9 +1893,8 @@ class Sabaki extends EventEmitter {
       sideToMove: 'black',
       title: 'New Game',
     })
-    const tab = await tabService.openTask({
+    const tab = await tabService.openPlayTab({
       taskId: task.id,
-      mode: 'play',
       playerConfig,
     })
     await flowService.startAttempt(tab.id)

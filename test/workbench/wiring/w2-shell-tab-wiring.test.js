@@ -54,14 +54,16 @@ function createSpyTabService() {
   const calls = {
     switchTab: [],
     closeTab: [],
-    openTask: [],
+    openPlayTab: [],
+    openProblemTab: [],
   }
 
   return {
     calls,
     switchTab(tabId) { calls.switchTab.push({tabId}) },
     async closeTab(tabId) { calls.closeTab.push({tabId}) },
-    async openTask(opts) { calls.openTask.push(opts) },
+    async openPlayTab(opts) { calls.openPlayTab.push(opts) },
+    async openProblemTab(opts) { calls.openProblemTab.push(opts) },
   }
 }
 
@@ -292,7 +294,6 @@ describe('W2 Container Wiring: tab commands and projection', () => {
 
     await callRequired(shellProps, 'onAddGame')
 
-    assert.strictEqual(tabService.calls.openTask.length, 1)
-    assert.strictEqual(tabService.calls.openTask[0].mode, 'play')
+    assert.strictEqual(tabService.calls.openPlayTab.length, 1)
   })
 })

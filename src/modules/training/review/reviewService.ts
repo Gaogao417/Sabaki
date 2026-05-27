@@ -1,12 +1,13 @@
 import type { TrainingAttemptResult } from '../types/attempt'
 import type { ReviewSchedule } from '../types/review'
+import type { WorkbenchTab } from '../types/index'
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { WorkbenchTabService } from '../workbench/workbenchTabService'
 import { inferDefaultMode } from '../workbench/workbenchTabService'
 
 export type ReviewService = {
   getDueItems(now?: string): Promise<ReviewSchedule[]>
-  openDueItem(scheduleId: string): Promise<ReturnType<WorkbenchTabService['openTask']>>
+  openDueItem(scheduleId: string): Promise<WorkbenchTab>
   updateScheduleAfterResult(input: {
     taskId: string
     result: TrainingAttemptResult
@@ -91,7 +92,7 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
     return repository.listDueReviewItems(isoNow)
   }
 
-  async function openDueItem(scheduleId: string): Promise<ReturnType<WorkbenchTabService['openTask']>> {
+  async function openDueItem(scheduleId: string): Promise<WorkbenchTab> {
     const schedule = (await repository.listDueReviewItems(new Date().toISOString()))
       .find(s => s.id === scheduleId)
 
@@ -109,7 +110,9 @@ export function createReviewService(deps: ReviewServiceDeps): ReviewService {
       taskId: schedule.taskId,
     })
 
-    return workbenchTabService.openTask({ taskId: schedule.taskId, mode: inferDefaultMode(task) })
+    return inferDefaultMode(task) === 'problem'
+      ? workbenchTabService.openProblemTab({ taskId: schedule.taskId })
+      : workbenchTabService.openPlayTab({ taskId: schedule.taskId })
   }
 
   async function updateScheduleAfterResult(input: {

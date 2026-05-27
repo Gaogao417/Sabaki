@@ -221,6 +221,15 @@ describeFlow('Analysis no-mutation invariant (flow level)', () => {
           },
           snapshotService,
           tabService: {
+            openProblemTab: async opts => ({
+              id: 'tab_new',
+              taskId: 'task_new',
+              mode: 'problem',
+              parentTabId: opts?.parentTabId,
+              childTabIds: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }),
             openTask: async opts => ({
               id: 'tab_new',
               taskId: 'task_new',

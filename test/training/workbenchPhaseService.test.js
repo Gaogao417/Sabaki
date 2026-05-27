@@ -29,7 +29,7 @@ describe('workbenchPhaseService', () => {
   beforeEach(() => {
     store = createWorkbenchStore()
     const taskImportCalls = {createTaskFromSnapshot: []}
-    const tabCalls = {openTask: [], openSnapshotProblemTab: []}
+    const tabCalls = {openProblemTab: [], openTask: [], openSnapshotProblemTab: []}
     service = createWorkbenchPhaseService({
       workbenchStore: store,
       repository: {
@@ -69,6 +69,18 @@ describe('workbenchPhaseService', () => {
       },
       tabService: {
         calls: tabCalls,
+        openProblemTab: async (opts) => {
+          tabCalls.openProblemTab.push(opts)
+          return {
+            id: 'tab_snap_1',
+            taskId: opts.taskId,
+            mode: 'problem',
+            parentTabId: opts.parentTabId,
+            childTabIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        },
         openTask: async (opts) => {
           tabCalls.openTask.push(opts)
           return {
@@ -293,6 +305,10 @@ describe('workbenchPhaseService', () => {
           }),
         },
         tabService: {
+          openProblemTab: async opts => ({
+            id: 'tab_snap_1', taskId: opts.taskId, mode: 'problem', parentTabId: opts.parentTabId, childTabIds: [],
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          }),
           openTask: async opts => ({
             id: 'tab_snap_1', taskId: opts.taskId, mode: opts.mode, parentTabId: opts.parentTabId, childTabIds: [],
             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -331,10 +347,11 @@ describe('workbenchPhaseService', () => {
       assert.strictEqual(newTab.parentTabId, 'tab_1')
     })
 
-    it('P2-T03: creates snapshot task through taskImportService and opens it through openTask', async () => {
+    it('P2-T03: creates snapshot task through taskImportService and opens it through openProblemTab', async () => {
       const calls = {
         createProblemFromCurrentAnalysisPosition: [],
         createTaskFromSnapshot: [],
+        openProblemTab: [],
         openTask: [],
         openSnapshotProblemTab: [],
         createTask: [],
@@ -375,6 +392,18 @@ describe('workbenchPhaseService', () => {
           },
         },
         tabService: {
+          openProblemTab: async opts => {
+            calls.openProblemTab.push(opts)
+            return {
+              id: 'tab_snapshot_p2',
+              taskId: opts.taskId,
+              mode: 'problem',
+              parentTabId: opts.parentTabId,
+              childTabIds: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          },
           openTask: async opts => {
             calls.openTask.push(opts)
             return {
@@ -404,11 +433,11 @@ describe('workbenchPhaseService', () => {
         sideToMove: 'black',
         moveIndex: 7,
       }])
-      assert.deepStrictEqual(calls.openTask, [{
+      assert.deepStrictEqual(calls.openProblemTab, [{
         taskId: 'task_snapshot_p2',
-        mode: 'problem',
         parentTabId: 'tab_1',
       }])
+      assert.deepStrictEqual(calls.openTask, [])
       assert.strictEqual(calls.createProblemFromCurrentAnalysisPosition.length, 0)
       assert.strictEqual(calls.createTask.length, 0)
       assert.strictEqual(calls.openSnapshotProblemTab.length, 0)

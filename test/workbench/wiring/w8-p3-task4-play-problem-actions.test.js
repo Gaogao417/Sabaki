@@ -700,15 +700,13 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
           'snapshotService.captureSnapshotInput must be called once')
         assert.strictEqual(harness.snapshotService.calls.captureSnapshotInput[0].tabId, 'tab_snap_src')
 
-        // Verify tabService.openTask was called
-        assert.strictEqual(harness.tabService.calls.openTask.length, 1,
-          'tabService.openTask must be called once -- Arch v0.5 SS9.7')
-        assert.strictEqual(harness.tabService.calls.openTask[0].taskId, newTab.taskId,
-          'tabService.openTask must use the created task id')
-        assert.strictEqual(harness.tabService.calls.openTask[0].mode, 'problem',
-          'tabService.openTask mode must be "problem" -- Arch v0.5 SS9.7, Contract T4-06')
-        assert.strictEqual(harness.tabService.calls.openTask[0].parentTabId, 'tab_snap_src',
-          'tabService.openTask parentTabId must be original tab id -- Contract T4-06')
+        // Verify tabService.openProblemTab was called
+        assert.strictEqual(harness.tabService.calls.openProblemTab.length, 1,
+          'tabService.openProblemTab must be called once -- Contract T4-06')
+        assert.strictEqual(harness.tabService.calls.openProblemTab[0].taskId, newTab.taskId,
+          'tabService.openProblemTab must use the created task id')
+        assert.strictEqual(harness.tabService.calls.openProblemTab[0].parentTabId, 'tab_snap_src',
+          'tabService.openProblemTab parentTabId must be original tab id -- Contract T4-06')
       })
     })
 
@@ -881,20 +879,20 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
           async completeRecall() {},
         }
 
-        // tabService.openTask writes the new tab into the real workbenchStore,
+        // tabService.openProblemTab writes the new tab into the real workbenchStore,
         // triggering subscriber notification -- same pattern as T5-11.
         let openTaskCounter = 0
         const tabService = {
-          calls: {switchTab: [], closeTab: [], openTask: []},
+          calls: {switchTab: [], closeTab: [], openProblemTab: [], openTask: []},
           switchTab(tabId) { this.calls.switchTab.push({tabId}) },
           async closeTab(tabId) { this.calls.closeTab.push({tabId}) },
-          async openTask(opts) {
+          async openProblemTab(opts) {
             openTaskCounter++
-            this.calls.openTask.push(opts)
+            this.calls.openProblemTab.push(opts)
             const newTab = {
               id: `tab_snap_${openTaskCounter}`,
               taskId: opts.taskId,
-              mode: opts.mode || 'problem',
+              mode: 'problem',
               parentTabId: opts.parentTabId || null,
               childTabIds: [],
               createdAt: new Date().toISOString(),
@@ -1201,10 +1199,10 @@ describe('W8-P3 Task 4: Play/Problem Action Buttons Wiring', function () {
           },
         }
 
-        // Track if tabService.openTask is called
+        // Track if tabService.openProblemTab is called
         let tabServiceCalled = false
         const spyTabService = {
-          async openTask() {
+          async openProblemTab() {
             tabServiceCalled = true
             return {id: 'tab_fake'}
           },

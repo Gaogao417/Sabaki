@@ -499,7 +499,7 @@ export function createLegacyTrainingFlowController(deps: {
       totalDue: queue.length,
     })
 
-    await tabService.openProblemTab(queue[0], {legacyCompatibility: true})
+    await tabService.openLegacyProblemTab(queue[0], {legacyCompatibility: true})
   }
 
   async function advanceReview(): Promise<void> {
@@ -517,7 +517,7 @@ export function createLegacyTrainingFlowController(deps: {
 
     runtimeStore.setReviewQueueView({...rv, currentIndex: nextIndex})
 
-    await tabService.openProblemTab(rv.queue[nextIndex], {legacyCompatibility: true})
+    await tabService.openLegacyProblemTab(rv.queue[nextIndex], {legacyCompatibility: true})
   }
 
   // --- Recall state check ---

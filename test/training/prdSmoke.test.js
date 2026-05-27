@@ -342,8 +342,8 @@ describe('PRD training smoke tests (service/controller/store)', () => {
   it('opens free tasks in play mode and problem-like tasks in problem mode', async () => {
     const harness = createHarness()
 
-    const freeTab = await harness.tabService.openTask({taskId: 'task_free'})
-    const problemTab = await harness.tabService.openTask({taskId: 'task_problem'})
+    const freeTab = await harness.tabService.openPlayTab({taskId: 'task_free'})
+    const problemTab = await harness.tabService.openProblemTab({taskId: 'task_problem'})
 
     assert.strictEqual(freeTab.mode, 'play')
     assert.strictEqual(problemTab.mode, 'problem')
@@ -378,7 +378,7 @@ describe('PRD training smoke tests (service/controller/store)', () => {
     })
 
     for (const taskId of ['task_saved_game', 'task_fox_yiwoo']) {
-      const tab = await harness.tabService.openTask({taskId})
+      const tab = await harness.tabService.openPlayTab({taskId})
       await harness.flowService.startAttempt(tab.id)
       const activeTab = harness.workbenchStore.getState().tabs.find(item => item.id === tab.id)
       const attemptId = activeTab.activeAttemptId
@@ -399,7 +399,7 @@ describe('PRD training smoke tests (service/controller/store)', () => {
       assert.deepStrictEqual(session.expectedMoves, tenMoveLine)
     }
 
-    const problemTab = await harness.tabService.openTask({taskId: 'task_101_problem'})
+    const problemTab = await harness.tabService.openProblemTab({taskId: 'task_101_problem'})
     assert.strictEqual(problemTab.mode, 'problem')
     const problemAttempt = await harness.attemptService.createAttempt({
       taskId: problemTab.taskId,
@@ -689,7 +689,7 @@ describe('PRD training smoke tests (service/controller/store)', () => {
     assert.strictEqual(view.result, 'fail')
   })
 
-  it('starts review by opening due tasks through openTask and runtime queue state', async () => {
+  it('starts review by opening due tasks through semantic tab entrypoints and runtime queue state', async () => {
     const harness = createHarness({
       schedules: {
         rev_due: {

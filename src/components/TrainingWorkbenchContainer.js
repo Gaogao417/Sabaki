@@ -260,9 +260,8 @@ class TrainingWorkbenchContainer extends Component {
       const task = await taskImportService.createManualTask({
         positionSgf: '(;SZ[19])',
       })
-      const tab = await tabService.openTask({
+      const tab = await tabService.openPlayTab({
         taskId: task.id,
-        mode: 'play',
         playerConfig: createDefaultPlayPlayerConfig(),
       })
       if (flowService.startAttempt) {
@@ -493,7 +492,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!task?.id) {
         throw new Error('Fox sync did not return a TrainingTask')
       }
-      await tabService.openTask({taskId: task.id, mode: 'play'})
+      await tabService.openPlayTab({taskId: task.id})
     }
 
     async function handleOpenOneOhOneWeiqi(problemId) {
@@ -519,7 +518,7 @@ class TrainingWorkbenchContainer extends Component {
       if (!task?.id) {
         throw new Error('101 sync did not return a TrainingTask')
       }
-      await tabService.openTask({taskId: task.id, mode: 'problem'})
+      await tabService.openProblemTab({taskId: task.id})
     }
 
     async function handleOpenLibraryProblem(problemId, problemRow = null) {
@@ -564,7 +563,7 @@ class TrainingWorkbenchContainer extends Component {
         taskId = task.id
       }
 
-      await tabService.openTask({taskId, mode: 'problem'})
+      await tabService.openProblemTab({taskId})
     }
 
     async function handleOpenLibraryTask(row, options = {}) {
@@ -577,11 +576,11 @@ class TrainingWorkbenchContainer extends Component {
       }
 
       if (options.mode === 'problem') {
-        await tabService.openTask({taskId, mode: 'problem'})
+        await tabService.openProblemTab({taskId})
         return
       }
 
-      await tabService.openTask({taskId, mode: 'play'})
+      await tabService.openPlayTab({taskId})
     }
 
     function handleOpenPreferences(tab = 'general') {
@@ -664,7 +663,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleOpenInboxTask(taskId) {
-      await tabService.openTask({taskId, mode: 'play'})
+      await tabService.openPlayTab({taskId})
     }
 
     async function handleOpenIncompleteAttempt(attemptId) {
@@ -676,7 +675,7 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleOpenBadMoveTask(taskId) {
-      await tabService.openTask({taskId, mode: 'problem'})
+      await tabService.openProblemTab({taskId})
     }
 
     const _container = this

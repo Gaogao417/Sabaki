@@ -1351,9 +1351,8 @@ export function createWorkbenchFlowService(
       await repository.createTask(snapshotTask)
     })
 
-    const newTab = await tabService.openTask({
+    const newTab = await tabService.openProblemTab({
       taskId: snapshotTask.id,
-      mode: 'problem',
       parentTabId: tabId,
     })
 

@@ -354,12 +354,12 @@ function createFlowHarness({
 
   let openTaskCounter = 0
   const tabService = {
-    async openTask(opts) {
+    async openProblemTab(opts) {
       openTaskCounter++
       const newTab = {
         id: `tab_snap_${openTaskCounter}`,
         taskId: `task_snap_${openTaskCounter}`,
-        mode: opts.mode || 'problem',
+        mode: 'problem',
         parentTabId: opts.parentTabId || null,
         childTabIds: [],
         createdAt: new Date().toISOString(),

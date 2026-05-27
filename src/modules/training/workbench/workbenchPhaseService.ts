@@ -162,9 +162,8 @@ export function createWorkbenchPhaseService(deps: WorkbenchPhaseServiceDeps): Wo
       sourceTaskId: tab.taskId,
     })
 
-    const newTab = await tabService.openTask({
+    const newTab = await tabService.openProblemTab({
       taskId: snapshotTask.id,
-      mode: 'problem',
       parentTabId: tabId,
     })
 

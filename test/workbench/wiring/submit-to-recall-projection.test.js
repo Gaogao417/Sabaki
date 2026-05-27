@@ -397,8 +397,8 @@ describe('submit-to-recall projection regression', function () {
       'src/components/TrainingWorkbenchContainer.js',
     ]
     const forbidden = [
-      'openGameTab',
-      'openProblemTab',
+      'openLegacyGameTab',
+      'openLegacyProblemTab',
       'openSnapshotProblemTab',
       'origin.provider',
       'source_kind',
