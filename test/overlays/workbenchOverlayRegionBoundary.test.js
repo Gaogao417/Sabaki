@@ -35,6 +35,32 @@ describe('Workbench overlay region boundary (OVR-T03)', () => {
       /export\s+function\s+createWorkbenchOverlayRegion\b/,
       'overlay region module must export createWorkbenchOverlayRegion(...)',
     )
+
+    let mod = require(REGION_MODULE)
+    let region = mod.createWorkbenchOverlayRegion({
+      overlayStore: {
+        onModeChange: () => {},
+      },
+    })
+    let forbiddenWriterNames = [
+      'setMode',
+      'setWorkbenchMode',
+      'updateMode',
+      'updateWorkbenchMode',
+      'updateTab',
+      'setTabMode',
+    ]
+
+    for (let name of forbiddenWriterNames) {
+      assert.ok(
+        !Object.prototype.hasOwnProperty.call(mod, name),
+        `overlay region module must not export parent mode writer API ${name}`,
+      )
+      assert.ok(
+        !Object.prototype.hasOwnProperty.call(region, name),
+        `WorkbenchOverlayRegion object must not expose parent mode writer API ${name}`,
+      )
+    }
   })
 
   for (const relativePath of [
@@ -55,7 +81,11 @@ describe('Workbench overlay region boundary (OVR-T03)', () => {
         /require\s*\(\s*['"][^'"]*training\/repository[^'"]*['"]\s*\)/,
         /\bwindow\.sabaki\b/,
         /\bsabaki\.setMode\b/,
+        /\bsetMode\s*\(/,
+        /\bsetWorkbenchMode\s*\(/,
+        /\bupdateWorkbenchMode\s*\(/,
         /\bworkbenchStore\.updateTab\b/,
+        /\bdeps\.workbenchStore\.updateTab\b/,
         /\bcreateWorkbenchFlowService\b/,
       ]
 

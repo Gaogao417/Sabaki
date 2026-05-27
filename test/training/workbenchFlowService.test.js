@@ -1172,71 +1172,99 @@ describe('workbenchFlowService', () => {
   // ================================================================
 
   describe('step1 overlay child-region transition boundary', () => {
-    it('OVR-T09 enterAnalysis notifies overlay region and does not auto-enable overlay', () => {
-      const overlay = createFlowOverlayHarness('play')
-      const recording = createRecordingOverlayRegion(overlay.overlayStore)
-      const deps = createMockDeps({overlayRegion: recording.overlayRegion})
-      const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({
-        id: 'tab_overlay_enter',
-        taskId: 'task_overlay_enter',
-        mode: 'play',
-        currentTreePosition: 'play_node_1',
-      }))
+    for (const fromMode of ['play', 'problem', 'recall']) {
+      it(`OVR-T09 enterAnalysis from ${fromMode} notifies overlay region and does not auto-enable overlay`, () => {
+        const overlay = createFlowOverlayHarness(fromMode)
+        const recording = createRecordingOverlayRegion(overlay.overlayStore)
+        const deps = createMockDeps({overlayRegion: recording.overlayRegion})
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({
+          id: `tab_overlay_enter_${fromMode}`,
+          taskId: `task_overlay_enter_${fromMode}`,
+          mode: fromMode,
+          activeAttemptId: fromMode === 'problem' ? 'attempt_overlay_enter' : undefined,
+          activeRecallSessionId: fromMode === 'recall' ? 'recall_overlay_enter' : undefined,
+          recallSubstate: fromMode === 'recall' ? 'normal' : undefined,
+          currentTreePosition: `${fromMode}_node_1`,
+        }))
 
-      service.enterAnalysis('tab_overlay_enter', {reason: 'manual'})
+        service.enterAnalysis(`tab_overlay_enter_${fromMode}`, {reason: 'manual'})
 
-      const tab = getTab(deps.store, 'tab_overlay_enter')
-      assert.strictEqual(tab.mode, 'analysis')
-      assert.strictEqual(tab.previousMode, 'play')
-      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, false)
-      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
-      assert.strictEqual(recording.calls.length, 1)
-      assert.strictEqual(recording.calls[0].tabId, 'tab_overlay_enter')
-      assert.strictEqual(recording.calls[0].fromMode, 'play')
-      assert.strictEqual(recording.calls[0].toMode, 'analysis')
-      assert.strictEqual(recording.calls[0].reason, 'manual')
-    })
+        const tab = getTab(deps.store, `tab_overlay_enter_${fromMode}`)
+        assert.strictEqual(tab.mode, 'analysis')
+        assert.strictEqual(tab.previousMode, fromMode)
+        assert.strictEqual(tab.analysisReturnTarget.mode, fromMode)
+        assert.strictEqual(
+          tab.analysisReturnTarget.recallSubstate,
+          fromMode === 'recall' ? 'normal' : undefined,
+        )
+        assert.strictEqual(
+          tab.analysisReturnTarget.treePosition,
+          `${fromMode}_node_1`,
+        )
+        assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, false)
+        assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
+        assert.strictEqual(recording.calls.length, 1)
+        assert.strictEqual(recording.calls[0].tabId, `tab_overlay_enter_${fromMode}`)
+        assert.strictEqual(recording.calls[0].fromMode, fromMode)
+        assert.strictEqual(recording.calls[0].toMode, 'analysis')
+        assert.strictEqual(recording.calls[0].reason, 'manual')
+      })
+    }
 
-    it('OVR-T04 returnFromAnalysis restores target state and clears overlay through region', async () => {
-      const overlay = createFlowOverlayHarness('analysis')
-      const recording = createRecordingOverlayRegion(overlay.overlayStore)
-      const deps = createMockDeps({overlayRegion: recording.overlayRegion})
-      const service = createWorkbenchFlowService(deps)
-      deps.store.addTab(makeTab({
-        id: 'tab_overlay_return',
-        taskId: 'task_overlay_return',
-        mode: 'analysis',
-        previousMode: 'recall',
-        recallSubstate: 'checkpoint_ai_revealed',
-        currentTreePosition: 'analysis_node',
-        activeRecallSessionId: 'recall_overlay',
-        analysisReturnTarget: {
-          mode: 'recall',
-          recallSubstate: 'normal',
-          treePosition: 'recall_node_7',
-          moveIndex: 7,
-        },
-      }))
-      assert.strictEqual(overlay.overlayStore.setTerritoryCompareEnabled(true), true)
-      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, true)
+    for (const targetMode of ['play', 'problem', 'recall']) {
+      it(`OVR-T04 returnFromAnalysis restores ${targetMode} and clears overlay through region`, async () => {
+        const overlay = createFlowOverlayHarness('analysis')
+        const recording = createRecordingOverlayRegion(overlay.overlayStore)
+        const deps = createMockDeps({overlayRegion: recording.overlayRegion})
+        const service = createWorkbenchFlowService(deps)
+        deps.store.addTab(makeTab({
+          id: `tab_overlay_return_${targetMode}`,
+          taskId: `task_overlay_return_${targetMode}`,
+          mode: 'analysis',
+          previousMode: targetMode,
+          recallSubstate: targetMode === 'recall' ? 'checkpoint_ai_revealed' : undefined,
+          currentTreePosition: 'analysis_node',
+          activeRecallSessionId: targetMode === 'recall' ? 'recall_overlay' : undefined,
+          analysisReturnTarget: {
+            mode: targetMode,
+            recallSubstate: targetMode === 'recall' ? 'normal' : undefined,
+            treePosition: `${targetMode}_node_7`,
+            moveIndex: targetMode === 'recall' ? 7 : undefined,
+          },
+        }))
 
-      service.returnFromAnalysis({tabId: 'tab_overlay_return', reason: 'return'})
-      await Promise.resolve()
+        if (targetMode === 'problem') {
+          assert.strictEqual(overlay.overlayStore.setTerritoryEnabled(true), true)
+          assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, true)
+        } else {
+          assert.strictEqual(overlay.overlayStore.setTerritoryCompareEnabled(true), true)
+          assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, true)
+        }
 
-      const tab = getTab(deps.store, 'tab_overlay_return')
-      assert.strictEqual(tab.mode, 'recall')
-      assert.strictEqual(tab.recallSubstate, 'normal')
-      assert.strictEqual(tab.currentTreePosition, 'recall_node_7')
-      assert.strictEqual(tab.analysisReturnTarget, undefined)
-      assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, false)
-      assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
-      assert.strictEqual(overlay.sideEffects.scheduleEditWorkspaceAnalysis, 0)
-      assert.strictEqual(recording.calls.length, 1)
-      assert.strictEqual(recording.calls[0].fromMode, 'analysis')
-      assert.strictEqual(recording.calls[0].toMode, 'recall')
-      assert.strictEqual(recording.calls[0].reason, 'return')
-    })
+        service.returnFromAnalysis({
+          tabId: `tab_overlay_return_${targetMode}`,
+          reason: 'return',
+        })
+        await Promise.resolve()
+
+        const tab = getTab(deps.store, `tab_overlay_return_${targetMode}`)
+        assert.strictEqual(tab.mode, targetMode)
+        assert.strictEqual(
+          tab.recallSubstate,
+          targetMode === 'recall' ? 'normal' : undefined,
+        )
+        assert.strictEqual(tab.currentTreePosition, `${targetMode}_node_7`)
+        assert.strictEqual(tab.analysisReturnTarget, undefined)
+        assert.strictEqual(overlay.overlayStore.getState().territoryEnabled, false)
+        assert.strictEqual(overlay.overlayStore.getState().territoryCompareEnabled, false)
+        assert.strictEqual(overlay.sideEffects.scheduleEditWorkspaceAnalysis, 0)
+        assert.strictEqual(recording.calls.length, 1)
+        assert.strictEqual(recording.calls[0].fromMode, 'analysis')
+        assert.strictEqual(recording.calls[0].toMode, targetMode)
+        assert.strictEqual(recording.calls[0].reason, 'return')
+      })
+    }
 
     it('OVR-T05 restartAttempt exits analysis and clears overlay through the same region path', async () => {
       const overlay = createFlowOverlayHarness('analysis')
