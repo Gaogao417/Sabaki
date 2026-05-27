@@ -401,11 +401,27 @@ function seedStaleCheckpoint(runtimeStore: TrainingRuntimeStore, checkpointId = 
 }
 
 function replaceFunctionBody(source: string, functionName: string): string {
-  const marker = `function ${functionName}`
-  const start = source.indexOf(marker)
-  if (start === -1) return source
+  const match = new RegExp(`(?:async\\s+)?function\\s+${functionName}\\s*\\(`).exec(source)
+  if (!match) return source
+  const start = match.index
 
-  const bodyStart = source.indexOf('{', start)
+  const paramsStart = source.indexOf('(', start)
+  if (paramsStart === -1) return source
+
+  let parenDepth = 0
+  let paramsEnd = -1
+  for (let index = paramsStart; index < source.length; index++) {
+    const char = source[index]
+    if (char === '(') parenDepth++
+    if (char === ')') parenDepth--
+    if (parenDepth === 0) {
+      paramsEnd = index
+      break
+    }
+  }
+  if (paramsEnd === -1) return source
+
+  const bodyStart = source.indexOf('{', paramsEnd)
   if (bodyStart === -1) return source
 
   let depth = 0

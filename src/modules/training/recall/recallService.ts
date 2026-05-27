@@ -303,7 +303,7 @@ export function mapRecallSessionToRecallView(
     taskId: session.taskId ?? '',
     tabId: session.tabId,
     moveIndex: session.currentMoveIndex ?? 0,
-    expectedMoves: session.expectedMoves.map((vertex, index) => ({
+    expectedMoves: (session.expectedMoves ?? []).map((vertex, index) => ({
       sign: index % 2 === 0 ? 1 : -1,
       vertex: vertex || null,
     })),

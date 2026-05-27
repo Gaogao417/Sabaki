@@ -7,6 +7,10 @@ import type {
 import type { TrainingRepository } from '../repository/trainingRepository'
 import type { TrainingRuntimeStore } from '../store/trainingRuntimeStore'
 import { mapRecallSessionToRecallView } from './recallService'
+import {
+  createWorkbenchRuntimeRegion,
+  type WorkbenchRuntimeRegion,
+} from '../workbench/workbenchRuntimeRegion'
 
 export type RecallCheckpointService = {
   shouldTriggerCheckpoint(input: {
@@ -39,6 +43,7 @@ export type RecallCheckpointService = {
 export type RecallCheckpointServiceDeps = {
   repository: TrainingRepository
   runtimeStore: TrainingRuntimeStore
+  runtimeRegion?: WorkbenchRuntimeRegion
   logger?: {
     info(channel: string, message: string, data?: Record<string, unknown>): void
   }
@@ -46,6 +51,8 @@ export type RecallCheckpointServiceDeps = {
 
 export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps): RecallCheckpointService {
   const { repository, runtimeStore, logger } = deps
+  const runtimeRegion =
+    deps.runtimeRegion ?? createWorkbenchRuntimeRegion({runtimeStore})
 
   async function refreshRecallView(recallSessionId: string): Promise<void> {
     const session = await repository.loadRecallSession(recallSessionId)
@@ -261,8 +268,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
       currentMoveIndex: session.currentMoveIndex + 1,
     })
 
-    runtimeStore.setActiveCheckpoint(undefined)
-    runtimeStore.clearCorrectionDraft(checkpointId)
+    if (runtimeRegion) runtimeRegion.onCheckpointResumed({checkpointId})
     await refreshRecallView(session.id)
 
     logger?.info('checkpoint.skip', 'Checkpoint skipped', {
@@ -298,8 +304,7 @@ export function createRecallCheckpointService(deps: RecallCheckpointServiceDeps)
       currentMoveIndex: session.currentMoveIndex + 1,
     })
 
-    runtimeStore.setActiveCheckpoint(undefined)
-    runtimeStore.clearCorrectionDraft(checkpointId)
+    if (runtimeRegion) runtimeRegion.onCheckpointResumed({checkpointId})
     await refreshRecallView(session.id)
 
     logger?.info('checkpoint.resume', 'Resumed recall after checkpoint', {

@@ -12,7 +12,6 @@ import type {TrainingRepository} from '../repository/trainingRepository'
 import type {SnapshotService} from '../analysis/snapshotService'
 import type {WorkbenchTabService} from './workbenchTabService'
 import type {
-  RecallView,
   TrainingRuntimeStore,
 } from '../store/trainingRuntimeStore'
 import type {RecallCheckpointService} from '../recall/recallCheckpointService'
@@ -23,6 +22,10 @@ import type {
 } from '../problem/problemFlowService'
 import type {WorkbenchOverlayRegion} from '../../overlays/workbenchOverlayRegion'
 import {resolveTransition} from './modeTransitions'
+import {
+  createWorkbenchRuntimeRegion,
+  type WorkbenchRuntimeRegion,
+} from './workbenchRuntimeRegion'
 
 export class InvalidModeTransitionError extends Error {
   constructor(
@@ -72,6 +75,7 @@ export type WorkbenchFlowServiceDeps = {
     }): TrainingAttemptResult
   }
   runtimeStore?: TrainingRuntimeStore
+  runtimeRegion?: WorkbenchRuntimeRegion
   logger?: {
     info(channel: string, message: string, data?: Record<string, unknown>): void
   }
@@ -232,6 +236,9 @@ export function createWorkbenchFlowService(
   const overlayRegion = deps.overlayRegion
   const evaluationRules = deps.evaluationRules
   const runtimeStore = deps.runtimeStore
+  const runtimeRegion =
+    deps.runtimeRegion ??
+    (runtimeStore ? createWorkbenchRuntimeRegion({runtimeStore}) : undefined)
 
   function getTab(tabId: string): WorkbenchTab {
     const tab = workbenchStore.getState().tabs.find((t) => t.id === tabId)
@@ -374,24 +381,6 @@ export function createWorkbenchFlowService(
     }
   }
 
-  function mapRecallSessionToRecallView(session: RecallSession): RecallView {
-    const expectedMoves = session.expectedMoves ?? []
-
-    return {
-      recallSessionId: session.id,
-      taskId: session.taskId ?? '',
-      tabId: session.tabId,
-      moveIndex: session.currentMoveIndex ?? 0,
-      expectedMoves: expectedMoves.map((vertex, index) => ({
-        sign: index % 2 === 0 ? 1 : -1,
-        vertex: vertex || null,
-      })),
-      userAttempts: [],
-      showHint: false,
-      completed: session.completed,
-    }
-  }
-
   function createAnalysisReturnTarget(tab: WorkbenchTab): AnalysisReturnTarget {
     const target: AnalysisReturnTarget = {
       mode: tab.mode as 'play' | 'problem' | 'recall',
@@ -519,9 +508,7 @@ export function createWorkbenchFlowService(
           activeRecallSessionId: session.id,
         })
 
-        runtimeStore?.setProblemView(null)
-        runtimeStore?.setActiveRecallSession(session.id)
-        runtimeStore?.setRecallView(mapRecallSessionToRecallView(session))
+        if (runtimeRegion) runtimeRegion.onRecallActivated({session})
 
         logger?.info('flow.submit', 'Problem submit completed', {
           tabId,
@@ -564,10 +551,7 @@ export function createWorkbenchFlowService(
         activeRecallSessionId: session.id,
       })
 
-      // Step 7: Update runtime store
-      runtimeStore?.setProblemView(null)
-      runtimeStore?.setActiveRecallSession(session.id)
-      runtimeStore?.setRecallView(mapRecallSessionToRecallView(session))
+      if (runtimeRegion) runtimeRegion.onRecallActivated({session})
 
       logger?.info('flow.submit', 'Submit completed', {
         tabId,
@@ -765,8 +749,7 @@ export function createWorkbenchFlowService(
       activeRecallSessionId: session.id,
     })
 
-    runtimeStore?.setActiveRecallSession(session.id)
-    runtimeStore?.setRecallView(mapRecallSessionToRecallView(session))
+    if (runtimeRegion) runtimeRegion.onRecallActivated({session})
 
     logger?.info('flow.enterRecall', 'Recall mode entered', {
       tabId: input.tabId,
@@ -804,9 +787,7 @@ export function createWorkbenchFlowService(
     const analysisReturnTarget = createAnalysisReturnTarget(tab)
     const analysisContext = createAnalysisContext(tab)
 
-    // Clear recall view model state
-    runtimeStore?.setRecallView(null)
-    runtimeStore?.setActiveCheckpoint(undefined)
+    if (runtimeRegion) runtimeRegion.onRecallCompleted({sessionId: recallSessionId})
 
     workbenchStore.updateTab(tabId, {
       mode: 'analysis',
@@ -1038,6 +1019,7 @@ export function createWorkbenchFlowService(
     )
 
     await recallCheckpointService!.skipCheckpoint(checkpointId)
+    if (runtimeRegion) runtimeRegion.onCheckpointResumed({checkpointId})
 
     const updatedTab = getTab(tab.id)
     assertCheckpointTransition({
@@ -1094,6 +1076,7 @@ export function createWorkbenchFlowService(
     })
 
     await recallCheckpointService!.resumeRecall(checkpointId)
+    if (runtimeRegion) runtimeRegion.onCheckpointResumed({checkpointId})
 
     workbenchStore.updateTab(tab.id, {
       recallSubstate: 'normal',
