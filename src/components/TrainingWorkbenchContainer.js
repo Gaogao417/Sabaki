@@ -261,17 +261,6 @@ class TrainingWorkbenchContainer extends Component {
     }
 
     async function handleNewGame() {
-      const { taskImportService } = sabaki.getTrainingContext()
-      if (
-        taskImportService &&
-        typeof taskImportService.createManualTask === 'function' &&
-        tabService &&
-        typeof tabService.openTask === 'function'
-      ) {
-        await handleAddTask()
-        return
-      }
-
       sabaki.openDrawer?.('newgame')
     }
 
@@ -539,6 +528,21 @@ class TrainingWorkbenchContainer extends Component {
       await tabService.openTask({taskId, mode: 'problem'})
     }
 
+    async function handleOpenLibraryTask(row, options = {}) {
+      const item = row && typeof row === 'object' ? row : {id: row}
+      const taskId =
+        item.taskId || item.trainingTaskId || item.id || options.taskId || null
+
+      if (!taskId) {
+        throw new Error('Library row is missing a task id')
+      }
+
+      await tabService.openTask({
+        taskId,
+        ...(options.mode ? {mode: options.mode} : {}),
+      })
+    }
+
     function handleOpenPreferences(tab = 'general') {
       sabaki.setState({preferencesTab: tab})
       sabaki.openDrawer('preferences')
@@ -700,6 +704,7 @@ class TrainingWorkbenchContainer extends Component {
       onAddGame: handleAddTask,
       onOpenFoxGames: handleOpenFoxGames,
       onOpenOneOhOneWeiqi: handleOpenOneOhOneWeiqi,
+      onOpenLibraryTask: handleOpenLibraryTask,
       onOpenPreferences: handleOpenPreferences,
       onOpenGameLibrary: () => this.setState({libraryDrawerType: 'history'}),
       onOpenWrongProblems: () => this.setState({libraryDrawerType: 'problems'}),

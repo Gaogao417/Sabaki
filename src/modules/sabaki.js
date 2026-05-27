@@ -975,7 +975,17 @@ class Sabaki extends EventEmitter {
       const analysisResultAdapter = createAnalysisResultAdapter(this)
       const positionSnapshotAdapter = createPositionSnapshotAdapter(this)
 
-      const taskImportService = createTaskImportService({ repository, logger })
+      const sgfAdapter = {
+        parse: fileformats.sgf.parse,
+        extractRootPosition: (trees) => sgf.stringify(trees),
+      }
+      const taskImportService = createTaskImportService({
+        repository,
+        logger,
+        sgfAdapter,
+        foxAdapter: window.sabaki.fox,
+        weiqi101Db: window.sabaki.db,
+      })
       const attemptService = createAttemptService({ repository, runtimeStore, logger })
       const monitor = createPlayTrainingMonitor({ attemptService, analysisResultAdapter, repository, runtimeStore, logger })
       const tabService = createWorkbenchTabService({

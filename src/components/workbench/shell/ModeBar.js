@@ -189,6 +189,7 @@ export default function ModeBar({
     }
 
     return [
+      h(ActionButton, {testId: 'mode-action-new-game', onClick: rest.onNewGame}, '新对局'),
       h(ActionButton, {testId: 'mode-action-analysis', onClick: onAnalysis}, '复盘'),
       h(ActionButton, {testId: 'mode-action-save', primary: true, onClick: onSnapshot}, '保存'),
       h(ActionButton, {testId: 'mode-action-resign', danger: true, onClick: rest.onResign}, '认输'),
@@ -205,9 +206,6 @@ export default function ModeBar({
     h('div', {class: 'wb-topbar-title'}, title),
     h('div', {class: 'wb-topbar-meta-group'}, renderMeta()),
     h('div', {class: 'wb-mode-bar__actions'}, renderActions()),
-    activeMode === 'play' && h('div', {class: 'wb-mode-bar__action-compat', 'aria-hidden': 'true'},
-      h(ActionButton, {testId: 'mode-action-new-game', onClick: rest.onNewGame}, '新对局'),
-    ),
   )
 }
 

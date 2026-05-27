@@ -17,7 +17,7 @@ test.describe('New game settings dialog', () => {
     })
     await page.evaluate(() => window.__sabaki.setMode('play'))
 
-    await page.getByTestId('mode-action-new-game').click()
+    await page.locator('[data-testid="mode-action-new-game"]:visible').click()
 
     const dialog = page.locator('.new-game-dialog')
     await expect(dialog).toBeVisible()

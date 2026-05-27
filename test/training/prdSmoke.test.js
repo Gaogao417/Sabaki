@@ -354,6 +354,72 @@ describe('PRD training smoke tests (service/controller/store)', () => {
     assert.strictEqual(harness.workbenchStore.getState().activeTabId, problemTab.id)
   })
 
+  it('runs source golden paths for saved games, Fox games, and 101 problems', async () => {
+    const tenMoveLine = ['dd', 'qq', 'pd', 'dp', 'cf', 'fc', 'pq', 'qp', 'jj', 'kk']
+    const harness = createHarness({
+      tasks: {
+        task_saved_game: makeTask({
+          id: 'task_saved_game',
+          title: 'Saved game golden path',
+          origin: {provider: 'local', externalId: 'saved-game'},
+        }),
+        task_fox_yiwoo: makeTask({
+          id: 'task_fox_yiwoo',
+          title: 'YiWoo Fox golden path',
+          origin: {provider: 'fox', externalId: 'YiWoo'},
+        }),
+        task_101_problem: makeTask({
+          id: 'task_101_problem',
+          prompt: '101 golden problem',
+          sideToMove: 'black',
+          origin: {provider: '101', externalId: 'golden-101'},
+        }),
+      },
+    })
+
+    for (const taskId of ['task_saved_game', 'task_fox_yiwoo']) {
+      const tab = await harness.tabService.openTask({taskId})
+      await harness.flowService.startAttempt(tab.id)
+      const activeTab = harness.workbenchStore.getState().tabs.find(item => item.id === tab.id)
+      const attemptId = activeTab.activeAttemptId
+
+      for (const move of tenMoveLine) {
+        await harness.attemptService.appendMove(attemptId, move)
+      }
+
+      await harness.flowService.submit(tab.id)
+
+      const submittedAttempt = harness.repository.store.attempts[attemptId]
+      const updatedTab = harness.workbenchStore.getState().tabs.find(item => item.id === tab.id)
+      const session = Object.values(harness.repository.store.sessions)
+        .find(item => item.attemptId === attemptId)
+
+      assert.strictEqual(submittedAttempt.status, 'submitted')
+      assert.strictEqual(updatedTab.mode, 'recall')
+      assert.deepStrictEqual(session.expectedMoves, tenMoveLine)
+    }
+
+    const problemTab = await harness.tabService.openTask({taskId: 'task_101_problem'})
+    assert.strictEqual(problemTab.mode, 'problem')
+    const problemAttempt = await harness.attemptService.createAttempt({
+      taskId: problemTab.taskId,
+      tabId: problemTab.id,
+      rootPositionSgf: harness.repository.store.tasks.task_101_problem.rootPositionSgf,
+    })
+    harness.workbenchStore.updateTab(problemTab.id, {
+      activeAttemptId: problemAttempt.id,
+    })
+    await harness.attemptService.appendMove(problemAttempt.id, 'dd')
+    await harness.flowService.submit(problemTab.id)
+
+    const submittedProblemTab = harness.workbenchStore.getState().tabs.find(item => item.id === problemTab.id)
+    assert.strictEqual(
+      harness.repository.store.attempts[problemAttempt.id].status,
+      'submitted',
+    )
+    assert.strictEqual(submittedProblemTab.mode, 'recall')
+  })
+
   it('submits a play attempt through flowService and writes recall state to stores', async () => {
     const harness = createHarness()
     const {tab, attempt} = await createTabWithAttempt(harness, {

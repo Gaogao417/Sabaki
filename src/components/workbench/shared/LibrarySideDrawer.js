@@ -376,7 +376,7 @@ export default class LibrarySideDrawer extends Component {
       )
 	  }
 
-  renderSavedGameList(items, emptyTitle, emptyBody) {
+  renderSavedGameList(items, emptyTitle, emptyBody, openItem = null) {
     return items.length === 0
       ? h('div', {class: 'wb-library-drawer__empty'},
         h('strong', {}, emptyTitle),
@@ -385,7 +385,10 @@ export default class LibrarySideDrawer extends Component {
       : h('ol', {class: 'wb-library-drawer__list wb-library-drawer__list--visual'},
         items.map((game, index) =>
           h('li', {key: game.id || game.title || index, class: 'wb-library-drawer__item'},
-            h('button', {type: 'button'},
+            h('button', {
+              type: 'button',
+              onClick: openItem ? () => openItem(game) : undefined,
+            },
               h(MiniBoard, {size: 5}),
               h('span', {class: 'wb-library-drawer__item-main'},
                 h('strong', {}, listItemTitle(game, '未命名棋谱')),
@@ -405,6 +408,7 @@ export default class LibrarySideDrawer extends Component {
 
   renderKifuLibrary() {
     let projection = this.getLibraryProjection()
+    let {onOpenLibraryTask = () => {}} = this.props
     let {query, savedGames} = this.state
     let normalizedQuery = query.trim().toLowerCase()
     let projectedKifu = getProjectionItems(projection, 'kifu')
@@ -437,6 +441,7 @@ export default class LibrarySideDrawer extends Component {
         kifuItems,
         '暂无棋谱',
         '导入 SGF 或保存复盘棋谱后会进入棋谱库。',
+        (item) => onOpenLibraryTask(item),
       ),
     )
   }
@@ -447,6 +452,7 @@ export default class LibrarySideDrawer extends Component {
       gameIndex = 0,
       onNewGame = () => {},
       onOpenGame = () => {},
+      onOpenLibraryTask = () => {},
     } = this.props
     let projection = this.getLibraryProjection()
     let {query, savedGames} = this.state
@@ -504,7 +510,9 @@ export default class LibrarySideDrawer extends Component {
             },
               h('button', {
                 type: 'button',
-                onClick: game.index != null ? () => onOpenGame(game.index) : undefined,
+                onClick: game.index != null
+                  ? () => onOpenGame(game.index)
+                  : () => onOpenLibraryTask(game),
               },
                 h(MiniBoard, {size: 5}),
                 h('span', {class: 'wb-library-drawer__item-main'},
@@ -605,6 +613,7 @@ export default class LibrarySideDrawer extends Component {
 
   renderProjectedSourceRows() {
     let projection = this.getLibraryProjection()
+    let {onOpenLibraryTask = () => {}, onStartProblem = () => {}} = this.props
     let sources = ['oneOhOne', 'fox']
       .map((source) => ({
         source,
@@ -636,7 +645,12 @@ export default class LibrarySideDrawer extends Component {
                   key: item.id || item.title || index,
                   class: 'wb-library-drawer__item',
                 },
-                  h('button', {type: 'button'},
+                  h('button', {
+                    type: 'button',
+                    onClick: source === 'oneOhOne'
+                      ? () => onStartProblem(item.id, item)
+                      : () => onOpenLibraryTask(item),
+                  },
                     h('strong', {}, listItemTitle(item)),
                     listItemMeta(item) && h('span', {}, listItemMeta(item)),
                     listItemBadge(item) && h('small', {}, listItemBadge(item)),
@@ -681,7 +695,7 @@ export default class LibrarySideDrawer extends Component {
             onClick: onClose,
           }, '×'),
         ),
-        !isProblemLibrary && h('div', {class: 'wb-library-drawer__tabs'},
+        h('div', {class: 'wb-library-drawer__tabs'},
           h('button', {
             type: 'button',
             'data-testid': 'library-tab-history',
@@ -700,6 +714,12 @@ export default class LibrarySideDrawer extends Component {
             class: activeType === 'game-records' ? 'active' : '',
             onClick: () => onSwitch('game-records'),
           }, '对局库'),
+          h('button', {
+            type: 'button',
+            'data-testid': 'library-tab-problems',
+            class: activeType === 'problems' ? 'active' : '',
+            onClick: () => onSwitch('problems'),
+          }, '历史问题'),
         ),
         !isProblemLibrary && h('div', {class: 'wb-library-drawer__sources'},
           this.renderExternalSourceButton(

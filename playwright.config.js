@@ -7,7 +7,7 @@ module.exports = defineConfig({
   workers: 1, // Electron tests must run serially
   reporter: process.env.CI ? 'github' : 'list',
   projects: [
-    {name: 'smoke', testMatch: /smoke\.spec\.js/},
+    {name: 'smoke', testMatch: /(smoke|golden-path-smoke)\.spec\.js/},
     {
       name: 'renderer',
       testMatch: /renderer\.spec\.js/,
@@ -27,6 +27,11 @@ module.exports = defineConfig({
     {
       name: 'new-game-dialog',
       testMatch: /new-game-dialog\.spec\.js/,
+      dependencies: [],
+    },
+    {
+      name: 'fox-real',
+      testMatch: /fox-real\.spec\.js/,
       dependencies: [],
     },
     {
