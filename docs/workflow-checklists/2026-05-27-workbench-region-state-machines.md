@@ -21,7 +21,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - [x] step1.review: Architecture review of overlay child-region implementation — role: architecture-reviewer — depends_on: step1.impl — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/overlay-region/architecture-review-v0.2.md` — commit: 8e09a3ce
 - [x] step2.1.contract: Contract sketch for runtime companion child-region cleanup — role: contract-designer — depends_on: step1.review — scope: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/test-contract-v0.2.md` — commit: 65ba143d — approved by step2.1.contract-audit retry
 - [x] step2.1.contract-audit: Audit runtime companion child-region contract — role: contract-auditor — depends_on: step2.1.contract — verdict: APPROVED — audit: `docs/archive/daily-design/2026-05-27/workbench-region-state-machines/runtime-region/contract-audit-v0.2.md` — commit: f3006ef9
-- [ ] step2.1.tests: Write focused runtime companion region and flow outcome tests — role: test-writer — depends_on: step2.1.contract-audit
+- [x] step2.1.tests: Write focused runtime companion region and flow outcome tests — role: test-writer — depends_on: step2.1.contract-audit — tests: `test/training/workbenchRuntimeRegion.test.ts` — commit: 8304caac — expected status: RTM-T05/T06/T07/T08 GREEN; RTM-T01/T02/T03/T04/T09/T10 RED until production runtime-region owner is implemented
 - [ ] step2.1.test-audit: Audit runtime companion tests for fake green / wrong-layer mocks — role: test-auditor — depends_on: step2.1.tests
 - [ ] step2.1.impl: Implement runtime companion child-region cleanup boundary — role: implementation-agent — depends_on: step2.1.test-audit
 - [ ] step2.1.review: Architecture review of runtime companion implementation — role: architecture-reviewer — depends_on: step2.1.impl
@@ -33,6 +33,7 @@ Implement the Workbench parent state-machine / child region state-machine migrat
 - Test-writer retry verification: `npx mocha --require tsx test/overlays/overlayStore.test.js` passed 10 tests; `npx mocha --require tsx test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js --grep "Workbench overlay region boundary|step1 overlay child-region transition boundary"` failed as expected on missing `src/modules/overlays/workbenchOverlayRegion.ts` after expanding OVR-T04/T09 matrix.
 - Implementation verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 168 tests before production composition retry.
 - Final step1 verification: `npx mocha --require tsx test/overlays/overlayStore.test.js test/overlays/workbenchOverlayRegionBoundary.test.js test/training/workbenchFlowService.test.js test/training/modeTransitions.test.js test/training/modeStateResolver.test.js` passed 170 tests; architecture review retry approved.
+- Runtime test-writer verification: `npx mocha --require tsx test/training/workbenchRuntimeRegion.test.ts` passed RTM-T05/T06/T07/T08 and failed as expected on RTM-T01/T02/T03/T04/T09/T10 because runtime-region owner/integration is not implemented yet.
 
 ## Retries
 
