@@ -6,6 +6,43 @@ import sabaki from '../modules/sabaki.js'
 const t = i18n.context('WorkspaceDock')
 
 export default class WorkspaceDock extends Component {
+  clearReviewWorkspace() {
+    let ws = sabaki.state.editWorkspace
+
+    if (ws != null && sabaki.getEditWorkspaceTabKeys != null) {
+      let tab = ws.activeTab || 'current'
+      let {snapshotKey, markerKey, linesKey} = sabaki.getEditWorkspaceTabKeys(tab)
+      let snapshot = ws[snapshotKey]
+
+      if (snapshot != null) {
+        let markerMap = Array.from({length: snapshot.height}, () =>
+          Array.from({length: snapshot.width}, () => null),
+        )
+
+        if (sabaki.commitEditResult != null) {
+          sabaki.commitEditResult({
+            tab,
+            markerMap,
+            lines: [],
+            lineFirstVertex: null,
+          })
+        } else {
+          sabaki.setState({
+            editWorkspace: {
+              ...ws,
+              [markerKey]: markerMap,
+              [linesKey]: [],
+              lineFirstVertex: null,
+            },
+          })
+        }
+        return
+      }
+    }
+
+    sabaki.clearAnalysisArea?.()
+  }
+
   render({mode, editWorkspaceActive, summary, treePosition, children}) {
     let isReviewDock = editWorkspaceActive || mode === 'analysis'
     let isPassiveDock = mode === 'play' || mode === 'recall'
@@ -99,14 +136,25 @@ export default class WorkspaceDock extends Component {
         h(
           'div',
           {class: 'workspace-dock__review-actions'},
-          h('button', {type: 'button', class: 'dock-tool'}, '撤销'),
           h(
             'button',
-            {type: 'button', class: 'dock-tool', disabled: true},
+            {type: 'button', class: 'dock-tool', onClick: () => sabaki.undo()},
+            '撤销',
+          ),
+          h(
+            'button',
+            {type: 'button', class: 'dock-tool', onClick: () => sabaki.redo()},
             '重做',
           ),
-          h('button', {type: 'button', class: 'dock-tool'}, '清空'),
-          h('button', {type: 'button', class: 'dock-tool'}, '清空'),
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'dock-tool',
+              onClick: () => this.clearReviewWorkspace(),
+            },
+            '清空',
+          ),
           h('button', {type: 'button', class: 'dock-tool'}, '100%'),
         ),
       h(
