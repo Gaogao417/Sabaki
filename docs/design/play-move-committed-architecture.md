@@ -1,8 +1,8 @@
 # PlayMoveCommitted 架构设计
 
-> 文档类型：Workbench Play Mode 棋盘写入边界设计  
-> 状态：v0.1 draft  
-> 日期：2026-05-28  
+> 文档类型：Workbench Play Mode 棋盘写入边界设计
+> 状态：v0.1 draft
+> 日期：2026-05-28
 > 关联文档：
 > - `docs/architecture/gabaki-sabaki-training-architecture-v0.5.md`
 > - `docs/product/sabaki-training-prd.md`
