@@ -3483,8 +3483,9 @@
 
 .wb-library-drawer__top-actions {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
+  min-height: 34px;
 }
 
 .wb-library-drawer__close {
@@ -3560,14 +3561,15 @@
   position: relative;
   display: grid;
   grid-template-columns: auto 22px;
-  align-items: start;
+  align-items: center;
   gap: 2px;
 }
 
 .wb-library-drawer__source {
   width: auto;
+  min-width: 34px;
   height: 30px;
-  padding: 0 9px;
+  padding: 0 10px;
   border: 1px solid rgba(248, 113, 113, 0.25);
   border-radius: 8px;
   background: #fff1f2;
@@ -3583,8 +3585,15 @@
 
 .wb-library-drawer__source-logo {
   font-size: 12px;
-  font-weight: 720;
+  font-weight: 700;
   line-height: 1;
+}
+
+.wb-library-drawer__source[data-testid='library-source-101'] {
+  min-width: 42px;
+  border-color: rgba(34, 197, 94, 0.26);
+  background: #ecfdf5;
+  color: #16a34a;
 }
 
 .wb-library-drawer__source small {
@@ -3613,6 +3622,9 @@
 .wb-library-drawer__source-id-toggle {
   width: 22px;
   height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 7px;
   background: #f8fafc;
@@ -3691,25 +3703,76 @@
   font-weight: 620;
 }
 
-.wb-library-detail-board {
+.wb-library-goban-frame {
+  display: grid;
+  place-items: center;
   overflow: hidden;
-  border-radius: 8px;
   background: #fff;
-  box-shadow: 0 12px 0 rgba(120, 113, 108, 0.42);
 }
 
-.wb-library-detail-board .wb-mini-board {
-  width: 100%;
+.wb-library-goban-frame .shudan-goban {
+  --shudan-board-border-width: 0.08em;
+  --shudan-board-border-color: #d6dee9;
+  --shudan-board-background-color: #f8fafc;
+  --shudan-board-foreground-color: #7d8795;
+
+  display: inline-grid !important;
+  background: #f8fafc !important;
+  color: #7d8795;
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.08);
+}
+
+.wb-library-goban-frame .shudan-gridline,
+.wb-library-goban-frame .shudan-hoshi,
+.wb-library-goban-frame .shudan-line {
+  fill: #7d8795;
+  stroke: #7d8795;
+}
+
+.wb-library-goban-frame .shudan-stone-image {
+  overflow: hidden;
+  border-radius: 50%;
+  background-image: none;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  text-indent: -9999rem;
+}
+
+.wb-library-goban-frame .shudan-stone-image.shudan-sign_1 {
+  background: radial-gradient(circle at 34% 28%, #4b5563 0, #111827 58%, #020617 100%);
+}
+
+.wb-library-goban-frame .shudan-stone-image.shudan-sign_-1 {
+  background: radial-gradient(circle at 34% 28%, #fff 0, #f8fafc 48%, #d6dce5 100%);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.55);
+}
+
+.wb-library-goban-frame .shudan-vertex:not(.shudan-sign_0) .shudan-shadow {
+  background: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 0.08em 0.16em rgba(15, 23, 42, 0.16);
+  transform: translate(0.04em, 0.06em);
+}
+
+.wb-library-goban-frame--detail {
+  justify-self: center;
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 6px 0 rgba(120, 113, 108, 0.34);
+}
+
+.wb-library-goban-frame--detail .shudan-goban {
   aspect-ratio: 1;
 }
 
 .wb-library-detail-heading {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   color: #2b1212;
   font-size: 20px;
-  font-weight: 680;
-  line-height: 1.16;
+  font-weight: 660;
+  line-height: 1.17;
 }
 
 .wb-library-detail-heading strong {
@@ -3723,7 +3786,7 @@
 .wb-library-detail-list {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 7px 16px;
+  gap: 6px 16px;
   margin: 0;
   color: #475569;
   font-size: 12px;
@@ -3738,8 +3801,8 @@
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: #334155;
-  font-weight: 620;
+  color: #40516a;
+  font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3762,6 +3825,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wb-library-drawer__detail[data-testid='library-problem-detail'] .wb-library-detail-heading {
+  color: #3a1717;
+  font-size: 20px;
+  font-weight: 660;
+}
+
+.wb-library-drawer__detail[data-testid='library-problem-detail'] .wb-library-detail-list {
+  margin-top: 1px;
 }
 
 .wb-library-drawer__grid-panel {
@@ -4001,12 +4074,18 @@
   background: #edf4ff;
 }
 
-.wb-library-drawer__list--visual .wb-mini-board {
-  width: 100%;
+.wb-library-goban-frame--tile {
+  justify-self: center;
+  width: max-content;
+  max-width: 100%;
   height: auto;
   aspect-ratio: 1;
   border-radius: 6px;
-  box-shadow: 8px 9px 0 rgba(120, 113, 108, 0.42);
+  box-shadow: 5px 6px 0 rgba(120, 113, 108, 0.34);
+}
+
+.wb-library-goban-frame--tile .shudan-goban {
+  aspect-ratio: 1;
 }
 
 .wb-library-drawer__item-main {
@@ -4026,14 +4105,14 @@
 
 .wb-library-drawer__item strong {
   color: #2b1212;
-  font-size: 16px;
-  font-weight: 620;
+  font-size: 15px;
+  font-weight: 610;
   line-height: 1.12;
 }
 
 .wb-library-drawer__item small {
   color: #64748b;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 520;
   line-height: 1.2;
 }

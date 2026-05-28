@@ -419,6 +419,7 @@ describe('LibrarySideDrawer golden path row routing', () => {
     )
 
     const tile = container.querySelector('[data-testid="library-kifu-tile"]')
+    assert.ok(tile.querySelector('.shudan-goban'), 'Kifu tile should render the real MiniGoban surface')
     assert.ok(tile.textContent.includes('柯洁 / 申真谞'))
     assert.ok(tile.textContent.includes('2026-05-28 · W+2.5'))
     assert.ok(!tile.textContent.includes('Q-999'), 'Kifu tile should not render problem-style QID text')
@@ -446,6 +447,7 @@ describe('LibrarySideDrawer golden path row routing', () => {
     )
 
     const tile = container.querySelector('[data-testid="library-problem-tile"]')
+    assert.ok(tile.querySelector('.shudan-goban'), 'Problem tile should render the real MiniGoban surface')
     assert.ok(tile.textContent.includes('死活 Q-58312'))
     assert.ok(tile.textContent.includes('2D · 角部净活'))
   })

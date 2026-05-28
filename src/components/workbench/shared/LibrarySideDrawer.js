@@ -1,5 +1,6 @@
 import {h, Component} from 'preact'
-import MiniBoard from './MiniBoard.js'
+import Board from '@sabaki/go-board'
+import MiniGoban from '../../MiniGoban.js'
 
 const externalSourceLabels = {
   fox: '野狐对局',
@@ -31,6 +32,92 @@ const KIFU_RULE_OPTIONS = ['中国规则', '日韩规则', '应氏规则', '其�
 const KIFU_TIME_OPTIONS = ['快棋', '30m + 读秒', '1h + 读秒', '长棋', '不限时']
 const PROBLEM_TYPE_OPTIONS = ['死活', '手筋', '官子', '方向', '征子', '连接']
 const DIFFICULTY_STEPS = ['10K', '5K', '1K', '1D', '2D', '3D', '4D', '5D']
+const DETAIL_GOBAN_MAX_SIZE = 330
+const TILE_GOBAN_MAX_SIZE = 210
+const PREVIEW_STONE_VARIANTS = [
+  [
+    [-1, 4, 2], [-1, 6, 2], [-1, 8, 3],
+    [-1, 4, 4], [1, 5, 4], [1, 6, 4], [-1, 7, 4],
+    [-1, 4, 5], [1, 5, 5], [1, 7, 5], [-1, 8, 5],
+    [-1, 4, 6], [1, 5, 6], [1, 6, 6], [-1, 7, 6],
+    [-1, 5, 7], [-1, 6, 7],
+  ],
+  [
+    [-1, 4, 2], [-1, 5, 2], [-1, 6, 2], [-1, 7, 2],
+    [-1, 4, 3], [1, 5, 3], [1, 7, 3],
+    [-1, 4, 4], [1, 5, 4], [1, 6, 4], [-1, 7, 4],
+    [-1, 3, 5], [1, 4, 5], [1, 6, 5], [1, 7, 5], [-1, 8, 5],
+    [-1, 4, 6], [1, 5, 6], [-1, 6, 6], [-1, 7, 6],
+  ],
+  [
+    [1, 5, 1], [-1, 6, 1], [1, 7, 1],
+    [1, 5, 2], [1, 7, 2], [-1, 8, 2],
+    [1, 5, 3], [-1, 6, 3], [-1, 7, 3], [1, 8, 3],
+    [1, 5, 4], [-1, 6, 4], [1, 7, 4],
+    [1, 5, 5], [1, 6, 5], [-1, 6, 6],
+  ],
+  [
+    [1, 6, 1], [-1, 7, 1], [-1, 8, 1],
+    [1, 6, 2], [-1, 7, 2],
+    [1, 6, 3], [-1, 7, 3],
+    [1, 6, 4], [-1, 7, 4],
+    [1, 6, 5], [-1, 7, 5], [1, 8, 5], [1, 9, 5],
+    [1, 6, 6], [1, 7, 6], [-1, 8, 6],
+  ],
+  [
+    [1, 1, 3], [-1, 2, 4], [-1, 3, 4], [-1, 4, 4],
+    [1, 5, 4], [1, 6, 4], [1, 7, 4], [-1, 8, 4],
+    [1, 2, 5], [1, 4, 5], [-1, 5, 5], [-1, 6, 5],
+    [1, 2, 6], [1, 4, 6],
+  ],
+  [
+    [-1, 4, 1], [1, 5, 1], [1, 6, 1], [1, 7, 1],
+    [-1, 4, 2], [1, 5, 2],
+    [-1, 4, 3], [-1, 5, 3], [1, 6, 3],
+    [-1, 4, 4], [1, 7, 4], [1, 8, 4],
+    [-1, 5, 5], [-1, 6, 5], [-1, 7, 5], [-1, 8, 5],
+  ],
+  [
+    [1, 2, 2], [1, 3, 2], [-1, 6, 2], [-1, 7, 2],
+    [1, 2, 3], [-1, 3, 3], [1, 6, 3], [-1, 7, 3],
+    [-1, 3, 4], [1, 6, 4], [1, 7, 4],
+    [1, 2, 5], [1, 3, 5], [1, 4, 5], [-1, 6, 5], [-1, 7, 5],
+    [-1, 2, 6], [-1, 3, 6], [1, 6, 6], [1, 7, 6],
+  ],
+  [
+    [-1, 2, 2], [1, 3, 2], [1, 4, 2], [-1, 7, 2], [-1, 8, 2],
+    [-1, 2, 3], [1, 5, 3], [1, 6, 3], [-1, 8, 3],
+    [-1, 3, 4], [1, 6, 4], [-1, 7, 4],
+    [1, 3, 5], [1, 4, 5], [1, 5, 5], [-1, 6, 5], [-1, 7, 5], [-1, 8, 5],
+    [1, 3, 6], [1, 4, 6], [1, 5, 6], [-1, 6, 6],
+  ],
+]
+const DEFAULT_PREVIEW_BOARDS = PREVIEW_STONE_VARIANTS.map(createPreviewBoard)
+
+function createPreviewBoard(stones = PREVIEW_STONE_VARIANTS[0]) {
+  return stones.reduce(
+    (board, [sign, x, y]) => board.set([x - 1, y - 1], sign),
+    Board.fromDimensions(9, 9),
+  )
+}
+
+function getPreviewBoardIndex(item) {
+  let value = String(item?.key ?? item?.id ?? item?.qid ?? item?.date ?? '')
+  let hash = 0
+  for (let char of value) hash = (hash * 31 + char.charCodeAt(0)) % 997
+  return hash % DEFAULT_PREVIEW_BOARDS.length
+}
+
+function getPreviewBoard(item) {
+  if (item?.board?.signMap) return item.board
+  if (item?.previewBoard?.signMap) return item.previewBoard
+  if (item?.signMap) {
+    let height = item.signMap.length
+    let width = height === 0 ? 0 : item.signMap[0].length
+    return {...Board.fromDimensions(width, height), signMap: item.signMap}
+  }
+  return DEFAULT_PREVIEW_BOARDS[getPreviewBoardIndex(item)]
+}
 
 function getRootData(gameTree) {
   if (gameTree == null) return {}
@@ -770,9 +857,6 @@ export default class LibrarySideDrawer extends Component {
   }
 
   renderExternalSourceButton(source, testId, state, handler) {
-    let statusText =
-      state.loading ? '同步中' :
-        state.status === 'synced' ? '已同步' : ''
     let editorOpen = this.state.sourceEditor === source
     let inputLabel = externalSourceInputLabels[source]
     let sourceGlyph = source === 'fox' ? '狐' : '101'
@@ -795,7 +879,6 @@ export default class LibrarySideDrawer extends Component {
         onClick: () => this.handleExternalSourceClick(source, handler),
       },
         h('span', {class: 'wb-library-drawer__source-logo'}, sourceGlyph),
-        statusText && h('small', {}, statusText),
       ),
       h('button', {
         type: 'button',
@@ -1154,8 +1237,8 @@ export default class LibrarySideDrawer extends Component {
 
     return h('aside', {class: 'wb-library-drawer__detail', 'data-testid': 'library-kifu-detail'},
       h('span', {class: 'wb-library-drawer__detail-label'}, '选中棋局'),
-      h('div', {class: 'wb-library-detail-board'},
-        h(MiniBoard, {size: 9}),
+      h('div', {class: 'wb-library-goban-frame wb-library-goban-frame--detail'},
+        h(MiniGoban, {board: getPreviewBoard(item), maxSize: DETAIL_GOBAN_MAX_SIZE}),
       ),
       h('div', {class: 'wb-library-detail-heading'},
         h('strong', {}, `黑 ${item.black || '未记录'}`),
@@ -1195,8 +1278,8 @@ export default class LibrarySideDrawer extends Component {
 
     return h('aside', {class: 'wb-library-drawer__detail', 'data-testid': 'library-problem-detail'},
       h('span', {class: 'wb-library-drawer__detail-label'}, '选中问题'),
-      h('div', {class: 'wb-library-detail-board'},
-        h(MiniBoard, {size: 9}),
+      h('div', {class: 'wb-library-goban-frame wb-library-goban-frame--detail'},
+        h(MiniGoban, {board: getPreviewBoard(item), maxSize: DETAIL_GOBAN_MAX_SIZE}),
       ),
       h('div', {class: 'wb-library-detail-heading'},
         h('strong', {}, item.type),
@@ -1233,7 +1316,9 @@ export default class LibrarySideDrawer extends Component {
         'data-testid': 'library-kifu-tile',
         onClick,
       },
-        h(MiniBoard, {size: 9}),
+        h('span', {class: 'wb-library-goban-frame wb-library-goban-frame--tile'},
+          h(MiniGoban, {board: getPreviewBoard(item), maxSize: TILE_GOBAN_MAX_SIZE}),
+        ),
         h('span', {class: 'wb-library-drawer__item-main'},
           h('strong', {}, item.playerLine),
           h('small', {}, `${dateText(item.date)} · ${item.result || '结果未定'}`),
@@ -1252,7 +1337,9 @@ export default class LibrarySideDrawer extends Component {
         'data-testid': 'library-problem-tile',
         onClick,
       },
-        h(MiniBoard, {size: 9}),
+        h('span', {class: 'wb-library-goban-frame wb-library-goban-frame--tile'},
+          h(MiniGoban, {board: getPreviewBoard(problem), maxSize: TILE_GOBAN_MAX_SIZE}),
+        ),
         h('span', {class: 'wb-library-drawer__item-main'},
           h('strong', {}, `${problem.type} ${problem.qid}`),
           h('small', {}, `${problem.difficulty} · ${problem.description}`),
