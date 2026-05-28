@@ -172,6 +172,23 @@ describe('LibrarySideDrawer golden path row routing', () => {
     )
   })
 
+  it('keeps synced source entries logo-only in the compact toolbar', () => {
+    const {container} = renderToDom(
+      h(LibrarySideDrawer, {
+        open: true,
+        type: 'problems',
+        librarySourceStates: {
+          oneOhOne: {status: 'synced'},
+        },
+      }),
+    )
+
+    const sourceButton = container.querySelector('[data-testid="library-source-101"]')
+    assert.ok(sourceButton.className.includes('wb-library-drawer__source--synced'))
+    assert.strictEqual(sourceButton.textContent.trim(), '101')
+    assert.ok(!sourceButton.textContent.includes('已同步'))
+  })
+
   it('opens a Fox id input and submits the id to the source handler', async () => {
     const submitted = []
     const {container, fireEvent} = renderToDom(
