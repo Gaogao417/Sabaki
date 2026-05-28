@@ -26,8 +26,9 @@ Architecture v0.4      = legacy reference，只用于理解迁移前状态
 
 Play Mode 的普通交替落子主线以
 `docs/design/play-move-committed-architecture.md` 为准。该文档定义
-`PlayMoveCommitted`、AI 首手/应手、Attempt 记录、后台 analysis 调度与 overlay
-边界；本文只保留摘要。
+Play move commit 生命周期点、AI 首手/应手、Attempt 记录、后台 analysis 调度与
+overlay 边界；本文只保留摘要。`PlayMoveCommitted` 在这些文档中是架构描述名，
+不要求实现为正式领域事件类型或事件总线消息。
 
 术语映射：
 
@@ -828,7 +829,7 @@ type AiMoveService = {
   }): Promise<PlayMoveCommand | null>
 
   maybeContinueAfterPlayMove(input: {
-    commit: PlayMoveCommitted
+    context: PlayMoveCommitContext
   }): Promise<PlayMoveCommand | null>
 
   requestAiMove(input: {
@@ -853,8 +854,8 @@ type AiMoveService = {
 ```text
 WorkbenchPlayerConfig.black / white 决定黑白方由 human 或 ai 控制。
 当前 game tree 的 next player 对应颜色为 ai 时，aiMoveService 请求引擎生成 AI move command。
-AI move command 必须回到 Play move commit 主线，由 documentStore 提交后产生
-PlayMoveCommitted。
+AI move command 必须回到 Play move commit 主线，由 documentStore.playMove 提交；
+changed moveResult 出现后再进入 after-play-move 后置流程。
 黑白双方都可为 human，也都可为 ai；双方都为 ai 时必须有自动对弈节流和停止条件。
 ```
 
@@ -923,7 +924,7 @@ stopOnUserInterruption
 ```
 
 AI 落子必须走 Play move command / Problem move command 对应主线。Play Mode 中，
-AI move 成功提交后产生 `PlayMoveCommitted`，再由 AttemptRecorder 写入 Attempt，
+AI move 成功提交后进入 after-play-move 后置流程，再由 AttemptRecorder 写入 Attempt，
 `moveActors` 标记为 `ai`。
 
 Play / Problem / Recall 下 overlay projection 为 off；`aiMoveService` 不参与
@@ -1799,36 +1800,41 @@ openTask(taskId, mode?)
 否则 → play
 ```
 
-## 9.3 PlayMoveCommitted 与用户落子
+## 9.3 Play move commit 与用户落子
 
 ```text
 User clicks board intersection
 → boardInteractionController resolves PLAY_STONE + mutationContract='playMove'
 → Play move command
 → documentStore.playMove(vertex, actor='human')
-→ PlayMoveCommitted(treePositionBefore, treePositionAfter, color, move, actor)
+→ changed moveResult
+→ afterPlayMoveCommitted(context)
 → AttemptRecorder appendMove({attemptId, move, actor:'human'})
-→ playTrainingMonitor.onUserMove(commit)
+→ playTrainingMonitor.onUserMove(context)
 → analysis scheduler schedules live/background analysis
-→ aiMoveService.maybeContinueAfterPlayMove(commit)
+→ aiMoveService.maybeContinueAfterPlayMove(context)
 → if next side is AI:
      create AiMovePending(requestId, tabId, attemptId, positionHash, color)
      requestAiMove with playerConfig
      validateAiMove including request freshness
      return AI Play move command
      documentStore.playMove(aiMove, actor='ai')
-     PlayMoveCommitted(actor='ai')
+     changed moveResult
+     afterPlayMoveCommitted(context with actor='ai')
      AttemptRecorder appendMove({attemptId, move: aiMove, actor:'ai'})
 ```
 
 PlayMode 的主写入事实是 `documentStore` / SGF game tree。Attempt、monitor、analysis
-调度、AI 应手都是 `PlayMoveCommitted` 之后的 subscriber / side effect。
+调度、AI 应手都是 `documentStore.playMove` 成功之后的后置 subscriber / side effect。
+`PlayMoveCommitted` 只作为这个生命周期点的描述名；实现上可以是
+`afterPlayMoveCommitted(context)`，不必落成持久事件、事件总线或大字段类型。
 
-PlayMoveCommitted 不触发 `overlayRegion`。Play / Problem / Recall 的 overlay projection 是
-off；territory / compare / analysis overlay 只属于 Analysis Mode 或 mode transition cleanup。
+Play move commit 不触发 `overlayRegion`。Play / Problem / Recall 的 overlay projection
+是 off；territory / compare / analysis overlay 只属于 Analysis Mode 或 mode transition
+cleanup。
 
-Problem Mode 不使用 `PlayMoveCommitted`。Problem 棋盘点击产生 `ProblemMoveCommitted`
-或同职责事件，主写入是 `problemFlowService`、`problemView` 和 mutable Attempt line。
+Problem Mode 不使用 Play move commit。Problem 棋盘点击进入 Problem 自己的提交点，
+主写入是 `problemFlowService`、`problemView` 和 mutable Attempt line。
 Problem AI 应手必须受 `task.problemArea` 约束；任何过期或范围外 AI 落子都不允许进入
 Problem runtime 或 Attempt。
 

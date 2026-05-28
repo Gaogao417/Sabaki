@@ -6,8 +6,8 @@ Revise the PlayMoveCommitted documentation so it describes a lightweight post-`d
 
 ## Steps
 
-- [x] Step 1: Revise the standalone PlayMoveCommitted design document. commit: pending
-- [ ] Step 2: Sync the lightweight wording into architecture and PRD.
+- [x] Step 1: Revise the standalone PlayMoveCommitted design document. commit: cff560f8
+- [x] Step 2: Sync the lightweight wording into architecture, PRD, and residual diagram labels. commit: pending
 - [ ] Step 3: Verify documentation consistency.
 
 ## Notes

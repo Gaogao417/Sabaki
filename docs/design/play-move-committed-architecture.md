@@ -242,7 +242,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  P["PlayMode"] --> P1["PlayMoveCommitted"]
+  P["PlayMode"] --> P1["Play move commit"]
   PR["ProblemMode"] --> PR1["ProblemMoveCommitted"]
   R["RecallMode"] --> R1["RecallAnswerCommitted"]
   A["AnalysisMode"] --> A1["AnalysisPositionCommitted / ScratchChanged"]

@@ -18,7 +18,8 @@
 - 当前模块架构以 [Training Architecture v0.5](../architecture/gabaki-sabaki-training-architecture-v0.5.md) 为准。
 - 当前长期迁移执行以 [Training Implementation Plan](../architecture/gabaki-sabaki-training-implementation-plan.md) 为准。
 - 棋盘读写边界以 [Position Source and Mutation Contract](../architecture/position-source-mutation-contract.md) 为准。
-- Play Mode 普通交替落子和 AI 应手边界以 [PlayMoveCommitted Architecture](../design/play-move-committed-architecture.md) 为准。
+- Play Mode 普通交替落子和 AI 应手边界以 [PlayMoveCommitted Architecture](../design/play-move-committed-architecture.md) 为准；
+  其中 `PlayMoveCommitted` 是产品/架构描述名，不要求实现为正式事件类型。
 - 野狐对局数据入口以 [Fox Game Import PRD](./fox_game_import_prd.md) 为准，并必须进入本 PRD 的
   TrainingTask / Game / Recall 训练闭环。
 - 101 围棋错题入口以 [101 Weiqi Error Sync PRD](./101weiqi_error_sync_prd.md) 为准，并必须进入本 PRD
@@ -330,17 +331,20 @@ type Game = {
 → 进入 Recall Mode
 ```
 
-### 6.1.6 PlayMoveCommitted 产品边界
+### 6.1.6 Play move commit 产品边界
 
 Play Mode 的普通交替落子必须表现为一条稳定主线：
 
 ```text
 用户或 AI 产生一手
 → 写入当前对局棋树
-→ 形成 PlayMoveCommitted
+→ 完成 Play move commit
 → 记录到 active TrainingAttempt
 → 后台触发训练评估 / AI 应手判断 / analysis 调度
 ```
+
+这里的 `PlayMoveCommitted` 只是对“棋树已经成功写入，可以触发后置流程”的命名；
+产品不要求它成为可见对象、持久事件或复杂领域类型。
 
 产品语义：
 
@@ -1302,12 +1306,12 @@ severe：亏 8 目以上
 Play Mode 中，AI 不应直接修改训练事实或 overlay。AI 能力只提供下一手候选：
 
 ```text
-PlayMoveCommitted / start turn
+Play move commit / start turn
 → aiMoveService 判断 next color 是否由 AI 控制
 → engineService.requestMove 获取候选手
 → 校验 requestId / attemptId / treePosition / mode freshness
 → 返回 AI move command
-→ 通过 Play move 主线提交为新的 PlayMoveCommitted
+→ 通过 Play move 主线写入棋树并进入后置流程
 ```
 
 验收口径：
