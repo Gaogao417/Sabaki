@@ -1,8 +1,8 @@
-# PlayMoveCommitted 架构设计
+# PlayMoveCommitted 架构说明
 
 > 文档类型：Workbench Play Mode 棋盘写入边界设计
-> 状态：v0.1 draft
-> 日期：2026-05-28
+> 状态：v0.2 draft
+> 日期：2026-05-29
 > 关联文档：
 > - `docs/architecture/gabaki-sabaki-training-architecture-v0.5.md`
 > - `docs/product/sabaki-training-prd.md`
@@ -26,21 +26,22 @@
 ```
 
 这让“普通交替落子”与“训练记录、评估、AI 应手”耦合在同一段控制流里。新的设计把
-Play 的核心写入事实抽象为 `PlayMoveCommitted`：它不是一个新的 WorkbenchMode，也不是 UI
-事件，而是一次 Play 合法落子写入 game tree 后产生的领域事件。
+Play 的核心写入事实标记为 `PlayMoveCommitted`：它不是一个新的 WorkbenchMode，也不是 UI
+事件，更不是当前阶段必须实现的正式领域事件类型。它只是 `documentStore.playMove` 成功写入
+game tree 后的架构提交点 / lifecycle point，用来说明哪些后置服务可以被触发。
 
 ---
 
 ## 2. 目标
 
-`PlayMoveCommitted` 的目标是明确三层边界：
+`PlayMoveCommitted` 的目标是明确三层边界，而不是引入复杂事件模型：
 
 ```text
 主线：
   验证当前 Play 落子是否合法，并写入 game tree。
 
-提交事件：
-  描述已成功写入的 Play move，包括颜色、actor、前后位置和 move metadata。
+提交点：
+  documentStore.playMove 已经成功返回 changed moveResult。
 
 订阅副作用：
   Attempt 记录、训练评估、AI 应手、后台分析调度。
@@ -54,6 +55,7 @@ Play 的核心写入事实抽象为 `PlayMoveCommitted`：它不是一个新的 
 - AI 首手、AI 应手、AI vs AI 自动推进都必须重新进入同一条 Play move commit 主线。
 - Play Mode 不显示 territory / compare / analysis overlay；`overlayRegion` 不参与 Play move fan-out。
 - Play 中可以后台调度 analysis，用于后续 `MoveEvaluation` / `BadMove`，但这不是 overlay 显示。
+- 当前阶段不要求 event bus，不要求持久化 event，也不要求一个字段完备的 `PlayMoveCommitted` TypeScript 类型。
 
 ---
 
@@ -71,43 +73,44 @@ AnalysisPositionCommitted Analysis Mode scratch / working position 编辑，不�
 
 ---
 
-## 4. 领域事件
+## 4. 轻量提交点
 
-建议的事件形态：
+第一阶段实现可以只是一个命名清楚的后置处理函数：
 
 ```ts
-type PlayMoveCommitted = {
-  kind: 'play-move-committed'
-  tabId: string
-  attemptId?: string
-  actor: 'human' | 'ai'
-  color: 'black' | 'white'
-  move: string
-  vertex: [number, number]
-  treePositionBefore: string
-  treePositionAfter: string
-  moveIndex?: number
-  pass: boolean
-  capturing: boolean
-  suicide: boolean
-  ko: boolean
-  doublePass: boolean
-  playerConfig: {
-    black: 'human' | 'ai'
-    white: 'human' | 'ai'
-    ai?: {
-      engineId?: string
-      timeLimitMs?: number
-      maxVisits?: number
-      autoPlay?: boolean
-    }
-  }
-  correlationId: string
+const moveResult = await documentStore.playMove(vertex, {player})
+
+if (isChangedPlayResult(moveResult)) {
+  await afterPlayMoveCommitted({
+    tab,
+    actor,
+    moveResult,
+    treePositionBefore,
+  })
 }
 ```
 
-`moveIndex` 是 Attempt 记录视角的序号；没有 active attempt 的自由对局可以省略。
-`treePositionAfter` 是后续 AI 判断、后台分析和 UI 投影的事实来源。
+`afterPlayMoveCommitted` 的输入只需要足够支撑后置服务：
+
+```ts
+type PlayMoveCommitContext = {
+  tab: WorkbenchTab
+  actor: 'human' | 'ai'
+  moveResult: {
+    treePosition: string
+    pass?: boolean
+    capturing?: boolean
+    suicide?: boolean
+    ko?: boolean
+    doublePass?: boolean
+  }
+  treePositionBefore: string
+}
+```
+
+这个轻量 context 是实现辅助，不是必须长期稳定的领域模型。需要 `move`、`color`、`moveIndex`
+时，可以由后置 handler 从 `vertex`、`moveResult`、当前 board/player、active attempt 中派生。
+只有当多个模块反复复制这些派生逻辑、测试夹具明显变复杂时，再考虑收敛为正式类型。
 
 ---
 
@@ -120,7 +123,7 @@ flowchart TD
   C --> D["documentStore.playMove"]
   D --> E{"valid and changed?"}
   E -->|no| F["return no-op / rejected"]
-  E -->|yes| G["PlayMoveCommitted"]
+  E -->|yes| G["afterPlayMoveCommitted"]
 
   G --> H["AttemptRecorder"]
   G --> I["playTrainingMonitor"]
@@ -156,7 +159,7 @@ sequenceDiagram
   UI->>BIC: click vertex
   BIC->>DS: playMove(vertex, actor=human)
   DS-->>BIC: moveResult(treePositionAfter)
-  BIC-->>BIC: emit PlayMoveCommitted
+  BIC-->>BIC: afterPlayMoveCommitted(context)
   BIC->>AR: appendMove(actor=human)
   BIC->>MON: onUserMove(commit)
   BIC->>ANA: schedule live analysis
@@ -194,9 +197,9 @@ sequenceDiagram
   ENG-->>AI: move
   AI-->>PM: AI move command
   PM->>DS: playMove(aiMove, actor=ai)
-  DS-->>PM: PlayMoveCommitted
+  DS-->>PM: changed moveResult
   PM->>AR: appendMove(actor=ai)
-  PM->>AI: maybeContinueAfterPlayMove(commit)
+  PM->>AI: afterPlayMoveCommitted -> maybe continue
 ```
 
 这解决人执白 / AI 执黑时的首手问题：开局创建 attempt 后，由 `aiMoveService`
@@ -209,10 +212,10 @@ sequenceDiagram
 
 | Subscriber | 读取 | 写入 | 允许条件 | 禁止 |
 | --- | --- | --- | --- | --- |
-| AttemptRecorder | `PlayMoveCommitted`, active attempt | `TrainingAttempt.userLine`, `moveActors` | active attempt 且 attempt 未冻结 | 决定落子是否合法 |
-| playTrainingMonitor | commit + analysis result | `MoveEvaluation`, `BadMove`, runtime evaluation cache | active attempt | 写 game tree，触发 overlay |
+| AttemptRecorder | commit context, active attempt | `TrainingAttempt.userLine`, `moveActors` | active attempt 且 attempt 未冻结 | 决定落子是否合法 |
+| playTrainingMonitor | commit context + analysis result | `MoveEvaluation`, `BadMove`, runtime evaluation cache | active attempt | 写 game tree，触发 overlay |
 | AnalysisScheduler | `treePositionAfter` | analysis queue/cache | Play move committed | 显示 overlay |
-| aiMoveService | commit, playerConfig, current tree position | `pendingAiMove`; engine request; returns AI move command | next side is AI and autoplay allowed | 直接写 Attempt、直接写 overlay、绕过 Play move command |
+| aiMoveService | commit context, playerConfig, current tree position | `pendingAiMove`; engine request; returns AI move command | next side is AI and autoplay allowed | 直接写 Attempt、直接写 overlay、绕过 Play move command |
 
 `overlayRegion` 不在表中。Play/Problem/Recall 的 overlay projection 是 `off`。
 
@@ -220,14 +223,14 @@ sequenceDiagram
 
 ## 9. Store / Service 使用矩阵
 
-| 层 | PlayMoveCommitted 中的角色 |
+| 层 | Play move commit 点中的角色 |
 | --- | --- |
 | `documentStore` | 主写入：提交 SGF game tree move，返回 treePositionAfter 和 move metadata。 |
 | `workbenchStore` | 读取 active tab、mode、playerConfig、activeAttemptId；不由 move commit 直接 patch mode。 |
 | `trainingRuntimeStore` | 存放 pending AI request、pending evaluation、visible bad move ids 等 transient companion state。 |
 | `trainingRepository` | 由 attempt/monitor 服务写入 Attempt、MoveEvaluation、BadMove。 |
 | `attemptService` | 记录 committed move 到 active Attempt；冻结后拒绝写入。 |
-| `playTrainingMonitor` | 接收 committed move 和 analysis update，生成训练评估事实。 |
+| `playTrainingMonitor` | 接收 commit context 和 analysis update，生成训练评估事实。 |
 | `aiMoveService` | 判断 AI turn、管理 freshness、请求 engine move、返回 AI move command。 |
 | `engineService` | 只作为 engine adapter 被 `aiMoveService` 调用；不应在 Workbench Play 主线中直接写棋树。 |
 | `analysisService` | 后台调度 live analysis；其结果供 monitor / panels 消费，不在 Play 显示 overlay。 |
@@ -264,7 +267,7 @@ Mode-specific restrictions:
 The current implementation can migrate incrementally:
 
 1. Keep `executePlayInteraction` as the low-level document write adapter.
-2. Introduce a small Play move command shape around it, even if initially implemented inside `boardInteractionController`.
+2. Add a small `afterPlayMoveCommitted(...)` function or equivalent local pipeline after changed `documentStore.playMove`.
 3. Move attempt append, monitor, analysis scheduling, and AI reply into named post-commit handlers.
 4. Change `aiMoveService` from "maybe play after attempt line" to "maybe continue from committed game tree position".
 5. Route AI-generated moves back into the same Play move command path.
