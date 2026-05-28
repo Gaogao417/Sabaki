@@ -7,7 +7,7 @@ Document the Play Mode move-commit architecture from the recent discussion, then
 ## Steps
 
 - [x] Step 1: Create the standalone PlayMoveCommitted architecture design document with diagrams.
-- [ ] Step 2: Sync the design into the current architecture and PRD documents.
+- [x] Step 2: Sync the design into the current architecture and PRD documents.
 - [ ] Step 3: Verify the changed documentation and record completion.
 
 ## Notes

@@ -18,6 +18,7 @@
 - 当前模块架构以 [Training Architecture v0.5](../architecture/gabaki-sabaki-training-architecture-v0.5.md) 为准。
 - 当前长期迁移执行以 [Training Implementation Plan](../architecture/gabaki-sabaki-training-implementation-plan.md) 为准。
 - 棋盘读写边界以 [Position Source and Mutation Contract](../architecture/position-source-mutation-contract.md) 为准。
+- Play Mode 普通交替落子和 AI 应手边界以 [PlayMoveCommitted Architecture](../design/play-move-committed-architecture.md) 为准。
 - 野狐对局数据入口以 [Fox Game Import PRD](./fox_game_import_prd.md) 为准，并必须进入本 PRD 的
   TrainingTask / Game / Recall 训练闭环。
 - 101 围棋错题入口以 [101 Weiqi Error Sync PRD](./101weiqi_error_sync_prd.md) 为准，并必须进入本 PRD
@@ -328,6 +329,26 @@ type Game = {
 → 创建默认 Recall Session
 → 进入 Recall Mode
 ```
+
+### 6.1.6 PlayMoveCommitted 产品边界
+
+Play Mode 的普通交替落子必须表现为一条稳定主线：
+
+```text
+用户或 AI 产生一手
+→ 写入当前对局棋树
+→ 形成 PlayMoveCommitted
+→ 记录到 active TrainingAttempt
+→ 后台触发训练评估 / AI 应手判断 / analysis 调度
+```
+
+产品语义：
+
+- 人人对局：黑白均由用户控制；AI 判断入口可以 no-op，但不得请求引擎。
+- 人机对局：AI 首手和 AI 应手都必须像普通落子一样进入同一条对局主线，不能绕过棋树和 Attempt 记录。
+- AI vs AI：允许作为自动对弈模型存在，但必须有最大手数、双 pass、resign、无合法手和用户中断保护。
+- Play Mode 不显示 territory / compare / analysis overlay。系统可以在后台分析棋局用于训练评估，但 overlay 显示必须等进入 Analysis Mode。
+- Play 的主事实是完整 SGF game tree；TrainingAttempt 是训练记录，不替代对局棋树。
 
 ---
 
@@ -1276,7 +1297,27 @@ severe：亏 8 目以上
 死活：目标棋块状态优先
 ```
 
-## 9.3 惩罚手生成
+## 9.3 Play Mode AI 应手
+
+Play Mode 中，AI 不应直接修改训练事实或 overlay。AI 能力只提供下一手候选：
+
+```text
+PlayMoveCommitted / start turn
+→ aiMoveService 判断 next color 是否由 AI 控制
+→ engineService.requestMove 获取候选手
+→ 校验 requestId / attemptId / treePosition / mode freshness
+→ 返回 AI move command
+→ 通过 Play move 主线提交为新的 PlayMoveCommitted
+```
+
+验收口径：
+
+- 人执黑、AI 执白：用户黑棋提交后，AI 白棋通过同一条 Play move 主线提交。
+- AI 执黑、人执白：开局创建 Attempt 后，AI 黑棋首手通过同一条 Play move 主线提交。
+- 人人对局：AI 判断返回 no-op，不触发 engine request。
+- stale AI 请求、切 tab、进入 Analysis、提交 Attempt 或重新开始 Attempt 后返回的 AI move 不得写入棋树或 Attempt。
+
+## 9.4 惩罚手生成
 
 当用户出现 bad move：
 
