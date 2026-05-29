@@ -64,7 +64,9 @@ Date: 2026-05-29
 - implementation: v0.2 terminal guard and AI tree-position freshness implemented; focused
   request-changes and related controller/AI/runtime regressions pass; commit: pending.
 - verification: passed `npm test` (1926 passing) and `npm run bundle`; commit: pending.
-- architecture review: REQUEST_CHANGES; blockers are terminal AI continuation stop and treePosition freshness for stale AI responses.
+- architecture review: REQUEST_CHANGES retry after `72fcdd25`: tree-position freshness is still
+  conditional on optional `WorkbenchTab.currentTreePosition`; add a real current-position reader
+  seam or production-maintained tab position and strengthen tests before retrying review.
 - contract addendum v0.2 request-changes: `test-contract-v0.2-request-changes.md`; commit: pending.
 
 ## Retries
@@ -72,3 +74,5 @@ Date: 2026-05-29
 - retry1 test-writer after request-changes addendum test audit: strengthen T13/T14 source-boundary scans for
   `aiMoveService` monitor/analysis/UI dependencies and forbidden Snapshot/source-specific API/event shortcuts.
   Focused source-boundary tests pass; T10/T11/T12 remain expected RED before implementation.
+- retry2 after architecture review REQUEST_CHANGES: add a test proving AI stale freshness does not rely
+  only on manually seeded `WorkbenchTab.currentTreePosition`, then wire a production current-position source.
