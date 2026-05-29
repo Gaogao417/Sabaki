@@ -70,8 +70,9 @@ Play 对战
 1. **把每一盘棋留下来**  
    不只是保存 SGF，而是保存为可回忆、可复盘、可出题、可复习的训练材料。
 
-2. **把用户产出冻结成 Attempt**  
-   Play / Problem 中的用户走法在提交后冻结为 `TrainingAttempt.userLine`，后续 Recall、Analysis、BadMove 和 Review 都围绕该事实展开。
+2. **把对局/做题产出冻结成训练 Attempt**
+   Play / Problem 中已经提交的完整作答线冻结为 `TrainingAttempt.userLine`，并用 `moveActors`
+   区分 human / ai。后续 Recall、Analysis、BadMove 和 Review 都围绕该训练事实展开。
 
 3. **先自己回忆并修正问题手**  
    major / severe BadMove 不直接跳到答案，而是在 Recall 中触发 `RecallCheckpoint`：用户先摆 correction line，再 reveal AI candidates，再写 comment。
@@ -115,9 +116,9 @@ Play 对战
 
 功能设计必须优先服务训练闭环，而不是追求棋谱编辑器的大而全。
 
-### 4.2 Attempt 是核心事实
+### 4.2 Attempt 是训练核心事实
 
-系统真正要保存和训练的不是“页面状态”，而是用户在 Play / Problem 中产出的一条线：
+系统真正要保存和训练的不是“页面状态”，而是 Play / Problem 中产出的一条线：
 
 ```text
 TrainingTask / Problem
@@ -130,6 +131,8 @@ TrainingTask / Problem
 ```
 
 提交后 Attempt 必须冻结；Recall、Analysis、Punishment、Review 都引用 Attempt 事实，不反向改写它。
+Play Mode 的对局主事实仍是完整 SGF game tree；`TrainingAttempt` 是棋树成功写入后的训练记录，
+不能替代或决定 Play 落子的合法性。
 
 ### 4.3 回忆优先于复盘
 
@@ -194,7 +197,7 @@ Punishment Problem 是错误沉淀机制，不是 RecallCheckpoint 的替代品�
 
 1. Play Mode
    用户和 AI 对战 / 指定局面续弈
-   用户产生 TrainingAttempt.userLine
+   Play 主线产生完整 SGF game tree，并记录 TrainingAttempt.userLine + moveActors
 
 2. Submit
    用户主动提交或对局结束
@@ -246,8 +249,9 @@ Play / Problem / Recall / Analysis
 
 - `Problem` entity / task：一道题、惩罚题或题目来源，是训练业务对象。
 - `WorkbenchMode.problem`：用户正在做题的运行态 mode，拥有 `problemView`、mutable Attempt、
-  pending evaluations 和 visible bad move projection。
-- `TrainingAttempt`：Play / Problem 中用户产出的一条线，是 Recall、Analysis、BadMove 和 Review
+  pending evaluations 和 visible bad move projection。这里的 projection 是 panel/view-model
+  状态，不是 `overlayRegion`。
+- `TrainingAttempt`：Play / Problem 中产出的完整作答线，是 Recall、Analysis、BadMove 和 Review
   的核心事实。提交后冻结，不因后续复盘或修正而改写。
 - `RecallCheckpoint`：Recall 中的问题手主动纠错子流程，不是独立 mode，也不是普通 Problem。
 - `Review`：复习队列和入口，不一定是棋盘 mode。用户从 Review 打开具体题目后进入
@@ -864,6 +868,7 @@ type TrainingAttempt = {
   submittedAt?: string
   status: 'playing' | 'submitted' | 'abandoned'
   userLine: string[]
+  moveActors: Array<'human' | 'ai'>
   moveEvaluations: MoveEvaluation[]
   result?: 'pass' | 'soft_pass' | 'fail' | 'abandoned'
   hintLevelUsed: number
@@ -886,8 +891,8 @@ type MoveEvaluation = {
 }
 ```
 
-提交后 `TrainingAttempt.userLine`、`moveEvaluations`、`result` 和 `badMoveIds` 进入冻结状态。Recall
-和 Analysis 可以创建 correction / reference / note，但不能改写这些提交事实。
+提交后 `TrainingAttempt.userLine`、`moveActors`、`moveEvaluations`、`result` 和 `badMoveIds`
+进入冻结状态。Recall 和 Analysis 可以创建 correction / reference / note，但不能改写这些提交事实。
 
 ---
 
@@ -1795,6 +1800,11 @@ minor bad move 只记录，不生成题
 ## Problem Attempt
 
 用户做某一道题的一次尝试。实现层是 `TrainingAttempt.mode = 'problem'` 的视图，不是独立主事实表。
+
+## TrainingAttempt.userLine
+
+Play / Problem 中冻结的完整作答线。Play Mode 下它可以包含 AI 或对手应手，具体归属由
+`moveActors` 标记；需要只回忆用户手时由 RecallPolicy 过滤。
 
 ## Bad Move
 

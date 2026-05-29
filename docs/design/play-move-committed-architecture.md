@@ -43,14 +43,14 @@ game tree 后的架构提交点 / lifecycle point，用来说明哪些后置服�
 提交点：
   documentStore.playMove 已经成功返回 changed moveResult。
 
-订阅副作用：
+后置处理：
   Attempt 记录、训练评估、AI 应手、后台分析调度。
 ```
 
 核心原则：
 
 - Play Mode 的主写入事实是 `documentStore` / SGF game tree。
-- `Attempt` 是 Play move 的训练记录订阅者，不是落子合法性和棋树推进的主条件。
+- `Attempt` 是 Play move 的训练记录后置参与者，不是落子合法性和棋树推进的主条件。
 - `aiMoveService` 是 AI turn policy + engine request orchestration 的 owner；不新增独立的薄 `AiTurnScheduler`。
 - AI 首手、AI 应手、AI vs AI 自动推进都必须重新进入同一条 Play move commit 主线。
 - Play Mode 不显示 territory / compare / analysis overlay；`overlayRegion` 不参与 Play move fan-out。
@@ -61,12 +61,13 @@ game tree 后的架构提交点 / lifecycle point，用来说明哪些后置服�
 
 ## 3. 非目标
 
-`PlayMoveCommitted` 不覆盖以下动作：
+`PlayMoveCommitted` 不覆盖以下动作；下面这些名称也只是说明各 mode 拥有自己的提交点，
+不是要实现一组 `*Committed` 事件类型：
 
 ```text
-ProblemMoveCommitted      Problem Mode 做题线提交，主写入是 problem runtime + Attempt line。
-RecallAnswerCommitted     Recall Mode 答案提交，不是棋树落子。
-AnalysisPositionCommitted Analysis Mode scratch / working position 编辑，不写 Attempt.userLine。
+Problem move commit point      Problem Mode 做题线提交，主写入是 problem runtime + Attempt line。
+Recall answer submit point     Recall Mode 答案提交，不是棋树落子。
+Analysis scratch changed point Analysis Mode scratch / working position 编辑，不写 Attempt.userLine。
 ```
 
 这四类动作可以共享棋盘 intent 解析，但不能共享同一个写入 executor。
@@ -82,34 +83,47 @@ const moveResult = await documentStore.playMove(vertex, {player})
 
 if (isChangedPlayResult(moveResult)) {
   await afterPlayMoveCommitted({
-    tab,
+    tabId,
+    attemptId,
     actor,
-    moveResult,
+    color,
+    move,
+    moveIndex,
     treePositionBefore,
+    treePositionAfter: moveResult.treePosition,
+    moveResult,
+    correlationId,
   })
 }
 ```
 
-`afterPlayMoveCommitted` 的输入只需要足够支撑后置服务：
+`afterPlayMoveCommitted` 的输入只需要足够支撑后置服务。它应是本地 helper 参数，而不是
+导出的、长期稳定的领域事件类型：
 
 ```ts
-type PlayMoveCommitContext = {
-  tab: WorkbenchTab
+type AfterPlayMoveContext = {
+  tabId: string
+  attemptId?: string
   actor: 'human' | 'ai'
+  color: 'black' | 'white'
+  move: string
+  moveIndex: number
+  treePositionBefore: string
+  treePositionAfter: string
+  requestId?: string
+  correlationId?: string
   moveResult: {
-    treePosition: string
     pass?: boolean
     capturing?: boolean
     suicide?: boolean
     ko?: boolean
     doublePass?: boolean
   }
-  treePositionBefore: string
 }
 ```
 
-这个轻量 context 是实现辅助，不是必须长期稳定的领域模型。需要 `move`、`color`、`moveIndex`
-时，可以由后置 handler 从 `vertex`、`moveResult`、当前 board/player、active attempt 中派生。
+这个轻量 context 是实现辅助，不是必须长期稳定的领域模型。它只携带 `documentStore.playMove`
+成功返回后已经稳定的快照，避免后置 handler 再从当前 tab / board / player 做 stale read。
 只有当多个模块反复复制这些派生逻辑、测试夹具明显变复杂时，再考虑收敛为正式类型。
 
 ---
@@ -151,6 +165,7 @@ sequenceDiagram
   participant UI as Board
   participant BIC as boardInteractionController
   participant DS as documentStore
+  participant Hook as afterPlayMoveCommitted
   participant AR as AttemptRecorder
   participant MON as playTrainingMonitor
   participant ANA as AnalysisScheduler
@@ -159,11 +174,11 @@ sequenceDiagram
   UI->>BIC: click vertex
   BIC->>DS: playMove(vertex, actor=human)
   DS-->>BIC: moveResult(treePositionAfter)
-  BIC-->>BIC: afterPlayMoveCommitted(context)
-  BIC->>AR: appendMove(actor=human)
-  BIC->>MON: onUserMove(commit)
-  BIC->>ANA: schedule live analysis
-  BIC->>AI: maybeContinueAfterPlayMove(commit)
+  BIC->>Hook: afterPlayMoveCommitted(context)
+  Hook->>AR: appendMove(actor=human)
+  Hook->>MON: onUserMove(context)
+  Hook->>ANA: schedule live analysis
+  Hook->>AI: maybeContinueAfterPlayMove(context)
   AI-->>BIC: no-op or AI move command
 ```
 
@@ -190,6 +205,7 @@ sequenceDiagram
   participant ENG as engineService
   participant PM as PlayMoveCommand
   participant DS as documentStore
+  participant Hook as afterPlayMoveCommitted
   participant AR as AttemptRecorder
 
   WF->>AI: maybeStartPlayTurn(tabId, reason=start)
@@ -198,8 +214,9 @@ sequenceDiagram
   AI-->>PM: AI move command
   PM->>DS: playMove(aiMove, actor=ai)
   DS-->>PM: changed moveResult
-  PM->>AR: appendMove(actor=ai)
-  PM->>AI: afterPlayMoveCommitted -> maybe continue
+  PM->>Hook: afterPlayMoveCommitted(context)
+  Hook->>AR: appendMove(actor=ai)
+  Hook->>AI: maybe continue if next side is AI
 ```
 
 这解决人执白 / AI 执黑时的首手问题：开局创建 attempt 后，由 `aiMoveService`
@@ -208,16 +225,17 @@ sequenceDiagram
 
 ---
 
-## 8. Subscriber 边界
+## 8. Post-commit handler 边界
 
-| Subscriber | 读取 | 写入 | 允许条件 | 禁止 |
+| Handler | 读取 | 写入 | 允许条件 | 禁止 |
 | --- | --- | --- | --- | --- |
-| AttemptRecorder | commit context, active attempt | `TrainingAttempt.userLine`, `moveActors` | active attempt 且 attempt 未冻结 | 决定落子是否合法 |
-| playTrainingMonitor | commit context + analysis result | `MoveEvaluation`, `BadMove`, runtime evaluation cache | active attempt | 写 game tree，触发 overlay |
+| AttemptRecorder | after context, active attempt | `TrainingAttempt.userLine`, `moveActors` | active attempt 且 attempt 未冻结 | 决定落子是否合法 |
+| playTrainingMonitor | after context + analysis result | `MoveEvaluation`, `BadMove`, runtime evaluation cache | active attempt | 写 game tree，触发 overlay |
 | AnalysisScheduler | `treePositionAfter` | analysis queue/cache | Play move committed | 显示 overlay |
-| aiMoveService | commit context, playerConfig, current tree position | `pendingAiMove`; engine request; returns AI move command | next side is AI and autoplay allowed | 直接写 Attempt、直接写 overlay、绕过 Play move command |
+| aiMoveService | after context, playerConfig, current tree position | `pendingAiMove`; engine request; returns AI move command | next side is AI and autoplay allowed | 直接写 Attempt、直接写 overlay、绕过 Play move command |
 
 `overlayRegion` 不在表中。Play/Problem/Recall 的 overlay projection 是 `off`。
+这里的 handler 是同步或异步函数调用边界，不表示 event bus subscriber。
 
 ---
 
@@ -230,7 +248,7 @@ sequenceDiagram
 | `trainingRuntimeStore` | 存放 pending AI request、pending evaluation、visible bad move ids 等 transient companion state。 |
 | `trainingRepository` | 由 attempt/monitor 服务写入 Attempt、MoveEvaluation、BadMove。 |
 | `attemptService` | 记录 committed move 到 active Attempt；冻结后拒绝写入。 |
-| `playTrainingMonitor` | 接收 commit context 和 analysis update，生成训练评估事实。 |
+| `playTrainingMonitor` | 接收 after context 和 analysis update，生成训练评估事实。 |
 | `aiMoveService` | 判断 AI turn、管理 freshness、请求 engine move、返回 AI move command。 |
 | `engineService` | 只作为 engine adapter 被 `aiMoveService` 调用；不应在 Workbench Play 主线中直接写棋树。 |
 | `analysisService` | 后台调度 live analysis；其结果供 monitor / panels 消费，不在 Play 显示 overlay。 |
@@ -242,10 +260,10 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  P["PlayMode"] --> P1["Play move commit"]
-  PR["ProblemMode"] --> PR1["ProblemMoveCommitted"]
-  R["RecallMode"] --> R1["RecallAnswerCommitted"]
-  A["AnalysisMode"] --> A1["AnalysisPositionCommitted / ScratchChanged"]
+  P["PlayMode"] --> P1["Play move commit point"]
+  PR["ProblemMode"] --> PR1["Problem move commit point"]
+  R["RecallMode"] --> R1["Recall answer submit point"]
+  A["AnalysisMode"] --> A1["Analysis scratch changed point"]
 
   P1 --> D["documentStore game tree"]
   PR1 --> PV["problemView + Attempt line"]
@@ -277,12 +295,13 @@ The current implementation can migrate incrementally:
    - AI black first move before human white;
    - stale AI result ignored;
    - Play move does not enable or update overlay;
-   - frozen attempt rejects Attempt append but does not corrupt game tree.
+   - AI vs AI auto-play stops at max-move / double-pass / resign / no-legal-move / user interruption limits;
+   - a frozen active attempt disables the Workbench Play command before document write; documentStore legal move checks remain independent of Attempt.
 
 ---
 
 ## 12. Open Questions
 
-- Should a Play move be allowed to commit to game tree when active Attempt append fails because the attempt is frozen, or should the command preflight reject before document write? Preferred: preflight reject when active tab claims an active frozen attempt.
+- If the active tab points at a frozen attempt, should Workbench expose a new attempt/restart affordance or simply disable Play input? Preferred: disable Play input before the command, without making Attempt state part of `documentStore.playMove` legal-move policy.
 - Should background analysis run after every human and AI move in Play, or only when an active attempt exists? Preferred: run when active attempt exists or live analysis is explicitly enabled.
-- Should AI vs AI auto-play be allowed in Workbench Play v1? Preferred: support the model but gate with explicit max-move and user interruption limits.
+- Should AI vs AI auto-play be enabled by default in Workbench Play v1? Preferred: support the model behind explicit opt-in and enforce `AutoPlayLimits`.

@@ -83,7 +83,7 @@ TrainingTask       标准化训练材料
 TaskOrigin         来源追溯 metadata，不参与流程判断
 WorkbenchTab       UI 承载容器
 WorkbenchMode      当前 UI 意图：play / problem / recall / analysis
-TrainingAttempt    用户产出的一条线
+TrainingAttempt    Play / Problem 中冻结的完整作答线
 MoveEvaluation     每手分析事实
 BadMove            问题手事实
 RecallSession      回忆一个 Attempt
@@ -151,14 +151,15 @@ type AnalysisReturnTarget = {
 | recall | revealAi | `checkpoint_correction && correction submitted` | `recallSubstate=checkpoint_ai_revealed` |
 | recall | commentCheckpoint | `checkpoint_ai_revealed` | `recallSubstate=checkpoint_commenting` |
 | recall | resumeRecall | `checkpoint saved/skipped` | clear active checkpoint, `recallSubstate=normal` |
-| any | snapshot | capturable position exists | create new task + new tab; keep current tab mode unchanged |
+| any | snapshot | capturable position exists | enter/create Analysis scratch projection, then create new task + new tab from that Analysis source |
 
 必须保持的 invariant：
 
 ```text
 Checkpoint 永远是 Recall substate，不是 WorkbenchMode。
 Analysis → Return 必须恢复 previous mode、Recall substate、tree position 和 moveIndex。
-Snapshot 不修改当前 tab，也不复用当前 tab 作为新 task。
+Snapshot 不复用当前 tab 作为新 task。来自 Play / Problem / Recall 的 Snapshot 必须先进入或创建
+Analysis scratch/current projection，再从 Analysis source 创建题目。
 Analysis 自由摆棋不写 Attempt.userLine。
 所有非法转换必须 reject / throw，并记录结构化日志。
 ```
@@ -829,7 +830,7 @@ type AiMoveService = {
   }): Promise<PlayMoveCommand | null>
 
   maybeContinueAfterPlayMove(input: {
-    context: PlayMoveCommitContext
+    context: AfterPlayMoveContext
   }): Promise<PlayMoveCommand | null>
 
   requestAiMove(input: {
@@ -969,6 +970,8 @@ type AttemptService = {
 不负责：
 
 ```text
+写 SGF game tree
+判断 Play move 在棋盘规则上是否合法
 直接读 engine
 判定 bad move severity
 打开 Tab
@@ -1139,7 +1142,9 @@ type RecallCheckpointService = {
 
 ### 责任
 
-从当前 Workbench 上下文捕获 Snapshot 输入。
+从 Analysis scratch/current source 捕获 Snapshot 输入。Snapshot 入口可以在任意 Workbench
+mode 暴露，但 Play / Problem / Recall 入口必须先由 `workbenchFlowService` 创建 Analysis
+scratch projection；`snapshotService` 不直接从这些 live mutable context 创建 Problem。
 
 ### API
 
@@ -1147,7 +1152,7 @@ type RecallCheckpointService = {
 type SnapshotService = {
   captureSnapshotInput(input: {
     tabId: string
-    mode: WorkbenchMode
+    mode: 'analysis'
     sourceTaskId?: string
     sourceAttemptId?: string
     analysisContext?: AnalysisContext
@@ -1173,7 +1178,7 @@ type SnapshotTaskInput = {
 }
 ```
 
-`SnapshotService` 不创建 Tab。
+`SnapshotService` 不创建 Tab，不触发 mode transition。
 
 `sourceTaskId` 是可选来源追溯字段，不是 Snapshot 的前置条件。对于自由落子 /
 free-play Tab，`captureSnapshotInput` 必须跳过 source task 加载，不能调用
@@ -1183,36 +1188,39 @@ free-play Tab，`captureSnapshotInput` 必须跳过 source task 加载，不能�
 完整流程由 `workbenchFlowService.snapshotFromCurrentContext` 编排：
 
 ```text
-snapshotService.captureSnapshotInput
+if active mode is Play / Problem / Recall:
+  workbenchFlowService.enterAnalysis({context from visible position})
+  create Analysis scratch/current projection
+snapshotService.captureSnapshotInput({mode:'analysis', analysisContext})
 → taskImportService.createTaskFromSnapshot
 → workbenchTabService.openTask(newTaskId)
 ```
 
 当源 Tab 没有 `taskId` 时，`workbenchFlowService.snapshotFromCurrentContext` 仍走同一条
-命令路径：捕获当前局面、创建 `origin.provider='snapshot'` 的新 Task、通过
+命令路径：先投影到 Analysis scratch、创建 `origin.provider='snapshot'` 的新 Task、通过
 `workbenchTabService.openTask` 打开新 Tab；只是不写 `origin.parentTaskId`。
 
 ### 当前局面捕获规则
 
-Snapshot 在四个模式下的“当前局面”定义必须显式：
+Snapshot 在四个模式下的 source projection 必须显式：
 
 ```text
 Play:
-  capture documentStore current position + activeAttemptId + moveIndex
+  project documentStore current position + activeAttemptId + moveIndex into Analysis scratch
 
 Problem:
-  capture current answer-line position + optional inherited problemArea / prompt / goal
+  project current answer-line position + optional inherited problemArea / prompt / goal into Analysis scratch
 
 Recall normal:
-  capture recall current index 对应的 expected position，或 capture 用户当前复现位置；
+  project recall current index 对应的 expected position，或 project 用户当前复现位置；
   MVP 必须二选一并写入测试，不允许混用
 
 Recall checkpoint:
-  capture checkpoint correctionDraft 当前局面；
+  project checkpoint correctionDraft 当前局面；
   parentCheckpointId 必须写入 origin
 
 Analysis:
-  capture active ExplorationBranch 当前局面；
+  capture active ExplorationBranch / scratch current 局面；
   不读取 Attempt.userLine 的尾局面，除非 analysisContext 明确指向它
 ```
 
@@ -1818,14 +1826,16 @@ User clicks board intersection
      requestAiMove with playerConfig
      validateAiMove including request freshness
      return AI Play move command
-     documentStore.playMove(aiMove, actor='ai')
-     changed moveResult
-     afterPlayMoveCommitted(context with actor='ai')
-     AttemptRecorder appendMove({attemptId, move: aiMove, actor:'ai'})
+→ Play move command executor receives AI command
+→ documentStore.playMove(aiMove, actor='ai')
+→ changed moveResult
+→ afterPlayMoveCommitted(context with actor='ai')
+→ AttemptRecorder appendMove({attemptId, move: aiMove, actor:'ai'})
+→ aiMoveService.maybeContinueAfterPlayMove(context) if AI vs AI remains enabled
 ```
 
 PlayMode 的主写入事实是 `documentStore` / SGF game tree。Attempt、monitor、analysis
-调度、AI 应手都是 `documentStore.playMove` 成功之后的后置 subscriber / side effect。
+调度、AI 应手都是 `documentStore.playMove` 成功之后的 post-commit handler / side effect。
 `PlayMoveCommitted` 只作为这个生命周期点的描述名；实现上可以是
 `afterPlayMoveCommitted(context)`，不必落成持久事件、事件总线或大字段类型。
 
@@ -1929,20 +1939,21 @@ Analysis 不改变 Attempt.userLine。
 ```text
 SnapshotButton.onClick
 → workbenchFlowService.snapshotFromCurrentContext({tabId, reason})
-→ snapshotService.captureSnapshotInput({tabId, mode: activeTab.mode, ...})
+→ if active mode is Play / Problem / Recall: enter/create Analysis scratch projection
+→ snapshotService.captureSnapshotInput({tabId, mode:'analysis', analysisContext})
 → taskImportService.createTaskFromSnapshot
 → trainingRepository.createTask(origin.provider='snapshot')
 → workbenchTabService.openTask({taskId:newTaskId, mode:'problem', parentTabId:tabId})
 ```
 
-Snapshot 是全局命令，不是 Analysis 专属命令：
+Snapshot 是全局可发现命令，但创建 Problem 的 source 必须是 Analysis scratch/current：
 
 ```text
-Play     捕获 documentStore 当前局面 + activeAttemptId + moveIndex
-Problem  捕获当前作答线局面 + optional inherited problemArea
-Recall   normal 捕获 recall 当前 expected position 或用户复现位置，MVP 二选一
-Recall   checkpoint 捕获 correctionDraft，origin 写 parentCheckpointId
-Analysis 捕获 active ExplorationBranch 当前局面
+Play     先投影 documentStore 当前局面 + activeAttemptId + moveIndex 到 Analysis scratch
+Problem  先投影当前作答线局面 + optional inherited problemArea 到 Analysis scratch
+Recall   normal 先投影 recall 当前 expected position 或用户复现位置，MVP 二选一
+Recall   checkpoint 先投影 correctionDraft，origin 写 parentCheckpointId
+Analysis 直接捕获 active ExplorationBranch / scratch current 局面
 ```
 
 快捷键和按钮应走同一条 command path。
@@ -2182,7 +2193,7 @@ modeTransitions table-driven tests
 submit 创建 RecallSession
 RecallPolicy fullLine / humanMovesOnly / sideToMoveOnly tests
 Recall checkpoint 流程
-Snapshot 创建新 Task 但不打开旧 Tab
+Snapshot 先进入/创建 Analysis scratch source，再创建新 Task
 Review openDueItem 只通过 taskId 打开
 Analysis 不修改 Attempt.userLine
 Play 黑白 AI 配置触发正确方自动落子
@@ -2199,7 +2210,7 @@ Free task → Play Mode → Submit → Recall
 Play Mode black/white human|ai → AI auto move
 Problem Mode opponent=ai → constrained AI reply
 Recall major BadMove → Checkpoint → Comment → Resume
-Play / Problem / Recall / Analysis → Snapshot → New Task
+Play / Problem / Recall / Analysis → Analysis scratch source → Snapshot → New Task
 Review item → openTask
 ```
 
@@ -2213,13 +2224,13 @@ Review item → openTask
 source 不再是核心建模维度
 origin 只做追溯，不参与主流程判断
 WorkbenchTab 保存 UI 状态，不保存训练事实
-Attempt 是用户产出的一条线
+Attempt 是 Play / Problem 中冻结的完整作答线
 RecallSession 绑定 Attempt
 RecallPolicy 显式决定 expectedMoves，不靠 Attempt.userLine 隐式推断
 Checkpoint 是 Recall substate，不是 WorkbenchMode
 Analysis Return 必须恢复 AnalysisReturnTarget
 Analysis 不污染 Attempt
-Snapshot 创建新 Task，不复用当前 Tab
+Snapshot 从 Analysis scratch source 创建新 Task，不复用当前 Tab
 Problem AI 落子必须受 task.problemArea / analysis area 限制
 AI 请求必须校验 requestId / attemptId / positionHash，过期不可写
 ReviewSchedule 直接引用 taskId
