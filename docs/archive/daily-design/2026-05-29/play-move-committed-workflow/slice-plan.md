@@ -69,3 +69,4 @@ Date: 2026-05-29
 
 - retry1 test-writer after request-changes addendum test audit: strengthen T13/T14 source-boundary scans for
   `aiMoveService` monitor/analysis/UI dependencies and forbidden Snapshot/source-specific API/event shortcuts.
+  Focused source-boundary tests pass; T10/T11/T12 remain expected RED before implementation.

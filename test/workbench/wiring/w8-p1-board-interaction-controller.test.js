@@ -1059,7 +1059,7 @@ describe('W8-P1 Board Interaction Controller', function () {
       }
     })
 
-    it('W8-PMC-T08: aiMoveService does not directly write game tree, Attempt, or overlay', function () {
+    it('W8-PMC-T08/W8-PMC-RC-T13: aiMoveService does not directly write commit side effects or UI', function () {
       const source = fs.readFileSync(
         path.resolve(__dirname, '../../../src/modules/training/ai/aiMoveService.ts'),
         'utf8',
@@ -1071,8 +1071,15 @@ describe('W8-P1 Board Interaction Controller', function () {
         /\.appendMove\s*\(/,
         /\.updateAttempt\s*\(/,
         /\.createAttempt\s*\(/,
+        /\bmonitor\b/,
+        /\banalysisService\b/,
+        /\bscheduleLiveAnalysis\b/,
         /\boverlayRegion\b/,
         /\boverlayStore\b/,
+        /from\s+['"][^'"]*components\//,
+        /\bReact\b/,
+        /\bwindow\b/,
+        /\bsabaki\b/i,
       ]
 
       for (const pattern of forbiddenPatterns) {
@@ -1080,7 +1087,7 @@ describe('W8-P1 Board Interaction Controller', function () {
       }
     })
 
-    it('W8-PMC-T09: no formal PlayMoveCommitted event, bus message, or persistent event is introduced', function () {
+    it('W8-PMC-T09/W8-PMC-RC-T14: no formal event, source-specific API, or Snapshot orchestration is introduced', function () {
       const files = [
         '../../../src/modules/training/workbench/boardInteractionController.ts',
         '../../../src/modules/workbench/board-interactions/executors/playInteractionExecutor.js',
@@ -1094,6 +1101,10 @@ describe('W8-P1 Board Interaction Controller', function () {
         /\bPlayMoveCommitted\b[\s\S]{0,120}\bEventEmitter\b/,
         /\bEventEmitter\b[\s\S]{0,120}\bPlayMoveCommitted\b/,
         /\bpersist\w*\s*\([^)]*PlayMoveCommitted/i,
+        /\bopen(?:Game|Play|Problem|SnapshotProblem)Tab\b/,
+        /\borigin\.provider\b/,
+        /\bsnapshotService\b/,
+        /\b(?:open|create|save|persist)Snapshot\b/,
       ]
 
       for (const file of files) {
