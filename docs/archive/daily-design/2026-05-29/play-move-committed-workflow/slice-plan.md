@@ -54,7 +54,7 @@ Date: 2026-05-29
 
 - docs alignment: committed in `af65237b`.
 - planner: this file.
-- contract: pending.
+- contract: completed; commit: pending.
 - contract audit: pending.
 - tests: pending.
 - test audit: pending.
