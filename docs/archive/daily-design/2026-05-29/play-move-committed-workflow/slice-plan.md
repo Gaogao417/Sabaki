@@ -60,6 +60,7 @@ Date: 2026-05-29
 - test audit: approved in `3f67a7d3`; request-changes addendum test audit REQUEST_CHANGES:
   T13/T14 source-boundary scans must also cover monitor/analysis/UI dependencies,
   source-specific tab APIs, `origin.provider`, and Snapshot orchestration before implementation.
+  retry approved after `608b9e2e`; implementation may proceed in the v0.2 scope.
 - implementation: pending.
 - verification: pending.
 - architecture review: REQUEST_CHANGES; blockers are terminal AI continuation stop and treePosition freshness for stale AI responses.
