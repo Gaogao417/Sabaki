@@ -958,6 +958,38 @@ describe('W8-P1 Board Interaction Controller', function () {
       }
     })
 
+    it('W8-PMC-RC-T10: double-pass terminal commit stops before AI request or AI write', async function () {
+      const deps = createPlayMoveCommitDeps({
+        playMoveResults: [
+          {valid: true, changed: true, treePosition: 'node_terminal', doublePass: true},
+          {valid: true, changed: true, treePosition: 'node_ai'},
+        ],
+        aiMoves: ['pp'],
+      })
+      const controller = createBoardInteractionController(deps)
+
+      await controller.handleBoardClick(makePlayCommitInput())
+
+      assert.deepStrictEqual(deps._calls.documentStorePlayMove, [
+        {vertex: [3, 3], opts: {player: null}},
+      ])
+      assert.deepStrictEqual(deps._calls.attemptAppendMove, [
+        {attemptId: 'attempt_1', move: 'dd', actor: 'human'},
+      ])
+      assert.deepStrictEqual(
+        deps._calls.monitorOnUserMove.map(call => ({
+          move: call.move,
+          positionAfterHash: call.positionAfterHash,
+        })),
+        [{move: 'dd', positionAfterHash: 'node_terminal'}],
+      )
+      assert.deepStrictEqual(deps._calls.analysisSchedule, [
+        {treePosition: 'node_terminal'},
+      ])
+      assert.strictEqual(deps._calls.aiMaybePlay.length, 0,
+        'terminal double-pass commit must not request an AI continuation')
+    })
+
     it('W8-PMC-T06: Problem, Recall, and Analysis clicks do not trigger Play post-commit handlers', async function () {
       const cases = [
         {

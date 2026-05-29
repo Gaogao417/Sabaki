@@ -701,5 +701,104 @@ describe('aiMoveService', () => {
       assert.strictEqual(await newer, 'B2')
       assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
     })
+
+    it('W8-PMC-RC-T11 stores request treePosition in AiMovePending while engine request is pending', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+      let notificationCount = 0
+      const unsubscribe = runtimeStore.subscribe(() => {
+        notificationCount += 1
+      })
+
+      const tab = makeTab({
+        id: 'tab_1',
+        mode: 'play',
+        activeAttemptId: 'attempt_1',
+        currentTreePosition: 'node_after_human',
+      })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => enginePromise),
+      })
+
+      const pending = service.requestAiMove({
+        tab,
+        attempt,
+        task: makeTask(),
+        color: 'white',
+        treePosition: 'node_after_human',
+      })
+
+      assert.strictEqual(
+        runtimeStore.getState().pendingAiMove?.treePosition,
+        'node_after_human',
+        'pending AI request must persist the request treePosition',
+      )
+      assert.ok(notificationCount >= 2,
+        'runtime store subscribers should be notified when pending AI request is stored')
+
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+      assert.strictEqual(await pending, 'C3')
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+      unsubscribe()
+    })
+
+    it('W8-PMC-RC-T12 drops AI response when active treePosition changes before resolve', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+
+      const tab = makeTab({
+        id: 'tab_1',
+        mode: 'play',
+        activeAttemptId: 'attempt_1',
+        currentTreePosition: 'node_after_human',
+      })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        engineService: createPhase3EngineService(async () => enginePromise),
+      })
+
+      const pending = service.requestAiMove({
+        tab,
+        attempt,
+        task: makeTask(),
+        color: 'white',
+        treePosition: 'node_after_human',
+      })
+
+      assert.strictEqual(runtimeStore.getState().pendingAiMove?.treePosition, 'node_after_human')
+
+      workbenchStore.updateTab('tab_1', { currentTreePosition: 'node_changed' })
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+
+      assert.strictEqual(await pending, null)
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+      assert.strictEqual(
+        workbenchStore.getState().tabs.find(t => t.id === 'tab_1').currentTreePosition,
+        'node_changed',
+      )
+    })
   })
 })
