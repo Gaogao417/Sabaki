@@ -268,8 +268,20 @@ function normalizeMoveToSgf(move: string): string {
   return vertex ? vertexToSgfMove(vertex) : move
 }
 
-function isChangedPlayResult(result: unknown): result is {changed: boolean; treePosition?: string} {
+type ChangedPlayResult = {
+  changed: true
+  treePosition?: string
+  doublePass?: boolean
+  resign?: boolean
+  noLegalMove?: boolean
+}
+
+function isChangedPlayResult(result: unknown): result is ChangedPlayResult {
   return typeof result === 'object' && result != null && (result as {changed?: unknown}).changed === true
+}
+
+function isTerminalPlayResult(result: ChangedPlayResult): boolean {
+  return result.doublePass === true || result.resign === true || result.noLegalMove === true
 }
 
 type PlayCommitActor = 'human' | 'ai'
@@ -456,7 +468,7 @@ export function createBoardInteractionController(
         const afterPlayMoveCommitted = async (context: {
           actor: PlayCommitActor
           move: string
-          playResult: {treePosition?: string}
+          playResult: ChangedPlayResult
         }): Promise<void> => {
           const attemptId = activeTab.activeAttemptId
           if (!attemptId) return
@@ -479,6 +491,10 @@ export function createBoardInteractionController(
 
           if (context.actor === 'ai') {
             runState.committedAiMoves += 1
+          }
+
+          if (isTerminalPlayResult(context.playResult)) {
+            return
           }
 
           if (!playServices.aiMoveService || !canAskAiForMove(runState)) {

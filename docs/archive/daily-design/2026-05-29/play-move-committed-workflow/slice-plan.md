@@ -61,7 +61,8 @@ Date: 2026-05-29
   T13/T14 source-boundary scans must also cover monitor/analysis/UI dependencies,
   source-specific tab APIs, `origin.provider`, and Snapshot orchestration before implementation.
   retry approved after `608b9e2e`; implementation may proceed in the v0.2 scope.
-- implementation: pending.
+- implementation: v0.2 terminal guard and AI tree-position freshness implemented; focused
+  request-changes and related controller/AI/runtime regressions pass; commit: pending.
 - verification: pending.
 - architecture review: REQUEST_CHANGES; blockers are terminal AI continuation stop and treePosition freshness for stale AI responses.
 - contract addendum v0.2 request-changes: `test-contract-v0.2-request-changes.md`; commit: pending.

@@ -39,6 +39,7 @@ export type AiMovePending = {
   tabId: string
   attemptId: string
   positionHash: string
+  treePosition?: string
   mode: 'play' | 'problem'
   color: 'black' | 'white'
   startedAt: string
@@ -181,6 +182,7 @@ export function createTrainingRuntimeStore(deps?: TrainingRuntimeStoreDeps): Tra
         requestId: pending.requestId,
         tabId: pending.tabId,
         attemptId: pending.attemptId,
+        treePosition: pending.treePosition,
         mode: pending.mode,
       })
       const supersededAiMoveRequestIds = state.pendingAiMove

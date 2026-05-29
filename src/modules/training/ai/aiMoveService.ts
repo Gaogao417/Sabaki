@@ -95,6 +95,7 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
       tabId: tab.id,
       attemptId: tab.activeAttemptId ?? '',
       positionHash,
+      treePosition: input.treePosition,
       mode,
       color: input.color ?? inferAiMoveColor(attempt, sideToMove),
       startedAt: new Date().toISOString(),
@@ -143,6 +144,7 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
       tab,
       attempt,
       positionHash,
+      treePosition: input.treePosition,
     }))) {
       runtimeStore?.clearAiMovePending(requestId)
       return null
@@ -192,18 +194,26 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     tab: WorkbenchTab
     attempt: { rootPositionSgf: string; userLine: string[] }
     positionHash: string
+    treePosition?: string
   }): Promise<boolean> {
-    const { requestId, tab, attempt, positionHash } = input
+    const { requestId, tab, attempt, positionHash, treePosition } = input
     if (runtimeStore?.hasSupersededAiMoveRequest(requestId)) return false
 
     const pending = runtimeStore?.getState().pendingAiMove
     if (pending && pending.requestId !== requestId) return false
+    if (pending?.treePosition && treePosition && pending.treePosition !== treePosition) return false
 
     const workbenchState = workbenchStore?.getState()
     const activeTab = workbenchState?.tabs.find(t => t.id === tab.id)
     if (workbenchState && workbenchState.activeTabId !== tab.id) return false
     if (activeTab && activeTab.mode !== tab.mode) return false
     if (activeTab && activeTab.activeAttemptId !== tab.activeAttemptId) return false
+    if (treePosition && activeTab?.currentTreePosition && activeTab.currentTreePosition !== treePosition) {
+      return false
+    }
+    if (pending?.treePosition && activeTab?.currentTreePosition && activeTab.currentTreePosition !== pending.treePosition) {
+      return false
+    }
 
     const runtimeState = runtimeStore?.getState()
     if (runtimeState?.activeAttemptId && tab.activeAttemptId && runtimeState.activeAttemptId !== tab.activeAttemptId) {
