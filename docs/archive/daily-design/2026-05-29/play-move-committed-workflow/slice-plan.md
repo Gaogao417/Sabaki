@@ -77,3 +77,4 @@ Date: 2026-05-29
 - retry2 after architecture review REQUEST_CHANGES: add a test proving AI stale freshness does not rely
   only on manually seeded `WorkbenchTab.currentTreePosition`, then wire a production current-position source.
   `W8-PMC-RC-T12b` added and is RED before implementation (`C3 !== null`).
+  test-auditor approved reader seam approach; implementation may add `getCurrentTreePosition`.
