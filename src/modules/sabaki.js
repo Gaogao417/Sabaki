@@ -1008,6 +1008,7 @@ class Sabaki extends EventEmitter {
         runtimeStore,
         workbenchStore,
         repository,
+        getCurrentTreePosition: () => this.state.treePosition,
         engineService: {
           requestMove: async (input) => {
             const engineService = this.getPlayServices().engineService

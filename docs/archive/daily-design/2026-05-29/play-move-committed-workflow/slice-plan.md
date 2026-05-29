@@ -78,3 +78,5 @@ Date: 2026-05-29
   only on manually seeded `WorkbenchTab.currentTreePosition`, then wire a production current-position source.
   `W8-PMC-RC-T12b` added and is RED before implementation (`C3 !== null`).
   test-auditor approved reader seam approach; implementation may add `getCurrentTreePosition`.
+  reader seam implemented in `aiMoveService` and composed from Sabaki current tree position; focused
+  AI/controller/problem-area regressions pass.

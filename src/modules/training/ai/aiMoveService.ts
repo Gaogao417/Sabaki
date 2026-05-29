@@ -17,6 +17,7 @@ export type AiMoveServiceDeps = {
   runtimeStore?: TrainingRuntimeStore
   workbenchStore?: WorkbenchStore
   repository?: Pick<TrainingRepository, 'loadAttempt'>
+  getCurrentTreePosition?: (input: { tabId: string }) => string | null | undefined
 }
 
 export type ShouldAiMoveInput = {
@@ -65,7 +66,7 @@ export function shouldAiMove(input: ShouldAiMoveInput): boolean {
 }
 
 export function createAiMoveService(deps: AiMoveServiceDeps) {
-  const { engineService, runtimeStore, workbenchStore, repository } = deps
+  const { engineService, runtimeStore, workbenchStore, repository, getCurrentTreePosition } = deps
 
   function hasProblemArea(task: { problemArea?: ProblemArea }): task is { problemArea: ProblemArea } {
     return Array.isArray(task.problemArea) && task.problemArea.length > 0
@@ -208,10 +209,16 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     if (workbenchState && workbenchState.activeTabId !== tab.id) return false
     if (activeTab && activeTab.mode !== tab.mode) return false
     if (activeTab && activeTab.activeAttemptId !== tab.activeAttemptId) return false
-    if (treePosition && activeTab?.currentTreePosition && activeTab.currentTreePosition !== treePosition) {
+
+    const liveTreePosition = getCurrentTreePosition?.({ tabId: tab.id })
+    const currentTreePosition = liveTreePosition ?? activeTab?.currentTreePosition
+    if ((treePosition || pending?.treePosition) && getCurrentTreePosition && currentTreePosition == null) {
       return false
     }
-    if (pending?.treePosition && activeTab?.currentTreePosition && activeTab.currentTreePosition !== pending.treePosition) {
+    if (treePosition && currentTreePosition && currentTreePosition !== treePosition) {
+      return false
+    }
+    if (pending?.treePosition && currentTreePosition && currentTreePosition !== pending.treePosition) {
       return false
     }
 
