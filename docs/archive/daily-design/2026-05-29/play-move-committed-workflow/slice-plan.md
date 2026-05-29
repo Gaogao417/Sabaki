@@ -63,7 +63,7 @@ Date: 2026-05-29
   retry approved after `608b9e2e`; implementation may proceed in the v0.2 scope.
 - implementation: v0.2 terminal guard and AI tree-position freshness implemented; focused
   request-changes and related controller/AI/runtime regressions pass; commit: pending.
-- verification: pending.
+- verification: passed `npm test` (1926 passing) and `npm run bundle`; commit: pending.
 - architecture review: REQUEST_CHANGES; blockers are terminal AI continuation stop and treePosition freshness for stale AI responses.
 - contract addendum v0.2 request-changes: `test-contract-v0.2-request-changes.md`; commit: pending.
 
