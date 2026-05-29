@@ -60,4 +60,5 @@ Date: 2026-05-29
 - test audit: pending.
 - implementation: pending.
 - verification: pending.
-- architecture review: pending.
+- architecture review: REQUEST_CHANGES; blockers are terminal AI continuation stop and treePosition freshness for stale AI responses.
+- contract addendum v0.2 request-changes: `test-contract-v0.2-request-changes.md`; commit: pending.
