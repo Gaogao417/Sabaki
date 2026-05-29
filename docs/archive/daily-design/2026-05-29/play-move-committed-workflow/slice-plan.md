@@ -80,3 +80,4 @@ Date: 2026-05-29
   test-auditor approved reader seam approach; implementation may add `getCurrentTreePosition`.
   reader seam implemented in `aiMoveService` and composed from Sabaki current tree position; focused
   AI/controller/problem-area regressions pass.
+  verification retry passed `npm test` (1927 passing) and `npm run bundle`.
