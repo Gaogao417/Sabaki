@@ -57,8 +57,15 @@ Date: 2026-05-29
 - contract: ready for audit; commit: 51ebfbbc.
 - contract audit: pending.
 - tests: pending.
-- test audit: pending.
+- test audit: approved in `3f67a7d3`; request-changes addendum test audit REQUEST_CHANGES:
+  T13/T14 source-boundary scans must also cover monitor/analysis/UI dependencies,
+  source-specific tab APIs, `origin.provider`, and Snapshot orchestration before implementation.
 - implementation: pending.
 - verification: pending.
 - architecture review: REQUEST_CHANGES; blockers are terminal AI continuation stop and treePosition freshness for stale AI responses.
 - contract addendum v0.2 request-changes: `test-contract-v0.2-request-changes.md`; commit: pending.
+
+## Retries
+
+- retry1 test-writer after request-changes addendum test audit: strengthen T13/T14 source-boundary scans for
+  `aiMoveService` monitor/analysis/UI dependencies and forbidden Snapshot/source-specific API/event shortcuts.
