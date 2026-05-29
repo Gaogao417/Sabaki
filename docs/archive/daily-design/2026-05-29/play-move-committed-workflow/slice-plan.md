@@ -55,19 +55,22 @@ Date: 2026-05-29
 - docs alignment: committed in `af65237b`.
 - planner: this file.
 - contract: ready for audit; commit: 51ebfbbc.
-- contract audit: pending.
-- tests: pending.
+- contract audit: approved in `5f835d8e`; request-changes addendum audit approved in `de4e96eb`.
+- tests: initial coverage in `5fba1741`; request-changes coverage in `1643ef75`;
+  source-boundary retry in `608b9e2e`; current-position reader retry in `76cee4db`.
 - test audit: approved in `3f67a7d3`; request-changes addendum test audit REQUEST_CHANGES:
   T13/T14 source-boundary scans must also cover monitor/analysis/UI dependencies,
   source-specific tab APIs, `origin.provider`, and Snapshot orchestration before implementation.
   retry approved after `608b9e2e`; implementation may proceed in the v0.2 scope.
-- implementation: v0.2 terminal guard and AI tree-position freshness implemented; focused
-  request-changes and related controller/AI/runtime regressions pass; commit: pending.
-- verification: passed `npm test` (1926 passing) and `npm run bundle`; commit: pending.
+- implementation: initial Play commit pipeline in `13b6f882`; v0.2 terminal guard and
+  AI tree-position freshness in `72fcdd25`; current-position reader seam in `2b059c5d`.
+- verification: initial pass in `57618760`; v0.2 pass in `f8054629`; current-position
+  retry passed `npm test` (1927 passing) and `npm run bundle` in `20013ad8`.
 - architecture review: REQUEST_CHANGES retry after `72fcdd25`: tree-position freshness is still
   conditional on optional `WorkbenchTab.currentTreePosition`; add a real current-position reader
   seam or production-maintained tab position and strengthen tests before retrying review.
-- contract addendum v0.2 request-changes: `test-contract-v0.2-request-changes.md`; commit: pending.
+  Retry approved after `2b059c5d`; final review commit: pending.
+- contract addendum v0.2 request-changes: `test-contract-v0.2-request-changes.md`; commit: `ddb004c6`.
 
 ## Retries
 
