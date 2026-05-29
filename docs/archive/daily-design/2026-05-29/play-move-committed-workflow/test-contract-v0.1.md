@@ -1,7 +1,7 @@
 # Play Move Post-Commit Pipeline Test Contract v0.1
 
 Date: 2026-05-29
-Status: pending-confirmation
+Status: confirmed
 
 # 契约草案
 
