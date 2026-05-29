@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * W8-P1 Board Interaction Controller Wiring Tests
  *
@@ -74,6 +76,22 @@ import {createRecallService} from '../../../src/modules/training/recall/recallSe
 import {createRecallCheckpointService} from '../../../src/modules/training/recall/recallCheckpointService.ts'
 import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
 import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+
+/**
+ * @typedef {import('../../../src/modules/training/workbench/boardInteractionController.ts').BoardInteractionControllerDeps} BoardInteractionControllerDeps
+ * @typedef {{rootPositionSgf: string, userLine: string[]}} PlayCommitAttempt
+ * @typedef {{
+ *   documentStorePlayMove: Array<{vertex: [number, number], opts: unknown}>,
+ *   attemptAppendMove: Array<{attemptId: string, move: string, actor?: 'human' | 'ai'}>,
+ *   monitorOnUserMove: Array<Record<string, unknown>>,
+ *   analysisSchedule: Array<{treePosition: string}>,
+ *   aiMaybePlay: Array<{treePosition?: string, attempt: PlayCommitAttempt}>,
+ *   problemAppendMove: Array<Record<string, unknown>>,
+ *   recallSubmitBoardClick: Array<{vertex: [number, number]}>,
+ *   editCommitScratchResult: Array<unknown>,
+ *   sequence: string[],
+ * }} PlayCommitCalls
+ */
 
 // --- Logger for test harness (real, not mocked) ---
 
@@ -222,6 +240,183 @@ function makeTab(overrides = {}) {
     playerConfig: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+/**
+ * Typed spy harness for the Play move post-commit contract. These spies observe
+ * controller ports only; they do not model resolver, executor, engine, or repo
+ * semantics.
+ *
+ * @param {{
+ *   playMoveResults?: Array<Record<string, unknown>>,
+ *   aiMoves?: Array<string | null>,
+ *   initialAttemptLine?: string[],
+ * }} [options]
+ * @returns {BoardInteractionControllerDeps & {
+ *   _calls: PlayCommitCalls,
+ *   _attempts: Map<string, PlayCommitAttempt>,
+ * }}
+ */
+function createPlayMoveCommitDeps(options = {}) {
+  const playMoveResults = options.playMoveResults ?? [
+    {valid: true, changed: true, treePosition: 'node_human'},
+  ]
+  const aiMoves = [...(options.aiMoves ?? [null])]
+  let playMoveIndex = 0
+
+  /** @type {PlayCommitCalls} */
+  const calls = {
+    documentStorePlayMove: [],
+    attemptAppendMove: [],
+    monitorOnUserMove: [],
+    analysisSchedule: [],
+    aiMaybePlay: [],
+    problemAppendMove: [],
+    recallSubmitBoardClick: [],
+    editCommitScratchResult: [],
+    sequence: [],
+  }
+
+  /** @type {Map<string, PlayCommitAttempt>} */
+  const attempts = new Map([
+    [
+      'attempt_1',
+      {
+        rootPositionSgf: '(;GM[1]SZ[19])',
+        userLine: [...(options.initialAttemptLine ?? [])],
+      },
+    ],
+  ])
+
+  /** @type {BoardInteractionControllerDeps} */
+  const deps = {
+    getPlayServices: () => ({
+      documentStore: {
+        playMove: async (vertex, opts) => {
+          calls.sequence.push(`document:${playMoveIndex}`)
+          calls.documentStorePlayMove.push({vertex, opts})
+          const result = playMoveResults[Math.min(playMoveIndex, playMoveResults.length - 1)]
+          playMoveIndex += 1
+          return result
+        },
+      },
+      engineService: undefined,
+      analysisService: {
+        scheduleLiveAnalysis: (treePosition) => {
+          calls.sequence.push(`analysis:${treePosition}`)
+          calls.analysisSchedule.push({treePosition})
+        },
+      },
+      problemFlowService: {
+        appendProblemMove: async (input) => {
+          calls.problemAppendMove.push({...input})
+          return {handled: true, changed: true}
+        },
+      },
+      attemptService: {
+        appendMove: async (attemptId, move, actor) => {
+          calls.sequence.push(`attempt:${actor ?? 'human'}:${move}`)
+          calls.attemptAppendMove.push({attemptId, move, actor})
+          const current = attempts.get(attemptId) ?? {
+            rootPositionSgf: '(;GM[1]SZ[19])',
+            userLine: [],
+          }
+          attempts.set(attemptId, {
+            ...current,
+            userLine: [...current.userLine, move],
+          })
+        },
+      },
+      monitor: {
+        onUserMove: async (input) => {
+          calls.sequence.push(`monitor:${String(input.move)}`)
+          calls.monitorOnUserMove.push({...input})
+        },
+      },
+      repository: {
+        loadAttempt: async (attemptId) => {
+          const attempt = attempts.get(attemptId)
+          return attempt
+            ? {rootPositionSgf: attempt.rootPositionSgf, userLine: [...attempt.userLine]}
+            : null
+        },
+        loadTask: async () => ({
+          rootPositionSgf: '(;GM[1]SZ[19])',
+          sideToMove: 'black',
+        }),
+      },
+      aiMoveService: {
+        maybePlayAiMove: async (input) => {
+          calls.sequence.push(`ai:${input.treePosition ?? ''}`)
+          calls.aiMaybePlay.push({
+            treePosition: input.treePosition,
+            attempt: {
+              rootPositionSgf: input.attempt.rootPositionSgf,
+              userLine: [...input.attempt.userLine],
+            },
+          })
+          return aiMoves.length > 0 ? aiMoves.shift() ?? null : null
+        },
+      },
+    }),
+    getRecallAdapter: () => ({
+      submitBoardClick: async (vertex) => {
+        calls.recallSubmitBoardClick.push({vertex})
+        return {handled: true, changed: true, isCorrect: true}
+      },
+    }),
+    getEditWorkspaceContext: () => ({
+      activeTab: 'current',
+      currentSnapshot: {
+        id: 'snap_1',
+        role: 'current',
+        signMap: Array(19).fill(null).map(() => Array(19).fill(0)),
+        nextPlayer: 1,
+        width: 19,
+        height: 19,
+      },
+      referenceSnapshot: null,
+      currentMarkerMap: Array(19).fill(null).map(() => Array(19).fill(null)),
+      referenceMarkerMap: null,
+      currentLines: [],
+      referenceLines: null,
+      lineFirstVertex: null,
+    }),
+    getEditWorkspaceDeps: () => ({
+      commitScratchResult: (result) => {
+        calls.editCommitScratchResult.push(result)
+      },
+    }),
+    getLegacySabaki: () => ({clickVertex: () => {}}),
+    getIsMac: () => false,
+  }
+
+  return Object.assign(deps, {
+    _calls: calls,
+    _attempts: attempts,
+  })
+}
+
+function makePlayCommitInput(overrides = {}) {
+  return {
+    vertex: [3, 3],
+    event: {button: 0, ctrlKey: false, metaKey: false},
+    activeTab: makeTab({
+      mode: 'play',
+      activeAttemptId: 'attempt_1',
+      playerConfig: {
+        black: 'human',
+        white: 'ai',
+        ai: {autoPlay: true},
+      },
+    }),
+    settings: {selectedTool: 'stone_1'},
+    board: makeMockBoard(),
+    editWorkspacePresent: false,
+    task: null,
+    runtimeState: {},
     ...overrides,
   }
 }
@@ -577,6 +772,304 @@ describe('W8-P1 Board Interaction Controller', function () {
         'documentStore.playMove must NOT be called for scratchEdit (Arch v0.5 SS14)')
       assert.ok(deps._calls.editAnalysisInvalidate.length >= 1,
         'editWorkspaceDeps.invalidateEditAnalysis should be called for scratch edit')
+    })
+  })
+
+  // =====================================================================
+  // W8-PMC: Play move post-commit pipeline
+  // Contract: docs/archive/daily-design/2026-05-29/play-move-committed-workflow/test-contract-v0.1.md
+  // =====================================================================
+
+  describe('W8-PMC: Play move post-commit pipeline', function () {
+    it('W8-PMC-T01: changed human Play move gates Attempt, monitor, analysis, and AI decision after document write', async function () {
+      const deps = createPlayMoveCommitDeps({
+        playMoveResults: [{valid: true, changed: true, treePosition: 'node_human'}],
+        aiMoves: [null],
+      })
+      const controller = createBoardInteractionController(deps)
+
+      const result = await controller.handleBoardClick(makePlayCommitInput())
+
+      assert.strictEqual(result.changed, true)
+      assert.deepStrictEqual(deps._calls.documentStorePlayMove, [
+        {vertex: [3, 3], opts: {player: null}},
+      ])
+      assert.deepStrictEqual(deps._calls.attemptAppendMove, [
+        {attemptId: 'attempt_1', move: 'dd', actor: 'human'},
+      ])
+      assert.deepStrictEqual(deps._calls.monitorOnUserMove, [
+        {
+          attemptId: 'attempt_1',
+          moveIndex: 0,
+          move: 'dd',
+          positionAfterHash: 'node_human',
+        },
+      ])
+      assert.deepStrictEqual(deps._calls.analysisSchedule, [
+        {treePosition: 'node_human'},
+      ])
+      assert.strictEqual(deps._calls.aiMaybePlay.length, 1)
+      assert.strictEqual(deps._calls.aiMaybePlay[0].treePosition, 'node_human')
+      assert.deepStrictEqual(deps._calls.aiMaybePlay[0].attempt.userLine, ['dd'])
+
+      const documentIndex = deps._calls.sequence.indexOf('document:0')
+      assert.ok(documentIndex >= 0, 'document write must be observed')
+      for (const marker of ['attempt:human:dd', 'monitor:dd', 'ai:node_human']) {
+        assert.ok(
+          deps._calls.sequence.indexOf(marker) > documentIndex,
+          `${marker} must run after changed document write`,
+        )
+      }
+    })
+
+    it('W8-PMC-T02: invalid or unchanged Play document result does not run post-commit participants', async function () {
+      for (const playMoveResult of [
+        {valid: false, changed: false, reason: 'illegal'},
+        {valid: true, changed: false, treePosition: 'node_same'},
+      ]) {
+        const deps = createPlayMoveCommitDeps({
+          playMoveResults: [playMoveResult],
+          aiMoves: ['pp'],
+        })
+        const controller = createBoardInteractionController(deps)
+
+        const result = await controller.handleBoardClick(makePlayCommitInput())
+
+        assert.strictEqual(result.changed, false)
+        assert.strictEqual(deps._calls.documentStorePlayMove.length, 1)
+        assert.strictEqual(deps._calls.attemptAppendMove.length, 0)
+        assert.strictEqual(deps._calls.monitorOnUserMove.length, 0)
+        assert.strictEqual(deps._calls.analysisSchedule.length, 0)
+        assert.strictEqual(deps._calls.aiMaybePlay.length, 0)
+      }
+    })
+
+    it('W8-PMC-T03: AI candidate re-enters the same Play post-commit pipeline after human commit', async function () {
+      const deps = createPlayMoveCommitDeps({
+        playMoveResults: [
+          {valid: true, changed: true, treePosition: 'node_human'},
+          {valid: true, changed: true, treePosition: 'node_ai'},
+        ],
+        aiMoves: ['pp', null],
+      })
+      const controller = createBoardInteractionController(deps)
+
+      await controller.handleBoardClick(makePlayCommitInput())
+
+      assert.deepStrictEqual(
+        deps._calls.documentStorePlayMove.map(call => call.vertex),
+        [[3, 3], [15, 15]],
+      )
+      assert.deepStrictEqual(deps._calls.attemptAppendMove, [
+        {attemptId: 'attempt_1', move: 'dd', actor: 'human'},
+        {attemptId: 'attempt_1', move: 'pp', actor: 'ai'},
+      ])
+      assert.deepStrictEqual(
+        deps._calls.monitorOnUserMove.map(call => ({
+          attemptId: call.attemptId,
+          moveIndex: call.moveIndex,
+          move: call.move,
+          positionAfterHash: call.positionAfterHash,
+        })),
+        [
+          {attemptId: 'attempt_1', moveIndex: 0, move: 'dd', positionAfterHash: 'node_human'},
+          {attemptId: 'attempt_1', moveIndex: 1, move: 'pp', positionAfterHash: 'node_ai'},
+        ],
+      )
+      assert.deepStrictEqual(deps._calls.analysisSchedule, [
+        {treePosition: 'node_human'},
+        {treePosition: 'node_ai'},
+      ])
+      assert.deepStrictEqual(
+        deps._calls.aiMaybePlay.map(call => ({
+          treePosition: call.treePosition,
+          userLine: call.attempt.userLine,
+        })),
+        [
+          {treePosition: 'node_human', userLine: ['dd']},
+          {treePosition: 'node_ai', userLine: ['dd', 'pp']},
+        ],
+      )
+    })
+
+    it('W8-PMC-T04: AI vs AI continuation is bounded by maxAutoMovesPerRun', async function () {
+      const deps = createPlayMoveCommitDeps({
+        playMoveResults: [
+          {valid: true, changed: true, treePosition: 'node_human'},
+          {valid: true, changed: true, treePosition: 'node_ai_1'},
+          {valid: true, changed: true, treePosition: 'node_ai_2'},
+          {valid: true, changed: true, treePosition: 'node_ai_3'},
+        ],
+        aiMoves: ['pp', 'dp', 'qq'],
+      })
+      const controller = createBoardInteractionController(deps)
+
+      await controller.handleBoardClick(makePlayCommitInput({
+        activeTab: makeTab({
+          mode: 'play',
+          activeAttemptId: 'attempt_1',
+          playerConfig: {
+            black: 'ai',
+            white: 'ai',
+            ai: {
+              autoPlay: true,
+              autoPlayLimits: {maxAutoMovesPerRun: 2},
+            },
+          },
+        }),
+      }))
+
+      assert.deepStrictEqual(
+        deps._calls.documentStorePlayMove.map(call => call.vertex),
+        [[3, 3], [15, 15], [3, 15]],
+      )
+      assert.deepStrictEqual(
+        deps._calls.attemptAppendMove.map(call => ({move: call.move, actor: call.actor})),
+        [
+          {move: 'dd', actor: 'human'},
+          {move: 'pp', actor: 'ai'},
+          {move: 'dp', actor: 'ai'},
+        ],
+      )
+      assert.deepStrictEqual(
+        deps._calls.aiMaybePlay.map(call => call.treePosition),
+        ['node_human', 'node_ai_1'],
+      )
+      assert.strictEqual(deps._attempts.get('attempt_1')?.userLine.includes('qq'), false,
+        'third queued AI move must be ignored by the maxAutoMovesPerRun guard')
+    })
+
+    it('W8-PMC-T05: null or invalid AI reply does not write game tree or AI Attempt', async function () {
+      for (const aiMove of [null, 'resign']) {
+        const deps = createPlayMoveCommitDeps({
+          playMoveResults: [{valid: true, changed: true, treePosition: 'node_human'}],
+          aiMoves: [aiMove],
+        })
+        const controller = createBoardInteractionController(deps)
+
+        await controller.handleBoardClick(makePlayCommitInput())
+
+        assert.strictEqual(deps._calls.documentStorePlayMove.length, 1)
+        assert.deepStrictEqual(deps._calls.attemptAppendMove, [
+          {attemptId: 'attempt_1', move: 'dd', actor: 'human'},
+        ])
+        assert.strictEqual(deps._calls.monitorOnUserMove.length, 1)
+        assert.strictEqual(deps._calls.aiMaybePlay.length, 1)
+      }
+    })
+
+    it('W8-PMC-T06: Problem, Recall, and Analysis clicks do not trigger Play post-commit handlers', async function () {
+      const cases = [
+        {
+          name: 'problem',
+          input: makePlayCommitInput({
+            activeTab: makeTab({mode: 'problem'}),
+            task: {sideToMove: 'black'},
+          }),
+          assertModeSpecific: (deps) => {
+            assert.strictEqual(deps._calls.problemAppendMove.length, 1)
+          },
+        },
+        {
+          name: 'recall',
+          input: makePlayCommitInput({
+            activeTab: makeTab({mode: 'recall', activeRecallSessionId: 'rs_1'}),
+          }),
+          assertModeSpecific: (deps) => {
+            assert.strictEqual(deps._calls.recallSubmitBoardClick.length, 1)
+          },
+        },
+        {
+          name: 'analysis',
+          input: makePlayCommitInput({
+            activeTab: makeTab({mode: 'analysis'}),
+            editWorkspacePresent: true,
+          }),
+          assertModeSpecific: (deps) => {
+            assert.strictEqual(deps._calls.editCommitScratchResult.length, 1)
+          },
+        },
+      ]
+
+      for (const testCase of cases) {
+        const deps = createPlayMoveCommitDeps({
+          playMoveResults: [{valid: true, changed: true, treePosition: `node_${testCase.name}`}],
+          aiMoves: ['pp'],
+        })
+        const controller = createBoardInteractionController(deps)
+
+        await controller.handleBoardClick(testCase.input)
+
+        testCase.assertModeSpecific(deps)
+        assert.strictEqual(deps._calls.documentStorePlayMove.length, 0,
+          `${testCase.name} must not write through Play documentStore.playMove`)
+        assert.strictEqual(deps._calls.attemptAppendMove.length, 0,
+          `${testCase.name} must not run Play Attempt append`)
+        assert.strictEqual(deps._calls.monitorOnUserMove.length, 0,
+          `${testCase.name} must not run Play monitor`)
+        assert.strictEqual(deps._calls.analysisSchedule.length, 0,
+          `${testCase.name} must not run Play analysis scheduler`)
+        assert.strictEqual(deps._calls.aiMaybePlay.length, 0,
+          `${testCase.name} must not run Play AI continuation`)
+      }
+    })
+
+    it('W8-PMC-T07: Play commit fan-out has no overlayRegion or overlayStore dependency', function () {
+      const files = [
+        '../../../src/modules/training/workbench/boardInteractionController.ts',
+        '../../../src/modules/workbench/board-interactions/executors/playInteractionExecutor.js',
+      ]
+
+      for (const file of files) {
+        const source = fs.readFileSync(path.resolve(__dirname, file), 'utf8')
+        assert.ok(!/\boverlayRegion\b/.test(source), `${file} must not depend on overlayRegion`)
+        assert.ok(!/\boverlayStore\b/.test(source), `${file} must not depend on overlayStore`)
+      }
+    })
+
+    it('W8-PMC-T08: aiMoveService does not directly write game tree, Attempt, or overlay', function () {
+      const source = fs.readFileSync(
+        path.resolve(__dirname, '../../../src/modules/training/ai/aiMoveService.ts'),
+        'utf8',
+      )
+
+      const forbiddenPatterns = [
+        /\bdocumentStore\b/,
+        /\.playMove\s*\(/,
+        /\.appendMove\s*\(/,
+        /\.updateAttempt\s*\(/,
+        /\.createAttempt\s*\(/,
+        /\boverlayRegion\b/,
+        /\boverlayStore\b/,
+      ]
+
+      for (const pattern of forbiddenPatterns) {
+        assert.ok(!pattern.test(source), `aiMoveService must not contain ${pattern}`)
+      }
+    })
+
+    it('W8-PMC-T09: no formal PlayMoveCommitted event, bus message, or persistent event is introduced', function () {
+      const files = [
+        '../../../src/modules/training/workbench/boardInteractionController.ts',
+        '../../../src/modules/workbench/board-interactions/executors/playInteractionExecutor.js',
+        '../../../src/modules/training/ai/aiMoveService.ts',
+      ]
+      const forbiddenPatterns = [
+        /\b(?:export\s+)?(?:type|interface|class)\s+PlayMoveCommitted(?:Event)?\b/,
+        /\.emit\s*\(\s*['"]PlayMoveCommitted['"]/,
+        /\bdispatchEvent\s*\(\s*new\s+Event\s*\(\s*['"]PlayMoveCommitted['"]/,
+        /\bipc(?:Main|Renderer)?\.\w+\s*\(\s*['"]PlayMoveCommitted['"]/,
+        /\bPlayMoveCommitted\b[\s\S]{0,120}\bEventEmitter\b/,
+        /\bEventEmitter\b[\s\S]{0,120}\bPlayMoveCommitted\b/,
+        /\bpersist\w*\s*\([^)]*PlayMoveCommitted/i,
+      ]
+
+      for (const file of files) {
+        const source = fs.readFileSync(path.resolve(__dirname, file), 'utf8')
+        for (const pattern of forbiddenPatterns) {
+          assert.ok(!pattern.test(source), `${file} must not introduce ${pattern}`)
+        }
+      }
     })
   })
 
