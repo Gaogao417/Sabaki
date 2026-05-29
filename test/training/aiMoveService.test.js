@@ -800,5 +800,54 @@ describe('aiMoveService', () => {
         'node_changed',
       )
     })
+
+    it('W8-PMC-RC-T12b drops AI response using injected current tree-position source when tab snapshot has no position', async () => {
+      const runtimeStore = createTrainingRuntimeStore()
+      const workbenchStore = createWorkbenchStore()
+      const attempt = makeAttempt({ id: 'attempt_1', userLine: ['D4'] })
+      let currentTreePosition = 'node_after_human'
+      let resolveEngine
+      const enginePromise = new Promise(resolve => {
+        resolveEngine = resolve
+      })
+      const readCalls = []
+
+      const tab = makeTab({
+        id: 'tab_1',
+        mode: 'play',
+        activeAttemptId: 'attempt_1',
+      })
+      workbenchStore.addTab(tab)
+      workbenchStore.setActiveTab('tab_1')
+      runtimeStore.setActiveAttempt('attempt_1')
+
+      const service = createAiMoveService({
+        runtimeStore,
+        workbenchStore,
+        repository: createPhase3AttemptRepository(() => attempt),
+        getCurrentTreePosition: ({ tabId }) => {
+          readCalls.push(tabId)
+          return currentTreePosition
+        },
+        engineService: createPhase3EngineService(async () => enginePromise),
+      })
+
+      const pending = service.requestAiMove({
+        tab,
+        attempt,
+        task: makeTask(),
+        color: 'white',
+        treePosition: 'node_after_human',
+      })
+
+      assert.strictEqual(runtimeStore.getState().pendingAiMove?.treePosition, 'node_after_human')
+
+      currentTreePosition = 'node_changed'
+      resolveEngine({ move: 'C3', candidates: ['C3'] })
+
+      assert.strictEqual(await pending, null)
+      assert.ok(readCalls.includes('tab_1'), 'freshness guard must read the live current tree position')
+      assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
+    })
   })
 })

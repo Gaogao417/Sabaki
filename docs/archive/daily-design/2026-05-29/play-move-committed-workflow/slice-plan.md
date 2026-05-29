@@ -76,3 +76,4 @@ Date: 2026-05-29
   Focused source-boundary tests pass; T10/T11/T12 remain expected RED before implementation.
 - retry2 after architecture review REQUEST_CHANGES: add a test proving AI stale freshness does not rely
   only on manually seeded `WorkbenchTab.currentTreePosition`, then wire a production current-position source.
+  `W8-PMC-RC-T12b` added and is RED before implementation (`C3 !== null`).
