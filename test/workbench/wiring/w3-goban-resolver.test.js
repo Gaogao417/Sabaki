@@ -49,7 +49,7 @@ describe('W3 Goban Resolver: resolveBoardInteraction with WorkbenchMode', functi
   // --- Helpers ---
 
   function baseResolverInput(overrides = {}) {
-    return {
+    const input = {
       mode: 'play',
       selectedTool: 'stone_1',
       event: {button: 0, ctrlKey: false, metaKey: false, isMac: false},
@@ -62,6 +62,41 @@ describe('W3 Goban Resolver: resolveBoardInteraction with WorkbenchMode', functi
       editWorkspacePresent: false,
       ...overrides,
     }
+
+    // Workbench business objects are now consumed by policy derivation, not by
+    // resolveBoardInteraction. Keep this older test matrix by translating the
+    // legacy fixture fields into the board-facing policy fields first.
+    if (input.workbenchMode === 'problem') {
+      input.mutationContract = 'problemAttemptMove'
+      if (input.problemArea?.vertices != null) {
+        input.allowedVertices = input.problemArea.vertices
+      }
+      if (input.playerConfig?.currentSide === 'ai') {
+        input.readOnly = true
+        input.readOnlyReason = 'problem: AI turn, board is read-only'
+      }
+    } else if (input.workbenchMode === 'play') {
+      if (input.playerConfig?.currentSide === 'ai') {
+        input.readOnly = true
+        input.readOnlyReason = 'play: AI turn, board is read-only'
+      }
+    } else if (input.workbenchMode === 'analysis') {
+      input.mutationContract = input.editWorkspacePresent ? 'scratchEdit' : null
+    } else if (input.workbenchMode === 'recall') {
+      input.mutationContract = 'recallAnswer'
+    } else if (
+      input.workbenchMode == null &&
+      input.mode === 'analysis' &&
+      !input.editWorkspacePresent
+    ) {
+      input.mutationContract = null
+    }
+
+    delete input.workbenchMode
+    delete input.problemArea
+    delete input.playerConfig
+
+    return input
   }
 
   // --- W3-T10: workbenchMode='play' + empty vertex -> play-stone intent + playMove contract ---

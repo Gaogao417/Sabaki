@@ -42,6 +42,7 @@ export type AppendMoveInput = {
   positionBeforeHash?: string
   positionAfterHash?: string
   preMoveAnalysis: PreMoveAnalysis | null
+  actor?: 'human' | 'ai'
 }
 
 export type AppendMoveResult = {
@@ -190,13 +191,14 @@ export function createProblemFlowService(
       positionBeforeHash,
       positionAfterHash,
       preMoveAnalysis,
+      actor = 'human',
     } = input
     const moveIndex = view.evalCache.length
 
     // Inline evaluation
     const moveEval = evaluateInline({ move, vertex, playerSign, moveIndex, preMoveAnalysis })
 
-    await attemptService.appendMove(view.attemptId, move)
+    await attemptService.appendMove(view.attemptId, move, actor)
 
     try {
       await monitor.onUserMove({

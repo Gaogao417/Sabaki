@@ -413,7 +413,7 @@ describe('W3 Goban Overlay Policy — activation/deactivation by WorkbenchMode',
       assert.strictEqual(result.overlayDisplayProps.showSiblings, false)
     })
 
-    it('shows analysis overlay when showAnalysis=true and analysis data present', () => {
+    it('hides analysis overlay in play even when showAnalysis=true and analysis data present', () => {
       const analysisObj = {variations: [{vertex: [3, 3], visits: 50}]}
       const result = projectGobanProps(baseInput({
         workbenchMode: 'play',
@@ -429,7 +429,7 @@ describe('W3 Goban Overlay Policy — activation/deactivation by WorkbenchMode',
         },
       }))
 
-      assert.strictEqual(result.overlayDisplayProps.analysis, analysisObj)
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
     })
 
     it('hides analysis overlay when showAnalysis=false even if analysis data present', () => {
@@ -527,7 +527,7 @@ describe('W3 Goban Overlay Policy — activation/deactivation by WorkbenchMode',
       assert.strictEqual(result.overlayDisplayProps.analysis, null)
     })
 
-    it('shows analysis when showAnalysis=true and data present', () => {
+    it('hides analysis in problem even when showAnalysis=true and data present', () => {
       const analysisObj = {variations: [{vertex: [4, 4]}]}
       const result = projectGobanProps(baseInput({
         workbenchMode: 'problem',
@@ -543,7 +543,7 @@ describe('W3 Goban Overlay Policy — activation/deactivation by WorkbenchMode',
         },
       }))
 
-      assert.strictEqual(result.overlayDisplayProps.analysis, analysisObj)
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
     })
 
     it('returns showMoveNumbers=false (same as play)', () => {

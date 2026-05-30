@@ -523,6 +523,7 @@ describe('W3.5 Container Wiring', function () {
           playerSign: 1,
           positionBeforeHash: 'node_root',
           preMoveAnalysis: null,
+          actor: 'human',
         },
       )
       assert.deepStrictEqual(playMoveCalls, [],

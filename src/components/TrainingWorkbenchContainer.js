@@ -945,6 +945,8 @@ class TrainingWorkbenchContainer extends Component {
       : null
     const toolbarOverlayState = toolbarOverlayStore?.getState?.() || {}
     const toolbarAreaState = sabaki.getAnalysisAreaStore?.()?.getState?.() || {}
+    const toolbarAnalysisOverlayAllowed =
+      activeTab?.mode === 'analysis' && !!sabaki.state?.editWorkspace
 
     return h(WorkbenchShell, {
       ...shellProps,
@@ -962,12 +964,16 @@ class TrainingWorkbenchContainer extends Component {
       overlayStore: toolbarOverlayStore,
       areaSelectMode: !!sabaki.state?.areaSelectMode,
       analysisAreaVertices: toolbarAreaState.analysisAreaVertices ?? null,
-      territoryEnabled: !!toolbarOverlayState.territoryEnabled,
-      territoryCompareEnabled: !!toolbarOverlayState.territoryCompareEnabled,
+      territoryEnabled:
+        toolbarAnalysisOverlayAllowed && !!toolbarOverlayState.territoryEnabled,
+      territoryCompareEnabled:
+        toolbarAnalysisOverlayAllowed &&
+        !!toolbarOverlayState.territoryCompareEnabled,
       territoryCompareAvailable:
-        toolbarOverlayStore?.getTerritoryCompareAvailable?.() ??
-        sabaki.getTerritoryCompareAvailable?.() ??
-        false,
+        toolbarAnalysisOverlayAllowed &&
+        (toolbarOverlayStore?.getTerritoryCompareAvailable?.() ??
+          sabaki.getTerritoryCompareAvailable?.() ??
+          false),
       showAISuggestions: !!sabaki.state?.showAISuggestions,
       showHumanPreference: !!sabaki.state?.showHumanPreference,
       libraryDrawerType: this.state.libraryDrawerType,
@@ -1156,33 +1162,6 @@ class TrainingWorkbenchContainer extends Component {
 
           return {
             submitBoardClick: async (vertex) => {
-              const runtimeState = ctx.runtimeStore.getState()
-              const activeCheckpointId = runtimeState.activeCheckpointId
-              if (activeCheckpointId) {
-                const userMove = vertexToSgfMove(vertex)
-                if (
-                  typeof ctx.runtimeStore.appendCorrectionDraftMove ===
-                  'function'
-                ) {
-                  ctx.runtimeStore.appendCorrectionDraftMove({
-                    checkpointId: activeCheckpointId,
-                    move: userMove,
-                    source: {
-                      kind: 'recall-checkpoint',
-                      recallSessionId: activeRecallSessionId,
-                    },
-                  })
-                }
-                return {
-                  handled: true,
-                  changed: true,
-                  isCorrect: false,
-                  completed: false,
-                  recallMoveIndex: runtimeState.recallView?.moveIndex || 0,
-                  attempt: null,
-                }
-              }
-
               const [x, y] = vertex
               const userMove = vertexToSgfMove([x, y])
               const attempt = await recallService.submitRecallMove({
@@ -1199,6 +1178,49 @@ class TrainingWorkbenchContainer extends Component {
                 completed: session ? session.completed : false,
                 recallMoveIndex: session ? session.currentMoveIndex : 0,
                 attempt,
+              }
+            },
+          }
+        },
+        getCheckpointCorrectionAdapter: () => {
+          const ws = ctx.workbenchStore.getState()
+          const activeTabId = ws.activeTabId
+          const activeTab = ws.tabs.find((t) => t.id === activeTabId)
+          const activeRecallSessionId = activeTab?.activeRecallSessionId
+
+          return {
+            appendCorrectionMove: async (vertex) => {
+              const runtimeState = ctx.runtimeStore.getState()
+              const activeCheckpointId = runtimeState.activeCheckpointId
+              if (!activeCheckpointId || !activeRecallSessionId) {
+                return {
+                  handled: false,
+                  changed: false,
+                  recallMoveIndex: runtimeState.recallView?.moveIndex || 0,
+                  attempt: null,
+                }
+              }
+
+              const userMove = vertexToSgfMove(vertex)
+              if (
+                typeof ctx.runtimeStore.appendCorrectionDraftMove ===
+                'function'
+              ) {
+                ctx.runtimeStore.appendCorrectionDraftMove({
+                  checkpointId: activeCheckpointId,
+                  move: userMove,
+                  source: {
+                    kind: 'recall-checkpoint',
+                    recallSessionId: activeRecallSessionId,
+                  },
+                })
+              }
+
+              return {
+                handled: true,
+                changed: true,
+                recallMoveIndex: runtimeState.recallView?.moveIndex || 0,
+                attempt: null,
               }
             },
           }

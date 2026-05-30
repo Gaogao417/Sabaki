@@ -30,6 +30,11 @@ Play 的核心写入事实标记为 `PlayMoveCommitted`：它不是一个新的 
 事件，更不是当前阶段必须实现的正式领域事件类型。它只是 `documentStore.playMove` 成功写入
 game tree 后的架构提交点 / lifecycle point，用来说明哪些后置服务可以被触发。
 
+本文件只描述 Play move 已经被 resolver / policy 层判定为 `playMove` 之后的提交边界。
+它不定义 `resolveBoardInteraction` 如何从 Workbench mode 推导棋盘交互策略，也不允许把
+Problem / Recall / Analysis 的业务态塞进 Play commit 主线。`mode -> board interaction
+policy -> resolver` 的边界以 `docs/architecture/position-source-mutation-contract.md` 为准。
+
 ---
 
 ## 2. 目标
@@ -56,6 +61,8 @@ game tree 后的架构提交点 / lifecycle point，用来说明哪些后置服�
 - Play Mode 不显示 territory / compare / analysis overlay；`overlayRegion` 不参与 Play move fan-out。
 - Play 中可以后台调度 analysis，用于后续 `MoveEvaluation` / `BadMove`，但这不是 overlay 显示。
 - 当前阶段不要求 event bus，不要求持久化 event，也不要求一个字段完备的 `PlayMoveCommitted` TypeScript 类型。
+- 上游 resolver 不应因为本文件而继续理解完整 `WorkbenchMode`；Play commit 只消费已经派发到
+  `playMove` 的 command。
 
 ---
 
@@ -71,6 +78,7 @@ Analysis scratch changed point Analysis Mode scratch / working position 编辑�
 ```
 
 这四类动作可以共享棋盘 intent 解析，但不能共享同一个写入 executor。
+它们的共同上游是 board interaction policy，而不是 `PlayMoveCommitted`。
 
 ---
 
@@ -132,9 +140,10 @@ type AfterPlayMoveContext = {
 
 ```mermaid
 flowchart TD
-  A["Board click / AI command"] --> B["resolveBoardInteraction: PLAY_STONE"]
-  B --> C["Play move command"]
-  C --> D["documentStore.playMove"]
+  A["Board click / AI command"] --> B["BoardInteractionPolicy: playMove"]
+  B --> C["resolveBoardInteraction: PLAY_STONE"]
+  C --> D0["Play move command"]
+  D0 --> D["documentStore.playMove"]
   D --> E{"valid and changed?"}
   E -->|no| F["return no-op / rejected"]
   E -->|yes| G["afterPlayMoveCommitted"]
@@ -285,11 +294,13 @@ Mode-specific restrictions:
 The current implementation can migrate incrementally:
 
 1. Keep `executePlayInteraction` as the low-level document write adapter.
-2. Add a small `afterPlayMoveCommitted(...)` function or equivalent local pipeline after changed `documentStore.playMove`.
-3. Move attempt append, monitor, analysis scheduling, and AI reply into named post-commit handlers.
-4. Change `aiMoveService` from "maybe play after attempt line" to "maybe continue from committed game tree position".
-5. Route AI-generated moves back into the same Play move command path.
-6. Add tests for:
+2. Keep board mode / task / runtime derivation outside this document's scope; it belongs to
+   `BoardInteractionPolicy`.
+3. Add a small `afterPlayMoveCommitted(...)` function or equivalent local pipeline after changed `documentStore.playMove`.
+4. Move attempt append, monitor, analysis scheduling, and AI reply into named post-commit handlers.
+5. Change `aiMoveService` from "maybe play after attempt line" to "maybe continue from committed game tree position".
+6. Route AI-generated moves back into the same Play move command path.
+7. Add tests for:
    - human-human no engine request;
    - human black vs AI white reply;
    - AI black first move before human white;

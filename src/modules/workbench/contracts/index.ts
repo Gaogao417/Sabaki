@@ -58,6 +58,8 @@ export type {
   ResolverInput,
 } from '../board-interactions/resolveBoardInteraction.ts'
 
+export type {BoardInteractionPolicy} from '../board-interactions/boardInteractionPolicy.ts'
+
 export {createBoardInteractionContext} from '../board-interactions/createBoardInteractionContext.ts'
 
 // Phase 4: board interaction executor

@@ -12,6 +12,8 @@ export type {
   ResolverInput,
 } from './resolveBoardInteraction.ts'
 
+export type {BoardInteractionPolicy} from './boardInteractionPolicy.ts'
+
 export {createBoardInteractionContext} from './createBoardInteractionContext.ts'
 
 export {executeBoardInteraction} from './executeBoardInteraction.js'

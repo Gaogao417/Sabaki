@@ -20,6 +20,8 @@ import {createBoardInteractionContext} from '../../workbench/board-interactions/
 import {executePlayInteraction} from '../../workbench/board-interactions/executors/playInteractionExecutor.js'
 import {executeRecallInteraction} from '../../workbench/board-interactions/executors/recallInteractionExecutor.js'
 import {executeScratchEdit} from '../../workbench/board-interactions/executors/scratchEditInteractionExecutor.js'
+import {deriveBoardInteractionPolicy} from './deriveBoardInteractionPolicy.ts'
+import type {DeriveBoardInteractionPolicyInput} from './deriveBoardInteractionPolicy.ts'
 
 export type BoardInteractionControllerDeps = {
   getPlayServices: () => {
@@ -37,6 +39,7 @@ export type BoardInteractionControllerDeps = {
         positionBeforeHash?: string
         positionAfterHash?: string
         preMoveAnalysis: unknown | null
+        actor?: 'human' | 'ai'
       }): Promise<unknown>
     }
     attemptService?: {
@@ -67,6 +70,8 @@ export type BoardInteractionControllerDeps = {
   }
   getRecallAdapter: () =>
     {submitBoardClick(vertex: [number, number]): Promise<{handled: boolean; changed: boolean; isCorrect?: boolean; completed?: boolean; recallMoveIndex?: number; attempt?: unknown}>}
+  getCheckpointCorrectionAdapter?: () =>
+    {appendCorrectionMove(vertex: [number, number]): Promise<{handled: boolean; changed: boolean; recallMoveIndex?: number; attempt?: unknown}>}
   getEditWorkspaceContext: () => unknown | null
   getEditWorkspaceDeps: () => {
     invalidateEditAnalysis?: () => void
@@ -102,34 +107,6 @@ export type BoardInteractionController = {
 }
 
 /**
- * Derive the workbench mode from activeTab.mode.
- * Maps tab mode strings to the resolver's workbenchMode values.
- */
-function toWorkbenchMode(tabMode: string): 'play' | 'problem' | 'recall' | 'analysis' | undefined {
-  if (tabMode === 'play' || tabMode === 'problem' || tabMode === 'recall' || tabMode === 'analysis') {
-    return tabMode
-  }
-  return undefined
-}
-
-/**
- * Safely extract a typed problemArea from unknown shape.
- */
-function extractProblemArea(raw: unknown): {vertices?: [number, number][]; [key: string]: unknown} | null {
-  if (raw == null) return null
-  if (Array.isArray(raw)) {
-    return { vertices: raw as [number, number][] }
-  }
-  if (typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>
-    if (Array.isArray(obj.vertices)) {
-      return obj as {vertices?: [number, number][]; [key: string]: unknown}
-    }
-  }
-  return null
-}
-
-/**
  * Safely extract playerConfig with optional currentSide.
  */
 function extractPlayerConfig(raw: unknown): {currentSide?: 'human' | 'ai'; [key: string]: unknown} | null {
@@ -137,43 +114,19 @@ function extractPlayerConfig(raw: unknown): {currentSide?: 'human' | 'ai'; [key:
   return raw as {currentSide?: 'human' | 'ai'; [key: string]: unknown}
 }
 
-/**
- * Infer a mutationContract from the resolved intent when mutationContract is null.
- *
- * This fallback handles modes like 'problem' that are not yet mapped to a
- * workspace kind in workspaceDefaults.ts. The mapping is based on which executor
- * the intent semantically belongs to:
- *   - PLAY_STONE -> playMove / problemAttemptMove
- *   - SUBMIT_RECALL_ANSWER -> recallAnswer
- *   - PLACE_BLACK_STONE, PLACE_WHITE_STONE, ERASE_STONE, DRAG_STONE,
- *     MARK_POINT, DRAW_LINE -> scratchEdit
- */
-function inferContractFromIntent(intent: string): string | null {
-  if (intent === BOARD_INTENTS.PLAY_STONE) return 'playMove'
-  if (intent === BOARD_INTENTS.SUBMIT_RECALL_ANSWER) return 'recallAnswer'
-  if (
-    intent === BOARD_INTENTS.PLACE_BLACK_STONE ||
-    intent === BOARD_INTENTS.PLACE_WHITE_STONE ||
-    intent === BOARD_INTENTS.ERASE_STONE ||
-    intent === BOARD_INTENTS.DRAG_STONE ||
-    intent === BOARD_INTENTS.MARK_POINT ||
-    intent === BOARD_INTENTS.DRAW_LINE
-  ) {
-    return 'scratchEdit'
-  }
-  return null
-}
-
 function getProblemPlayerSign(input: {
   task: {sideToMove?: 'black' | 'white'} | null
   activeTab: {playerConfig?: unknown}
+  moveIndex?: number
 }): number {
-  if (input.task?.sideToMove === 'white') return -1
-  if (input.task?.sideToMove === 'black') return 1
+  const moveIndex = input.moveIndex ?? 0
+  if (input.task?.sideToMove === 'white') return moveIndex % 2 === 0 ? -1 : 1
+  if (input.task?.sideToMove === 'black') return moveIndex % 2 === 0 ? 1 : -1
 
   const playerConfig = extractPlayerConfig(input.activeTab.playerConfig)
   const sideToMove = playerConfig?.sideToMove ?? playerConfig?.currentColor
-  return sideToMove === 'white' ? -1 : 1
+  const firstSign = sideToMove === 'white' ? -1 : 1
+  return moveIndex % 2 === 0 ? firstSign : -firstSign
 }
 
 function getPositionBeforeHash(positionSource: unknown): string | undefined {
@@ -188,8 +141,14 @@ function getPositionBeforeHash(positionSource: unknown): string | undefined {
 async function executeProblemAttemptMove(
   result: ReturnType<typeof resolveBoardInteraction>,
   input: {
-    activeTab: {playerConfig?: unknown}
-    task: {sideToMove?: 'black' | 'white'} | null
+    activeTab: {
+      id: string
+      mode: string
+      taskId?: string
+      playerConfig?: unknown
+      activeAttemptId?: string
+    }
+    task: {problemArea?: unknown; rootPositionSgf?: string; sideToMove?: 'black' | 'white'} | null
   },
   services: ReturnType<BoardInteractionControllerDeps['getPlayServices']>,
 ): Promise<unknown> {
@@ -222,7 +181,18 @@ async function executeProblemAttemptMove(
     playerSign: getProblemPlayerSign(input),
     positionBeforeHash,
     preMoveAnalysis,
+    actor: 'human',
   })
+
+  if (flowResult != null) {
+    await maybeAppendProblemAiMove({
+      result,
+      input,
+      services,
+      positionBeforeHash,
+      problemFlowService,
+    })
+  }
 
   return {
     handled: flowResult != null,
@@ -231,6 +201,86 @@ async function executeProblemAttemptMove(
       ? flowResult as Record<string, unknown>
       : {}),
   }
+}
+
+function normalizeProblemArea(raw: unknown): [number, number][] | undefined {
+  const vertices = Array.isArray(raw)
+    ? raw
+    : raw != null && typeof raw === 'object' && Array.isArray((raw as {vertices?: unknown}).vertices)
+      ? (raw as {vertices: unknown[]}).vertices
+      : null
+
+  if (vertices == null) return undefined
+
+  const normalized = vertices
+    .filter((vertex): vertex is [number, number] =>
+      Array.isArray(vertex) &&
+      vertex.length >= 2 &&
+      typeof vertex[0] === 'number' &&
+      typeof vertex[1] === 'number',
+    )
+    .map(vertex => [vertex[0], vertex[1]] as [number, number])
+
+  return normalized.length === 0 ? undefined : normalized
+}
+
+async function maybeAppendProblemAiMove(input: {
+  result: ReturnType<typeof resolveBoardInteraction>
+  input: {
+    activeTab: {
+      id: string
+      mode: string
+      taskId?: string
+      playerConfig?: unknown
+      activeAttemptId?: string
+    }
+    task: {problemArea?: unknown; rootPositionSgf?: string; sideToMove?: 'black' | 'white'} | null
+  }
+  services: ReturnType<BoardInteractionControllerDeps['getPlayServices']>
+  positionBeforeHash?: string
+  problemFlowService: NonNullable<ReturnType<BoardInteractionControllerDeps['getPlayServices']>['problemFlowService']>
+}): Promise<void> {
+  const {services, problemFlowService} = input
+  const attemptId = input.input.activeTab.activeAttemptId
+  if (!attemptId || !services.aiMoveService) return
+
+  const attemptAfter = await loadAttempt(services, attemptId)
+  if (!attemptAfter) return
+
+  const loadedTask = await loadTask(
+    services,
+    input.input.activeTab,
+    input.input.task,
+  )
+  const problemArea = normalizeProblemArea(loadedTask.problemArea)
+  const taskForAi = {
+    ...loadedTask,
+    ...(problemArea == null ? {} : {problemArea}),
+  }
+
+  const aiMove = await services.aiMoveService.maybePlayAiMove({
+    tab: input.input.activeTab,
+    attempt: attemptAfter,
+    task: taskForAi,
+    sideToMove: taskForAi.sideToMove,
+  })
+  const aiVertex = aiMove ? moveToVertex(aiMove) : null
+
+  if (!aiMove || !aiVertex) return
+
+  const normalizedMove = normalizeMoveToSgf(aiMove)
+  await problemFlowService.appendProblemMove({
+    move: normalizedMove,
+    vertex: aiVertex,
+    playerSign: getProblemPlayerSign({
+      activeTab: input.input.activeTab,
+      task: taskForAi,
+      moveIndex: attemptAfter.userLine.length,
+    }),
+    positionBeforeHash: input.positionBeforeHash,
+    preMoveAnalysis: null,
+    actor: 'ai',
+  })
 }
 
 function vertexToSgfMove(vertex: [number, number]): string {
@@ -372,16 +422,26 @@ export function createBoardInteractionController(
     async handleBoardClick(input) {
       const {vertex, event, activeTab, settings, board, editWorkspacePresent, task, runtimeState} = input
 
-      const workbenchMode = toWorkbenchMode(activeTab.mode)
-      const problemArea = extractProblemArea(task?.problemArea ?? activeTab.problemArea)
       const playerConfig = extractPlayerConfig(activeTab.playerConfig)
+      const editWorkspaceContext = editWorkspacePresent
+        ? deps.getEditWorkspaceContext()
+        : null
+      const policy = deriveBoardInteractionPolicy({
+        tab: activeTab as DeriveBoardInteractionPolicyInput['tab'],
+        runtimeState,
+        task: task as DeriveBoardInteractionPolicyInput['task'],
+        playerConfig: playerConfig as DeriveBoardInteractionPolicyInput['playerConfig'],
+        selectedTool: settings.selectedTool,
+        treePosition: activeTab.currentTreePosition ?? 'node_root',
+        editWorkspace: editWorkspaceContext as DeriveBoardInteractionPolicyInput['editWorkspace'],
+      })
 
       // Build state-like object for createBoardInteractionContext
       const state = {
         mode: activeTab.mode,
         selectedTool: settings.selectedTool,
         treePosition: 'node_root',
-        editWorkspace: editWorkspacePresent ? {activeTab: 'current'} : null,
+        editWorkspace: editWorkspaceContext ?? (editWorkspacePresent ? {activeTab: 'current'} : null),
       }
 
       // Build the ResolverInput using the existing context builder
@@ -396,13 +456,7 @@ export function createBoardInteractionController(
         vertex,
         event,
         isMac: deps.getIsMac(),
-        workbenchMode,
-        tabId: activeTab.id,
-        taskId: activeTab.taskId,
-        playerConfig,
-        problemArea,
-        activeAttemptId: activeTab.activeAttemptId,
-        activeRecallSessionId: activeTab.activeRecallSessionId,
+        policy,
       })
 
       if (resolverInput == null) return
@@ -423,9 +477,7 @@ export function createBoardInteractionController(
       }
 
       // RESOLVED: dispatch based on mutationContract.
-      // When mutationContract is null (e.g. problem mode which is not yet mapped
-      // in workspaceDefaults), fall back to intent-based routing.
-      const effectiveContract = result.mutationContract ?? inferContractFromIntent(result.intent)
+      const effectiveContract = result.mutationContract
 
       if (effectiveContract === 'problemAttemptMove') {
         const playServices = deps.getPlayServices()
@@ -541,8 +593,33 @@ export function createBoardInteractionController(
         return recallResult
       }
 
+      if (effectiveContract === 'checkpointCorrection') {
+        if (
+          result.status !== RESOLVE_STATUSES.RESOLVED ||
+          result.intent !== BOARD_INTENTS.SUBMIT_CHECKPOINT_CORRECTION_MOVE
+        ) {
+          return {
+            handled: false,
+            changed: false,
+            reason: `unsupported checkpoint correction result: ${result.status}/${result.intent}`,
+          }
+        }
+
+        const adapter = deps.getCheckpointCorrectionAdapter?.()
+        if (!adapter) {
+          return {
+            handled: false,
+            changed: false,
+            reason: 'missing checkpointCorrectionAdapter',
+          }
+        }
+
+        return await adapter.appendCorrectionMove(
+          result.payload?.vertex as [number, number],
+        )
+      }
+
       if (effectiveContract === 'scratchEdit') {
-        const editWorkspaceContext = deps.getEditWorkspaceContext()
         const editWorkspaceDeps = deps.getEditWorkspaceDeps()
         const scratchResult = executeScratchEdit(result, editWorkspaceContext as any, editWorkspaceDeps)
         if (

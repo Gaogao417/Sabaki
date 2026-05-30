@@ -707,11 +707,11 @@ describe('W8-P1 Board Interaction Controller', function () {
     })
 
     // W8P1-T12: deferred -> legacySabaki.clickVertex is called
-    it('W8P1-T12: deferred routes to legacySabaki.clickVertex', async function () {
+    it('W8P1-T12: Workbench analysis without editWorkspace is read-only', async function () {
       const deps = createControllerDeps()
       const controller = createBoardInteractionController(deps)
 
-      // analysis without editWorkspace -> deferred
+      // analysis without editWorkspace -> rejected by Workbench policy
       await controller.handleBoardClick({
         vertex: [3, 3],
         event: {button: 0, ctrlKey: false, metaKey: false},
@@ -723,9 +723,8 @@ describe('W8-P1 Board Interaction Controller', function () {
         runtimeState: {},
       })
 
-      assert.strictEqual(deps._calls.legacyClickVertex.length, 1,
-        'legacySabaki.clickVertex must be called for deferred')
-      assert.deepStrictEqual(deps._calls.legacyClickVertex[0].vertex, [3, 3])
+      assert.strictEqual(deps._calls.legacyClickVertex.length, 0,
+        'analysis without editWorkspace must not fall back to legacy SGF edit')
     })
 
     // W8P1-T13: recall resolved -> documentStore.playMove is NOT called (Arch v0.5 SS14)

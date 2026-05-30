@@ -289,12 +289,8 @@ function computeAnalysis(
   overlayState: GobanPropsInput['overlayState'],
   settings: GobanPropsInput['settings'],
 ): object | null {
-  // Recall never shows analysis overlay
-  if (mode === 'recall') return null
-  // Analysis without editWorkspace never shows analysis overlay
-  if (mode === 'analysis' && !settings.editWorkspaceActive) return null
-  // Play and problem: show analysis overlay if showAnalysis is enabled
-  // Analysis with editWorkspace: show analysis overlay if showAnalysis is enabled
+  // Analysis overlay is owned by scratch analysis only.
+  if (mode !== 'analysis' || !settings.editWorkspaceActive) return null
   if (settings.showAnalysis) return overlayState.analysis
   return null
 }

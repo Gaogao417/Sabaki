@@ -472,10 +472,10 @@ describe('W3.5 boardInteractionController', function () {
     })
   })
 
-  // --- W35-T10: handleBoardClick with deferred routes to legacy sabaki.clickVertex ---
+  // --- W35-T10: Workbench analysis without editWorkspace is read-only ---
 
-  describe('W35-T10: deferred routes to legacy sabaki.clickVertex', function () {
-    it('click in analysis mode without editWorkspace calls legacy sabaki.clickVertex', async function () {
+  describe('W35-T10: analysis without editWorkspace is read-only', function () {
+    it('click in analysis mode without editWorkspace does not call legacy sabaki.clickVertex', async function () {
       const deps = createControllerDeps()
       const controller = createController(deps)
 
@@ -490,13 +490,8 @@ describe('W3.5 boardInteractionController', function () {
         runtimeState: {},
       })
 
-      assert.strictEqual(deps._calls.legacyClickVertex.length, 1,
-        'legacy sabaki.clickVertex must be called for deferred interaction')
-      assert.deepStrictEqual(
-        deps._calls.legacyClickVertex[0].vertex,
-        [7, 7],
-        'legacy clickVertex must receive the clicked vertex [7,7]',
-      )
+      assert.strictEqual(deps._calls.legacyClickVertex.length, 0,
+        'Workbench analysis without editWorkspace must not fall back to legacy SGF edit')
     })
   })
 

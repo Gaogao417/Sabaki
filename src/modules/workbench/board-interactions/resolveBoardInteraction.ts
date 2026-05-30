@@ -39,14 +39,10 @@ export type ResolverInput = {
   positionSource: PositionSource | null
   mutationContract: MutationContract | null
   editWorkspacePresent: boolean
-  // W3 WorkbenchMode extension fields
-  workbenchMode?: 'play' | 'problem' | 'recall' | 'analysis'
-  tabId?: string
-  taskId?: string
-  playerConfig?: { currentSide?: 'human' | 'ai'; [key: string]: unknown } | null
-  problemArea?: { vertices?: [number, number][]; [key: string]: unknown } | null
-  activeAttemptId?: string
-  activeRecallSessionId?: string
+  readOnly?: boolean
+  readOnlyReason?: string
+  allowedVertices?: [number, number][]
+  lineFirstVertex?: {type: string; vertex: [number, number]} | null
 }
 
 function noop(
@@ -254,23 +250,25 @@ function resolveRecall(input: ResolverInput): BoardInteractionResult {
   return noop('recall: occupied point', input)
 }
 
-function resolveProblemAttempt(input: ResolverInput): BoardInteractionResult {
-  const result = resolvePlay(input)
+function resolveCheckpointCorrection(input: ResolverInput): BoardInteractionResult {
+  let {event, point, vertex} = input
 
-  if (
-    result.status === RESOLVE_STATUSES.RESOLVED &&
-    result.intent === BOARD_INTENTS.PLAY_STONE
-  ) {
+  if (event.button !== 0) {
+    return noop('checkpoint correction: non-left button', input)
+  }
+
+  if (point.sign === 0) {
     return {
-      ...result,
-      mutationContract: 'problemAttemptMove' as MutationContract,
+      intent: BOARD_INTENTS.SUBMIT_CHECKPOINT_CORRECTION_MOVE,
+      positionSource: input.positionSource,
+      mutationContract: input.mutationContract,
+      status: RESOLVE_STATUSES.RESOLVED,
+      payload: {vertex},
     }
   }
 
-  return result
+  return noop('checkpoint correction: occupied point', input)
 }
-
-// --- Helpers for workbench-mode routing ---
 
 function vertexInList(v: [number, number], list: [number, number][]): boolean {
   return list.some(item => item[0] === v[0] && item[1] === v[1])
@@ -281,49 +279,52 @@ function vertexInList(v: [number, number], list: [number, number][]): boolean {
 export function resolveBoardInteraction(
   input: ResolverInput,
 ): BoardInteractionResult {
-  let {mode, editWorkspacePresent, workbenchMode} = input
+  let {mode, editWorkspacePresent, mutationContract} = input
 
-  // When workbenchMode is present, use it for routing instead of legacy mode
-  if (workbenchMode != null) {
-    if (workbenchMode === 'play') {
-      // AI turn: board is read-only
-      if (input.playerConfig?.currentSide === 'ai') {
-        return noop('play: AI turn, board is read-only', input)
-      }
-      return resolvePlay(input)
-    }
-    if (workbenchMode === 'problem') {
-      // AI turn: board is read-only
-      if (input.playerConfig?.currentSide === 'ai') {
-        return noop('problem: AI turn, board is read-only', input)
-      }
-      // Check problemArea constraint if present
-      if (input.problemArea?.vertices != null) {
-        if (!vertexInList(input.vertex, input.problemArea.vertices)) {
-          return noop('problem: vertex outside problemArea', input)
-        }
-      }
-      return resolveProblemAttempt(input)
-    }
-    if (workbenchMode === 'recall') {
-      return resolveRecall(input)
-    }
-    if (workbenchMode === 'analysis') {
-      if (editWorkspacePresent) {
-        return resolveAnalysisEdit(input)
-      }
-      return legacy(BOARD_INTENTS.LEGACY_SGF_EDIT, input, 'analysis without editWorkspace')
-    }
+  if (input.readOnly) {
+    return noop(input.readOnlyReason ?? 'board is read-only', input)
   }
 
-  // Legacy path: unchanged when workbenchMode is absent
+  if (
+    input.allowedVertices != null &&
+    !vertexInList(input.vertex, input.allowedVertices)
+  ) {
+    return noop('vertex outside allowed vertices', input)
+  }
 
-  // Play / autoplay
-  if (mode === 'play') {
+  if (
+    mode !== 'play' &&
+    mode !== 'analysis' &&
+    mode !== 'recall' &&
+    mutationContract !== 'problemAttemptMove'
+  ) {
+    return resolveLegacyMode(input)
+  }
+
+  if (mutationContract === 'playMove' || mutationContract === 'problemAttemptMove') {
     return resolvePlay(input)
   }
-  if (mode === 'autoplay') {
-    return legacy(BOARD_INTENTS.LEGACY_AUTOPLAY, input, 'autoplay mode')
+
+  if (mutationContract === 'recallAnswer') {
+    return resolveRecall(input)
+  }
+
+  if (mutationContract === 'checkpointCorrection') {
+    return resolveCheckpointCorrection(input)
+  }
+
+  if (mutationContract === 'scratchEdit') {
+    if (editWorkspacePresent) {
+      return resolveAnalysisEdit(input)
+    }
+    return legacy(BOARD_INTENTS.LEGACY_SGF_EDIT, input, 'analysis without editWorkspace')
+  }
+
+  // Legacy path for native Sabaki modes that have not moved to policy routing.
+
+  // Play
+  if (mode === 'play') {
+    return resolvePlay(input)
   }
 
   // Analysis with edit workspace (scratch analysis)
@@ -336,7 +337,21 @@ export function resolveBoardInteraction(
     return legacy(BOARD_INTENTS.LEGACY_SGF_EDIT, input, 'analysis without editWorkspace')
   }
 
-  // Scoring / estimator
+  // Recall
+  if (mode === 'recall') {
+    return resolveRecall(input)
+  }
+
+  return noop('unknown mode', input)
+}
+
+function resolveLegacyMode(input: ResolverInput): BoardInteractionResult {
+  let {mode} = input
+
+  if (mode === 'autoplay') {
+    return legacy(BOARD_INTENTS.LEGACY_AUTOPLAY, input, 'autoplay mode')
+  }
+
   if (mode === 'scoring' || mode === 'estimator') {
     if (input.event.button !== 0 || input.point.sign === 0) {
       return noop('scoring/estimator: empty point or non-left button', input)
@@ -348,12 +363,6 @@ export function resolveBoardInteraction(
     )
   }
 
-  // Recall
-  if (mode === 'recall') {
-    return resolveRecall(input)
-  }
-
-  // Find
   if (mode === 'find') {
     if (input.event.button !== 0) return noop('find: non-left button', input)
     return legacy(BOARD_INTENTS.LEGACY_FIND_MOVE, input, 'find mode')

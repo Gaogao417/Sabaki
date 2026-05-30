@@ -809,9 +809,9 @@ describe('PRD training smoke tests (service/controller/store)', () => {
     const updatedAttempt = harness.repository.store.attempts[attempt.id]
 
     assert.deepStrictEqual(calls.documentMoves, [])
-    assert.deepStrictEqual(updatedAttempt.userLine, ['dd'])
-    assert.deepStrictEqual(updatedAttempt.moveActors.map(actor => actor.actor), ['human'])
-    assert.deepStrictEqual(calls.monitorMoves.map(call => call.move), ['dd'])
-    assert.deepStrictEqual(calls.aiInputs, [])
+    assert.deepStrictEqual(updatedAttempt.userLine, ['dd', 'qq'])
+    assert.deepStrictEqual(updatedAttempt.moveActors.map(actor => actor.actor), ['human', 'ai'])
+    assert.deepStrictEqual(calls.monitorMoves.map(call => call.move), ['dd', 'qq'])
+    assert.strictEqual(calls.aiInputs.length, 1)
   })
 })

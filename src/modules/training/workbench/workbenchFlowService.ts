@@ -537,10 +537,7 @@ export function createWorkbenchFlowService(
   }
 
   function clearPlayCompanions(): void {
-    runtimeStore?.setProblemView(null)
-    runtimeStore?.setRecallView(null)
-    runtimeStore?.setActiveRecallSession(undefined)
-    runtimeStore?.setActiveCheckpoint(undefined)
+    if (runtimeRegion) runtimeRegion.onPlayActivated()
   }
 
   async function createRecallForAttempt(
@@ -700,9 +697,7 @@ export function createWorkbenchFlowService(
   async function abandonProblem(tabId: string): Promise<void> {
     const tab = getTab(tabId)
     assertProblemCommand(tab, 'abandonProblem')
-    runtimeStore?.setRecallView(null)
-    runtimeStore?.setActiveRecallSession(undefined)
-    runtimeStore?.setActiveCheckpoint(undefined)
+    if (runtimeRegion) runtimeRegion.onProblemActivated()
     checkModeStateInvariant({
       tabId,
       command: 'abandonProblem',
@@ -718,9 +713,6 @@ export function createWorkbenchFlowService(
       await problemFlowService.abandonActiveProblem()
     } else if (tab.activeAttemptId) {
       await attemptService.finalizeAttemptResult(tab.activeAttemptId, 'abandoned')
-      runtimeStore?.setProblemView(null)
-    } else {
-      runtimeStore?.setProblemView(null)
     }
 
     workbenchStore.updateTab(tabId, {

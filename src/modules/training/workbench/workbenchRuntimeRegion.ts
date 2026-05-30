@@ -3,6 +3,8 @@ import type {TrainingRuntimeStore} from '../store/trainingRuntimeStore'
 import {mapRecallSessionToRecallView} from '../recall/recallService'
 
 export type WorkbenchRuntimeRegion = {
+  onPlayActivated(): void
+  onProblemActivated(): void
   onRecallActivated(input: {session: RecallSession}): void
   onRecallCompleted(input?: {sessionId?: string}): void
   onCheckpointResumed(input?: {checkpointId?: string}): void
@@ -18,6 +20,19 @@ export function createWorkbenchRuntimeRegion(
   const {runtimeStore} = deps
 
   return {
+    onPlayActivated() {
+      runtimeStore.setProblemView(null)
+      runtimeStore.setActiveRecallSession(undefined)
+      runtimeStore.setRecallView(null)
+      runtimeStore.setActiveCheckpoint(undefined)
+    },
+
+    onProblemActivated() {
+      runtimeStore.setActiveRecallSession(undefined)
+      runtimeStore.setRecallView(null)
+      runtimeStore.setActiveCheckpoint(undefined)
+    },
+
     onRecallActivated(input) {
       runtimeStore.setProblemView(null)
       runtimeStore.setActiveRecallSession(input.session.id)

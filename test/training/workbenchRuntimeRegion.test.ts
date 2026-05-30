@@ -761,10 +761,11 @@ describe('workbench runtime region transition contract', () => {
       'utf8',
     )
     const flowCleanupSource = replaceFunctionBodies(flowSource, [
-      'abandonProblem',
       'showRecallHint',
       'skipRecallMove',
     ])
+    assert.match(flowSource, /runtimeRegion\.onPlayActivated\s*\(/)
+    assert.match(flowSource, /runtimeRegion\.onProblemActivated\s*\(/)
     assert.match(flowSource, /runtimeRegion\.onRecallActivated\s*\(/)
     assert.match(flowSource, /runtimeRegion\.onRecallCompleted\s*\(/)
     assert.match(flowSource, /runtimeRegion\.onCheckpointResumed\s*\(/)
@@ -814,6 +815,8 @@ describe('workbench runtime region transition contract', () => {
       'runtime region module must export createWorkbenchRuntimeRegion factory',
     )
     assert.match(ownerSource, /WorkbenchRuntimeRegion/)
+    assert.match(ownerSource, /onPlayActivated/)
+    assert.match(ownerSource, /onProblemActivated/)
     assert.match(ownerSource, /onRecallActivated/)
     assert.match(ownerSource, /onRecallCompleted/)
     assert.match(ownerSource, /onCheckpointResumed/)

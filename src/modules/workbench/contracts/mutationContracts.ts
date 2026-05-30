@@ -8,13 +8,17 @@
  */
 export const MUTATION_CONTRACTS = Object.freeze({
   PLAY_MOVE: 'playMove',
+  PROBLEM_ATTEMPT_MOVE: 'problemAttemptMove',
   SCRATCH_EDIT: 'scratchEdit',
   RECALL_ANSWER: 'recallAnswer',
+  CHECKPOINT_CORRECTION: 'checkpointCorrection',
   VARIATION_MOVE: 'variationMove',
 } as const)
 
 export type MutationContract =
   | 'playMove'
+  | 'problemAttemptMove'
   | 'scratchEdit'
   | 'recallAnswer'
+  | 'checkpointCorrection'
   | 'variationMove'

@@ -1812,6 +1812,7 @@ openTask(taskId, mode?)
 
 ```text
 User clicks board intersection
+→ Workbench derives BoardInteractionPolicy(mutationContract='playMove')
 → boardInteractionController resolves PLAY_STONE + mutationContract='playMove'
 → Play move command
 → documentStore.playMove(vertex, actor='human')
@@ -1847,6 +1848,11 @@ Problem Mode 不使用 Play move commit。Problem 棋盘点击进入 Problem 自
 主写入是 `problemFlowService`、`problemView` 和 mutable Attempt line。
 Problem AI 应手必须受 `task.problemArea` 约束；任何过期或范围外 AI 落子都不允许进入
 Problem runtime 或 Attempt。
+
+上游棋盘解析边界以 `PositionSource + BoardInteractionPolicy + MutationContract` 为准：
+Workbench mode / task / runtime / playerConfig 先派生 board-facing policy，resolver 再返回
+intent + contract + payload。不要把 `workbenchMode`、active Attempt / Recall ids、
+`problemArea`、AI turn 等业务对象作为 resolver 的长期输入模型。
 
 analysis update 后：
 

@@ -16,6 +16,7 @@ export const BOARD_INTENTS = Object.freeze({
   MARK_POINT: 'mark-point',
   DRAW_LINE: 'draw-line',
   SUBMIT_RECALL_ANSWER: 'submit-recall-answer',
+  SUBMIT_CHECKPOINT_CORRECTION_MOVE: 'submit-checkpoint-correction-move',
 
   // Scratch-edit extended intents (Phase 7)
   SET_NEXT_PLAYER: 'set-next-player',
@@ -45,6 +46,7 @@ export type BoardIntent =
   | 'mark-point'
   | 'draw-line'
   | 'submit-recall-answer'
+  | 'submit-checkpoint-correction-move'
   | 'set-next-player'
   | 'capture-reference'
   | 'toggle-tab'

@@ -10,7 +10,7 @@ function makeInput(overrides = {}) {
     showHumanPreference: false,
     showNextMoves: true,
     showSiblings: true,
-    editWorkspaceActive: false,
+    editWorkspaceActive: true,
     ...overrides,
   }
 }
@@ -27,9 +27,20 @@ describe('resolveAnalysisDisplay', () => {
     })
 
     it('shows next moves and siblings', () => {
-      let result = resolveAnalysisDisplay(makeInput({mode: 'analysis'}))
+      let result = resolveAnalysisDisplay(
+        makeInput({mode: 'analysis', editWorkspaceActive: false}),
+      )
       assert.strictEqual(result.showNextMoves, true)
       assert.strictEqual(result.showSiblings, true)
+    })
+
+    it('hides analysis without editWorkspace', () => {
+      let result = resolveAnalysisDisplay(
+        makeInput({mode: 'analysis', editWorkspaceActive: false}),
+      )
+      assert.strictEqual(result.showAnalysis, false)
+      assert.strictEqual(result.showAISuggestions, false)
+      assert.strictEqual(result.showAnalysisSummaryCard, false)
     })
 
     it('hides analysis when showAnalysis is off', () => {
@@ -54,14 +65,14 @@ describe('resolveAnalysisDisplay', () => {
     })
   })
 
-  // --- Regression: recall mode should show analysis ---
+  // --- Recall mode must not show analysis ---
 
   describe('recall mode', () => {
-    it('shows analysis when flags are on', () => {
+    it('hides analysis when flags are on', () => {
       let result = resolveAnalysisDisplay(makeInput({mode: 'recall'}))
-      assert.strictEqual(result.showAnalysis, true)
-      assert.strictEqual(result.showAISuggestions, true)
-      assert.strictEqual(result.showAnalysisSummaryCard, true)
+      assert.strictEqual(result.showAnalysis, false)
+      assert.strictEqual(result.showAISuggestions, false)
+      assert.strictEqual(result.showAnalysisSummaryCard, false)
     })
 
     it('hides next moves and siblings (do not spoil expected moves)', () => {
@@ -77,7 +88,7 @@ describe('resolveAnalysisDisplay', () => {
       assert.strictEqual(result.showAnalysis, false)
     })
 
-    it('shows human preference when flag is on', () => {
+    it('hides human preference analysis when flag is on', () => {
       let result = resolveAnalysisDisplay(
         makeInput({
           mode: 'recall',
@@ -85,8 +96,8 @@ describe('resolveAnalysisDisplay', () => {
           showHumanPreference: true,
         }),
       )
-      assert.strictEqual(result.showAnalysis, true)
-      assert.strictEqual(result.showHumanPreference, true)
+      assert.strictEqual(result.showAnalysis, false)
+      assert.strictEqual(result.showHumanPreference, false)
     })
   })
 
@@ -101,7 +112,9 @@ describe('resolveAnalysisDisplay', () => {
     })
 
     it('shows next moves and siblings', () => {
-      let result = resolveAnalysisDisplay(makeInput({mode: 'play'}))
+      let result = resolveAnalysisDisplay(
+        makeInput({mode: 'play', editWorkspaceActive: false}),
+      )
       assert.strictEqual(result.showNextMoves, true)
       assert.strictEqual(result.showSiblings, true)
     })

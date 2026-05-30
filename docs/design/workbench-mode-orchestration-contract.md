@@ -88,22 +88,21 @@ Mode transition 的唯一编排入口是 `workbenchFlowService`，或后续同�
 
 | Companion state | Contract | 当前代码状态 |
 | --- | --- | --- |
-| `WorkbenchTab` | 应为 `mode:'problem'`，必须有 `activeAttemptId`；`activeRecallSessionId` 为空；`previousMode` 为空。 | **Gap**: `openProblemTab` 创建 tab 后 legacy setup 仍将 `sabaki.state.mode` 设为 `play`，见 `src/modules/training/workbench/workbenchTabService.ts:107` 和 `src/modules/training/workbench/workbenchTabService.ts:120`。 |
+| `WorkbenchTab` | 应为 `mode:'problem'`，必须有 `activeAttemptId`；`activeRecallSessionId` 为空；`previousMode` 为空。 | `WorkbenchTab.mode='problem'` 已被 resolver 主路径识别；剩余 gap 是 resolver 仍直接消费 `workbenchMode`，而不是消费上层派生的 board interaction policy。 |
 | Runtime | 必须有 `problemView`；`recallView=null`；`activeCheckpointId=null`；pending evaluations 可存在；`visibleBadMoveIds` 只属于当前 problem attempt。 | `openProblemTab` 设置 `problemView`，见 `src/modules/training/workbench/workbenchTabService.ts:166`。 |
-| Attempt | submit 前 mutable；submit 后 frozen。problem undo 必须同步回滚 Attempt userLine。 | **Risk**: `undoProblemMove` 只改 runtime cache，不改 Attempt，见 `src/modules/training/problem/problemFlowService.ts:237`。 |
-| Game tree | 允许在 problem area 内生成真实答题节点；submit 后禁止继续改当前 attempt line。 | legacy controller 在 play mode 截获 problem move 并写 tree，见 `src/modules/training/controller/legacyTrainingFlowController.ts:359`。 |
+| Attempt | submit 前 mutable；submit 后 frozen。problem undo 必须同步回滚 Attempt userLine。 | `problemFlowService.undoProblemMove` 已回滚 `Attempt.userLine` 和 `moveActors`；仍需测试保护 tree/runtime/Attempt line 长度一致。 |
+| Game tree | 允许在 problem area 内生成真实答题节点；submit 后禁止继续改当前 attempt line。 | 新 Workbench controller 主路径不通过 Play commit 写 problem attempt；legacy adapter 投影仍需逐步收敛。 |
 | Overlay | territory/compare off；analysis overlay hidden。 | overlay territory 会被拒绝，但 analysis display 是否隐藏需单独控制。 |
 | Engine / analysis | 可创建 pending MoveEvaluation / BadMove；engine update 只能更新 evaluation/bad move，不得写 frozen Attempt。 | monitor update 不写 Attempt，但 transition 未停止 monitor，是风险。 |
 | UI projection | Problem panel/bar 只读 `problemView` / `result` / bad move summary。 | `TrainingWorkbenchContainer` 将 runtime 映射为 props，见 `src/components/TrainingWorkbenchContainer.js:50`。 |
 
-特别说明：当前 board resolver 没有 `problem` branch。Problem 的真实入口是
-`sabaki.state.mode === 'play' && runtime.problemView`：
+特别说明：当前 board resolver 已有 `workbenchMode === 'problem'` 分支，可以返回
+`problemAttemptMove`，但这是迁移中间态。目标形态是由上层
+`deriveBoardInteractionPolicy(...)` 产出 `mutationContract='problemAttemptMove'`、
+`allowedVertices` 和 `readOnly`，resolver 不再直接理解完整 Workbench mode / runtime。
 
-- `src/modules/sabaki.js:2358`
-- `src/modules/workbench/board-interactions/resolveBoardInteraction.ts:251`
-- `src/modules/workbench/contracts/workspaceDefaults.ts:19`
-
-因此 Problem 是当前最大 mode 主 region 缺口。
+因此 Problem 的当前最大缺口不是“没有 resolver 分支”，而是 contract / policy 来源不够单一：
+`workspaceDefaults`、`workbenchMode` 分支和 controller fallback 仍共同决定写入边界。
 
 ### Recall
 
@@ -242,14 +241,18 @@ Mode transition 的唯一编排入口是 `workbenchFlowService`，或后续同�
 
 1. **Problem mode 双重真相**
 
-   `WorkbenchMode` 有 `problem`，但 board resolver 没有 problem branch，legacy 通过
-   `sabaki.state.mode === 'play' && runtime.problemView` 截获 problem move。
+   `WorkbenchMode` 有 `problem`，board resolver 也已有 problem branch；剩余风险是
+   contract/policy 来源仍不单一。历史 legacy adapter 仍可能把 problem 投影到 play-like
+   Sabaki state，workspace defaults 又把 `problem` 映射到 PLAY，再由 resolver
+   `workbenchMode` 分支覆盖成 `problemAttemptMove`。
 
    - `src/modules/workbench/board-interactions/resolveBoardInteraction.ts:251`
    - `src/modules/workbench/contracts/workspaceDefaults.ts:19`
-   - `src/modules/sabaki.js:2358`
+   - `src/modules/training/workbench/boardInteractionController.ts:428`
 
-   合同要求：`WorkbenchTab.mode` 是主 region；legacy `sabaki.state.mode` 只能是 adapter projection。
+   合同要求：`WorkbenchTab.mode` 是主 region；legacy `sabaki.state.mode` 只能是 adapter
+   projection。board 写入边界应由 `deriveBoardInteractionPolicy(...)` 单点派生，而不是
+   workspace defaults、resolver mode branch 和 controller fallback 共同决定。
 
 2. **Frozen Attempt guard 不完整**
 
@@ -262,25 +265,27 @@ Mode transition 的唯一编排入口是 `workbenchFlowService`，或后续同�
 
    合同要求：冻结后只允许写独立 followup state，或显式 allowlist metadata。
 
-3. **Recall complete 污染 Attempt**
+3. **Recall completion metadata ownership**
 
-   `recallService.completeRecall` 写回 source Attempt：
+   当前 `recallService.completeRecall` 只更新 RecallSession 并清理 runtime，不再写 source
+   Attempt 的 `userLine/result/status`：
 
-   - `src/modules/training/recall/recallService.ts:183`
+   - `src/modules/training/recall/recallService.ts:234`
 
-   合同建议：`recallCompleted` / next-stage status 放到 RecallSession、FollowupState 或独立
-   AttemptProgress 表；若必须保留在 Attempt，必须声明为 frozen metadata allowlist，并禁止写
-   `userLine/result/status`。
+   合同要求继续保持：Recall completion / checkpoint follow-up state 放到 RecallSession、
+   FollowupState 或独立 progress 表；禁止重新引入对 source Attempt
+   `userLine/result/status` 的写入。
 
-4. **Problem undo 不回滚 Attempt**
+4. **Problem undo consistency guard**
 
-   `problemFlowService.undoProblemMove` 更新 runtime cache；legacy controller 导航 tree parent；
-   但 Attempt.userLine 不回滚。
+   `problemFlowService.undoProblemMove` 已回滚 runtime cache 和 Attempt line；后续仍要确保
+   legacy tree projection、runtime eval cache、Attempt.userLine / `moveActors` 三者长度一致。
 
    - `src/modules/training/problem/problemFlowService.ts:237`
    - `src/modules/training/controller/legacyTrainingFlowController.ts:452`
 
-   合同要求：problem undo 后 tree、runtime、Attempt line 三者长度一致。
+   合同要求：problem undo 后 tree、runtime、Attempt line 三者长度一致，并有 focused regression
+   test 防止只回滚其中一层。
 
 5. **Analysis enter/exit effect 被拆散**
 

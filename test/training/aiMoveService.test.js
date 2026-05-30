@@ -102,6 +102,16 @@ describe('aiMoveService', () => {
       assert.strictEqual(result, false)
     })
 
+    it('returns true in play mode when white AI is first to move', () => {
+      const tab = makeTab({
+        mode: 'play',
+        playerConfig: { black: 'human', white: 'ai', ai: { autoPlay: true } },
+      })
+      const attempt = makeAttempt({ userLine: [] })
+      const result = shouldAiMove({ tab, attempt, sideToMove: 'white' })
+      assert.strictEqual(result, true)
+    })
+
     it('returns false when both sides are human (C11)', () => {
       const tab = makeTab({
         mode: 'play',
@@ -264,6 +274,38 @@ describe('aiMoveService', () => {
 
       assert.ok(receivedInput, 'adapter.requestMove should have been called')
       assert.strictEqual(receivedInput.treePosition, 'node_after_human_black')
+      assert.strictEqual(receivedInput.engineId, 'engine_white')
+    })
+
+    it('generates the first play move when sideToMove is white AI and the attempt line is empty', async () => {
+      let receivedInput = null
+      const mockAdapter = {
+        async requestMove(input) {
+          receivedInput = input
+          return { move: 'Q16', candidates: ['Q16'] }
+        },
+      }
+
+      const service = createAiMoveService({ engineService: mockAdapter })
+      const tab = makeTab({
+        mode: 'play',
+        playerConfig: {
+          black: 'human',
+          white: 'ai',
+          ai: {engineId: 'engine_white', autoPlay: true},
+        },
+      })
+      const attempt = makeAttempt({ rootPositionSgf: '(;SZ[19])', userLine: [] })
+
+      const result = await service.maybePlayAiMove({
+        tab,
+        attempt,
+        task: makeTask({sideToMove: 'white'}),
+      })
+
+      assert.strictEqual(result, 'Q16')
+      assert.ok(receivedInput, 'engineService.requestMove should be called')
+      assert.strictEqual(receivedInput.positionSgf, '(;SZ[19])')
       assert.strictEqual(receivedInput.engineId, 'engine_white')
     })
 

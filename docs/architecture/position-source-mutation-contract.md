@@ -12,7 +12,7 @@ between the documents is:
 
 ```txt
 ModeState / TransitionEffect
-  -> derive PositionSource + MutationContract
+  -> derive BoardInteractionPolicy
   -> boardInteractionResolver
   -> focused executor
 ```
@@ -77,6 +77,72 @@ The current `editWorkspace.currentSnapshot` and
 - Existing code may still use `ScratchPosition`, `SCRATCH_ROLES`, and
   `scratchEdit`; new design language should use working position for the data
   shape and `scratchEdit` for the write boundary.
+
+## BoardInteractionPolicy
+
+`BoardInteractionPolicy` is the boundary between Workbench business state and the
+pure board resolver. It is derived by a Workbench-facing layer from tab mode,
+runtime companion state, task metadata, player configuration, and the current
+position source. The resolver consumes this policy; it should not need to know
+the full `WorkbenchMode` object graph.
+
+```ts
+type BoardInteractionPolicy = {
+  positionSource: PositionSource | null
+  mutationContract: MutationContract | null
+  selectedTool: string
+  readOnly?: boolean
+  readOnlyReason?: string
+  allowedVertices?: [number, number][]
+  lineFirstVertex?: {type: string; vertex: [number, number]} | null
+}
+```
+
+Responsibilities:
+
+- `WorkbenchMode`, `TrainingTask`, `TrainingRuntimeState`, `PlayerConfig`, active
+  Attempt ids, Recall session ids, checkpoint state, and problem metadata stay in
+  the policy derivation layer.
+- `BoardInteractionPolicy` carries only board-facing permissions and defaults:
+  where the position comes from, where a successful action may write, whether the
+  board is read-only, the selected tool, and optional board-space constraints
+  such as problem-area vertices.
+- `resolveBoardInteraction` maps raw input plus policy to
+  `BoardInteractionIntent + MutationContract + payload`. It remains pure and
+  does not call stores, services, repositories, engine, overlay, or UI code.
+- The controller dispatches by `mutationContract`; it does not reinterpret
+  Workbench modes to decide ownership.
+
+Anti-goals:
+
+- Passing `workbenchMode`, `activeAttemptId`, `activeRecallSessionId`,
+  `problemArea`, or `playerConfig` through the resolver as first-class business
+  state.
+- Letting `mutationContract` be derived in one place and then overwritten by a
+  resolver mode branch.
+- Recreating a central mode switch in `resolveBoardInteraction`.
+
+Current implementation status:
+
+- The current controller passes `workbenchMode` and selected business fields into
+  `resolveBoardInteraction`; this is a migration bridge, not the target shape.
+- `problemAttemptMove` exists in the architecture contract, but the current code
+  still needs to make it a first-class runtime `MutationContract` value instead
+  of patching it from a `workbenchMode === 'problem'` resolver branch.
+- `problemArea` and AI-turn read-only checks currently live in resolver logic.
+  They should be derived as `allowedVertices` and `readOnly` policy fields before
+  resolver execution.
+
+Target shape:
+
+```txt
+WorkbenchTab + TrainingRuntimeState + TrainingTask + PlayerConfig
+  -> deriveBoardInteractionPolicy(...)
+  -> resolveBoardInteraction(raw event + board point + policy)
+  -> BoardInteractionIntent + MutationContract + payload
+  -> boardInteractionController
+  -> focused executor / service owner
+```
 
 ## Mutation Contracts
 
@@ -217,6 +283,7 @@ Recommended routing shape:
 
 ```txt
 Goban raw event
+  -> derive BoardInteractionPolicy
   -> boardInteractionResolver
   -> BoardInteractionIntent + PositionSource + MutationContract
   -> focused executor
@@ -250,6 +317,30 @@ raw event
 That shape recreates the current `clickVertex` problem with new names. The
 module split is valuable only when the resolver is pure and the write/effect
 logic moves behind executor boundaries.
+
+## Resolver-Policy Cleanup Plan
+
+1. Add `problemAttemptMove` to the runtime `MutationContract` definition and
+   remove any TypeScript mismatch between this document and
+   `src/modules/workbench/contracts/mutationContracts.ts`.
+2. Introduce `deriveBoardInteractionPolicy(...)` in the Workbench interaction
+   boundary. It should receive tab/runtime/task/player configuration and return
+   only `BoardInteractionPolicy`.
+3. Update `createBoardInteractionContext` so it accepts a policy object rather
+   than separate Workbench business fields.
+4. Refactor `resolveBoardInteraction` to remove direct `workbenchMode` branches.
+   The resolver should handle read-only, allowed-vertex, selected-tool,
+   point-state, and mouse-event rules from policy.
+5. Move Problem dispatch to a focused `problemInteractionExecutor` or equivalent
+   thin executor wrapper around `problemFlowService`.
+6. Wire Problem AI responses through the Problem command path with
+   `problemArea` freshness checks owned by `aiMoveService` and
+   `problemFlowService`, not by Play commit.
+7. Keep Recall and Analysis on their own contracts: `recallAnswer` writes
+   Recall state only, and `scratchEdit` writes working positions only.
+8. Add acceptance tests that prove a missing or stale Workbench mode projection
+   cannot make Problem fall back to `playMove`, Recall cannot write game tree or
+   Attempt line, and Analysis scratch edits cannot write the SGF game tree.
 
 ## Workspace Defaults
 
@@ -308,6 +399,11 @@ Legacy areas are frozen or hidden from the product center:
 Phase one does not delete the legacy code. New workbench behavior should be
 designed around `PositionSource` and mutation contracts instead of expanding
 legacy modes.
+
+The native SGF edit fallback for analysis without `editWorkspace` is
+legacy-only. Workbench analysis must derive a read-only board policy when no
+scratch workspace exists, so the Workbench controller cannot silently write the
+current SGF game tree through the legacy click path.
 
 ## Phase-One Code Anchors
 

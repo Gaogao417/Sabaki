@@ -702,23 +702,23 @@ describe('W8-P2 Executor Routing: Scratch (T-SCRATCH-01..T-SCRATCH-02)', functio
 })
 
 // ===========================================================================
-// T-DEFERRED-01: Deferred clean delegation
+// T-DEFERRED-01: Analysis without editWorkspace is read-only
 // Real controller, real resolver.
 // ==========================================================================
 
-describe('W8-P2 Executor Routing: Deferred (T-DEFERRED-01)', function () {
+describe('W8-P2 Executor Routing: Analysis read-only (T-DEFERRED-01)', function () {
 
-  // T-DEFERRED-01: Deferred clean delegation
+  // T-DEFERRED-01: Workbench analysis without editWorkspace is read-only
   //
-  // Contract Section 4.4: When resolver returns DEFERRED (e.g. analysis without
-  // editWorkspace), controller must delegate to legacySabaki.clickVertex and
+  // Contract: Workbench analysis without editWorkspace must not silently fall
+  // back to legacy SGF edit, and
   // must NOT call any executor, documentStore, engineService, analysisService,
   // or trainingStore.
-  it('T-DEFERRED-01: deferred routes to legacySabaki.clickVertex, no executors or services called', async function () {
+  it('T-DEFERRED-01: analysis without editWorkspace does not route to legacy SGF edit', async function () {
     const harness = createDeferredTestDeps()
     const controller = createBoardInteractionController(harness.deps)
 
-    // analysis without editWorkspace -> resolver returns DEFERRED
+    // analysis without editWorkspace -> policy rejects the click
     await controller.handleBoardClick({
       vertex: [3, 3],
       event: {button: 0, ctrlKey: false, metaKey: false},
@@ -730,10 +730,8 @@ describe('W8-P2 Executor Routing: Deferred (T-DEFERRED-01)', function () {
       runtimeState: {},
     })
 
-    // legacySabaki.clickVertex must be called
-    assert.strictEqual(harness.legacyClickCalls.length, 1,
-      'legacySabaki.clickVertex must be called exactly once for deferred')
-    assert.deepStrictEqual(harness.legacyClickCalls[0].vertex, [3, 3])
+    assert.strictEqual(harness.legacyClickCalls.length, 0,
+      'Workbench analysis without editWorkspace must not fall back to legacy')
 
     // NO executor/service calls
     assert.strictEqual(harness.documentStoreCalls.length, 0,

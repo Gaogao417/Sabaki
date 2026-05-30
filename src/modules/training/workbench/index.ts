@@ -33,3 +33,8 @@ export {
   type UiPolicyInput,
   type ModeTransitionAction,
 } from './workbenchUiPolicy'
+
+export {
+  deriveBoardInteractionPolicy,
+  type DeriveBoardInteractionPolicyInput,
+} from './deriveBoardInteractionPolicy'

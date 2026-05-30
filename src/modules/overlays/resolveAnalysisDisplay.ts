@@ -37,7 +37,6 @@ export type AnalysisDisplayOutput = {
   showAnalysisSummaryCard: boolean
 }
 
-const ANALYSIS_HIDDEN_MODES = ['problem', 'review']
 const NEXT_MOVES_HIDDEN_MODES = ['recall', 'problem', 'review']
 
 export function resolveAnalysisDisplay(input: AnalysisDisplayInput): AnalysisDisplayOutput {
@@ -51,7 +50,7 @@ export function resolveAnalysisDisplay(input: AnalysisDisplayInput): AnalysisDis
     editWorkspaceActive,
   } = input
 
-  let analysisAllowed = mode === 'analysis' || mode === 'recall'
+  let analysisAllowed = mode === 'analysis' && editWorkspaceActive
 
   return {
     showAnalysis:

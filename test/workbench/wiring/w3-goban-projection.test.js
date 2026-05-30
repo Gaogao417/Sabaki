@@ -588,7 +588,7 @@ describe('W3 Goban Projection: projectGobanProps', function () {
       assert.strictEqual(result.overlayDisplayProps.showSiblings, false)
     })
 
-    it('returns analysis from overlayState when showAnalysis=true', () => {
+    it('returns analysis=null in problem even when showAnalysis=true', () => {
       const analysisObj = {type: 'winrate', data: [0.6]}
       const result = projectGobanProps(baseInput({
         workbenchMode: 'problem',
@@ -598,7 +598,7 @@ describe('W3 Goban Projection: projectGobanProps', function () {
         },
         settings: {...baseInput().settings, showAnalysis: true},
       }))
-      assert.deepStrictEqual(result.overlayDisplayProps.analysis, analysisObj)
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
     })
 
     it('returns analysis=null when showAnalysis=false', () => {
@@ -761,14 +761,14 @@ describe('W3 Goban Projection: projectGobanProps', function () {
       assert.strictEqual(result.overlayDisplayProps.showNextMoves, false)
     })
 
-    it('analysis=overlayState.analysis when showAnalysis=true', () => {
+    it('analysis=null in play even when showAnalysis=true', () => {
       const analysisObj = {type: 'winrate', data: [0.55]}
       const result = projectGobanProps(baseInput({
         workbenchMode: 'play',
         overlayState: {...baseInput().overlayState, analysis: analysisObj},
         settings: {...baseInput().settings, showAnalysis: true},
       }))
-      assert.deepStrictEqual(result.overlayDisplayProps.analysis, analysisObj)
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
     })
 
     it('analysis=null when showAnalysis=false even if overlayState has analysis', () => {
@@ -1018,7 +1018,7 @@ describe('W3 Goban Projection: projectGobanProps', function () {
         overlayState: sharedOverlay,
         settings: sharedSettings,
       }))
-      assert.deepStrictEqual(playResult.overlayDisplayProps.analysis, analysisObj)
+      assert.strictEqual(playResult.overlayDisplayProps.analysis, null)
       assert.strictEqual(recallResult.overlayDisplayProps.analysis, null)
     })
 
@@ -1320,14 +1320,14 @@ describe('W3 Goban Projection: projectGobanProps', function () {
       assert.strictEqual(result.overlayDisplayProps.showMoveNumbers, false)
     })
 
-    it('analysis from overlayState when showAnalysis=true', () => {
+    it('analysis=null in problem even when showAnalysis=true', () => {
       const analysisObj = {type: 'score', data: {black: 40}}
       const result = projectGobanProps(baseInput({
         workbenchMode: 'problem',
         overlayState: {...baseInput().overlayState, analysis: analysisObj},
         settings: {...baseInput().settings, showAnalysis: true},
       }))
-      assert.deepStrictEqual(result.overlayDisplayProps.analysis, analysisObj)
+      assert.strictEqual(result.overlayDisplayProps.analysis, null)
     })
 
     it('analysis=null when showAnalysis=false', () => {

@@ -9,9 +9,10 @@
 import {
   getMutationContractFromState,
   getPositionSourceFromState,
-  getWorkspaceKindFromState,
 } from '../contracts/workspaceDefaults.ts'
 import type {ScratchRole} from '../contracts/positionSource.ts'
+import type {BoardInteractionPolicy} from './boardInteractionPolicy.ts'
+import {MUTATION_CONTRACTS} from '../contracts/mutationContracts.ts'
 
 type BoardLike = {
   width: number
@@ -43,6 +44,7 @@ export function createBoardInteractionContext({
   sourceVertex,
   event,
   isMac = false,
+  policy,
   workbenchMode,
   tabId,
   taskId,
@@ -57,6 +59,7 @@ export function createBoardInteractionContext({
   sourceVertex?: [number, number] | null
   event: {button?: number; ctrlKey?: boolean; metaKey?: boolean}
   isMac?: boolean
+  policy?: BoardInteractionPolicy | null
   // W3 WorkbenchMode extension fields
   workbenchMode?: 'play' | 'problem' | 'recall' | 'analysis'
   tabId?: string
@@ -79,10 +82,41 @@ export function createBoardInteractionContext({
   let sourceMarker =
     sourceVertex == null ? null : board.markers[svy]?.[svx]
   let mode = state.mode ?? 'play'
-  let selectedTool = state.selectedTool ?? 'stone_1'
+  let selectedTool = policy?.selectedTool ?? state.selectedTool ?? 'stone_1'
 
-  let positionSource = getPositionSourceFromState(state)
-  let mutationContract = getMutationContractFromState(state)
+  let positionSource = policy?.positionSource ?? getPositionSourceFromState(state)
+  let mutationContract = policy?.mutationContract ?? getMutationContractFromState(state)
+  let allowedVertices = policy?.allowedVertices
+  let readOnly = policy?.readOnly
+  let readOnlyReason = policy?.readOnlyReason
+  let lineFirstVertex = policy?.lineFirstVertex
+
+  // Deprecated compatibility bridge for older W3 tests/call sites. It shapes
+  // business fields into board-facing policy fields, and never returns those
+  // business objects to the resolver.
+  if (policy == null && workbenchMode != null) {
+    if (workbenchMode === 'problem') {
+      mutationContract = MUTATION_CONTRACTS.PROBLEM_ATTEMPT_MOVE
+      if (problemArea?.vertices != null) allowedVertices = problemArea.vertices
+      if (playerConfig?.currentSide === 'ai') {
+        readOnly = true
+        readOnlyReason = 'problem: AI turn, board is read-only'
+      }
+    } else if (workbenchMode === 'recall') {
+      mutationContract = MUTATION_CONTRACTS.RECALL_ANSWER
+    } else if (workbenchMode === 'analysis') {
+      mutationContract = state.editWorkspace == null
+        ? null
+        : MUTATION_CONTRACTS.SCRATCH_EDIT
+      lineFirstVertex = normalizeLineFirstVertex(state.editWorkspace?.lineFirstVertex)
+    } else if (workbenchMode === 'play') {
+      mutationContract = MUTATION_CONTRACTS.PLAY_MOVE
+      if (playerConfig?.currentSide === 'ai') {
+        readOnly = true
+        readOnlyReason = 'play: AI turn, board is read-only'
+      }
+    }
+  }
 
   return {
     mode,
@@ -109,13 +143,24 @@ export function createBoardInteractionContext({
     positionSource,
     mutationContract,
     editWorkspacePresent: state.editWorkspace != null,
-    // W3 WorkbenchMode extension fields — passed through from container
-    ...(workbenchMode != null ? {workbenchMode} : {}),
-    ...(tabId != null ? {tabId} : {}),
-    ...(taskId != null ? {taskId} : {}),
-    ...(playerConfig != null ? {playerConfig} : {}),
-    ...(problemArea != null ? {problemArea} : {}),
-    ...(activeAttemptId != null ? {activeAttemptId} : {}),
-    ...(activeRecallSessionId != null ? {activeRecallSessionId} : {}),
+    ...(readOnly == null ? null : {readOnly}),
+    ...(readOnlyReason == null ? null : {readOnlyReason}),
+    ...(allowedVertices == null ? null : {allowedVertices}),
+    ...(lineFirstVertex == null ? null : {lineFirstVertex}),
   }
+}
+
+function normalizeLineFirstVertex(
+  raw: {type: string; vertex: number[]} | null | undefined,
+): BoardInteractionPolicy['lineFirstVertex'] {
+  if (
+    raw == null ||
+    !Array.isArray(raw.vertex) ||
+    typeof raw.vertex[0] !== 'number' ||
+    typeof raw.vertex[1] !== 'number'
+  ) {
+    return null
+  }
+
+  return {type: raw.type, vertex: [raw.vertex[0], raw.vertex[1]]}
 }
