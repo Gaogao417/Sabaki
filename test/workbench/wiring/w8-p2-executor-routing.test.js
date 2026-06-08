@@ -121,12 +121,11 @@ import {executePlayInteraction} from '../../../src/modules/workbench/board-inter
 import {executeRecallInteraction} from '../../../src/modules/workbench/board-interactions/executors/recallInteractionExecutor.js'
 import {executeScratchEdit} from '../../../src/modules/workbench/board-interactions/executors/scratchEditInteractionExecutor.js'
 import {createBoardInteractionController} from '../../../src/modules/training/workbench/boardInteractionController.ts'
-import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
-import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 
 // --- Logger for test harness (real, not mocked per wiring test rules) ---
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
+const {logger} = createTestLogger()
 
 // --- Helper Factories ---
 

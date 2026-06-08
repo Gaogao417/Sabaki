@@ -52,12 +52,11 @@ import assert from 'assert'
 // --- Real production imports ---
 
 import {createBoardInteractionController} from '../../../src/modules/training/workbench/boardInteractionController.ts'
-import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
-import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 
 // --- Logger for test harness (real, not mocked) ---
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
+const {logger} = createTestLogger()
 
 // --- Helper Factories ---
 

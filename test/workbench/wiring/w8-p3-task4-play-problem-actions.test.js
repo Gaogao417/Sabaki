@@ -96,8 +96,7 @@ import {
   createWorkbenchFlowService,
   InvalidModeTransitionError,
 } from '../../../src/modules/training/workbench/workbenchFlowService.ts'
-import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
-import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 import {renderToDom} from '../preactTestHelper.js'
 import {
   createSpyFlowService,
@@ -117,7 +116,7 @@ const __dirname = path.dirname(__filename)
 
 // --- Logger for test harness (real, not mocked) ---
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
+const {logger} = createTestLogger()
 
 // --- Tab factories ---
 

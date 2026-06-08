@@ -4,6 +4,10 @@ const fs = require('fs')
 const os = require('os')
 const {getKatagoEngine} = require('../katago-fixture')
 
+function isTestLoggingEnabled() {
+  return ['1', 'true', 'yes'].includes(String(process.env.SABAKI_TEST_LOGS || ''))
+}
+
 const test = base.extend({
   electronApp: async ({}, use) => {
     // Create isolated temp directory for settings
@@ -114,6 +118,29 @@ const test = base.extend({
     // dialog events that block Playwright operations.
     page.on('dialog', async (dialog) => {
       await dialog.accept()
+    })
+
+    const rendererLogs = []
+    page.__sabakiConsoleLogs = rendererLogs
+    page.on('console', (msg) => {
+      const entry = {
+        type: msg.type(),
+        text: msg.text(),
+      }
+      rendererLogs.push(entry)
+      if (isTestLoggingEnabled()) {
+        console.log(`[renderer:${entry.type}] ${entry.text}`)
+      }
+    })
+    page.on('pageerror', (error) => {
+      const entry = {
+        type: 'pageerror',
+        text: error.stack || String(error),
+      }
+      rendererLogs.push(entry)
+      if (isTestLoggingEnabled()) {
+        console.error(`[renderer:${entry.type}] ${entry.text}`)
+      }
     })
 
     // Wait for the app to fully render

@@ -81,8 +81,7 @@ import {h} from 'preact'
 import TrainingWorkbenchContainer from '../../../src/components/TrainingWorkbenchContainer.js'
 import {createWorkbenchStore} from '../../../src/modules/training/store/workbenchStore.ts'
 import {createTrainingRuntimeStore} from '../../../src/modules/training/store/trainingRuntimeStore.ts'
-import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
-import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 import {
   createSpyFlowService,
   createSpyTabService,
@@ -98,7 +97,7 @@ const __dirname = path.dirname(__filename)
 
 // --- Logger for test harness (real, not mocked) ---
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
+const {logger} = createTestLogger()
 
 // --- Tab factory ---
 

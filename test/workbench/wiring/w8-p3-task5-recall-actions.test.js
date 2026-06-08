@@ -121,8 +121,7 @@ import TrainingWorkbenchContainer from '../../../src/components/TrainingWorkbenc
 import { createWorkbenchStore } from '../../../src/modules/training/store/workbenchStore.ts'
 import { createTrainingRuntimeStore } from '../../../src/modules/training/store/trainingRuntimeStore.ts'
 import { createWorkbenchFlowService } from '../../../src/modules/training/workbench/workbenchFlowService.ts'
-import { createLoggerService } from '../../../src/modules/logger/LoggerService.js'
-import { createConsoleWriter } from '../../../src/modules/logger/consoleWriter.js'
+import { createTestLogger } from '../../helpers/createTestLogger.ts'
 import {
   createSpyFlowService,
   createSpyTabService,
@@ -138,7 +137,7 @@ const __dirname = path.dirname(__filename)
 
 // --- Real Logger (not mocked) ---
 
-const logger = createLoggerService({ writers: [createConsoleWriter()] })
+const {logger} = createTestLogger()
 
 // ===================================================================
 // Factory helpers

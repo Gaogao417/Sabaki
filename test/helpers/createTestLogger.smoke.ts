@@ -1,8 +1,8 @@
 import assert from 'assert'
-import {createTestLogger} from './createTestLogger.ts'
+import {createTestLogger, isTestLoggingEnabled} from './createTestLogger.ts'
 
 describe('createTestLogger smoke test', () => {
-  it('collects and prints logs', () => {
+  it('collects logs without requiring console output', () => {
     const {logger, logs} = createTestLogger()
 
     logger.info('flow.submit', 'Submit attempt', {tabId: 'tab_1', mode: 'play'})
@@ -17,7 +17,20 @@ describe('createTestLogger smoke test', () => {
     assert.strictEqual(logs[2].channel, 'flow.error')
   })
 
-  it('silent mode suppresses console output', () => {
+  it('honors the global SABAKI_TEST_LOGS switch', () => {
+    const before = process.env.SABAKI_TEST_LOGS
+
+    delete process.env.SABAKI_TEST_LOGS
+    assert.strictEqual(isTestLoggingEnabled(), false)
+
+    process.env.SABAKI_TEST_LOGS = '1'
+    assert.strictEqual(isTestLoggingEnabled(), true)
+
+    if (before === undefined) delete process.env.SABAKI_TEST_LOGS
+    else process.env.SABAKI_TEST_LOGS = before
+  })
+
+  it('silent mode suppresses console output regardless of global switch', () => {
     const {logger, logs} = createTestLogger({silent: true})
 
     logger.info('silent.test', 'Should not print')

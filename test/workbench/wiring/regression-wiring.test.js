@@ -93,10 +93,9 @@ const __dirname = path.dirname(__filename)
 
 // --- Logger for test harness (real, not mocked) ---
 
-import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
-import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
+const {logger} = createTestLogger()
 
 // --- Tab factories ---
 

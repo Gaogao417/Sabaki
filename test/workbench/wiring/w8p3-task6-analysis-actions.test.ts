@@ -67,10 +67,7 @@
 import assert from 'assert'
 import {h} from 'preact'
 
-import {
-  createLoggerService,
-  createConsoleWriter,
-} from '../../../src/modules/logger/index.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 import TrainingWorkbenchContainer from '../../../src/components/TrainingWorkbenchContainer.js'
 import {createWorkbenchStore} from '../../../src/modules/training/store/workbenchStore.ts'
 import {createTrainingRuntimeStore} from '../../../src/modules/training/store/trainingRuntimeStore.ts'
@@ -84,12 +81,6 @@ import {
   createSpySnapshotService,
   createSpyTabService,
 } from '../shared/workbenchSpyFactories.ts'
-
-// --- Logger ---
-
-function createTestLogger() {
-  return createLoggerService({writers: [createConsoleWriter()]})
-}
 
 // --- Tab Factory ---
 
@@ -268,7 +259,7 @@ function createHarness({
   activeTabId?: string | null
   recallView?: any
 } = {}) {
-  const logger = createTestLogger()
+  const {logger} = createTestLogger()
   const workbenchStore = createWorkbenchStore({logger})
   const runtimeStore = createTrainingRuntimeStore({logger})
   const flowService = createSpyFlowService()
@@ -344,7 +335,7 @@ function createHarnessWithRealFlowService({
   tabs?: any[]
   activeTabId?: string | null
 } = {}) {
-  const logger = createTestLogger()
+  const {logger} = createTestLogger()
   const workbenchStore = createWorkbenchStore({logger})
   const runtimeStore = createTrainingRuntimeStore({logger})
   const snapshotService = createSpySnapshotService()
@@ -451,7 +442,7 @@ function createHarnessWithRealSnapshotService({
 }: {
   tabs?: any[]
 } = {}) {
-  const logger = createTestLogger()
+  const {logger} = createTestLogger()
   const workbenchStore = createWorkbenchStore({logger})
   const runtimeStore = createTrainingRuntimeStore({logger})
   const repository = createSpyRepository()

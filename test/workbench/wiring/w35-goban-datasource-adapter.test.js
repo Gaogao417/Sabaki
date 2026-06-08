@@ -58,8 +58,7 @@ import {tryImport} from '../tryImport.js'
 // Import real production types/functions that already exist
 import {projectGobanProps} from '../../../src/modules/training/workbench/projectGobanProps.ts'
 
-// Real LoggerService with consoleWriter for wiring tests
-import {createLoggerService, createConsoleWriter} from '../../../src/modules/logger/index.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 
 // gobanDataAdapter is to be created -- use tryImport
 let createGobanDataAdapter = null
@@ -230,7 +229,7 @@ function createAdapterDeps(options = {}) {
   }
 
   return {
-    logger: createLoggerService({writers: [createConsoleWriter()]}),
+    logger: createTestLogger().logger,
     getSabakiState: () => sabakiState,
     getDocumentStore: () => wrappedDocumentStore,
     getOverlayStore: () => overlayStore,

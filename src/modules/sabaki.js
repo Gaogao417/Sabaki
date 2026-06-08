@@ -96,6 +96,18 @@ const setting = {
 
 const humanSLModelFilename = 'b18c384nbt-humanv0.bin.gz'
 
+function isTestLoggingEnabled() {
+  return ['1', 'true', 'yes'].includes(String(process.env.SABAKI_TEST_LOGS || ''))
+}
+
+function isTestProcess() {
+  const argv = Array.isArray(process.argv) ? process.argv : []
+  return process.env.SABAKI_E2E === '1' ||
+    process.env.NODE_ENV === 'test' ||
+    String(process.env.npm_lifecycle_event || '').startsWith('test') ||
+    argv.some(arg => /(?:^|[/\\])(?:mocha|playwright)(?:$|[/.])/.test(arg))
+}
+
 class Sabaki extends EventEmitter {
   constructor() {
     super()
@@ -196,7 +208,12 @@ class Sabaki extends EventEmitter {
 
     this._consoleWriter = createConsoleWriter()
 
-    logger.reconfigure({writers: [this._winstonWriter, this._consoleWriter]})
+    logger.reconfigure({
+      writers: [
+        this._winstonWriter,
+        ...(!isTestProcess() || isTestLoggingEnabled() ? [this._consoleWriter] : []),
+      ],
+    })
 
     // App info will be set via IPC - use defaults initially
     this.appName = 'Sabaki'

@@ -74,8 +74,7 @@ import {createBoardInteractionController} from '../../../src/modules/training/wo
 import {createTrainingRuntimeStore} from '../../../src/modules/training/store/trainingRuntimeStore.ts'
 import {createRecallService} from '../../../src/modules/training/recall/recallService.ts'
 import {createRecallCheckpointService} from '../../../src/modules/training/recall/recallCheckpointService.ts'
-import {createLoggerService} from '../../../src/modules/logger/LoggerService.js'
-import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 
 /**
  * @typedef {import('../../../src/modules/training/workbench/boardInteractionController.ts').BoardInteractionControllerDeps} BoardInteractionControllerDeps
@@ -95,7 +94,7 @@ import {createConsoleWriter} from '../../../src/modules/logger/consoleWriter.js'
 
 // --- Logger for test harness (real, not mocked) ---
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
+const {logger} = createTestLogger()
 
 // --- Helper Factories ---
 

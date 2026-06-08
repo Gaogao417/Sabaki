@@ -22,9 +22,9 @@ import assert from 'assert'
 import TrainingWorkbenchContainer from '../../../src/components/TrainingWorkbenchContainer.js'
 import {createWorkbenchStore} from '../../../src/modules/training/store/workbenchStore.ts'
 import {createTrainingRuntimeStore} from '../../../src/modules/training/store/trainingRuntimeStore.ts'
-import {createLoggerService, createConsoleWriter} from '../../../src/modules/logger/index.js'
+import {createTestLogger} from '../../helpers/createTestLogger.ts'
 
-const logger = createLoggerService({writers: [createConsoleWriter()]})
+const {logger} = createTestLogger()
 
 function makeTab(overrides = {}) {
   return {
