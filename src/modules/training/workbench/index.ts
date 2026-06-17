@@ -38,3 +38,9 @@ export {
   deriveBoardInteractionPolicy,
   type DeriveBoardInteractionPolicyInput,
 } from './deriveBoardInteractionPolicy'
+
+export {
+  createPlayAiTurnService,
+  type PlayAiTurnService,
+  type PlayAiTurnServices,
+} from './playAiTurnService'

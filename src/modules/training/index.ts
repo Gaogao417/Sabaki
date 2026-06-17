@@ -51,6 +51,10 @@ export {
 } from './ai/aiMoveService'
 
 export {
+  createPlayAiTurnService,
+} from './workbench/index'
+
+export {
   projectTrainingState,
 } from './adapter/trainingStateProjection'
 

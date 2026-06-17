@@ -22,6 +22,8 @@ gtp.cfg
 gtp_logs/
 
 .DS_Store
+# 视觉验收构建产物
+**/.harness-build/
 # PRD：Sabaki 魔改 — KataGo HumanSL 常驻加载与运行.md
 ChatGPT Image 2026年5月8日 15_25_16 (1).png
 ChatGPT Image 2026年5月8日 15_25_17 (2).png

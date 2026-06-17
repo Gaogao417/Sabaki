@@ -1127,6 +1127,7 @@ class TrainingWorkbenchContainer extends Component {
           monitor: ctx.monitor,
           repository: ctx.repository,
           aiMoveService: ctx.aiMoveService,
+          playAiTurnService: ctx.playAiTurnService,
         }),
         getRecallAdapter: () => {
           const ws = ctx.workbenchStore.getState()

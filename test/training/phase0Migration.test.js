@@ -175,6 +175,10 @@ async function createTestSetup() {
       if (patch.userLine !== undefined) { sets.push('user_line_json = ?'); params.push(JSON.stringify(patch.userLine)) }
       if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status) }
       if (patch.result !== undefined) { sets.push('result = ?'); params.push(patch.result) }
+      if (patch.moveActors !== undefined) {
+        sets.push('move_actors_json = ?')
+        params.push(patch.moveActors == null ? null : JSON.stringify(patch.moveActors))
+      }
       if (sets.length === 0) return
       params.push(attemptId)
       client.run(`UPDATE training_attempts SET ${sets.join(', ')} WHERE id = ?`, params)
@@ -654,6 +658,28 @@ describe('Phase 0 Migration - Group 3: Repository Roundtrip (real SQLite)', () =
     assert.strictEqual(attempt.moveActors.length, 2)
     assert.strictEqual(attempt.moveActors[0].actor, 'human')
     assert.strictEqual(attempt.moveActors[1].actor, 'ai')
+  })
+
+  it('T-13b: TrainingAttempt moveActors update roundtrips', async () => {
+    await repo.createAttempt({
+      id: 'attempt_13b',
+      taskId: 'task_1',
+      rootPositionSgf: '(;SZ[9])',
+      userLine: [],
+      status: 'playing',
+      result: 'pending',
+      hintLevelUsed: 0,
+      recallCompleted: false,
+      analysisOpened: false,
+    })
+
+    await repo.updateAttempt('attempt_13b', {
+      userLine: ['D4'],
+      moveActors: [{ moveIndex: 0, actor: 'ai' }],
+    })
+
+    const loaded = await repo.loadAttempt('attempt_13b')
+    assert.deepStrictEqual(loaded.moveActors, [{ moveIndex: 0, actor: 'ai' }])
   })
 
   // T-14: TrainingTask with all v0.5 fields roundtrips

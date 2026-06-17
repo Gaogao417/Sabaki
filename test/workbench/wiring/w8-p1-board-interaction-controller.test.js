@@ -883,10 +883,7 @@ describe('W8-P1 Board Interaction Controller', function () {
           treePosition: call.treePosition,
           userLine: call.attempt.userLine,
         })),
-        [
-          {treePosition: 'node_human', userLine: ['dd']},
-          {treePosition: 'node_ai', userLine: ['dd', 'pp']},
-        ],
+        [{treePosition: 'node_human', userLine: ['dd']}],
       )
     })
 

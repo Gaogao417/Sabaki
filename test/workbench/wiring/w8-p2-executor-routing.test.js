@@ -768,17 +768,27 @@ describe('W8-P2 Executor Routing: Architecture (T-ARCH-01)', function () {
   //
   // This test reads the source file and checks the structural constraints.
   // RED until boardInteractionController.ts imports the executors.
-  it('T-ARCH-01: controller imports executors and does NOT directly call service methods', function () {
+  it('T-ARCH-01: controller routes through executors/Play owner and does NOT directly call service methods', function () {
     const controllerPath = path.resolve(
       __dirname,
       '../../../src/modules/training/workbench/boardInteractionController.ts'
     )
     const source = fs.readFileSync(controllerPath, 'utf8')
+    const playAiTurnServicePath = path.resolve(
+      __dirname,
+      '../../../src/modules/training/workbench/playAiTurnService.ts',
+    )
+    const playAiTurnSource = fs.readFileSync(playAiTurnServicePath, 'utf8')
 
-    // MUST contain executor imports
+    // Play writes now go through the Workbench Play AI turn owner; that owner
+    // owns the executePlayInteraction import for both human and AI commits.
     assert.ok(
-      source.includes('executePlayInteraction'),
-      'boardInteractionController must import executePlayInteraction. ' +
+      source.includes('playAiTurnService') || source.includes('createPlayAiTurnService'),
+      'boardInteractionController must route playMove through the Play AI turn owner.'
+    )
+    assert.ok(
+      playAiTurnSource.includes('executePlayInteraction'),
+      'playAiTurnService must import executePlayInteraction. ' +
       'Contract Section 3: playMove path must go through executePlayInteraction.'
     )
     assert.ok(

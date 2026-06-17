@@ -17,10 +17,11 @@
 import {resolveBoardInteraction} from '../../workbench/board-interactions/resolveBoardInteraction.ts'
 import {RESOLVE_STATUSES, BOARD_INTENTS} from '../../workbench/board-interactions/intents.ts'
 import {createBoardInteractionContext} from '../../workbench/board-interactions/createBoardInteractionContext.ts'
-import {executePlayInteraction} from '../../workbench/board-interactions/executors/playInteractionExecutor.js'
 import {executeRecallInteraction} from '../../workbench/board-interactions/executors/recallInteractionExecutor.js'
 import {executeScratchEdit} from '../../workbench/board-interactions/executors/scratchEditInteractionExecutor.js'
 import {deriveBoardInteractionPolicy} from './deriveBoardInteractionPolicy.ts'
+import {createPlayAiTurnService} from './playAiTurnService.ts'
+import type {PlayAiTurnService} from './playAiTurnService.ts'
 import type {DeriveBoardInteractionPolicyInput} from './deriveBoardInteractionPolicy.ts'
 
 export type BoardInteractionControllerDeps = {
@@ -67,6 +68,7 @@ export type BoardInteractionControllerDeps = {
         treePosition?: string
       }): Promise<string | null>
     }
+    playAiTurnService?: PlayAiTurnService
   }
   getRecallAdapter: () =>
     {submitBoardClick(vertex: [number, number]): Promise<{handled: boolean; changed: boolean; isCorrect?: boolean; completed?: boolean; recallMoveIndex?: number; attempt?: unknown}>}
@@ -318,82 +320,6 @@ function normalizeMoveToSgf(move: string): string {
   return vertex ? vertexToSgfMove(vertex) : move
 }
 
-type ChangedPlayResult = {
-  changed: true
-  treePosition?: string
-  doublePass?: boolean
-  resign?: boolean
-  noLegalMove?: boolean
-}
-
-function isChangedPlayResult(result: unknown): result is ChangedPlayResult {
-  return typeof result === 'object' && result != null && (result as {changed?: unknown}).changed === true
-}
-
-function isTerminalPlayResult(result: ChangedPlayResult): boolean {
-  return result.doublePass === true || result.resign === true || result.noLegalMove === true
-}
-
-type PlayCommitActor = 'human' | 'ai'
-
-type PlayCommitRunState = {
-  committedAiMoves: number
-  maxAiMoves: number
-  allowTerminalCheck: boolean
-  terminalCheckUsed: boolean
-}
-
-function isAiVsAiConfig(activeTab: {playerConfig?: unknown}): boolean {
-  const config = extractPlayerConfig(activeTab.playerConfig)
-  return config?.black === 'ai' && config?.white === 'ai'
-}
-
-function createPlayCommitRunState(activeTab: {playerConfig?: unknown}): PlayCommitRunState {
-  const config = extractPlayerConfig(activeTab.playerConfig)
-  const aiConfig = typeof config?.ai === 'object' && config.ai != null
-    ? config.ai as {autoPlayLimits?: {maxAutoMovesPerRun?: unknown}}
-    : null
-  const configuredLimit = aiConfig?.autoPlayLimits?.maxAutoMovesPerRun
-  const isAiVsAi = isAiVsAiConfig(activeTab)
-
-  if (isAiVsAi) {
-    return {
-      committedAiMoves: 0,
-      maxAiMoves: typeof configuredLimit === 'number' && Number.isFinite(configuredLimit)
-        ? Math.max(0, configuredLimit)
-        : 0,
-      allowTerminalCheck: false,
-      terminalCheckUsed: false,
-    }
-  }
-
-  return {
-    committedAiMoves: 0,
-    maxAiMoves: 1,
-    allowTerminalCheck: true,
-    terminalCheckUsed: false,
-  }
-}
-
-function canAskAiForMove(runState: PlayCommitRunState): boolean {
-  return runState.committedAiMoves < runState.maxAiMoves ||
-    (runState.allowTerminalCheck && !runState.terminalCheckUsed)
-}
-
-function canExecuteAiMove(runState: PlayCommitRunState): boolean {
-  return runState.committedAiMoves < runState.maxAiMoves
-}
-
-function createAiPlayResult(vertex: [number, number], positionSource: unknown) {
-  return {
-    intent: BOARD_INTENTS.PLAY_STONE,
-    status: RESOLVE_STATUSES.RESOLVED,
-    mutationContract: 'playMove',
-    positionSource,
-    payload: {vertex},
-  }
-}
-
 async function loadAttempt(
   playServices: ReturnType<BoardInteractionControllerDeps['getPlayServices']>,
   attemptId: string,
@@ -486,105 +412,16 @@ export function createBoardInteractionController(
 
       if (effectiveContract === 'playMove') {
         const playServices = deps.getPlayServices()
-        const useTrainingAiReply =
-          playServices.aiMoveService != null && activeTab.activeAttemptId != null
+        const playAiTurnService = playServices.playAiTurnService ??
+          createPlayAiTurnService({getPlayServices: () => playServices})
 
-        const runState = createPlayCommitRunState(activeTab)
-
-        const executePlayCommand = async (
-          playResultInput: ReturnType<typeof resolveBoardInteraction>,
-          actor: PlayCommitActor,
-          move: string,
-        ): Promise<unknown> => {
-          const playResult = await executePlayInteraction(
-            playResultInput,
-            {player: (playResultInput.payload?.player as number) ?? undefined},
-            {
-              documentStore: playServices.documentStore,
-              engineService: useTrainingAiReply ? undefined : playServices.engineService,
-              analysisService: playServices.analysisService,
-            },
-          )
-
-          if (isChangedPlayResult(playResult) && activeTab.activeAttemptId) {
-            await afterPlayMoveCommitted({
-              actor,
-              move,
-              playResult,
-            })
-          }
-
-          return playResult
-        }
-
-        const afterPlayMoveCommitted = async (context: {
-          actor: PlayCommitActor
-          move: string
-          playResult: ChangedPlayResult
-        }): Promise<void> => {
-          const attemptId = activeTab.activeAttemptId
-          if (!attemptId) return
-
-          const attemptBefore = await loadAttempt(playServices, attemptId)
-          const moveIndex = attemptBefore?.userLine.length ?? 0
-
-          if (playServices.attemptService) {
-            await playServices.attemptService.appendMove(attemptId, context.move, context.actor)
-          }
-
-          if (playServices.monitor) {
-            await playServices.monitor.onUserMove({
-              attemptId,
-              moveIndex,
-              move: context.move,
-              positionAfterHash: context.playResult.treePosition,
-            })
-          }
-
-          if (context.actor === 'ai') {
-            runState.committedAiMoves += 1
-          }
-
-          if (isTerminalPlayResult(context.playResult)) {
-            return
-          }
-
-          if (!playServices.aiMoveService || !canAskAiForMove(runState)) {
-            return
-          }
-
-          const canExecuteReturnedAiMove = canExecuteAiMove(runState)
-          if (!canExecuteReturnedAiMove && runState.allowTerminalCheck) {
-            runState.terminalCheckUsed = true
-          }
-
-          const attemptAfter = await loadAttempt(playServices, attemptId) ??
-            (attemptBefore
-              ? {...attemptBefore, userLine: [...attemptBefore.userLine, context.move]}
-              : null)
-
-          if (!attemptAfter) return
-
-          const loadedTask = await loadTask(playServices, activeTab, task)
-          const aiMove = await playServices.aiMoveService.maybePlayAiMove({
-            tab: activeTab,
-            attempt: attemptAfter,
-            task: loadedTask,
-            sideToMove: loadedTask.sideToMove,
-            treePosition: context.playResult.treePosition,
-          })
-          const aiVertex = aiMove ? moveToVertex(aiMove) : null
-
-          if (!aiMove || !aiVertex || !canExecuteReturnedAiMove) return
-
-          await executePlayCommand(
-            createAiPlayResult(aiVertex, result.positionSource) as ReturnType<typeof resolveBoardInteraction>,
-            'ai',
-            normalizeMoveToSgf(aiMove),
-          )
-        }
-
-        return await executePlayCommand(result, 'human', vertexToSgfMove(vertex))
+        return await playAiTurnService.commitMove({
+          result,
+          tab: activeTab,
+          task,
+          actor: 'human',
+          move: vertexToSgfMove(vertex),
+        })
       }
 
       if (effectiveContract === 'recallAnswer') {

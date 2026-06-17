@@ -394,14 +394,13 @@ describe('W3.5 boardInteractionController', function () {
         ['dd', 'qq'],
         'monitor must evaluate every changed Play commit, including AI replies',
       )
-      assert.strictEqual(deps._calls.aiMoveRequest.length, 2)
+      assert.strictEqual(deps._calls.aiMoveRequest.length, 1)
       assert.deepStrictEqual(deps._calls.aiMoveRequest[0].attempt.userLine, ['dd'])
       assert.strictEqual(
         deps._calls.aiMoveRequest[0].treePosition,
         'node_2',
         'AI request must use the post-human-move treePosition',
       )
-      assert.deepStrictEqual(deps._calls.aiMoveRequest[1].attempt.userLine, ['dd', 'qq'])
     })
   })
 

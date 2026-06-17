@@ -604,6 +604,7 @@ function updateTrainingAttempt(attemptId, patch) {
   if (patch.hintLevelUsed !== undefined) { sets.push('hint_level_used = ?'); params.push(patch.hintLevelUsed) }
   if (patch.recallCompleted !== undefined) { sets.push('recall_completed = ?'); params.push(patch.recallCompleted ? 1 : 0) }
   if (patch.analysisOpened !== undefined) { sets.push('analysis_opened = ?'); params.push(patch.analysisOpened ? 1 : 0) }
+  if (patch.moveActors !== undefined) { sets.push('move_actors_json = ?'); params.push(patch.moveActors == null ? null : JSON.stringify(patch.moveActors)) }
   params.push(attemptId)
   run(`UPDATE training_attempts SET ${sets.join(', ')} WHERE id = ?`, params)
   save()

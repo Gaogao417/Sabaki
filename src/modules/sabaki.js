@@ -63,6 +63,7 @@ import {
   createProblemService,
   createProblemFlowService,
   createAiMoveService,
+  createPlayAiTurnService,
   createLegacyTrainingFlowController,
   createTaskImportService,
   evaluateAttempt,
@@ -1034,6 +1035,15 @@ class Sabaki extends EventEmitter {
           },
         },
       })
+      const playAiTurnService = createPlayAiTurnService({
+        getPlayServices: () => ({
+          ...this.getPlayServices(),
+          attemptService,
+          monitor,
+          repository,
+          aiMoveService,
+        }),
+      })
       const snapshotService = createSnapshotService({ repository, positionSnapshotAdapter, workbenchStore, logger })
       const phaseService = createWorkbenchPhaseService({
         workbenchStore,
@@ -1098,6 +1108,7 @@ class Sabaki extends EventEmitter {
         monitor,
         recallService,
         aiMoveService,
+        playAiTurnService,
         checkpointService,
         snapshotService,
         reviewService,
@@ -1888,16 +1899,27 @@ class Sabaki extends EventEmitter {
     return this.getPlayServices().engineService
   }
 
+  /**
+   * Mirror a configured new game into Workbench Play.
+   *
+   * startConfiguredGame() still owns the real game tree and engine attachment.
+   * This helper creates the matching manual training task, opens a Play tab,
+   * starts an Attempt, and stores the playerConfig that tells Workbench which
+   * side is human or AI. It does not start engines or play moves itself.
+   */
   async syncConfiguredGameWorkbench({emptyTree, black, white, blackSyncer, whiteSyncer}) {
-    const {taskImportService, tabService, flowService} = this.getTrainingContext()
+    const {taskImportService, tabService, flowService, workbenchStore} = this.getTrainingContext()
     const blackPlayer = black?.type === 'engine' ? 'ai' : 'human'
     const whitePlayer = white?.type === 'engine' ? 'ai' : 'human'
-    const engineId =
-      whitePlayer === 'ai'
+    const bothPlayersAreAi = blackPlayer === 'ai' && whitePlayer === 'ai'
+    let engineId
+    if (!bothPlayersAreAi) {
+      engineId = whitePlayer === 'ai'
         ? whiteSyncer?.id
         : blackPlayer === 'ai'
           ? blackSyncer?.id
           : undefined
+    }
     const playerConfig = {
       black: blackPlayer,
       white: whitePlayer,
@@ -1916,16 +1938,19 @@ class Sabaki extends EventEmitter {
       playerConfig,
     })
     await flowService.startAttempt(tab.id)
+    const syncedTab =
+      workbenchStore.getState().tabs.find(candidate => candidate.id === tab.id) ??
+      tab
 
     logger.info('game.workbench_synced', 'Configured game synced to Workbench', {
-      tabId: tab.id,
+      tabId: syncedTab.id,
       taskId: task.id,
       black: playerConfig.black,
       white: playerConfig.white,
       aiEngineId: playerConfig.ai.engineId ?? null,
     })
 
-    return {tab, task, playerConfig}
+    return {tab: syncedTab, task, playerConfig}
   }
 
   async startConfiguredGame({
@@ -2027,28 +2052,12 @@ class Sabaki extends EventEmitter {
       })
     }
 
-    let treePosition = this.state.treePosition
-    let nextPlayer = this.getPlayer(treePosition)
-
-    logger.info('game.starting', 'Starting game play', {
-      nextPlayer: nextPlayer > 0 ? 'black' : 'white',
-      treePosition,
-      engineGame: blackSyncer != null && whiteSyncer != null,
+    await this.getTrainingContext().playAiTurnService.playAiIfTurn({
+      tab: workbenchGame.tab,
+      task: workbenchGame.task,
+      positionSource: {kind: 'game-tree', treePosition: this.state.treePosition},
+      treePosition: this.state.treePosition,
     })
-
-    if (blackSyncer != null && whiteSyncer != null) {
-      this.getPlayServices().engineService.startEngineGame(treePosition)
-    } else if (nextPlayer > 0 && blackSyncer != null) {
-      this.getPlayServices().engineService.generateMove(
-        blackSyncer.id,
-        treePosition,
-      )
-    } else if (nextPlayer < 0 && whiteSyncer != null) {
-      this.getPlayServices().engineService.generateMove(
-        whiteSyncer.id,
-        treePosition,
-      )
-    }
 
     sound.playNewGame()
     logger.info('game.started', 'New game started', {
