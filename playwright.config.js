@@ -25,8 +25,8 @@ module.exports = defineConfig({
       dependencies: [],
     },
     {
-      name: 'new-game-dialog',
-      testMatch: /new-game-dialog\.spec\.js/,
+      name: 'workbench-new-game-ai',
+      testMatch: /workbench-new-game-ai\.spec\.js/,
       dependencies: [],
     },
     {
