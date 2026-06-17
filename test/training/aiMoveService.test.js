@@ -328,7 +328,7 @@ describe('aiMoveService', () => {
     it('returns move when engine move is inside problemArea (C16)', async () => {
       const mockAdapter = {
         async requestMove() {
-          return { move: 'C3', candidates: ['C3', 'D4'] }
+          return { move: 'C7', candidates: ['C7', 'D6'] }
         },
       }
 
@@ -345,8 +345,8 @@ describe('aiMoveService', () => {
       const task = makeTask({ problemArea: areaCoords })
 
       const result = await service.requestAiMove({ tab, attempt, task })
-      // C3 at coord (2,2) is within area (0,0)-(5,5)
-      assert.strictEqual(result, 'C3')
+      // C7 on a 9x9 board is coord (2,2), inside area (0,0)-(5,5).
+      assert.strictEqual(result, 'C7')
     })
 
     it('returns null when engine move is outside problemArea (C17)', async () => {
@@ -431,7 +431,7 @@ describe('aiMoveService', () => {
           async (input) => {
             receivedInput = input
             assert.ok(runtimeStore.getState().pendingAiMove)
-            return { move: 'C3', candidates: ['C3'] }
+            return { move: 'C7', candidates: ['C7'] }
           },
         ),
       })
@@ -443,7 +443,7 @@ describe('aiMoveService', () => {
         color: 'white',
       })
 
-      assert.strictEqual(result, 'C3')
+      assert.strictEqual(result, 'C7')
       assert.deepStrictEqual(receivedInput.analysisAreaVertices, [[2, 2]])
       assert.strictEqual(runtimeStore.getState().pendingAiMove, undefined)
     })

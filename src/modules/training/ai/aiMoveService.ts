@@ -158,7 +158,7 @@ export function createAiMoveService(deps: AiMoveServiceDeps) {
     // In problem mode with problemArea, filter by area
     if (tab.mode === 'problem' && hasProblemArea(task)) {
       const area = task.problemArea
-      const moveCoord = moveToCoord(result.move)
+      const moveCoord = moveToCoord(result.move, getBoardSize(task))
       if (moveCoord && isCoordInArea(moveCoord, area)) {
         return result.move
       }
@@ -261,7 +261,16 @@ function inferAiMoveColor(
  * Handles both SGF coordinates (e.g. "dd") and human-readable GTP coordinates (e.g. "C3", "Q16").
  * Returns null for pass or invalid coordinates.
  */
-function moveToCoord(move: string): { x: number; y: number } | null {
+function getBoardSize(task: {rootPositionSgf?: string}): number {
+  const sgf = task.rootPositionSgf
+  if (typeof sgf !== 'string') return 19
+
+  const match = sgf.match(/\bSZ\[(\d+)(?::\d+)?\]/)
+  const size = match ? Number.parseInt(match[1], 10) : 19
+  return Number.isFinite(size) && size > 0 ? size : 19
+}
+
+function moveToCoord(move: string, boardSize = 19): { x: number; y: number } | null {
   if (!move || move.length < 2) return null
 
   // Detect format: if second char is a digit, it's human-readable (e.g. "C3", "Q16")
@@ -269,12 +278,12 @@ function moveToCoord(move: string): { x: number; y: number } | null {
   const secondChar = move.charCodeAt(1)
   if (secondChar >= 48 && secondChar <= 57) {
     // Second char is a digit -> human-readable GTP format
-    return humanReadableToCoord(move)
+    return humanReadableToCoord(move, boardSize)
   } else if (secondChar >= 97 && secondChar <= 122) {
     // Second char is a lowercase letter -> SGF format
     const x = move.charCodeAt(0) - 97 // 'a' = 0
     const y = move.charCodeAt(1) - 97
-    if (x < 0 || y < 0) return null
+    if (x < 0 || y < 0 || x >= boardSize || y >= boardSize) return null
     return { x, y }
   }
   return null
@@ -284,7 +293,7 @@ function moveToCoord(move: string): { x: number; y: number } | null {
  * Convert human-readable GTP coordinate (e.g. "C3", "Q16") to zero-based {x, y}.
  * Columns: A-T (skipping I), Rows: 1-based from bottom.
  */
-function humanReadableToCoord(coord: string): { x: number; y: number } | null {
+function humanReadableToCoord(coord: string, boardSize = 19): { x: number; y: number } | null {
   const match = coord.match(/^([A-HJ-T])(\d+)$/i)
   if (!match) return null
   const colLetter = match[1].toUpperCase()
@@ -295,9 +304,9 @@ function humanReadableToCoord(coord: string): { x: number; y: number } | null {
   const x = columns.indexOf(colLetter)
   if (x < 0) return null
 
-  // Row: 1-based, where 1 is the bottom row
-  const y = rowNumber - 1
-  if (y < 0) return null
+  // Row: 1-based from the bottom in GTP; internal vertices are 0-based from top.
+  const y = boardSize - rowNumber
+  if (y < 0 || y >= boardSize || x >= boardSize) return null
 
   return { x, y }
 }
